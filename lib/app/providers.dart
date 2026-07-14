@@ -145,6 +145,7 @@ final Provider<LoadAccountDefaults> loadAccountDefaultsProvider =
       (Ref ref) => LoadAccountDefaults(
         settings: ref.watch(settingsRepositoryProvider),
         secrets: ref.watch(secretStoreProvider),
+        syncDefaults: ref.watch(syncAccountDefaultsProvider),
       ),
     );
 
