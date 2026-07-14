@@ -8,36 +8,28 @@ import 'package:tela/domain/models/wallpaper_color.dart';
 
 void main() {
   group('applyTo', () {
-    test('applies the three fields the account is allowed to set', () {
+    test('applies the two fields the account is allowed to set', () {
       final SearchQuery query = _account.applyTo(const SearchQuery());
 
       expect(query.categories.toApiBits(), '010');
-      expect(query.purity.toApiBits(), '110');
       expect(query.topRange, TopRange.oneWeek);
     });
 
-    test('never seeds explicit, even from an account that browses it', () {
-      const AccountSettings explicit = AccountSettings(
-        categories: CategoryFilter.all,
-        purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw}),
-        topRange: TopRange.oneMonth,
-      );
+    test('never touches the purity — browse always opens on safe, whatever '
+        'the account browses on', () {
+      final SearchQuery query = _account.applyTo(const SearchQuery());
 
-      final SearchQuery query = explicit.applyTo(const SearchQuery());
-
-      // Sketchy seeds — it needs no key and it is not explicit. Explicit is a
-      // thing you turn on in the filter sheet, per session.
-      expect(query.purity.toApiBits(), '110');
+      expect(query.purity.toApiBits(), '100');
     });
 
-    test('an explicit-only account seeds safe, not the "000" mask', () {
-      const AccountSettings explicit = AccountSettings(
-        categories: CategoryFilter.all,
-        purity: PurityFilter(<Purity>{Purity.nsfw}),
-        topRange: TopRange.oneMonth,
+    test('leaves a purity the user chose for this session alone', () {
+      // Turning Explicit on in the filter sheet must survive an account sync;
+      // the account seeds a *fresh* query, it does not police an open one.
+      const SearchQuery browsing = SearchQuery(
+        purity: PurityFilter(<Purity>{Purity.sfw, Purity.nsfw}),
       );
 
-      expect(explicit.applyTo(const SearchQuery()).purity.toApiBits(), '100');
+      expect(_account.applyTo(browsing).purity.toApiBits(), '101');
     });
 
     test('leaves everything the account has no business setting', () {
@@ -66,56 +58,33 @@ void main() {
     });
   });
 
-  group('browsablePurity', () {
-    test("keeps the account's explicit purity as the account stated it", () {
-      // The *stored* account is the account's truth; only what browse opens on
-      // is narrowed. A future "browse explicit" affordance needs this row.
-      const AccountSettings explicit = AccountSettings(
-        categories: CategoryFilter.all,
-        purity: PurityFilter(<Purity>{Purity.sfw, Purity.nsfw}),
-        topRange: TopRange.oneMonth,
-      );
-
-      expect(explicit.purity.toApiBits(), '101');
-      expect(explicit.browsablePurity.toApiBits(), '100');
-    });
-
-    test('leaves a safe account alone', () {
-      expect(_account.browsablePurity.toApiBits(), '110');
-    });
-  });
-
   group('tryParse', () {
     test('reads back what the repository writes', () {
       final AccountSettings? parsed = AccountSettings.tryParse(
         storedCategories: _account.categories.toApiBits(),
-        storedPurity: _account.purity.toApiBits(),
         storedTopRange: _account.topRange.apiValue,
       );
 
       expect(parsed, _account);
     });
 
-    test('answers null for a corrupt row of any of the three', () {
+    test('answers null for a corrupt row of either', () {
       expect(_parse(categories: '11'), isNull);
       expect(_parse(categories: '000'), isNull);
-      expect(_parse(purity: 'sfw'), isNull);
-      expect(_parse(purity: '1x0'), isNull);
+      expect(_parse(categories: '1x0'), isNull);
       expect(_parse(topRange: '1m'), isNull);
       expect(_parse(topRange: ''), isNull);
     });
   });
 
   group('equality', () {
-    test('compares the filters by members, not by set identity', () {
+    test('compares the categories by members, not by set identity', () {
       const AccountSettings one = AccountSettings(
         categories: CategoryFilter(<Category>{Category.anime, Category.people}),
-        purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
         topRange: TopRange.oneWeek,
       );
       const AccountSettings same = AccountSettings(
         categories: CategoryFilter(<Category>{Category.people, Category.anime}),
-        purity: PurityFilter(<Purity>{Purity.sketchy, Purity.sfw}),
         topRange: TopRange.oneWeek,
       );
 
@@ -129,7 +98,6 @@ void main() {
         isNot(
           AccountSettings(
             categories: CategoryFilter.all,
-            purity: _account.purity,
             topRange: _account.topRange,
           ),
         ),
@@ -139,17 +107,6 @@ void main() {
         isNot(
           AccountSettings(
             categories: _account.categories,
-            purity: PurityFilter.sfwOnly,
-            topRange: _account.topRange,
-          ),
-        ),
-      );
-      expect(
-        _account,
-        isNot(
-          AccountSettings(
-            categories: _account.categories,
-            purity: _account.purity,
             topRange: TopRange.oneYear,
           ),
         ),
@@ -160,18 +117,12 @@ void main() {
 
 const AccountSettings _account = AccountSettings(
   categories: CategoryFilter(<Category>{Category.anime}),
-  purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
   topRange: TopRange.oneWeek,
 );
 
-AccountSettings? _parse({
-  String categories = '111',
-  String purity = '100',
-  String topRange = '1M',
-}) {
+AccountSettings? _parse({String categories = '111', String topRange = '1M'}) {
   return AccountSettings.tryParse(
     storedCategories: categories,
-    storedPurity: purity,
     storedTopRange: topRange,
   );
 }

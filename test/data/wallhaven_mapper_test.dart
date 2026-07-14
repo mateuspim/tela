@@ -157,31 +157,39 @@ void main() {
       );
 
       expect(account.categories.toApiBits(), '110');
-      expect(account.purity.toApiBits(), '110');
       expect(account.topRange, TopRange.oneWeek);
+    });
+
+    test("does not read the account's purity at all — browse opens on safe, "
+        'whatever the account browses on', () {
+      // The fixture's account allows sketchy. Nothing in the domain model can
+      // carry that, which is the point: it cannot be honoured by accident.
+      final AccountSettings account = _account(<String, dynamic>{
+        'purity': <String>['sfw', 'sketchy', 'nsfw'],
+        'categories': <String>['anime'],
+      });
+
+      expect(account.applyTo(const SearchQuery()).purity.toApiBits(), '100');
     });
 
     test('an unreadable name costs that name, not the sync', () {
       final AccountSettings account = _account(<String, dynamic>{
         'categories': <String>['anime', 'memes'],
-        'purity': <String>['sfw', 'spicy'],
         'toplist_range': '1w',
       });
 
       expect(account.categories.toApiBits(), '010');
-      expect(account.purity.toApiBits(), '100');
+      expect(account.topRange, TopRange.oneWeek);
     });
 
     test("a filter the account never narrowed is tela's own", () {
-      // Wallhaven sends [] for "no preference"; the encoders would throw on the
+      // Wallhaven sends [] for "no preference"; the encoder would throw on the
       // "000" mask that literally translates to.
       final AccountSettings account = _account(<String, dynamic>{
         'categories': <String>[],
-        'purity': <String>[],
       });
 
       expect(account.categories.toApiBits(), '111');
-      expect(account.purity.toApiBits(), '100');
     });
 
     test('an unreadable toplist range costs the range', () {
@@ -193,14 +201,6 @@ void main() {
         _account(<String, dynamic>{}).topRange,
         TopRange.oneMonth,
       );
-    });
-
-    test('reads an explicit account as explicit', () {
-      final AccountSettings account = _account(<String, dynamic>{
-        'purity': <String>['sfw', 'sketchy', 'nsfw'],
-      });
-
-      expect(account.purity.toApiBits(), '111');
     });
 
     test('fails soft on a payload shape Wallhaven never promised to keep', () {

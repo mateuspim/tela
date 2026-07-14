@@ -32,9 +32,10 @@ void main() {
       final SearchQuery query = container.read(browseQueryProvider);
 
       expect(query.categories.toApiBits(), '010');
-      expect(query.purity.toApiBits(), '110');
       expect(query.topRange, TopRange.oneWeek);
-      // The account has no say over the rest of the query.
+      // The account has no say over the rest of the query — least of all the
+      // purity, which always opens on safe.
+      expect(query.purity.toApiBits(), '100');
       expect(query.ratios, <String>['9x16']);
     });
 
@@ -184,7 +185,6 @@ void main() {
 /// it cannot pass by accidentally reading a default back.
 const AccountSettings _account = AccountSettings(
   categories: CategoryFilter(<Category>{Category.anime}),
-  purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
   topRange: TopRange.oneWeek,
 );
 

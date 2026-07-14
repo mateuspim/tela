@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
-import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/use_cases/load_account_defaults.dart';
@@ -18,31 +17,29 @@ void main() {
 
   test('hands back the stored defaults while a key is stored', () {
     final LoadAccountDefaults load = _load(
-      stored: _explicitAccount,
+      stored: _account,
       storedKey: 'abc123',
     );
 
-    expect(load(), completion(_explicitAccount));
+    expect(load(), completion(_account));
   });
 
-  test('hands back what the account said, explicit and all — narrowing it is '
-      "applyTo's job, and doing it twice is doing it in two places", () async {
+  test('the defaults it hands back cannot carry a purity at all, so browse '
+      'opens on safe no matter what the account browses on', () async {
     final LoadAccountDefaults load = _load(
-      stored: _explicitAccount,
+      stored: _account,
       storedKey: 'abc123',
     );
 
     final AccountSettings? defaults = await load();
 
-    expect(defaults?.purity.toApiBits(), '111');
-    // …and the query it seeds still refuses to open on explicit.
-    expect(defaults?.applyTo(const SearchQuery()).purity.toApiBits(), '110');
+    expect(defaults?.applyTo(const SearchQuery()).purity.toApiBits(), '100');
   });
 
   group('backfill', () {
     test('syncs a key that predates the sync — the upgrade case, where the '
         'feature would otherwise never run', () async {
-      final FakeWallhavenApi api = FakeWallhavenApi(account: _explicitAccount);
+      final FakeWallhavenApi api = FakeWallhavenApi(account: _account);
       final FakeSettingsRepository settings = FakeSettingsRepository();
       final LoadAccountDefaults load = _load(
         api: api,
@@ -50,17 +47,17 @@ void main() {
         storedKey: 'abc123',
       );
 
-      expect(await load(), _explicitAccount);
+      expect(await load(), _account);
       expect(api.accountSettingsCalls, 1);
       // Written, so the next load costs nothing.
-      expect(settings.accountSaved, _explicitAccount);
+      expect(settings.accountSaved, _account);
     });
 
     test('costs nothing once the defaults are there', () async {
       final FakeWallhavenApi api = FakeWallhavenApi();
       final LoadAccountDefaults load = _load(
         api: api,
-        stored: _explicitAccount,
+        stored: _account,
         storedKey: 'abc123',
       );
 
@@ -108,11 +105,10 @@ void main() {
   });
 }
 
-/// An account that browses anime, allows sketchy *and* explicit, and tops by
-/// the week — so every field is distinguishable from tela's own defaults.
-const AccountSettings _explicitAccount = AccountSettings(
+/// An account that browses anime and tops by the week — every field it has is
+/// distinguishable from tela's own defaults.
+const AccountSettings _account = AccountSettings(
   categories: CategoryFilter(<Category>{Category.anime}),
-  purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw}),
   topRange: TopRange.oneWeek,
 );
 

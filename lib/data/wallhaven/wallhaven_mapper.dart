@@ -65,8 +65,12 @@ abstract final class WallhavenMapper {
   /// useless, but an account setting tela cannot read is merely a *preference*
   /// it cannot honour — so an unknown category name costs that category, an
   /// unreadable range costs the range, and an empty list means the account
-  /// never narrowed it and gets tela's own default. Wallhaven's `resolutions`
-  /// and `aspect_ratios` are read by nobody; see [AccountSettings].
+  /// never narrowed it and gets tela's own default.
+  ///
+  /// Three of the body's fields are read by nobody, and the one that matters is
+  /// **`purity`**: browse always opens on safe, whatever the account says. See
+  /// [AccountSettings], which is also where `resolutions` and `aspect_ratios`
+  /// are explained away.
   static AccountSettings toAccountSettings(Map<String, dynamic> body) {
     final Object? data = body['data'];
     if (data is! Map<String, dynamic>) {
@@ -80,16 +84,10 @@ abstract final class WallhavenMapper {
       'categories',
       Category.tryFromApiName,
     );
-    final Set<Purity> purities = _readApiNames(
-      data,
-      'purity',
-      Purity.tryFromApiName,
-    );
     return AccountSettings(
       categories: categories.isEmpty
           ? CategoryFilter.all
           : CategoryFilter(categories),
-      purity: purities.isEmpty ? PurityFilter.sfwOnly : PurityFilter(purities),
       topRange:
           TopRange.tryFromApiValue(
             _readOptionalString(data, 'toplist_range'),

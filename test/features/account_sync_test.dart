@@ -5,7 +5,6 @@ import 'package:tela/app/account_defaults.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
-import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
@@ -30,9 +29,10 @@ void main() {
     final SearchQuery query = container.read(browseQueryProvider);
     expect(query.categories.toApiBits(), '010');
     expect(query.topRange, TopRange.oneWeek);
-    // The account browses explicit; the front page does not. Sketchy seeds,
-    // explicit stays a per-session choice in the filter sheet.
-    expect(query.purity.toApiBits(), '110');
+    // The account browses explicit. The front page still opens on safe: sketchy
+    // and explicit are per-session choices in the filter sheet, and no account
+    // gets to make them for you.
+    expect(query.purity.toApiBits(), '100');
   });
 
   test('forgetting the key takes the account back out of browse', () async {
@@ -43,11 +43,11 @@ void main() {
     await container.read(apiKeyProvider.notifier).forget();
     await container.read(accountDefaultsProvider.future);
 
-    // Back to tela's own — and crucially, no longer asking for explicit
-    // content, which with no key is a 401 rather than a grid.
+    // Back to tela's own: the defaults belong to an account this device can no
+    // longer reach.
     final SearchQuery query = container.read(browseQueryProvider);
-    expect(query.purity.toApiBits(), '100');
     expect(query.categories.toApiBits(), '111');
+    expect(query.topRange, TopRange.oneMonth);
   });
 
   test('a key the user is still typing over does not change browse', () async {
@@ -72,7 +72,6 @@ void main() {
 /// from tela's own defaults.
 const AccountSettings _explicitAccount = AccountSettings(
   categories: CategoryFilter(<Category>{Category.anime}),
-  purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw}),
   topRange: TopRange.oneWeek,
 );
 

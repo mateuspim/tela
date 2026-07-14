@@ -4,7 +4,6 @@ import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
-import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -102,8 +101,22 @@ void main() {
       await settings.saveAccountDefaults(_account);
 
       expect(await db.settingValue('account.categories'), '010');
-      expect(await db.settingValue('account.purity'), '110');
       expect(await db.settingValue('account.topRange'), '1w');
+    });
+
+    test('never stores a purity — the account does not get to decide that, '
+        'and a row nothing reads is a row that misleads', () async {
+      await settings.saveAccountDefaults(_account);
+
+      expect(await db.settingValue('account.purity'), isNull);
+    });
+
+    test('a re-sync drops the purity row an older build left behind', () async {
+      await db.putSetting('account.purity', '111');
+
+      await settings.saveAccountDefaults(_account);
+
+      expect(await db.settingValue('account.purity'), isNull);
     });
 
     test('a re-sync overwrites rather than accumulating rows', () async {
@@ -111,7 +124,6 @@ void main() {
       await settings.saveAccountDefaults(
         const AccountSettings(
           categories: CategoryFilter.all,
-          purity: PurityFilter.sfwOnly,
           topRange: TopRange.oneYear,
         ),
       );
@@ -121,15 +133,17 @@ void main() {
       expect(loaded?.topRange, TopRange.oneYear);
     });
 
-    test('forgetting the key removes every row of them', () async {
+    test('forgetting the key removes every row of them, including the one an '
+        'older build wrote', () async {
       await settings.saveAccountDefaults(_account);
+      await db.putSetting('account.purity', '111');
 
       await settings.forgetAccountDefaults();
 
       expect(await settings.loadAccountDefaults(), isNull);
-      expect(await db.settingValue('account.purity'), isNull);
       expect(await db.settingValue('account.categories'), isNull);
       expect(await db.settingValue('account.topRange'), isNull);
+      expect(await db.settingValue('account.purity'), isNull);
     });
 
     test('forgetting them leaves every other setting alone', () async {
@@ -148,7 +162,7 @@ void main() {
       // Browse simply opens on tela's own, which is where it opens before any
       // key is saved. A half-read account is not a state worth having.
       await settings.saveAccountDefaults(_account);
-      await db.putSetting('account.purity', 'sketchy');
+      await db.putSetting('account.categories', 'anime');
 
       expect(await settings.loadAccountDefaults(), isNull);
     });
@@ -161,11 +175,10 @@ void main() {
   });
 }
 
-/// An account that browses anime, allows sketchy, and tops by the week — every
-/// field different from tela's own defaults, so a round trip cannot pass by
-/// accidentally reading a default back.
+/// An account that browses anime and tops by the week — both fields different
+/// from tela's own defaults, so a round trip cannot pass by accidentally
+/// reading a default back.
 const AccountSettings _account = AccountSettings(
   categories: CategoryFilter(<Category>{Category.anime}),
-  purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
   topRange: TopRange.oneWeek,
 );

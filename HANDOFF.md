@@ -111,13 +111,28 @@ library now say "nothing here" the same way, and a failure picks its icon from
 what actually failed — the offline cloud for a dead network, not a generic
 error triangle.
 
-**Account `/settings` sync** (`9dd0d6a`). Saving an API key now pulls the
-Wallhaven account's own browse defaults — categories, purity, toplist range —
-and browse opens on them. The same request is what *verifies* the key, so the
-sync is free: it replaced an NSFW-purity search that cost the same one of the
-45 req/min and learned nothing but "valid". A filter the user set by hand is
-never overwritten, and forgetting the key drops the defaults with it. This was
-Wave 2's last slice.
+**Account `/settings` sync** (`9dd0d6a`, plus `70f6227` and `76471d3` from the
+device pass). Saving an API key now pulls the Wallhaven account's own browse
+defaults — categories, purity, toplist range — and browse opens on them. The
+same request is what *verifies* the key, so the sync is free: it replaced an
+NSFW-purity search that cost the same one of the 45 req/min and learned nothing
+but "valid". A filter the user set by hand is never overwritten, forgetting the
+key drops the defaults with it, and **explicit purity never seeds a default at
+all** (see the decisions). This was Wave 2's last slice.
+
+**It has run on hardware, and the device found two things the tests could not.**
+Both are fixed and re-verified there:
+
+- **A key that predates the sync never synced** (`70f6227`). The phone's database
+  held a working API key and no `account.*` rows at all: `SaveApiKey` syncs, so a
+  key saved by *this* build always has defaults, but a key saved by an earlier one
+  had nothing that would ever ask again. The feature would have silently done
+  nothing for every existing user until they re-pasted a key that already worked.
+  `LoadAccountDefaults` now backfills once when it finds a stored key with no
+  stored defaults.
+- **The account's explicit purity opened the front page on explicit** (`76471d3`).
+  See the decision below; this is the one the device was always going to catch,
+  because it only shows up on an account that actually has NSFW enabled.
 
 ## Decisions made
 
@@ -371,16 +386,35 @@ Wave 2's last slice.
   the account has. Categories, purity and toplist range mean the same thing on
   both, so those three are `AccountSettings` and the other two are dropped at the
   mapper.
-- **Forgetting the key drops the account defaults with it, and `LoadAccountDefaults`
-  strips explicit content from them anyway.** Two doors on one hole, in the style
-  of the NSFW storage rules: a stored default may *be* an explicit purity, and an
-  explicit search with no key is a 401 — so browse would open on an error instead
-  of a grid. `ForgetApiKey` deletes the rows, and the load path refuses to hand
-  explicit defaults to a keyless device even if a crash between the two writes (or
-  a hand-edited database) left them there.
+- **Explicit purity never seeds a default, in any state** — `AccountSettings`
+  stores the account's real purity but `applyTo` seeds `browsablePurity`, which is
+  that minus NSFW. This was found on the device and it is the most important
+  decision in the slice. An account with NSFW enabled made tela's front page a
+  masonry grid of explicit thumbnails at launch, behind no gate. That is exactly
+  what "the account seeds the defaults" means, and it is the one place tela ran
+  against its own grain: every other NSFW rule here fails toward safe (downloads
+  route explicit to app-private, the private library is behind `FLAG_SECURE` and
+  an app-lock, a corrupt purity reads as `nsfw` rather than `sfw`). A phone is the
+  device you unlock on a train. Sketchy still seeds — it needs no key and it is
+  not that — and the Explicit chip is still *offered* while a key is stored, so
+  turning it on is one tap and one session.
+- **Forgetting the key drops the account defaults with it.** They belong to an
+  account this device can no longer reach. This used to be one of two doors on the
+  same hole; `browsablePurity` closed the other one for free, so the load path no
+  longer strips explicit by hand — an explicit default cannot outlive its key and
+  turn browse into a 401 because it is never a default at all. One rule, one place.
 - The account defaults are **read back through the port on every load, never
-  cached from what the sync returned**, precisely so that guard sits on the only
-  path they can reach the UI by.
+  cached from what the sync returned** — which is what gives the backfill somewhere
+  to live.
+- **A stored key with no stored defaults backfills, once.** The sync runs inside
+  `SaveApiKey`, so it only ever fires on a *save*; every user upgrading with a key
+  already in place would have been handed a feature that does nothing until they
+  happened to re-paste a working key. A successful backfill writes the rows it
+  exists to look for, so every later load costs nothing. A failure writes nothing
+  and answers null — browse opens on tela's own defaults and the next launch may
+  try again, because being offline says nothing about an account, exactly as it
+  says nothing about a key. It never spends a request without a key: Wallhaven
+  would only 401.
 - `accountDefaultsProvider` lives in `app/`, not in a feature. Settings *writes*
   it (a save syncs, a forget clears) and browse *reads* it, and features may not
   import each other (CLAUDE.md). They meet at the composition root instead.
@@ -406,7 +440,7 @@ Wave 2's last slice.
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 227 tests pass
+- `./tool/tela test`: 232 tests pass
 - Three-tap browse → detail → Both widget flow: covered
 - Domain use case and all native target/error mappings: covered
 - `/w/{id}` is covered by a detail JSON fixture, mapper boundary tests, and a
@@ -505,8 +539,21 @@ Wave 2's last slice.
   defaults rather than tela's)
 - `test/features/account_sync_test.dart` is the whole path in one place, which no
   other test can see: saving a key in settings moves the browse query, forgetting
-  it moves it back (and takes the explicit purity with it), and a hand-set filter
-  survives both
+  it moves it back, and a hand-set filter survives both
+- The backfill: syncs a key that predates the sync, costs nothing once the
+  defaults are there, never spends a request without a key, and answers null
+  (rather than throwing, or deleting the key) when the account cannot be reached
+  or the key is rejected
+- **The account sync is verified on hardware** (2026-07-14, Samsung, debug build,
+  installed as an update over the previous one):
+  - the backfill fired on first launch and wrote `account.categories=111`,
+    `account.purity=111`, `account.topRange=1M` — and `purity=111` is proof the
+    real `GET /settings` parsed, because tela's own fallback is `100`
+  - the filter sheet then showed the account's three categories and Last month,
+    with **Safe and Sketchy checked and Explicit unchecked but offered**
+  - the settings table's other rows, the favorites, and the download history all
+    survived the upgrade; permissions still `INTERNET`, `SET_WALLPAPER`,
+    `USE_BIOMETRIC`, `USE_FINGERPRINT`; no errors in logcat
 
 The Random tab's deep paging is the one Wave 1 behaviour never exercised on
 hardware — see below.
@@ -541,16 +588,15 @@ Three things were deliberately left out rather than forgotten:
 
 ### 2. Owed on the device
 
-Nothing in Wave 2 has run on hardware yet. In rough order of what would actually
-bite:
+**The account sync is done** (see Verification). Everything else in Wave 2 has
+still never run on hardware. In rough order of what would actually bite:
 
-- **The account sync against real Wallhaven.** `GET /settings` has only ever been
-  answered by `FakeWallhavenApi`, and it is now the request that decides whether a
-  key is *accepted at all* — if the real endpoint answers in a shape the mapper
-  misreads, a perfectly good key looks rejected. Save a real key and confirm it
-  verifies, then confirm the filter sheet opens on the account's categories and
-  purity. Change a setting on wallhaven.cc, re-save the key, and confirm tela
-  follows. Then remove the key and confirm browse falls back to safe/all/portrait.
+- **Saving a key from scratch, and removing one.** The sync was only ever seen
+  *backfilling* an existing key. `SaveApiKey`'s own path — paste a key, watch it
+  verify against `/settings`, watch the defaults land — has not run on the device,
+  and neither has `ForgetApiKey` dropping the `account.*` rows. Remove the key and
+  confirm browse falls back to safe / all categories / portrait, and that the
+  Explicit chip disappears.
 - **The app-lock, end to end.** It has only ever met `FakeAppLock`. Turn it on in
   Settings, leave the private library, come back, and confirm the prompt appears
   and the PIN fallback works. `MainActivity` became a `FlutterFragmentActivity`

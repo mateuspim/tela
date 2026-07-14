@@ -28,14 +28,20 @@ class DriftSettingsRepository implements SettingsRepository {
   /// an enum constant being renamed, and they read the same in a `sqlite3`
   /// shell as they do in a request.
   static const String _accountCategoriesKey = 'account.categories';
-  static const String _accountPurityKey = 'account.purity';
   static const String _accountTopRangeKey = 'account.topRange';
+
+  /// Written by builds between `9dd0d6a` and `76471d3`, which synced the
+  /// account's purity before that turned out to open browse on explicit content
+  /// (see `AccountSettings`). Nothing reads it any more, so it is only here to
+  /// be deleted — an inert row saying `purity=111` is exactly the thing that
+  /// misleads whoever next opens this database.
+  static const String _legacyAccountPurityKey = 'account.purity';
 
   /// Every row [forgetAccountDefaults] drops. The defaults are one setting.
   static const List<String> _accountKeys = <String>[
     _accountCategoriesKey,
-    _accountPurityKey,
     _accountTopRangeKey,
+    _legacyAccountPurityKey,
   ];
 
   final TelaDatabase _db;
@@ -72,15 +78,13 @@ class DriftSettingsRepository implements SettingsRepository {
   @override
   Future<AccountSettings?> loadAccountDefaults() async {
     final String? categories = await _db.settingValue(_accountCategoriesKey);
-    final String? purity = await _db.settingValue(_accountPurityKey);
     final String? topRange = await _db.settingValue(_accountTopRangeKey);
-    if (categories == null || purity == null || topRange == null) return null;
+    if (categories == null || topRange == null) return null;
 
     // A row that cannot be read costs the defaults, not the app: browse simply
     // opens on tela's own, which is where it opens before any key is saved.
     return AccountSettings.tryParse(
       storedCategories: categories,
-      storedPurity: purity,
       storedTopRange: topRange,
     );
   }
@@ -88,8 +92,9 @@ class DriftSettingsRepository implements SettingsRepository {
   @override
   Future<void> saveAccountDefaults(AccountSettings account) async {
     await _db.putSetting(_accountCategoriesKey, account.categories.toApiBits());
-    await _db.putSetting(_accountPurityKey, account.purity.toApiBits());
     await _db.putSetting(_accountTopRangeKey, account.topRange.apiValue);
+    // A re-sync is also the moment to drop what an older build wrote here.
+    await _db.deleteSettings(<String>[_legacyAccountPurityKey]);
   }
 
   @override

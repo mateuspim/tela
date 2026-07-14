@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
-import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/use_cases/forget_api_key.dart';
 
@@ -26,7 +25,6 @@ void main() {
     final FakeSettingsRepository settings = FakeSettingsRepository(
       accountDefaults: const AccountSettings(
         categories: CategoryFilter.all,
-        purity: PurityFilter(<Purity>{Purity.nsfw}),
         topRange: TopRange.oneMonth,
       ),
     );

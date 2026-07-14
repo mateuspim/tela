@@ -1,6 +1,5 @@
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
-import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -73,7 +72,6 @@ class FakeWallhavenApi implements WallhavenApi {
   /// What an account that never changed a setting would answer with.
   static const AccountSettings _telaDefaults = AccountSettings(
     categories: CategoryFilter.all,
-    purity: PurityFilter.sfwOnly,
     topRange: TopRange.oneMonth,
   );
 }

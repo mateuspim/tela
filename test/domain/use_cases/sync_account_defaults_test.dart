@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
-import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/use_cases/sync_account_defaults.dart';
@@ -63,12 +62,10 @@ void main() {
 
 const AccountSettings _account = AccountSettings(
   categories: CategoryFilter(<Category>{Category.anime}),
-  purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
   topRange: TopRange.oneWeek,
 );
 
 const AccountSettings _otherAccount = AccountSettings(
   categories: CategoryFilter(<Category>{Category.people}),
-  purity: PurityFilter(<Purity>{Purity.nsfw}),
   topRange: TopRange.oneYear,
 );
