@@ -18,9 +18,9 @@ Wallhaven response. It is unit-tested; a lost seed would show up only as
 repeated images several pages in.
 
 **Wave 2 is now in progress.** Favorites are `0cf2781`, Material You is
-`c056369`, and the private library is `a2e5da7` + `5f747a8`; see "Wave 2 so far"
-below. Three slices remain: download history, account `/settings` sync, and the
-colour filter with the shared empty/offline states.
+`c056369`, the private library is `a2e5da7` + `5f747a8`, and the download
+history is `50485bd`; see "Wave 2 so far" below. Two slices remain: account
+`/settings` sync, and the colour filter with the shared empty/offline states.
 
 The app supports the thin product loop:
 
@@ -87,6 +87,14 @@ tier had been written to since Wave 1 with no way to read it back, so explicit
 downloads were write-only — uninstalling was the only way to get a file out. It
 is now listable and deletable, behind `FLAG_SECURE` and an optional biometric/PIN
 gate. Reached from Settings, not the browse app bar.
+
+**Download history + set again** (`50485bd`). Every non-explicit download is now
+recorded in Drift (schema v3), and the history opens from Settings. Tapping a
+tile goes straight to the Home/Lock/Both sheet and applies the wallpaper **from
+the file the download already left on the device** — no second fetch, and it
+works with no network. `WallpaperApplier` therefore takes a `Uri` source rather
+than a URL, and Kotlin reads a local `file://` or `content://` through the
+`ContentResolver` when the scheme is not http(s).
 
 ## Decisions made
 
@@ -240,12 +248,54 @@ gate. Reached from Settings, not the browse app bar.
   (**merged in by `local_auth_android`**, not by us — worth knowing before the
   next permission audit reads it as a regression). Both are normal, install-time
   permissions. There is still **no storage or media permission**.
+- **"Set again" reads the file, and that is why the applier port changed.** The
+  handoff had predicted a pure-Dart slice, but re-fetching six megabytes tela
+  already wrote is not "setting it again" — it is downloading it again, and it
+  needs a network the user may not have. `WallpaperApplier.apply` now takes a
+  `Uri` source, and the Kotlin branches on its scheme: http(s) downloads,
+  anything else goes through the `ContentResolver`, which covers all three tiers
+  (a MediaStore image tela inserted, a document under the user's SAF tree, and an
+  app-private file) with **no new permission** — an app can always read what it
+  created, and the SAF grant is already persisted.
+- A local file that cannot be read maps to the same `WallpaperApplyProblem.source`
+  a failed download does, and `ApplyDownload` retries against Wallhaven when it
+  sees it. A gallery download can be deleted from Photos and a document one from
+  a file manager, neither of which tela hears about; the history row still knows
+  the source URL, so a deleted file costs a re-fetch rather than the feature.
+  Only *that* problem is retried — a wallpaper Android itself rejected would fail
+  the same way the second time, at the price of a pointless download.
+- **Explicit downloads are never recorded in the history, in any tier.** This is
+  the one place the history deliberately forgets something. Those files already
+  have a home — the private library, which lists the real files behind
+  `FLAG_SECURE` and the app-lock. A history row is the opposite of that: a
+  browsable index of thumbnails and URLs on an ungated screen, inside a database
+  that Android's Auto Backup carries off the device (the API key is excluded from
+  backup; the database is not). Refused in `DownloadWallpaper` *and* in the Drift
+  adapter, and `downloads()` additionally withholds any row whose purity no longer
+  reads as safe — which is exactly what a corrupt row does, since `storedPurity`
+  fails closed to `nsfw`.
+- The downloads table is keyed by wallpaper id, not by download event: the
+  history is "what is on this device", so downloading the same wallpaper twice
+  updates one row instead of stacking duplicates.
+- The wallpaper columns are now a **Drift table mixin** (`WallpaperColumns`), and
+  the fail-safe parses a **shared `stored_wallpaper_fields.dart`**. Favorites and
+  downloads store the same eleven fields for the same reason (render offline,
+  apply offline), and the purity fail-closed rule is the load-bearing part of
+  both — a second copy of it is a second chance to get it wrong. The generated
+  favorites schema is byte-identical to what v2 shipped.
+- The Home/Lock/Both sheet moved to `core/ui/wallpaper_target_sheet.dart`. Two
+  screens can now apply a wallpaper, and "Set wallpaper on" must read the same on
+  both.
+- The settings widget test now pumps a **tall viewport**. Settings is a
+  `ListView`, and the new history tile pushed the explicit-purity picker below a
+  phone-sized test fold, where it is never built — which failed as "the setting
+  disappeared" rather than "scroll down".
 
 ## Verification
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 143 tests pass
+- `./tool/tela test`: 159 tests pass
 - Three-tap browse → detail → Both widget flow: covered
 - Domain use case and all native target/error mappings: covered
 - `/w/{id}` is covered by a detail JSON fixture, mapper boundary tests, and a
@@ -298,7 +348,20 @@ gate. Reached from Settings, not the browse app bar.
   rule
 - Material You: the device palette is used, a missing one falls back to the
   seed, a wrong-brightness one is refused, and the chrome stays untinted
-- `./tool/tela build apk --debug`: passes with `dynamic_color` and the new schema
+- Download history: the use case (records where the file actually landed, refuses
+  every explicit download in every tier while still storing the file), the Drift
+  adapter (full round trip, newest first, re-download upserts rather than stacks,
+  an explicit record refused, and a row whose purity reads corrupt withheld from
+  the listing), `ApplyDownload` (applies the local file, falls back to Wallhaven
+  only when that file is unreadable, and does *not* re-download after a rejected
+  apply), and the screen — empty state, a tile per download newest-first, and a
+  tap applying the stored URI rather than the Wallhaven URL, with no API bound
+- The v2→v3 migration is tested against a hand-built v2 database: the favorite
+  survives, the settings survive, and the downloads table appears. v1→v3 lands
+  both new tables at once, which is the jump a device that skipped v2 takes
+- `./tool/tela build apk --debug` and `--release`: pass, and the release merged
+  manifest still shows only `INTERNET`, `SET_WALLPAPER`, `USE_BIOMETRIC`,
+  `USE_FINGERPRINT` — reading back a download needs no permission
 
 The Random tab's deep paging is the one Wave 1 behaviour never exercised on
 hardware — see below.
@@ -307,12 +370,7 @@ hardware — see below.
 
 ### 1. Wave 2, continued
 
-Three slices remain:
-
-**Download history + "set again."** Persist downloads in Drift (the database is
-open and now at v2), so a wallpaper already on the device can be re-applied
-without re-fetching it. Pure Dart, no new native surface — the smallest of the
-three.
+Two slices remain:
 
 **Account `/settings` sync.** `GET /settings` on `WallhavenApi`, pulling the
 account's default purity/categories/resolutions. This is also the endpoint that
@@ -321,6 +379,11 @@ would give the API key a first-class validity check, if the NSFW probe used by
 
 **Colour filter + shared empty/error/offline states** across the grids. The
 lightest slice.
+
+The history has **no way to remove an entry**, deliberately left out rather than
+forgotten: "remove from history" and "delete the file" are two different actions,
+and offering the first next to a tile that looks like a file is how someone
+deletes the wrong thing. Worth designing, not worth guessing at.
 
 ### 2. Owed on the device
 
@@ -338,9 +401,15 @@ bite:
 - **The private library against real files.** It has never listed a real
   `filesDir/wallpapers`. Download an explicit wallpaper, confirm it appears there,
   delete it, and confirm it is gone and still absent from Photos.
-- **The v1→v2 migration on the real database.** The test builds a v1 database by
-  hand, but the device holds the actual one. Confirm the download destinations and
-  the API key survive the first launch of this build.
+- **"Set again", from each tier that can hold a file.** The applier has only ever
+  met a fake `Uri`. Download one wallpaper to Gallery and one to Files-not-gallery,
+  open the history, and set each again — the `content://` read is the new code
+  path, and a MediaStore URI and a SAF document URI fail differently when they
+  fail. Then delete one of the files from Photos and set it again anyway: it must
+  quietly re-fetch from Wallhaven rather than fail.
+- **The v2→v3 migration on the real database.** The test builds a v2 database by
+  hand, but the device holds the actual one. Confirm the download destinations,
+  the API key, and the existing favorites survive the first launch of this build.
 - **Favorites persistence.** Favorite a wallpaper, kill the app, reopen it, and
   confirm it is still there and still renders in airplane mode.
 - **Material You.** Change the system wallpaper/accent and confirm tela's chrome
