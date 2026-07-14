@@ -4,9 +4,8 @@ Updated: 2026-07-13
 
 ## Current milestone
 
-Wave 0 is complete at `209101c`. Wave 1 slice 1 is committed as
-`bcba151` (`feat: add wallpaper apply core loop`). Wave 1 slice 2 is ready to
-commit.
+Wave 0 is complete at `209101c`. Wave 1's apply core loop is committed as
+`bcba151`, and its detail metadata slice is committed as `36ec9f9`.
 
 The app now supports the thin product loop:
 
@@ -24,6 +23,16 @@ The action passes through `ApplyWallpaper` → `WallpaperApplier` → tela's nat
 Android method channel. Kotlin downloads to app-private cache and calls
 `android.app.WallpaperManager`; Both uses sequential home/lock writes separated
 by 500 ms for restrictive OEM compatibility.
+
+The detail app bar now also has Download: tap routes to the purity default,
+while long-press offers a one-download Gallery / Files, not gallery / Private
+library override. `DownloadWallpaper` passes `ImageStore` the ID, source,
+purity, and selected `StorageTier`. Its project-owned Android adapter applies
+the actual storage policy: SFW/sketchy Gallery downloads are MediaStore images
+in `Pictures/tela`; app-private files live below tela's internal files dir; and
+the middle tier asks once for a persistent local Storage Access Framework tree,
+then writes to `tela/.nomedia` below it. The adapter rejects NSFW before a
+MediaStore write can happen.
 
 ## Decisions made
 
@@ -43,12 +52,17 @@ by 500 ms for restrictive OEM compatibility.
 - `WallpaperDetails` is deliberately separate from the browse `Wallpaper`.
   Its detail fields are non-nullable, so paged grids stay small and detail UI
   cannot turn every field into a null-state branch.
+- The non-gallery tier must use a user-selected SAF directory. An automatic
+  raw shared-storage path is not available to a scoped-storage app targeting
+  Android 11+ without broader access, and a MediaStore row would violate the
+  NSFW non-indexing invariant. Only the local external-storage documents
+  provider is accepted, preserving file-manager / USB-MTP reachability.
 
 ## Verification
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 45 tests pass
+- `./tool/tela test`: 52 tests pass
 - Three-tap browse → detail → Both widget flow: covered
 - Domain use case and all native target/error mappings: covered
 - `/w/{id}` is covered by a detail JSON fixture, mapper boundary tests, and a
@@ -58,6 +72,8 @@ by 500 ms for restrictive OEM compatibility.
 - Debug and release merged manifests inspected: `INTERNET` and
   `SET_WALLPAPER`; no
   `READ_EXTERNAL_STORAGE` or `READ_MEDIA_*`
+- Download routing has domain/use-case, method-channel, and detail-widget
+  coverage; `./tool/tela build apk --debug` compiles the Android storage code
 
 The Android 16 tablet was initially visible to Flutter, but its ADB USB
 transport disappeared before install (`flutter install` later listed only
@@ -65,9 +81,15 @@ Linux). Physical Home/Lock/Both application remains smoke-test pending.
 
 ## Start of next session
 
-Reconnect the Android 16 device and smoke-test Home, Lock, and Both with one
-portrait and one large landscape wallpaper. Record any OEM behavior here.
+Reconnect the Android 16 device and install the debug APK. Smoke-test Home,
+Lock, and Both with one portrait and one large landscape wallpaper; then test
+all three download tiers. For Gallery, confirm it appears in Photos. For Files,
+pick a local shared-storage directory when Android's picker opens, then confirm
+the resulting `tela/.nomedia` directory is visible through USB/MTP but absent
+from Photos. For Private library, confirm no gallery entry is created. Record
+any OEM behavior here.
 
-Then continue Wave 1 with download storage: introduce the domain-owned
-`ImageStore` port and three-tier routing, enforcing the NSFW non-indexing rule
-inside its adapter. Keep browsing, detail, and the apply flow working throughout.
+Then continue Wave 1 with persisted per-purity storage settings (SFW and NSFW)
+and settings UI. The current defaults are SFW/sketchy → Gallery and NSFW →
+Private library; the long-press override is already functional. Keep browsing,
+detail, apply, and downloads working throughout.

@@ -91,6 +91,41 @@
     "description": "Safe fallback when Android cannot apply a wallpaper."
   },
 
+  "detailDownload": "Download",
+  "@detailDownload": {
+    "description": "Downloads the current wallpaper to its configured destination."
+  },
+
+  "detailDownloadChooseTier": "Download to",
+  "@detailDownloadChooseTier": {
+    "description": "Heading above the one-download storage destination choices."
+  },
+
+  "detailStorageSharedGallery": "Gallery",
+  "@detailStorageSharedGallery": {
+    "description": "Downloads to the system-visible Pictures/tela gallery folder."
+  },
+
+  "detailStorageFilesOutsideGallery": "Files, not gallery",
+  "@detailStorageFilesOutsideGallery": {
+    "description": "Downloads to the USB/file-manager storage tier that is excluded from Photos."
+  },
+
+  "detailStorageAppPrivate": "Private library",
+  "@detailStorageAppPrivate": {
+    "description": "Downloads to tela's app-private storage tier."
+  },
+
+  "detailDownloadSuccess": "Wallpaper downloaded.",
+  "@detailDownloadSuccess": {
+    "description": "Confirmation shown after the wallpaper has been stored."
+  },
+
+  "detailDownloadFailure": "Couldn't download this wallpaper.",
+  "@detailDownloadFailure": {
+    "description": "Safe fallback when the image cannot be stored."
+  },
+
   "detailPreviewLabel": "Wallpaper {wallpaperId}",
   "@detailPreviewLabel": {
     "description": "Accessibility label for the full-screen preview.",

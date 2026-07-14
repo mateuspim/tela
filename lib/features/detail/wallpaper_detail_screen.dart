@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
@@ -38,6 +40,7 @@ class WallpaperDetailScreen extends ConsumerStatefulWidget {
 
 class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   bool _isApplying = false;
+  bool _isDownloading = false;
 
   Future<void> _chooseTarget() async {
     final WallpaperTarget? target = await showModalBottomSheet<WallpaperTarget>(
@@ -95,6 +98,70 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     }
   }
 
+  Future<void> _downloadDefault() {
+    return _download(StorageTier.defaultFor(widget.wallpaper.purity));
+  }
+
+  Future<void> _chooseDownloadTier() async {
+    final StorageTier? tier = await showModalBottomSheet<StorageTier>(
+      context: context,
+      builder: _downloadTierSheet,
+    );
+    if (tier == null || !mounted) return;
+    await _download(tier);
+  }
+
+  Widget _downloadTierSheet(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          ListTile(title: Text(l10n.detailDownloadChooseTier)),
+          _downloadTierTile(
+            l10n.detailStorageSharedGallery,
+            Icons.photo_library_outlined,
+            StorageTier.sharedGallery,
+          ),
+          _downloadTierTile(
+            l10n.detailStorageFilesOutsideGallery,
+            Icons.folder_outlined,
+            StorageTier.filesOutsideGallery,
+          ),
+          _downloadTierTile(
+            l10n.detailStorageAppPrivate,
+            Icons.lock_outline,
+            StorageTier.appPrivate,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _downloadTierTile(String label, IconData icon, StorageTier tier) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(label),
+      onTap: () => Navigator.pop(context, tier),
+    );
+  }
+
+  Future<void> _download(StorageTier tier) async {
+    setState(() => _isDownloading = true);
+    try {
+      await ref.read(downloadWallpaperProvider)(widget.wallpaper, tier);
+      if (mounted) {
+        _showResult(AppLocalizations.of(context).detailDownloadSuccess);
+      }
+    } on ImageStoreFailure {
+      if (mounted) {
+        _showResult(AppLocalizations.of(context).detailDownloadFailure);
+      }
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
   void _showResult(String message) {
     ScaffoldMessenger.of(
       context,
@@ -108,7 +175,10 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       wallpaperDetailsProvider(widget.wallpaper.id),
     );
     return Scaffold(
-      appBar: AppBar(title: Text(widget.wallpaper.resolution.toString())),
+      appBar: AppBar(
+        title: Text(widget.wallpaper.resolution.toString()),
+        actions: <Widget>[_downloadButton(l10n)],
+      ),
       body: Column(
         children: <Widget>[
           Expanded(
@@ -166,6 +236,27 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
                 )
               : const Icon(Icons.wallpaper_outlined),
           label: Text(l10n.detailSetWallpaper),
+        ),
+      ),
+    );
+  }
+
+  Widget _downloadButton(AppLocalizations l10n) {
+    return Semantics(
+      button: true,
+      label: l10n.detailDownload,
+      child: InkWell(
+        onTap: _isDownloading ? null : _downloadDefault,
+        onLongPress: _isDownloading ? null : _chooseDownloadTier,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: _isDownloading
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.download_outlined),
         ),
       ),
     );

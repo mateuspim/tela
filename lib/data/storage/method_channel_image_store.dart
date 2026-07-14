@@ -1,0 +1,75 @@
+import 'package:flutter/services.dart';
+import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/ports/image_store.dart';
+
+/// Signature of tela's native image-storage method.
+typedef InvokeImageStoreMethod =
+    Future<Object?> Function(String method, Map<String, String> arguments);
+
+/// [ImageStore] backed by tela's Android Storage Access Framework adapter.
+///
+/// Native code owns all filesystem and MediaStore calls, including the NSFW
+/// guard. Dart sends purity as data so the invariant stays at the I/O boundary.
+class MethodChannelImageStore implements ImageStore {
+  /// Creates an adapter whose native invocation can be replaced in tests.
+  MethodChannelImageStore({InvokeImageStoreMethod? invokeMethod})
+    : _invokeMethod = invokeMethod ?? _invokeNativeMethod;
+
+  final InvokeImageStoreMethod _invokeMethod;
+
+  static const MethodChannel _channel = MethodChannel('cc.pym.tela/images');
+
+  @override
+  Future<StoredImage> store({
+    required String id,
+    required String imageUrl,
+    required Purity purity,
+    required StorageTier tier,
+  }) async {
+    try {
+      final Object? raw = await _invokeMethod(
+        'storeImage',
+        <String, String>{
+          'id': id,
+          'imageUrl': imageUrl,
+          'purity': purity.name,
+          'tier': tier.name,
+        },
+      );
+      return _storedImageFrom(raw, tier);
+    } on PlatformException catch (error) {
+      throw ImageStoreFailure(_problemFor(error.code));
+    }
+  }
+
+  static Future<Object?> _invokeNativeMethod(
+    String method,
+    Map<String, String> arguments,
+  ) {
+    return _channel.invokeMethod<Object?>(method, arguments);
+  }
+
+  StoredImage _storedImageFrom(Object? raw, StorageTier tier) {
+    if (raw is Map<Object?, Object?> && raw['success'] == true) {
+      final Object? location = raw['location'];
+      if (location is String) {
+        return StoredImage(location: Uri.parse(location), tier: tier);
+      }
+    }
+    final Object? code = raw is Map<Object?, Object?> ? raw['errorCode'] : null;
+    throw ImageStoreFailure(_problemFor(code));
+  }
+
+  ImageStoreProblem _problemFor(Object? code) {
+    return switch (code) {
+      'downloadFailed' => ImageStoreProblem.source,
+      'unavailable' => ImageStoreProblem.unavailable,
+      'notConfigured' => ImageStoreProblem.notConfigured,
+      'restricted' => ImageStoreProblem.restricted,
+      _ => ImageStoreProblem.unknown,
+    };
+  }
+}
