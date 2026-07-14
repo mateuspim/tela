@@ -185,6 +185,97 @@ void main() {
     expect(api.receivedQueries.last.term, 'sunset');
   });
 
+  testWidgets('most viewed and most favorited are reachable listings', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    // Both have been in the Sorting enum since Wave 1 and could not be reached
+    // at all: the tab *was* the sorting, and there were only four tabs.
+    await _tapTab(tester, 'Most viewed');
+    expect(SearchQueryFacts(api.receivedQueries.last).sorting, 'views');
+
+    await _tapTab(tester, 'Most favorited');
+    expect(SearchQueryFacts(api.receivedQueries.last).sorting, 'favorites');
+  });
+
+  testWidgets('withholds relevance until there is a term to rank against', (
+    WidgetTester tester,
+  ) async {
+    await _pumpBrowse(tester, FakeWallhavenApi());
+
+    // Wallhaven's `relevance` ranks against `q`. With no term it has nothing to
+    // rank, so the tab would quietly be a listing of something else.
+    expect(find.text('Relevance'), findsNothing);
+    expect(_selectedTab(tester), 'Latest');
+  });
+
+  testWidgets('submitting a search lands on relevance', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await _search(tester, 'sunset');
+
+    // A search that left you on Latest would rank by upload date and take no
+    // account of what you typed.
+    expect(_selectedTab(tester), 'Relevance');
+    expect(_sortingsRequested(api), contains('relevance'));
+    expect(api.receivedQueries.last.term, 'sunset');
+  });
+
+  testWidgets('refining a search returns to relevance', (
+    WidgetTester tester,
+  ) async {
+    await _pumpBrowse(tester, FakeWallhavenApi());
+
+    await _search(tester, 'sunset');
+    await _tapTab(tester, 'Top');
+    expect(_selectedTab(tester), 'Top');
+
+    await _search(tester, 'sunset beach');
+
+    // A different path from the first search: relevance is already on screen,
+    // so the tab list does not change shape and nothing rebuilds the tab
+    // controller. It has to be moved by hand, and this is what catches it.
+    expect(_selectedTab(tester), 'Relevance');
+  });
+
+  testWidgets('clearing the search keeps the listing you were on', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await _search(tester, 'sunset');
+    await _tapTab(tester, 'Top');
+    await _clearSearch(tester);
+
+    // Relevance vanishes with the term and every tab behind it shifts one place
+    // left, so a controller that held its *index* would have moved the user
+    // from Top to Hot without being asked. The selection is by sorting.
+    expect(find.text('Relevance'), findsNothing);
+    expect(_selectedTab(tester), 'Top');
+    expect(SearchQueryFacts(api.receivedQueries.last).sorting, 'toplist');
+    expect(api.receivedQueries.last.term, isEmpty);
+  });
+
+  testWidgets('clearing the search while on relevance falls back to latest', (
+    WidgetTester tester,
+  ) async {
+    await _pumpBrowse(tester, FakeWallhavenApi());
+
+    await _search(tester, 'sunset');
+    expect(_selectedTab(tester), 'Relevance');
+
+    await _clearSearch(tester);
+
+    // The tab the user was standing on is the one that just disappeared.
+    expect(_selectedTab(tester), 'Latest');
+  });
+
   testWidgets('shows a localized message and a retry when the API fails', (
     WidgetTester tester,
   ) async {
@@ -326,6 +417,51 @@ void main() {
     );
     expect(reopened.purity.toApiBits(), '100');
   });
+}
+
+/// Types [term] into the search field and submits it, as the keyboard would.
+Future<void> _search(WidgetTester tester, String term) async {
+  await tester.enterText(find.byType(TextField), term);
+  await tester.testTextInput.receiveAction(TextInputAction.search);
+  await _settleTabs(tester);
+}
+
+/// Empties the search field from its own clear button.
+Future<void> _clearSearch(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Clear search'));
+  await _settleTabs(tester);
+}
+
+/// Taps the tab named [label], scrolling the bar to it first — seven sortings
+/// do not fit across a phone, which is why the bar is scrollable at all.
+Future<void> _tapTab(WidgetTester tester, String label) async {
+  await tester.ensureVisible(find.text(label));
+  await tester.tap(find.text(label));
+  await _settleTabs(tester);
+}
+
+/// Long enough for the tab indicator to finish sliding and the grid to fetch.
+Future<void> _settleTabs(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
+/// The label of the selected tab — the listing the user is actually looking at.
+///
+/// Read through the [TabBar]'s own controller rather than an index this test
+/// computed, because the index is exactly what the screen must *not* rely on:
+/// Relevance appearing renumbers every tab behind it.
+String _selectedTab(WidgetTester tester) {
+  final TabBar bar = tester.widget<TabBar>(find.byType(TabBar));
+  final Tab selected = bar.tabs[bar.controller!.index] as Tab;
+  return selected.text!;
+}
+
+/// Every `sorting` Wallhaven was actually asked for, in order.
+List<String?> _sortingsRequested(FakeWallhavenApi api) {
+  return api.receivedQueries
+      .map((SearchQuery query) => SearchQueryFacts(query).sorting)
+      .toList();
 }
 
 /// Opens the filter sheet from the browse app bar.

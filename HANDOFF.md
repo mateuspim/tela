@@ -2,6 +2,37 @@
 
 Updated: 2026-07-14
 
+## Every sorting is reachable (Wave 3, slice 3)
+
+The newest slice, and the one to read first. **Three of Wallhaven's seven
+sortings could not be reached at all** — `relevance`, `views` and `favorites`
+have been in the `Sorting` enum since Wave 1, and nothing could select them,
+because the tab *was* the sorting and there were four tabs. The bar is now
+scrollable and carries Most viewed and Most favorited; **Relevance appears only
+while a search term is set** and is selected on submit.
+
+`offerableSortings(hasTerm:)` is the rule, and it sits beside `offerablePurities`
+because it is the same shape of rule: an option Wallhaven cannot honour is not
+offered. Relevance ranks results *against* `q`, so with no term there is nothing
+to rank and the tab would quietly be a listing of something else.
+
+**The load-bearing part is that the selection is held by *sorting*, not by tab
+index.** Relevance appearing renumbers every tab behind it, so an index-based
+controller would move someone from Top to Hot the moment they cleared a search.
+`BrowseScreen` is stateful now for exactly this: it owns a `TabController` whose
+length changes under it, and `_selected` is what carries across the rebuild.
+
+**It has run on hardware against real Wallhaven** (2026-07-14, Samsung SM-X730):
+Most viewed and Most favorited come back as real, *distinct* grids — proof the
+params are honoured and not merely well-formed, which is all a fake could ever
+show. Searching from Most viewed moved the user to Relevance and returned
+genuinely sunset-ranked results, and clearing the search from Top left them on
+Top rather than Hot. No Flutter errors in logcat.
+
+**Still owed on a phone:** at 2560px the tablet fits all seven tabs without
+scrolling, so the *scrolling* of the scrollable bar has never actually been
+exercised. It joins the palette and the launch grid on the phone list.
+
 ## Tags and the uploader lead somewhere (Wave 3, slice 4)
 
 The newest slice, and the one to read first. **A wallpaper is now a place you can
@@ -719,11 +750,44 @@ re-verified on the phone:
   it must answer "how big is this screen" identically, and it was about to become
   a second copy of the same six lines.
 
+- **The selected tab is held by *sorting*, never by index — and that is the whole
+  design of the slice.** Relevance appears and vanishes with the search term,
+  which renumbers every tab behind it, so a `TabController` that kept its index
+  across the change would move a user from Top to Hot the instant they cleared a
+  search. `_selected` is a `Sorting`, `_recordSelection` writes it on every tap
+  and swipe, and the controller is rebuilt *only* when the tab list itself
+  changes — rebuilding every frame would restart the indicator mid-swipe, and
+  keeping a stale one when Relevance arrives throws (a `TabController` shorter
+  than its `TabBar`). A test pins it: mutating `_recordSelection` to a no-op
+  fails "clearing the search keeps the listing you were on" with Top → Latest.
+- **Selecting Relevance on submit has two code paths, and only one of them is the
+  rebuild.** A *first* search grows the tab list, so the controller is recreated
+  and simply opens on Relevance. *Refining* a search that is already running does
+  not change the list at all — nothing rebuilds the controller, and the tab has to
+  be moved by hand with `animateTo`. Deleting that one line still passes the
+  first-search test and fails only the refine one, which is why both exist.
+- **`offerableSortings(hasTerm:)` sits beside `offerablePurities`, and is the same
+  rule.** An option Wallhaven cannot honour is not offered: NSFW without a key
+  401s, and `relevance` with no `q` has nothing to rank against, so it answers
+  with an arbitrary listing. A tab that silently means something else is worse
+  than a tab that is not there.
+- **Each grid is keyed by its `Sorting`.** Relevance appearing shifts every grid
+  one place right in the `TabBarView`, and an unkeyed child would inherit the
+  paging state of the listing that used to sit in that slot.
+- The tab bar is `isScrollable` with `TabAlignment.start`. Seven sortings do not
+  fit across a phone, and fixed tabs would shrink to fit and cut their own labels
+  off. **The tablet cannot prove this**: at 2560px all seven fit without
+  scrolling, so the scrolling itself is still owed on a phone.
+- **"Most viewed" and "Most favorited", not "Views" and "Favorites".** The app
+  already has a favorites shelf in the same app bar, and a tab reading "Favorites"
+  next to it would promise the user's own saved wallpapers rather than
+  Wallhaven's most-favorited. These are wire sortings, not the local library.
+
 ## Verification
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 304 tests pass
+- `./tool/tela test`: 314 tests pass
 - **The app-lock, end to end, on hardware** (2026-07-14, Samsung SM-X730): the
   gate raises a real BiometricPrompt (`BiometricService/PreAuthInfo: Package:
   cc.pym.tela` in logcat), a dismissed prompt lists nothing, and the fail-open is
@@ -946,6 +1010,30 @@ re-verified on the phone:
   - and the device found the misaligned uploader link, which is fixed and
     re-confirmed on it
 
+- Every sorting reachable: `offerableSortings` (relevance withheld without a term
+  and leading with one, and — the one that would have caught the whole gap —
+  every member of `Sorting` being offered by *something*, since a sorting nothing
+  offers is a listing nobody can reach), and the browse screen, which asserts on
+  the **selected tab's own label** rather than an index, because the index is
+  exactly what the screen must not rely on: Most viewed and Most favorited each
+  re-query with their sorting, relevance is absent until a term is set, a submit
+  lands on it, *refining* a search returns to it, and clearing a search from Top
+  leaves you on Top (rather than Hot) and from Relevance falls back to Latest.
+  Both regressions were confirmed to fail against a deliberately mutated screen
+  before the tests were kept
+- **Every sorting reachable is verified on hardware** (2026-07-14, Samsung
+  SM-X730, debug build, installed as an update):
+  - Most viewed and Most favorited return real and *distinct* grids from
+    Wallhaven. That is the part no fake could ever show: `FakeWallhavenApi`
+    proves tela **builds** `sorting=views`, not that Wallhaven **honours** it,
+    and neither param had ever been sent to the real server
+  - searching "sunset" from the Most viewed tab moved the user to Relevance and
+    came back genuinely sunset-ranked — so `sorting=relevance` is live too
+  - clearing the search from Top left them on **Top**, not Hot: the tab list
+    shrank by one under a selection held by sorting rather than by index
+  - all seven tabs fit the tablet's 2560px bar, so the *scrolling* of the
+    scrollable bar is still owed on a phone. No Flutter errors in logcat
+
 The Random tab's deep paging is the one Wave 1 behaviour never exercised on
 hardware — see below.
 
@@ -973,14 +1061,15 @@ user, 2026-07-14:
    multi-select over Wallhaven's real vocabulary, with the device's own reduced
    ratio offered first as the recommendation. Ratios are a **union** in the API,
    unlike `colors` — so chips, not a radio.
-3. **Every sorting reachable.** Relevance, views, and favorites cannot be reached
-   at all today, because the tab *is* the sorting and there are four tabs. The tab
-   bar becomes scrollable and gains Views and Favorites; **Relevance appears only
-   when a search term is set** (it ranks against a term and means nothing without
-   one) and is selected on submit.
+3. ~~**Every sorting reachable.**~~ **Built and verified on hardware,
+   2026-07-14** — read the top of this file.
 4. ~~**Tags and the uploader become links.**~~ **Built and verified on hardware,
-   2026-07-14** — read the top of this file. Slices 1–3 are what is left of
-   Wave 3.
+   2026-07-14** — read the top of this file.
+
+**Slices 1 and 2 are what is left of Wave 3**, and they are the two that
+overlap: the resolution filter's buckets group *by ratio*, and the ratio filter
+offers the device's own reduced ratio first. Taking the ratio filter first reads
+more naturally.
 
 PLAN's old Wave 3 (crop/reposition, daily auto-rotate, collections, share sheet,
 Omarchy sync) is now **Wave 4**.
@@ -1030,8 +1119,10 @@ listings, remove-from-history, and "set again" including the re-fetch fallback.
 What follows is what the tablet could *not* settle.
 
 **The device is a Samsung SM-X730 — a tablet, not a phone.** Everything on this
-list works there, but two claims it cannot settle: whether the 29-swatch palette
-is usable one-handed, and how the launch grid reads on a small screen. Both are
+list works there, but three claims it cannot settle: whether the 29-swatch palette
+is usable one-handed, how the launch grid reads on a small screen, and whether
+the seven-tab sorting bar scrolls sanely — at 2560px every tab fits at once, so
+the scrolling that the bar exists for has never actually happened. All three are
 still owed on an actual phone. **It also has no screen lock**, which is why the
 PIN fallback is untestable on it — and, not coincidentally, why the app-lock
 fail-open bit there first.

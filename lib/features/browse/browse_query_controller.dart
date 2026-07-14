@@ -128,3 +128,32 @@ List<Purity> offerablePurities({required bool hasApiKey}) {
   if (hasApiKey) return Purity.values;
   return <Purity>[Purity.sfw, Purity.sketchy];
 }
+
+/// The sortings the browse tabs may offer: Relevance only with a search term.
+///
+/// Not a matter of taste either — `relevance` ranks results *against* `q`, so
+/// with no term there is nothing to rank against and Wallhaven answers with an
+/// arbitrary listing. A tab that silently means something else is worse than a
+/// tab that isn't there.
+///
+/// Relevance leads, because it is the sorting a search wants and is selected on
+/// submit; the six that stand on their own follow, in the order they were
+/// always in.
+///
+/// ```dart
+/// offerableSortings(hasTerm: false); // no Sorting.relevance
+/// ```
+List<Sorting> offerableSortings({required bool hasTerm}) {
+  if (hasTerm) return <Sorting>[Sorting.relevance, ..._termlessSortings];
+  return _termlessSortings;
+}
+
+/// The sortings that mean something with no search term behind them.
+const List<Sorting> _termlessSortings = <Sorting>[
+  Sorting.dateAdded,
+  Sorting.toplist,
+  Sorting.hot,
+  Sorting.random,
+  Sorting.views,
+  Sorting.favorites,
+];

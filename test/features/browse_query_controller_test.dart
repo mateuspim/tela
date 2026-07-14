@@ -265,6 +265,42 @@ void main() {
     });
   });
 
+  group('offerableSortings', () {
+    test('withholds relevance until there is a term to rank against', () {
+      expect(
+        offerableSortings(hasTerm: false),
+        isNot(contains(Sorting.relevance)),
+      );
+      expect(offerableSortings(hasTerm: true), contains(Sorting.relevance));
+    });
+
+    test('leads with relevance, so a search lands on it', () {
+      expect(offerableSortings(hasTerm: true).first, Sorting.relevance);
+    });
+
+    test('offers every sorting Wallhaven has, and no more', () {
+      // The gap this slice closes: views and favorites existed in the enum from
+      // Wave 1 and could not be reached at all, because the tab *was* the
+      // sorting and there were four tabs.
+      expect(
+        offerableSortings(hasTerm: true).toSet(),
+        Sorting.values.toSet(),
+        reason: 'a sorting nothing offers is a listing nobody can reach',
+      );
+    });
+
+    test('a termless listing keeps the six that stand on their own', () {
+      expect(offerableSortings(hasTerm: false), <Sorting>[
+        Sorting.dateAdded,
+        Sorting.toplist,
+        Sorting.hot,
+        Sorting.random,
+        Sorting.views,
+        Sorting.favorites,
+      ]);
+    });
+  });
+
   group('RatioChoice', () {
     test('reads the choice back out of a query', () {
       expect(RatioChoice.of(const SearchQuery()), RatioChoice.portrait);

@@ -23,6 +23,26 @@ String ratioLabel(AppLocalizations l10n, RatioChoice choice) {
   };
 }
 
+/// The user-facing name of a [Sorting] — the label on its browse tab.
+///
+/// Exhaustive on purpose: a sorting Wallhaven adds later is a compile error
+/// here rather than an unlabelled tab.
+///
+/// ```dart
+/// sortingLabel(l10n, Sorting.dateAdded); // 'Latest'
+/// ```
+String sortingLabel(AppLocalizations l10n, Sorting sorting) {
+  return switch (sorting) {
+    Sorting.dateAdded => l10n.browseTabLatest,
+    Sorting.toplist => l10n.browseTabTop,
+    Sorting.hot => l10n.browseTabHot,
+    Sorting.random => l10n.browseTabRandom,
+    Sorting.views => l10n.browseTabViews,
+    Sorting.favorites => l10n.browseTabFavorites,
+    Sorting.relevance => l10n.browseTabRelevance,
+  };
+}
+
 /// The user-facing name of a [SortOrder].
 String orderLabel(AppLocalizations l10n, SortOrder order) {
   return switch (order) {

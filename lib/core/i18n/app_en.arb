@@ -26,6 +26,21 @@
     "description": "Browse tab showing a shuffled selection."
   },
 
+  "browseTabViews": "Most viewed",
+  "@browseTabViews": {
+    "description": "Browse tab showing the most-viewed wallpapers of all time."
+  },
+
+  "browseTabFavorites": "Most favorited",
+  "@browseTabFavorites": {
+    "description": "Browse tab showing the most-favorited wallpapers of all time. Wallhaven's own favorites, not the ones saved on this device."
+  },
+
+  "browseTabRelevance": "Relevance",
+  "@browseTabRelevance": {
+    "description": "Browse tab ranking results against the search term. Only shown while a term is set."
+  },
+
   "browseSearchHint": "Search wallpapers",
   "@browseSearchHint": {
     "description": "Placeholder in the browse search field."
