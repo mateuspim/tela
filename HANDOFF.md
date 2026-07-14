@@ -19,7 +19,7 @@ repeated images several pages in.
 
 **Wave 2 is now in progress.** Favorites are `0cf2781`, Material You is
 `c056369`, the private library is `a2e5da7` + `5f747a8`, the download history is
-`50485bd`, and the colour filter with the shared status states is `HEAD`; see
+`50485bd`, and the colour filter with the shared status states is `f0c1e10`; see
 "Wave 2 so far" below. **One slice remains: account `/settings` sync.**
 
 The app supports the thin product loop:
@@ -96,7 +96,7 @@ works with no network. `WallpaperApplier` therefore takes a `Uri` source rather
 than a URL, and Kotlin reads a local `file://` or `content://` through the
 `ContentResolver` when the scheme is not http(s).
 
-**Colour filter + shared status states** (`HEAD`). The filter sheet now carries
+**Colour filter + shared status states** (`f0c1e10`). The filter sheet now carries
 Wallhaven's 29-swatch palette, and every grid in the app draws its empty and
 failed states through one `WallpaperStatusView` instead of four hand-rolled
 centred `Text`s. Browse, favorites, the download history, and the private
