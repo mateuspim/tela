@@ -4,18 +4,8 @@ import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/use_cases/sync_account_defaults.dart';
 
-/// Reads the synced account defaults this device is allowed to browse on, and
-/// syncs them the first time it finds a key that never had the chance.
-///
-/// Two rules live here, and each closes a door the other cannot.
-///
-/// **The explicit guard.** What an account asks for and what a *keyless* device
-/// may request are two different things: an NSFW search with no key is a 401,
-/// so browse would open on an error rather than a grid. `ForgetApiKey` already
-/// drops the defaults with the key, so an explicit default surviving into a
-/// keyless app means something went wrong — a crash between the two writes, a
-/// hand-edited database — and this is the second door, closed the way the NSFW
-/// storage rules are.
+/// Reads the synced account defaults, and syncs them the first time it finds a
+/// key that never had the chance.
 ///
 /// **The backfill.** `SaveApiKey` syncs, so a key saved *by this build* always
 /// has defaults. A key saved by an earlier one does not, and nothing would ever
@@ -23,7 +13,12 @@ import 'package:tela/domain/use_cases/sync_account_defaults.dart';
 /// until they happened to re-paste a key that already works. So a stored key
 /// with no stored defaults syncs once, here, and the very next load finds them
 /// and spends nothing. Found on the device (2026-07-14), where the settings
-/// table had a working key and no `account.*` rows at all.
+/// table held a working key and no `account.*` rows at all.
+///
+/// It hands back what the account *said*, explicit purity and all. Nothing here
+/// strips that any more, because nothing has to: `AccountSettings.applyTo` will
+/// not seed explicit into a query in the first place, so an explicit default
+/// cannot outlive its key and turn browse into a 401. One rule, one place.
 ///
 /// ```dart
 /// final AccountSettings? defaults = await loadAccountDefaults();
@@ -47,8 +42,11 @@ class LoadAccountDefaults {
   /// throws: an account tela cannot reach costs the defaults, not the app.
   Future<AccountSettings?> call() async {
     final AccountSettings? stored = await _settings.loadAccountDefaults();
-    if (!await _secrets.hasApiKey()) return stored?.withoutExplicit();
-    return stored ?? _backfill();
+    if (stored != null) return stored;
+    // No key, no request: Wallhaven would only 401, and a device with no key
+    // has no account to have defaults from.
+    if (!await _secrets.hasApiKey()) return null;
+    return _backfill();
   }
 
   /// The one request a key that predates the sync is owed.

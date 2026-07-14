@@ -29,8 +29,10 @@ void main() {
 
     final SearchQuery query = container.read(browseQueryProvider);
     expect(query.categories.toApiBits(), '010');
-    expect(query.purity.toApiBits(), '111');
     expect(query.topRange, TopRange.oneWeek);
+    // The account browses explicit; the front page does not. Sketchy seeds,
+    // explicit stays a per-session choice in the filter sheet.
+    expect(query.purity.toApiBits(), '110');
   });
 
   test('forgetting the key takes the account back out of browse', () async {

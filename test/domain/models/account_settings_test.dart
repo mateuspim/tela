@@ -16,6 +16,30 @@ void main() {
       expect(query.topRange, TopRange.oneWeek);
     });
 
+    test('never seeds explicit, even from an account that browses it', () {
+      const AccountSettings explicit = AccountSettings(
+        categories: CategoryFilter.all,
+        purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw}),
+        topRange: TopRange.oneMonth,
+      );
+
+      final SearchQuery query = explicit.applyTo(const SearchQuery());
+
+      // Sketchy seeds — it needs no key and it is not explicit. Explicit is a
+      // thing you turn on in the filter sheet, per session.
+      expect(query.purity.toApiBits(), '110');
+    });
+
+    test('an explicit-only account seeds safe, not the "000" mask', () {
+      const AccountSettings explicit = AccountSettings(
+        categories: CategoryFilter.all,
+        purity: PurityFilter(<Purity>{Purity.nsfw}),
+        topRange: TopRange.oneMonth,
+      );
+
+      expect(explicit.applyTo(const SearchQuery()).purity.toApiBits(), '100');
+    });
+
     test('leaves everything the account has no business setting', () {
       final WallpaperColor blue = WallpaperColor('#0066cc');
       final SearchQuery browsing = SearchQuery(
@@ -42,33 +66,22 @@ void main() {
     });
   });
 
-  group('withoutExplicit', () {
-    test('drops nsfw and keeps the rest', () {
-      const AccountSettings explicit = AccountSettings(
-        categories: CategoryFilter(<Category>{Category.anime}),
-        purity: PurityFilter(<Purity>{Purity.sketchy, Purity.nsfw}),
-        topRange: TopRange.oneWeek,
-      );
-
-      final AccountSettings safe = explicit.withoutExplicit();
-
-      expect(safe.purity.toApiBits(), '010');
-      expect(safe.categories.toApiBits(), '010');
-      expect(safe.topRange, TopRange.oneWeek);
-    });
-
-    test('falls back to sfw rather than encode the "000" mask', () {
+  group('browsablePurity', () {
+    test("keeps the account's explicit purity as the account stated it", () {
+      // The *stored* account is the account's truth; only what browse opens on
+      // is narrowed. A future "browse explicit" affordance needs this row.
       const AccountSettings explicit = AccountSettings(
         categories: CategoryFilter.all,
-        purity: PurityFilter(<Purity>{Purity.nsfw}),
+        purity: PurityFilter(<Purity>{Purity.sfw, Purity.nsfw}),
         topRange: TopRange.oneMonth,
       );
 
-      expect(explicit.withoutExplicit().purity.toApiBits(), '100');
+      expect(explicit.purity.toApiBits(), '101');
+      expect(explicit.browsablePurity.toApiBits(), '100');
     });
 
-    test('is an identity on defaults that were never explicit', () {
-      expect(_account.withoutExplicit(), _account);
+    test('leaves a safe account alone', () {
+      expect(_account.browsablePurity.toApiBits(), '110');
     });
   });
 

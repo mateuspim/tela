@@ -25,31 +25,18 @@ void main() {
     expect(load(), completion(_explicitAccount));
   });
 
-  test('strips explicit content when the key is gone — an nsfw default with '
-      'no key is a 401, not a grid', () async {
-    final LoadAccountDefaults load = _load(stored: _explicitAccount);
-
-    final AccountSettings? defaults = await load();
-
-    expect(defaults?.purity.toApiBits(), '110');
-    // Everything that is not the purity survives the strip.
-    expect(defaults?.categories.toApiBits(), '010');
-    expect(defaults?.topRange, TopRange.oneWeek);
-  });
-
-  test('an explicit-only account with no key falls back to safe, not to an '
-      'empty mask', () async {
+  test('hands back what the account said, explicit and all — narrowing it is '
+      "applyTo's job, and doing it twice is doing it in two places", () async {
     final LoadAccountDefaults load = _load(
-      stored: const AccountSettings(
-        categories: CategoryFilter.all,
-        purity: PurityFilter(<Purity>{Purity.nsfw}),
-        topRange: TopRange.oneMonth,
-      ),
+      stored: _explicitAccount,
+      storedKey: 'abc123',
     );
 
     final AccountSettings? defaults = await load();
 
-    expect(defaults?.purity.toApiBits(), '100');
+    expect(defaults?.purity.toApiBits(), '111');
+    // …and the query it seeds still refuses to open on explicit.
+    expect(defaults?.applyTo(const SearchQuery()).purity.toApiBits(), '110');
   });
 
   group('backfill', () {

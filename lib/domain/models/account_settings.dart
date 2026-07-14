@@ -53,39 +53,46 @@ class AccountSettings {
   /// The content buckets the account browses by default.
   final CategoryFilter categories;
 
-  /// The purities the account browses by default. May include NSFW — the
-  /// account has a key by definition, but *this device* only has one while a
-  /// key is stored, hence [withoutExplicit].
+  /// The purities the account browses by default, as the account itself states
+  /// them — explicit included. What browse *opens* on is [browsablePurity],
+  /// which is deliberately not the same thing.
   final PurityFilter purity;
 
   /// The account's toplist window.
   final TopRange topRange;
+
+  /// The account's purity, minus explicit.
+  ///
+  /// **Explicit never seeds a default, in any state.** Every other NSFW rule in
+  /// tela fails toward safe — downloads route explicit content to app-private
+  /// storage, the private library sits behind `FLAG_SECURE` and an app-lock, a
+  /// corrupt stored purity reads as `nsfw` rather than `sfw` — and a grid that
+  /// opens on explicit thumbnails the moment the app launches is the one place
+  /// that would have run the other way. A phone is the device you unlock on a
+  /// train. (Seen on hardware, 2026-07-14: an account with NSFW enabled made
+  /// the front page explicit by default, which is how this rule was found.)
+  ///
+  /// So explicit stays something you turn on per session, in the filter sheet.
+  /// Sketchy still seeds: it needs no key, and it is not that. Dropping the
+  /// last purity would encode as `"000"`, so an explicit-only account falls
+  /// back to safe.
+  ///
+  /// This also closes for free the hole `LoadAccountDefaults` used to guard by
+  /// hand — an explicit default cannot outlive its key and turn browse into a
+  /// 401, because it is never a default at all.
+  PurityFilter get browsablePurity {
+    final Set<Purity> safe = purity.purities
+        .where((Purity p) => !p.requiresApiKey)
+        .toSet();
+    return safe.isEmpty ? PurityFilter.sfwOnly : PurityFilter(safe);
+  }
 
   /// Returns [query] with these defaults applied, and everything else — the
   /// search term, the sorting, the screen-derived `atLeast` — untouched.
   SearchQuery applyTo(SearchQuery query) {
     return query.copyWith(
       categories: categories,
-      purity: purity,
-      topRange: topRange,
-    );
-  }
-
-  /// Returns these defaults with explicit content removed.
-  ///
-  /// What an account asks for and what a keyless device may *request* are two
-  /// different things: an NSFW search with no key is a 401, so browse would
-  /// open on an error rather than a grid. Dropping the last purity would encode
-  /// as `"000"`, so an explicit-only account falls back to safe.
-  AccountSettings withoutExplicit() {
-    final Set<Purity> safe = purity.purities
-        .where((Purity p) => !p.requiresApiKey)
-        .toSet();
-    if (safe.length == purity.purities.length) return this;
-
-    return AccountSettings(
-      categories: categories,
-      purity: safe.isEmpty ? PurityFilter.sfwOnly : PurityFilter(safe),
+      purity: browsablePurity,
       topRange: topRange,
     );
   }
