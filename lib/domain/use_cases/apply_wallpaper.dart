@@ -12,6 +12,9 @@ class ApplyWallpaper {
 
   /// Applies [wallpaper] to [target] using its full-resolution image.
   Future<void> call(Wallpaper wallpaper, WallpaperTarget target) {
-    return _applier.apply(imageUrl: wallpaper.fullImageUrl, target: target);
+    return _applier.apply(
+      source: Uri.parse(wallpaper.fullImageUrl),
+      target: target,
+    );
   }
 }

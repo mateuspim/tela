@@ -51,6 +51,8 @@ class _SettingsList extends StatelessWidget {
         const ApiKeySection(),
         const Divider(),
         _Header(title: l10n.settingsDownloadsSection),
+        const _DownloadHistoryTile(),
+        const Divider(),
         _TierPicker(
           title: l10n.settingsDownloadsSfw,
           purity: Purity.sfw,
@@ -68,6 +70,26 @@ class _SettingsList extends StatelessWidget {
         const _PrivateLibraryTile(),
         const AppLockSwitch(),
       ],
+    );
+  }
+}
+
+/// The way into the download history.
+///
+/// It sits above the destination pickers because it is what they produce: the
+/// wallpapers already on this device, each one ready to be set again.
+class _DownloadHistoryTile extends StatelessWidget {
+  const _DownloadHistoryTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return ListTile(
+      leading: const Icon(Icons.history_outlined),
+      title: Text(l10n.downloadHistoryTitle),
+      subtitle: Text(l10n.downloadHistoryOpenDetail),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => context.pushNamed(TelaRoutes.downloadHistoryName),
     );
   }
 }

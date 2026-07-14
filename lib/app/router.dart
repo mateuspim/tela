@@ -3,6 +3,7 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/browse_screen.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
+import 'package:tela/features/downloads/download_history_screen.dart';
 import 'package:tela/features/favorites/favorites_screen.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
 import 'package:tela/features/settings/settings_screen.dart';
@@ -45,6 +46,11 @@ abstract final class TelaRouter {
           path: TelaRoutes.privateLibraryPath,
           name: TelaRoutes.privateLibraryName,
           builder: (_, _) => const PrivateLibraryScreen(),
+        ),
+        GoRoute(
+          path: TelaRoutes.downloadHistoryPath,
+          name: TelaRoutes.downloadHistoryName,
+          builder: (_, _) => const DownloadHistoryScreen(),
         ),
       ],
     );

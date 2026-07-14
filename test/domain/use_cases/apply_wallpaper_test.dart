@@ -16,7 +16,7 @@ void main() {
 
     await apply(wallpaper, WallpaperTarget.lock);
 
-    expect(applier.receivedImageUrl, wallpaper.fullImageUrl);
+    expect(applier.receivedSource, Uri.parse(wallpaper.fullImageUrl));
     expect(applier.receivedTarget, WallpaperTarget.lock);
     expect(applier.callCount, 1);
   });

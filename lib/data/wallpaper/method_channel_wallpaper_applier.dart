@@ -9,7 +9,8 @@ typedef InvokeWallpaperMethod =
 
 /// [WallpaperApplier] backed by tela's Android method channel.
 ///
-/// The Kotlin side downloads into app-private cache and calls Android's public
+/// The Kotlin side reads the source — over HTTP, or from the local file a past
+/// download left behind — into app-private cache, then calls Android's public
 /// wallpaper API. No storage permission or third-party plugin is involved.
 class MethodChannelWallpaperApplier implements WallpaperApplier {
   /// Creates the adapter.
@@ -26,14 +27,14 @@ class MethodChannelWallpaperApplier implements WallpaperApplier {
 
   @override
   Future<void> apply({
-    required String imageUrl,
+    required Uri source,
     required WallpaperTarget target,
   }) async {
     try {
       final Object? raw = await _invokeMethod(
         'applyWallpaper',
         <String, String>{
-          'imageUrl': imageUrl,
+          'source': source.toString(),
           'target': target.name,
         },
       );
@@ -57,9 +58,13 @@ class MethodChannelWallpaperApplier implements WallpaperApplier {
     return WallpaperApplyFailure(_problemFor(code));
   }
 
+  /// A source that could not be *downloaded* and one that could not be *read*
+  /// from disk are one problem to a caller: the image is gone. `ApplyDownload`
+  /// leans on that to decide it should fall back to Wallhaven.
   WallpaperApplyProblem _problemFor(Object? code) {
     return switch (code) {
       'downloadFailed' => WallpaperApplyProblem.source,
+      'sourceUnreadable' => WallpaperApplyProblem.source,
       'unsupported' => WallpaperApplyProblem.unsupported,
       'applyFailed' => WallpaperApplyProblem.rejected,
       _ => WallpaperApplyProblem.unknown,

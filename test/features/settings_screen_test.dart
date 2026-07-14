@@ -152,6 +152,14 @@ Future<void> _pumpSettings(
   FakeSecretStore? secrets,
   FakeWallhavenApi? api,
 }) async {
+  // Settings is a scrolling list, and it grew a download-history tile. On a
+  // phone-sized test viewport the explicit picker falls below the fold and is
+  // never built, which reads as "the setting vanished" rather than "scroll".
+  tester.view
+    ..physicalSize = const Size(1080, 3600)
+    ..devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
+import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -46,47 +47,9 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   bool _isDownloading = false;
 
   Future<void> _chooseTarget() async {
-    final WallpaperTarget? target = await showModalBottomSheet<WallpaperTarget>(
-      context: context,
-      builder: _targetSheet,
-    );
+    final WallpaperTarget? target = await chooseWallpaperTarget(context);
     if (target == null || !mounted) return;
     await _apply(target);
-  }
-
-  Widget _targetSheet(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          ListTile(title: Text(l10n.detailTargetTitle)),
-          _targetTile(
-            l10n.detailTargetHome,
-            Icons.home_outlined,
-            WallpaperTarget.home,
-          ),
-          _targetTile(
-            l10n.detailTargetLock,
-            Icons.lock_outline,
-            WallpaperTarget.lock,
-          ),
-          _targetTile(
-            l10n.detailTargetBoth,
-            Icons.smartphone_outlined,
-            WallpaperTarget.both,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _targetTile(String label, IconData icon, WallpaperTarget target) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(label),
-      onTap: () => Navigator.pop(context, target),
-    );
   }
 
   Future<void> _apply(WallpaperTarget target) async {

@@ -43,7 +43,7 @@ void main() {
     await _finishTransition(tester);
 
     expect(applier.callCount, 1);
-    expect(applier.receivedImageUrl, wallpaper.fullImageUrl);
+    expect(applier.receivedSource, Uri.parse(wallpaper.fullImageUrl));
     expect(applier.receivedTarget, WallpaperTarget.both);
     expect(find.text('Wallpaper set.'), findsOneWidget);
   });

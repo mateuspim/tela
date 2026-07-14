@@ -9,6 +9,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ExecutorService
@@ -72,14 +73,14 @@ class MainActivity : FlutterFragmentActivity() {
             result.notImplemented()
             return
         }
-        val imageUrl = call.argument<String>("imageUrl")
+        val source = call.argument<String>("source")
         val target = call.argument<String>("target")
-        if (imageUrl == null || target == null) {
+        if (source == null || target == null) {
             result.success(failure("unsupported"))
             return
         }
         wallpaperExecutor.execute {
-            val response = applyRemoteWallpaper(imageUrl, target)
+            val response = applyWallpaper(Uri.parse(source), target)
             runOnUiThread { result.success(response) }
         }
     }
@@ -192,11 +193,21 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    private fun applyRemoteWallpaper(imageUrl: String, target: String): Map<String, Any> {
+    /**
+     * Applies a wallpaper from Wallhaven, or from a file already on this device.
+     *
+     * A past download is set again from its own file: re-fetching several
+     * megabytes tela already wrote is both slow and pointless, and it would make
+     * "set again" need a network the user may not have. Which failure comes back
+     * matters — an unreadable local file is how Dart learns the download was
+     * deleted behind our back and that it should fall back to the source URL.
+     */
+    private fun applyWallpaper(source: Uri, target: String): Map<String, Any> {
+        val remote = source.scheme == "http" || source.scheme == "https"
         val cachedImage = try {
-            downloadToCache(imageUrl)
+            if (remote) downloadToCache(source.toString()) else copyLocalToCache(source)
         } catch (_: Exception) {
-            return failure("downloadFailed")
+            return failure(if (remote) "downloadFailed" else "sourceUnreadable")
         }
         return try {
             applyCachedWallpaper(cachedImage, target)
@@ -209,21 +220,36 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun downloadToCache(imageUrl: String): File {
-        val cachedImage = File.createTempFile("tela-wallpaper-", ".image", cacheDir)
         val connection = URL(imageUrl).openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = NETWORK_TIMEOUT_MS
             connection.readTimeout = NETWORK_TIMEOUT_MS
             connection.instanceFollowRedirects = true
-            connection.inputStream.use { input ->
-                cachedImage.outputStream().use { output -> input.copyTo(output) }
-            }
+            return connection.inputStream.use(::copyToCache)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /**
+     * Reads through the ContentResolver, which covers all three storage tiers:
+     * a MediaStore image tela inserted, a document under the user's SAF tree, and
+     * a plain file in app-private storage. Throws when the file is gone.
+     */
+    private fun copyLocalToCache(source: Uri): File {
+        val stream = contentResolver.openInputStream(source)
+            ?: throw IllegalStateException("no input stream for the stored image")
+        return stream.use(::copyToCache)
+    }
+
+    private fun copyToCache(input: InputStream): File {
+        val cachedImage = File.createTempFile("tela-wallpaper-", ".image", cacheDir)
+        try {
+            cachedImage.outputStream().use { output -> input.copyTo(output) }
             return cachedImage
         } catch (error: Exception) {
             cachedImage.delete()
             throw error
-        } finally {
-            connection.disconnect()
         }
     }
 

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/network/wallhaven_client.dart';
 import 'package:tela/data/db/tela_database.dart';
+import 'package:tela/data/downloads/drift_download_history.dart';
 import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/secrets/secure_secret_store.dart';
 import 'package:tela/data/security/local_auth_app_lock.dart';
@@ -11,6 +12,7 @@ import 'package:tela/data/storage/method_channel_screen_guard.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
 import 'package:tela/domain/ports/app_lock.dart';
+import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/image_store.dart';
 import 'package:tela/domain/ports/screen_guard.dart';
@@ -18,6 +20,7 @@ import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
+import 'package:tela/domain/use_cases/apply_download.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
 import 'package:tela/domain/use_cases/forget_api_key.dart';
@@ -87,6 +90,12 @@ final Provider<FavoritesRepository> favoritesRepositoryProvider =
       (Ref ref) => DriftFavoritesRepository(ref.watch(telaDatabaseProvider)),
     );
 
+/// The download-history port, bound to its Drift adapter.
+final Provider<DownloadHistory> downloadHistoryProvider =
+    Provider<DownloadHistory>(
+      (Ref ref) => DriftDownloadHistory(ref.watch(telaDatabaseProvider)),
+    );
+
 /// Applies one selected wallpaper to an Android target.
 final Provider<ApplyWallpaper> applyWallpaperProvider =
     Provider<ApplyWallpaper>(
@@ -101,8 +110,14 @@ final Provider<DownloadWallpaper> downloadWallpaperProvider =
       (Ref ref) => DownloadWallpaper(
         imageStore: ref.watch(imageStoreProvider),
         settings: ref.watch(settingsRepositoryProvider),
+        history: ref.watch(downloadHistoryProvider),
       ),
     );
+
+/// Sets an already-downloaded wallpaper again, from the file on this device.
+final Provider<ApplyDownload> applyDownloadProvider = Provider<ApplyDownload>(
+  (Ref ref) => ApplyDownload(applier: ref.watch(wallpaperApplierProvider)),
+);
 
 /// The search use case, the only thing the browse feature actually calls.
 final Provider<SearchWallpapers> searchWallpapersProvider =

@@ -15,7 +15,7 @@ void main() {
           );
 
       for (final WallpaperTarget target in WallpaperTarget.values) {
-        await applier.apply(imageUrl: _imageUrl, target: target);
+        await applier.apply(source: Uri.parse(_imageUrl), target: target);
       }
 
       expect(fake.receivedMethods, <String>[
@@ -24,7 +24,7 @@ void main() {
         'applyWallpaper',
       ]);
       expect(
-        fake.receivedArguments.map((arguments) => arguments['imageUrl']),
+        fake.receivedArguments.map((arguments) => arguments['source']),
         <String>[_imageUrl, _imageUrl, _imageUrl],
       );
       expect(
@@ -38,6 +38,7 @@ void main() {
     const Map<String, WallpaperApplyProblem> cases =
         <String, WallpaperApplyProblem>{
           'downloadFailed': WallpaperApplyProblem.source,
+          'sourceUnreadable': WallpaperApplyProblem.source,
           'unsupported': WallpaperApplyProblem.unsupported,
           'applyFailed': WallpaperApplyProblem.rejected,
           'newNativeFailure': WallpaperApplyProblem.unknown,
@@ -55,7 +56,10 @@ void main() {
           MethodChannelWallpaperApplier(invokeMethod: fake.call);
 
       await expectLater(
-        applier.apply(imageUrl: _imageUrl, target: WallpaperTarget.home),
+        applier.apply(
+          source: Uri.parse(_imageUrl),
+          target: WallpaperTarget.home,
+        ),
         throwsA(_failureWith(entry.value)),
       );
     }
@@ -70,7 +74,7 @@ void main() {
     );
 
     await expectLater(
-      applier.apply(imageUrl: _imageUrl, target: WallpaperTarget.lock),
+      applier.apply(source: Uri.parse(_imageUrl), target: WallpaperTarget.lock),
       throwsA(_failureWith(WallpaperApplyProblem.rejected)),
     );
   });

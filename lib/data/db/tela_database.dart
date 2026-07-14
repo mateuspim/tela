@@ -19,14 +19,15 @@ class SettingEntries extends Table {
   Set<Column<Object>> get primaryKey => <Column<Object>>{key};
 }
 
-/// One favorited wallpaper, stored whole rather than as a bare id.
+/// The columns that spell out one whole wallpaper, shared by the tables that
+/// keep one.
 ///
-/// Every field the grid and the apply action need lives here, so the favorites
-/// screen renders — and a saved wallpaper can still be applied — with no
-/// network at all. An id-only table would make favorites unreadable offline,
-/// which is the one thing they exist to survive.
-@DataClassName('FavoriteRow')
-class FavoriteWallpapers extends Table {
+/// Both favorites and downloads store the wallpaper *whole* rather than as a
+/// bare id, for the same reason: their grids must render with no network at
+/// all, and an applied or re-applied wallpaper needs every field an id alone
+/// would have to re-fetch. Sharing the columns keeps the two tables from
+/// drifting apart field by field.
+mixin WallpaperColumns on Table {
   /// Wallhaven's id, e.g. `"e7jvjd"`.
   TextColumn get id => text()();
 
@@ -60,11 +61,40 @@ class FavoriteWallpapers extends Table {
   /// Dominant colours, comma-joined in Wallhaven's order.
   TextColumn get colors => text()();
 
-  /// When it was favorited. Orders the grid, newest first.
-  DateTimeColumn get savedAt => dateTime()();
-
   @override
   Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
+/// One favorited wallpaper, stored whole rather than as a bare id.
+///
+/// Every field the grid and the apply action need lives here, so the favorites
+/// screen renders — and a saved wallpaper can still be applied — with no
+/// network at all. An id-only table would make favorites unreadable offline,
+/// which is the one thing they exist to survive.
+@DataClassName('FavoriteRow')
+class FavoriteWallpapers extends Table with WallpaperColumns {
+  /// When it was favorited. Orders the grid, newest first.
+  DateTimeColumn get savedAt => dateTime()();
+}
+
+/// One wallpaper this device downloaded, and where the file landed.
+///
+/// Keyed by wallpaper id, so downloading the same wallpaper twice updates one
+/// row rather than stacking duplicates in the history.
+///
+/// **Never holds an explicit wallpaper.** Those live in the private library,
+/// behind `FLAG_SECURE` and the app-lock; a row here would be an ungated index
+/// of them, in a database Android's Auto Backup carries off the device.
+@DataClassName('DownloadRow')
+class DownloadedWallpapers extends Table with WallpaperColumns {
+  /// `StorageTier` name of the destination it actually landed in.
+  TextColumn get tier => text()();
+
+  /// The file's URI: MediaStore content, a SAF document, or a local file.
+  TextColumn get location => text()();
+
+  /// When it was downloaded. Orders the history, newest first.
+  DateTimeColumn get downloadedAt => dateTime()();
 }
 
 /// tela's local database: the one SQLite connection the app opens.
@@ -75,7 +105,9 @@ class FavoriteWallpapers extends Table {
 /// ```dart
 /// final TelaDatabase db = TelaDatabase.open();
 /// ```
-@DriftDatabase(tables: <Type>[SettingEntries, FavoriteWallpapers])
+@DriftDatabase(
+  tables: <Type>[SettingEntries, FavoriteWallpapers, DownloadedWallpapers],
+)
 class TelaDatabase extends _$TelaDatabase {
   /// Wraps an existing connection — the seam tests use for an in-memory one.
   TelaDatabase(super.e);
@@ -86,21 +118,38 @@ class TelaDatabase extends _$TelaDatabase {
   }
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   /// Adds tables to an existing database instead of recreating it.
   ///
-  /// The settings table shipped at v1 with real user choices in it. A favorites
-  /// table arriving at v2 must not cost anyone their download destinations —
-  /// or, once favorites ship, their favorites.
+  /// The settings table shipped at v1 with real user choices in it, and
+  /// favorites at v2. A downloads table arriving at v3 must not cost anyone
+  /// either — each version only ever adds what the one before it lacked.
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) => m.createAll(),
       onUpgrade: (Migrator m, int from, int to) async {
         if (from < 2) await m.createTable(favoriteWallpapers);
+        if (from < 3) await m.createTable(downloadedWallpapers);
       },
     );
+  }
+
+  /// Every download, most recent first.
+  Future<List<DownloadRow>> downloadRows() {
+    final SimpleSelectStatement<$DownloadedWallpapersTable, DownloadRow> query =
+        select(downloadedWallpapers)
+          ..orderBy(<OrderClauseGenerator<$DownloadedWallpapersTable>>[
+            ($DownloadedWallpapersTable row) =>
+                OrderingTerm.desc(row.downloadedAt),
+          ]);
+    return query.get();
+  }
+
+  /// Writes one download, replacing any earlier row for the same wallpaper.
+  Future<void> putDownload(DownloadedWallpapersCompanion row) {
+    return into(downloadedWallpapers).insertOnConflictUpdate(row);
   }
 
   /// Every favorite, most recently saved first.

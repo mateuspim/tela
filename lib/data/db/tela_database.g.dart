@@ -568,10 +568,10 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
   /// Size of [fullImageUrl] in bytes.
   final int fileSizeBytes;
 
-  /// [Purity] enum name. Routes storage, so its read has a fail-safe parse.
+  /// Purity enum name. Routes storage, so its read has a fail-safe parse.
   final String purity;
 
-  /// [Category] enum name.
+  /// Category enum name.
   final String category;
 
   /// Dominant colours, comma-joined in Wallhaven's order.
@@ -958,12 +958,861 @@ class FavoriteWallpapersCompanion extends UpdateCompanion<FavoriteRow> {
   }
 }
 
+class $DownloadedWallpapersTable extends DownloadedWallpapers
+    with TableInfo<$DownloadedWallpapersTable, DownloadRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DownloadedWallpapersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fullImageUrlMeta = const VerificationMeta(
+    'fullImageUrl',
+  );
+  @override
+  late final GeneratedColumn<String> fullImageUrl = GeneratedColumn<String>(
+    'full_image_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _thumbSmallUrlMeta = const VerificationMeta(
+    'thumbSmallUrl',
+  );
+  @override
+  late final GeneratedColumn<String> thumbSmallUrl = GeneratedColumn<String>(
+    'thumb_small_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _thumbLargeUrlMeta = const VerificationMeta(
+    'thumbLargeUrl',
+  );
+  @override
+  late final GeneratedColumn<String> thumbLargeUrl = GeneratedColumn<String>(
+    'thumb_large_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _thumbOriginalUrlMeta = const VerificationMeta(
+    'thumbOriginalUrl',
+  );
+  @override
+  late final GeneratedColumn<String> thumbOriginalUrl = GeneratedColumn<String>(
+    'thumb_original_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _widthMeta = const VerificationMeta('width');
+  @override
+  late final GeneratedColumn<int> width = GeneratedColumn<int>(
+    'width',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _heightMeta = const VerificationMeta('height');
+  @override
+  late final GeneratedColumn<int> height = GeneratedColumn<int>(
+    'height',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fileSizeBytesMeta = const VerificationMeta(
+    'fileSizeBytes',
+  );
+  @override
+  late final GeneratedColumn<int> fileSizeBytes = GeneratedColumn<int>(
+    'file_size_bytes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _purityMeta = const VerificationMeta('purity');
+  @override
+  late final GeneratedColumn<String> purity = GeneratedColumn<String>(
+    'purity',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _colorsMeta = const VerificationMeta('colors');
+  @override
+  late final GeneratedColumn<String> colors = GeneratedColumn<String>(
+    'colors',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tierMeta = const VerificationMeta('tier');
+  @override
+  late final GeneratedColumn<String> tier = GeneratedColumn<String>(
+    'tier',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _locationMeta = const VerificationMeta(
+    'location',
+  );
+  @override
+  late final GeneratedColumn<String> location = GeneratedColumn<String>(
+    'location',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _downloadedAtMeta = const VerificationMeta(
+    'downloadedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> downloadedAt = GeneratedColumn<DateTime>(
+    'downloaded_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    fullImageUrl,
+    thumbSmallUrl,
+    thumbLargeUrl,
+    thumbOriginalUrl,
+    width,
+    height,
+    fileSizeBytes,
+    purity,
+    category,
+    colors,
+    tier,
+    location,
+    downloadedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'downloaded_wallpapers';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DownloadRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('full_image_url')) {
+      context.handle(
+        _fullImageUrlMeta,
+        fullImageUrl.isAcceptableOrUnknown(
+          data['full_image_url']!,
+          _fullImageUrlMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_fullImageUrlMeta);
+    }
+    if (data.containsKey('thumb_small_url')) {
+      context.handle(
+        _thumbSmallUrlMeta,
+        thumbSmallUrl.isAcceptableOrUnknown(
+          data['thumb_small_url']!,
+          _thumbSmallUrlMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_thumbSmallUrlMeta);
+    }
+    if (data.containsKey('thumb_large_url')) {
+      context.handle(
+        _thumbLargeUrlMeta,
+        thumbLargeUrl.isAcceptableOrUnknown(
+          data['thumb_large_url']!,
+          _thumbLargeUrlMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_thumbLargeUrlMeta);
+    }
+    if (data.containsKey('thumb_original_url')) {
+      context.handle(
+        _thumbOriginalUrlMeta,
+        thumbOriginalUrl.isAcceptableOrUnknown(
+          data['thumb_original_url']!,
+          _thumbOriginalUrlMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_thumbOriginalUrlMeta);
+    }
+    if (data.containsKey('width')) {
+      context.handle(
+        _widthMeta,
+        width.isAcceptableOrUnknown(data['width']!, _widthMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_widthMeta);
+    }
+    if (data.containsKey('height')) {
+      context.handle(
+        _heightMeta,
+        height.isAcceptableOrUnknown(data['height']!, _heightMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_heightMeta);
+    }
+    if (data.containsKey('file_size_bytes')) {
+      context.handle(
+        _fileSizeBytesMeta,
+        fileSizeBytes.isAcceptableOrUnknown(
+          data['file_size_bytes']!,
+          _fileSizeBytesMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_fileSizeBytesMeta);
+    }
+    if (data.containsKey('purity')) {
+      context.handle(
+        _purityMeta,
+        purity.isAcceptableOrUnknown(data['purity']!, _purityMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_purityMeta);
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryMeta);
+    }
+    if (data.containsKey('colors')) {
+      context.handle(
+        _colorsMeta,
+        colors.isAcceptableOrUnknown(data['colors']!, _colorsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_colorsMeta);
+    }
+    if (data.containsKey('tier')) {
+      context.handle(
+        _tierMeta,
+        tier.isAcceptableOrUnknown(data['tier']!, _tierMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tierMeta);
+    }
+    if (data.containsKey('location')) {
+      context.handle(
+        _locationMeta,
+        location.isAcceptableOrUnknown(data['location']!, _locationMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_locationMeta);
+    }
+    if (data.containsKey('downloaded_at')) {
+      context.handle(
+        _downloadedAtMeta,
+        downloadedAt.isAcceptableOrUnknown(
+          data['downloaded_at']!,
+          _downloadedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_downloadedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  DownloadRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DownloadRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      fullImageUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}full_image_url'],
+      )!,
+      thumbSmallUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}thumb_small_url'],
+      )!,
+      thumbLargeUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}thumb_large_url'],
+      )!,
+      thumbOriginalUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}thumb_original_url'],
+      )!,
+      width: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}width'],
+      )!,
+      height: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}height'],
+      )!,
+      fileSizeBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}file_size_bytes'],
+      )!,
+      purity: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}purity'],
+      )!,
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      )!,
+      colors: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}colors'],
+      )!,
+      tier: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tier'],
+      )!,
+      location: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}location'],
+      )!,
+      downloadedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}downloaded_at'],
+      )!,
+    );
+  }
+
+  @override
+  $DownloadedWallpapersTable createAlias(String alias) {
+    return $DownloadedWallpapersTable(attachedDatabase, alias);
+  }
+}
+
+class DownloadRow extends DataClass implements Insertable<DownloadRow> {
+  /// Wallhaven's id, e.g. `"e7jvjd"`.
+  final String id;
+
+  /// Full-resolution source — what apply and download stream from.
+  final String fullImageUrl;
+
+  /// The three Wallhaven thumbnail sizes, kept as-is.
+  final String thumbSmallUrl;
+
+  /// Preview-sized thumbnail.
+  final String thumbLargeUrl;
+
+  /// Ratio-preserving thumbnail — the one the masonry grid draws.
+  final String thumbOriginalUrl;
+
+  /// Pixel width of [fullImageUrl].
+  final int width;
+
+  /// Pixel height of [fullImageUrl].
+  final int height;
+
+  /// Size of [fullImageUrl] in bytes.
+  final int fileSizeBytes;
+
+  /// Purity enum name. Routes storage, so its read has a fail-safe parse.
+  final String purity;
+
+  /// Category enum name.
+  final String category;
+
+  /// Dominant colours, comma-joined in Wallhaven's order.
+  final String colors;
+
+  /// [StorageTier] name of the destination it actually landed in.
+  final String tier;
+
+  /// The file's URI: MediaStore content, a SAF document, or a local file.
+  final String location;
+
+  /// When it was downloaded. Orders the history, newest first.
+  final DateTime downloadedAt;
+  const DownloadRow({
+    required this.id,
+    required this.fullImageUrl,
+    required this.thumbSmallUrl,
+    required this.thumbLargeUrl,
+    required this.thumbOriginalUrl,
+    required this.width,
+    required this.height,
+    required this.fileSizeBytes,
+    required this.purity,
+    required this.category,
+    required this.colors,
+    required this.tier,
+    required this.location,
+    required this.downloadedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['full_image_url'] = Variable<String>(fullImageUrl);
+    map['thumb_small_url'] = Variable<String>(thumbSmallUrl);
+    map['thumb_large_url'] = Variable<String>(thumbLargeUrl);
+    map['thumb_original_url'] = Variable<String>(thumbOriginalUrl);
+    map['width'] = Variable<int>(width);
+    map['height'] = Variable<int>(height);
+    map['file_size_bytes'] = Variable<int>(fileSizeBytes);
+    map['purity'] = Variable<String>(purity);
+    map['category'] = Variable<String>(category);
+    map['colors'] = Variable<String>(colors);
+    map['tier'] = Variable<String>(tier);
+    map['location'] = Variable<String>(location);
+    map['downloaded_at'] = Variable<DateTime>(downloadedAt);
+    return map;
+  }
+
+  DownloadedWallpapersCompanion toCompanion(bool nullToAbsent) {
+    return DownloadedWallpapersCompanion(
+      id: Value(id),
+      fullImageUrl: Value(fullImageUrl),
+      thumbSmallUrl: Value(thumbSmallUrl),
+      thumbLargeUrl: Value(thumbLargeUrl),
+      thumbOriginalUrl: Value(thumbOriginalUrl),
+      width: Value(width),
+      height: Value(height),
+      fileSizeBytes: Value(fileSizeBytes),
+      purity: Value(purity),
+      category: Value(category),
+      colors: Value(colors),
+      tier: Value(tier),
+      location: Value(location),
+      downloadedAt: Value(downloadedAt),
+    );
+  }
+
+  factory DownloadRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DownloadRow(
+      id: serializer.fromJson<String>(json['id']),
+      fullImageUrl: serializer.fromJson<String>(json['fullImageUrl']),
+      thumbSmallUrl: serializer.fromJson<String>(json['thumbSmallUrl']),
+      thumbLargeUrl: serializer.fromJson<String>(json['thumbLargeUrl']),
+      thumbOriginalUrl: serializer.fromJson<String>(json['thumbOriginalUrl']),
+      width: serializer.fromJson<int>(json['width']),
+      height: serializer.fromJson<int>(json['height']),
+      fileSizeBytes: serializer.fromJson<int>(json['fileSizeBytes']),
+      purity: serializer.fromJson<String>(json['purity']),
+      category: serializer.fromJson<String>(json['category']),
+      colors: serializer.fromJson<String>(json['colors']),
+      tier: serializer.fromJson<String>(json['tier']),
+      location: serializer.fromJson<String>(json['location']),
+      downloadedAt: serializer.fromJson<DateTime>(json['downloadedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'fullImageUrl': serializer.toJson<String>(fullImageUrl),
+      'thumbSmallUrl': serializer.toJson<String>(thumbSmallUrl),
+      'thumbLargeUrl': serializer.toJson<String>(thumbLargeUrl),
+      'thumbOriginalUrl': serializer.toJson<String>(thumbOriginalUrl),
+      'width': serializer.toJson<int>(width),
+      'height': serializer.toJson<int>(height),
+      'fileSizeBytes': serializer.toJson<int>(fileSizeBytes),
+      'purity': serializer.toJson<String>(purity),
+      'category': serializer.toJson<String>(category),
+      'colors': serializer.toJson<String>(colors),
+      'tier': serializer.toJson<String>(tier),
+      'location': serializer.toJson<String>(location),
+      'downloadedAt': serializer.toJson<DateTime>(downloadedAt),
+    };
+  }
+
+  DownloadRow copyWith({
+    String? id,
+    String? fullImageUrl,
+    String? thumbSmallUrl,
+    String? thumbLargeUrl,
+    String? thumbOriginalUrl,
+    int? width,
+    int? height,
+    int? fileSizeBytes,
+    String? purity,
+    String? category,
+    String? colors,
+    String? tier,
+    String? location,
+    DateTime? downloadedAt,
+  }) => DownloadRow(
+    id: id ?? this.id,
+    fullImageUrl: fullImageUrl ?? this.fullImageUrl,
+    thumbSmallUrl: thumbSmallUrl ?? this.thumbSmallUrl,
+    thumbLargeUrl: thumbLargeUrl ?? this.thumbLargeUrl,
+    thumbOriginalUrl: thumbOriginalUrl ?? this.thumbOriginalUrl,
+    width: width ?? this.width,
+    height: height ?? this.height,
+    fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
+    purity: purity ?? this.purity,
+    category: category ?? this.category,
+    colors: colors ?? this.colors,
+    tier: tier ?? this.tier,
+    location: location ?? this.location,
+    downloadedAt: downloadedAt ?? this.downloadedAt,
+  );
+  DownloadRow copyWithCompanion(DownloadedWallpapersCompanion data) {
+    return DownloadRow(
+      id: data.id.present ? data.id.value : this.id,
+      fullImageUrl: data.fullImageUrl.present
+          ? data.fullImageUrl.value
+          : this.fullImageUrl,
+      thumbSmallUrl: data.thumbSmallUrl.present
+          ? data.thumbSmallUrl.value
+          : this.thumbSmallUrl,
+      thumbLargeUrl: data.thumbLargeUrl.present
+          ? data.thumbLargeUrl.value
+          : this.thumbLargeUrl,
+      thumbOriginalUrl: data.thumbOriginalUrl.present
+          ? data.thumbOriginalUrl.value
+          : this.thumbOriginalUrl,
+      width: data.width.present ? data.width.value : this.width,
+      height: data.height.present ? data.height.value : this.height,
+      fileSizeBytes: data.fileSizeBytes.present
+          ? data.fileSizeBytes.value
+          : this.fileSizeBytes,
+      purity: data.purity.present ? data.purity.value : this.purity,
+      category: data.category.present ? data.category.value : this.category,
+      colors: data.colors.present ? data.colors.value : this.colors,
+      tier: data.tier.present ? data.tier.value : this.tier,
+      location: data.location.present ? data.location.value : this.location,
+      downloadedAt: data.downloadedAt.present
+          ? data.downloadedAt.value
+          : this.downloadedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DownloadRow(')
+          ..write('id: $id, ')
+          ..write('fullImageUrl: $fullImageUrl, ')
+          ..write('thumbSmallUrl: $thumbSmallUrl, ')
+          ..write('thumbLargeUrl: $thumbLargeUrl, ')
+          ..write('thumbOriginalUrl: $thumbOriginalUrl, ')
+          ..write('width: $width, ')
+          ..write('height: $height, ')
+          ..write('fileSizeBytes: $fileSizeBytes, ')
+          ..write('purity: $purity, ')
+          ..write('category: $category, ')
+          ..write('colors: $colors, ')
+          ..write('tier: $tier, ')
+          ..write('location: $location, ')
+          ..write('downloadedAt: $downloadedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    fullImageUrl,
+    thumbSmallUrl,
+    thumbLargeUrl,
+    thumbOriginalUrl,
+    width,
+    height,
+    fileSizeBytes,
+    purity,
+    category,
+    colors,
+    tier,
+    location,
+    downloadedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DownloadRow &&
+          other.id == this.id &&
+          other.fullImageUrl == this.fullImageUrl &&
+          other.thumbSmallUrl == this.thumbSmallUrl &&
+          other.thumbLargeUrl == this.thumbLargeUrl &&
+          other.thumbOriginalUrl == this.thumbOriginalUrl &&
+          other.width == this.width &&
+          other.height == this.height &&
+          other.fileSizeBytes == this.fileSizeBytes &&
+          other.purity == this.purity &&
+          other.category == this.category &&
+          other.colors == this.colors &&
+          other.tier == this.tier &&
+          other.location == this.location &&
+          other.downloadedAt == this.downloadedAt);
+}
+
+class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
+  final Value<String> id;
+  final Value<String> fullImageUrl;
+  final Value<String> thumbSmallUrl;
+  final Value<String> thumbLargeUrl;
+  final Value<String> thumbOriginalUrl;
+  final Value<int> width;
+  final Value<int> height;
+  final Value<int> fileSizeBytes;
+  final Value<String> purity;
+  final Value<String> category;
+  final Value<String> colors;
+  final Value<String> tier;
+  final Value<String> location;
+  final Value<DateTime> downloadedAt;
+  final Value<int> rowid;
+  const DownloadedWallpapersCompanion({
+    this.id = const Value.absent(),
+    this.fullImageUrl = const Value.absent(),
+    this.thumbSmallUrl = const Value.absent(),
+    this.thumbLargeUrl = const Value.absent(),
+    this.thumbOriginalUrl = const Value.absent(),
+    this.width = const Value.absent(),
+    this.height = const Value.absent(),
+    this.fileSizeBytes = const Value.absent(),
+    this.purity = const Value.absent(),
+    this.category = const Value.absent(),
+    this.colors = const Value.absent(),
+    this.tier = const Value.absent(),
+    this.location = const Value.absent(),
+    this.downloadedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DownloadedWallpapersCompanion.insert({
+    required String id,
+    required String fullImageUrl,
+    required String thumbSmallUrl,
+    required String thumbLargeUrl,
+    required String thumbOriginalUrl,
+    required int width,
+    required int height,
+    required int fileSizeBytes,
+    required String purity,
+    required String category,
+    required String colors,
+    required String tier,
+    required String location,
+    required DateTime downloadedAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       fullImageUrl = Value(fullImageUrl),
+       thumbSmallUrl = Value(thumbSmallUrl),
+       thumbLargeUrl = Value(thumbLargeUrl),
+       thumbOriginalUrl = Value(thumbOriginalUrl),
+       width = Value(width),
+       height = Value(height),
+       fileSizeBytes = Value(fileSizeBytes),
+       purity = Value(purity),
+       category = Value(category),
+       colors = Value(colors),
+       tier = Value(tier),
+       location = Value(location),
+       downloadedAt = Value(downloadedAt);
+  static Insertable<DownloadRow> custom({
+    Expression<String>? id,
+    Expression<String>? fullImageUrl,
+    Expression<String>? thumbSmallUrl,
+    Expression<String>? thumbLargeUrl,
+    Expression<String>? thumbOriginalUrl,
+    Expression<int>? width,
+    Expression<int>? height,
+    Expression<int>? fileSizeBytes,
+    Expression<String>? purity,
+    Expression<String>? category,
+    Expression<String>? colors,
+    Expression<String>? tier,
+    Expression<String>? location,
+    Expression<DateTime>? downloadedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (fullImageUrl != null) 'full_image_url': fullImageUrl,
+      if (thumbSmallUrl != null) 'thumb_small_url': thumbSmallUrl,
+      if (thumbLargeUrl != null) 'thumb_large_url': thumbLargeUrl,
+      if (thumbOriginalUrl != null) 'thumb_original_url': thumbOriginalUrl,
+      if (width != null) 'width': width,
+      if (height != null) 'height': height,
+      if (fileSizeBytes != null) 'file_size_bytes': fileSizeBytes,
+      if (purity != null) 'purity': purity,
+      if (category != null) 'category': category,
+      if (colors != null) 'colors': colors,
+      if (tier != null) 'tier': tier,
+      if (location != null) 'location': location,
+      if (downloadedAt != null) 'downloaded_at': downloadedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DownloadedWallpapersCompanion copyWith({
+    Value<String>? id,
+    Value<String>? fullImageUrl,
+    Value<String>? thumbSmallUrl,
+    Value<String>? thumbLargeUrl,
+    Value<String>? thumbOriginalUrl,
+    Value<int>? width,
+    Value<int>? height,
+    Value<int>? fileSizeBytes,
+    Value<String>? purity,
+    Value<String>? category,
+    Value<String>? colors,
+    Value<String>? tier,
+    Value<String>? location,
+    Value<DateTime>? downloadedAt,
+    Value<int>? rowid,
+  }) {
+    return DownloadedWallpapersCompanion(
+      id: id ?? this.id,
+      fullImageUrl: fullImageUrl ?? this.fullImageUrl,
+      thumbSmallUrl: thumbSmallUrl ?? this.thumbSmallUrl,
+      thumbLargeUrl: thumbLargeUrl ?? this.thumbLargeUrl,
+      thumbOriginalUrl: thumbOriginalUrl ?? this.thumbOriginalUrl,
+      width: width ?? this.width,
+      height: height ?? this.height,
+      fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
+      purity: purity ?? this.purity,
+      category: category ?? this.category,
+      colors: colors ?? this.colors,
+      tier: tier ?? this.tier,
+      location: location ?? this.location,
+      downloadedAt: downloadedAt ?? this.downloadedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (fullImageUrl.present) {
+      map['full_image_url'] = Variable<String>(fullImageUrl.value);
+    }
+    if (thumbSmallUrl.present) {
+      map['thumb_small_url'] = Variable<String>(thumbSmallUrl.value);
+    }
+    if (thumbLargeUrl.present) {
+      map['thumb_large_url'] = Variable<String>(thumbLargeUrl.value);
+    }
+    if (thumbOriginalUrl.present) {
+      map['thumb_original_url'] = Variable<String>(thumbOriginalUrl.value);
+    }
+    if (width.present) {
+      map['width'] = Variable<int>(width.value);
+    }
+    if (height.present) {
+      map['height'] = Variable<int>(height.value);
+    }
+    if (fileSizeBytes.present) {
+      map['file_size_bytes'] = Variable<int>(fileSizeBytes.value);
+    }
+    if (purity.present) {
+      map['purity'] = Variable<String>(purity.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (colors.present) {
+      map['colors'] = Variable<String>(colors.value);
+    }
+    if (tier.present) {
+      map['tier'] = Variable<String>(tier.value);
+    }
+    if (location.present) {
+      map['location'] = Variable<String>(location.value);
+    }
+    if (downloadedAt.present) {
+      map['downloaded_at'] = Variable<DateTime>(downloadedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DownloadedWallpapersCompanion(')
+          ..write('id: $id, ')
+          ..write('fullImageUrl: $fullImageUrl, ')
+          ..write('thumbSmallUrl: $thumbSmallUrl, ')
+          ..write('thumbLargeUrl: $thumbLargeUrl, ')
+          ..write('thumbOriginalUrl: $thumbOriginalUrl, ')
+          ..write('width: $width, ')
+          ..write('height: $height, ')
+          ..write('fileSizeBytes: $fileSizeBytes, ')
+          ..write('purity: $purity, ')
+          ..write('category: $category, ')
+          ..write('colors: $colors, ')
+          ..write('tier: $tier, ')
+          ..write('location: $location, ')
+          ..write('downloadedAt: $downloadedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$TelaDatabase extends GeneratedDatabase {
   _$TelaDatabase(QueryExecutor e) : super(e);
   $TelaDatabaseManager get managers => $TelaDatabaseManager(this);
   late final $SettingEntriesTable settingEntries = $SettingEntriesTable(this);
   late final $FavoriteWallpapersTable favoriteWallpapers =
       $FavoriteWallpapersTable(this);
+  late final $DownloadedWallpapersTable downloadedWallpapers =
+      $DownloadedWallpapersTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -971,6 +1820,7 @@ abstract class _$TelaDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     settingEntries,
     favoriteWallpapers,
+    downloadedWallpapers,
   ];
 }
 
@@ -1468,6 +2318,401 @@ typedef $$FavoriteWallpapersTableProcessedTableManager =
       FavoriteRow,
       PrefetchHooks Function()
     >;
+typedef $$DownloadedWallpapersTableCreateCompanionBuilder =
+    DownloadedWallpapersCompanion Function({
+      required String id,
+      required String fullImageUrl,
+      required String thumbSmallUrl,
+      required String thumbLargeUrl,
+      required String thumbOriginalUrl,
+      required int width,
+      required int height,
+      required int fileSizeBytes,
+      required String purity,
+      required String category,
+      required String colors,
+      required String tier,
+      required String location,
+      required DateTime downloadedAt,
+      Value<int> rowid,
+    });
+typedef $$DownloadedWallpapersTableUpdateCompanionBuilder =
+    DownloadedWallpapersCompanion Function({
+      Value<String> id,
+      Value<String> fullImageUrl,
+      Value<String> thumbSmallUrl,
+      Value<String> thumbLargeUrl,
+      Value<String> thumbOriginalUrl,
+      Value<int> width,
+      Value<int> height,
+      Value<int> fileSizeBytes,
+      Value<String> purity,
+      Value<String> category,
+      Value<String> colors,
+      Value<String> tier,
+      Value<String> location,
+      Value<DateTime> downloadedAt,
+      Value<int> rowid,
+    });
+
+class $$DownloadedWallpapersTableFilterComposer
+    extends Composer<_$TelaDatabase, $DownloadedWallpapersTable> {
+  $$DownloadedWallpapersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fullImageUrl => $composableBuilder(
+    column: $table.fullImageUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get thumbSmallUrl => $composableBuilder(
+    column: $table.thumbSmallUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get thumbLargeUrl => $composableBuilder(
+    column: $table.thumbLargeUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get thumbOriginalUrl => $composableBuilder(
+    column: $table.thumbOriginalUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get width => $composableBuilder(
+    column: $table.width,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get height => $composableBuilder(
+    column: $table.height,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get fileSizeBytes => $composableBuilder(
+    column: $table.fileSizeBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get purity => $composableBuilder(
+    column: $table.purity,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get colors => $composableBuilder(
+    column: $table.colors,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tier => $composableBuilder(
+    column: $table.tier,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get location => $composableBuilder(
+    column: $table.location,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get downloadedAt => $composableBuilder(
+    column: $table.downloadedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DownloadedWallpapersTableOrderingComposer
+    extends Composer<_$TelaDatabase, $DownloadedWallpapersTable> {
+  $$DownloadedWallpapersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fullImageUrl => $composableBuilder(
+    column: $table.fullImageUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get thumbSmallUrl => $composableBuilder(
+    column: $table.thumbSmallUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get thumbLargeUrl => $composableBuilder(
+    column: $table.thumbLargeUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get thumbOriginalUrl => $composableBuilder(
+    column: $table.thumbOriginalUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get width => $composableBuilder(
+    column: $table.width,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get height => $composableBuilder(
+    column: $table.height,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get fileSizeBytes => $composableBuilder(
+    column: $table.fileSizeBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get purity => $composableBuilder(
+    column: $table.purity,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get colors => $composableBuilder(
+    column: $table.colors,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tier => $composableBuilder(
+    column: $table.tier,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get location => $composableBuilder(
+    column: $table.location,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get downloadedAt => $composableBuilder(
+    column: $table.downloadedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DownloadedWallpapersTableAnnotationComposer
+    extends Composer<_$TelaDatabase, $DownloadedWallpapersTable> {
+  $$DownloadedWallpapersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get fullImageUrl => $composableBuilder(
+    column: $table.fullImageUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get thumbSmallUrl => $composableBuilder(
+    column: $table.thumbSmallUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get thumbLargeUrl => $composableBuilder(
+    column: $table.thumbLargeUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get thumbOriginalUrl => $composableBuilder(
+    column: $table.thumbOriginalUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get width =>
+      $composableBuilder(column: $table.width, builder: (column) => column);
+
+  GeneratedColumn<int> get height =>
+      $composableBuilder(column: $table.height, builder: (column) => column);
+
+  GeneratedColumn<int> get fileSizeBytes => $composableBuilder(
+    column: $table.fileSizeBytes,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get purity =>
+      $composableBuilder(column: $table.purity, builder: (column) => column);
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<String> get colors =>
+      $composableBuilder(column: $table.colors, builder: (column) => column);
+
+  GeneratedColumn<String> get tier =>
+      $composableBuilder(column: $table.tier, builder: (column) => column);
+
+  GeneratedColumn<String> get location =>
+      $composableBuilder(column: $table.location, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get downloadedAt => $composableBuilder(
+    column: $table.downloadedAt,
+    builder: (column) => column,
+  );
+}
+
+class $$DownloadedWallpapersTableTableManager
+    extends
+        RootTableManager<
+          _$TelaDatabase,
+          $DownloadedWallpapersTable,
+          DownloadRow,
+          $$DownloadedWallpapersTableFilterComposer,
+          $$DownloadedWallpapersTableOrderingComposer,
+          $$DownloadedWallpapersTableAnnotationComposer,
+          $$DownloadedWallpapersTableCreateCompanionBuilder,
+          $$DownloadedWallpapersTableUpdateCompanionBuilder,
+          (
+            DownloadRow,
+            BaseReferences<
+              _$TelaDatabase,
+              $DownloadedWallpapersTable,
+              DownloadRow
+            >,
+          ),
+          DownloadRow,
+          PrefetchHooks Function()
+        > {
+  $$DownloadedWallpapersTableTableManager(
+    _$TelaDatabase db,
+    $DownloadedWallpapersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DownloadedWallpapersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DownloadedWallpapersTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DownloadedWallpapersTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> fullImageUrl = const Value.absent(),
+                Value<String> thumbSmallUrl = const Value.absent(),
+                Value<String> thumbLargeUrl = const Value.absent(),
+                Value<String> thumbOriginalUrl = const Value.absent(),
+                Value<int> width = const Value.absent(),
+                Value<int> height = const Value.absent(),
+                Value<int> fileSizeBytes = const Value.absent(),
+                Value<String> purity = const Value.absent(),
+                Value<String> category = const Value.absent(),
+                Value<String> colors = const Value.absent(),
+                Value<String> tier = const Value.absent(),
+                Value<String> location = const Value.absent(),
+                Value<DateTime> downloadedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DownloadedWallpapersCompanion(
+                id: id,
+                fullImageUrl: fullImageUrl,
+                thumbSmallUrl: thumbSmallUrl,
+                thumbLargeUrl: thumbLargeUrl,
+                thumbOriginalUrl: thumbOriginalUrl,
+                width: width,
+                height: height,
+                fileSizeBytes: fileSizeBytes,
+                purity: purity,
+                category: category,
+                colors: colors,
+                tier: tier,
+                location: location,
+                downloadedAt: downloadedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String fullImageUrl,
+                required String thumbSmallUrl,
+                required String thumbLargeUrl,
+                required String thumbOriginalUrl,
+                required int width,
+                required int height,
+                required int fileSizeBytes,
+                required String purity,
+                required String category,
+                required String colors,
+                required String tier,
+                required String location,
+                required DateTime downloadedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => DownloadedWallpapersCompanion.insert(
+                id: id,
+                fullImageUrl: fullImageUrl,
+                thumbSmallUrl: thumbSmallUrl,
+                thumbLargeUrl: thumbLargeUrl,
+                thumbOriginalUrl: thumbOriginalUrl,
+                width: width,
+                height: height,
+                fileSizeBytes: fileSizeBytes,
+                purity: purity,
+                category: category,
+                colors: colors,
+                tier: tier,
+                location: location,
+                downloadedAt: downloadedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DownloadedWallpapersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TelaDatabase,
+      $DownloadedWallpapersTable,
+      DownloadRow,
+      $$DownloadedWallpapersTableFilterComposer,
+      $$DownloadedWallpapersTableOrderingComposer,
+      $$DownloadedWallpapersTableAnnotationComposer,
+      $$DownloadedWallpapersTableCreateCompanionBuilder,
+      $$DownloadedWallpapersTableUpdateCompanionBuilder,
+      (
+        DownloadRow,
+        BaseReferences<_$TelaDatabase, $DownloadedWallpapersTable, DownloadRow>,
+      ),
+      DownloadRow,
+      PrefetchHooks Function()
+    >;
 
 class $TelaDatabaseManager {
   final _$TelaDatabase _db;
@@ -1476,4 +2721,6 @@ class $TelaDatabaseManager {
       $$SettingEntriesTableTableManager(_db, _db.settingEntries);
   $$FavoriteWallpapersTableTableManager get favoriteWallpapers =>
       $$FavoriteWallpapersTableTableManager(_db, _db.favoriteWallpapers);
+  $$DownloadedWallpapersTableTableManager get downloadedWallpapers =>
+      $$DownloadedWallpapersTableTableManager(_db, _db.downloadedWallpapers);
 }

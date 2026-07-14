@@ -415,6 +415,31 @@
     "description": "States the hard NSFW rule, so the missing Gallery option does not read as a bug."
   },
 
+  "downloadHistoryTitle": "Download history",
+  "@downloadHistoryTitle": {
+    "description": "Title of the screen listing wallpapers already downloaded to this device."
+  },
+
+  "downloadHistoryOpenDetail": "Wallpapers already on this device. Tap one to set it again.",
+  "@downloadHistoryOpenDetail": {
+    "description": "Subtitle of the settings entry that opens the download history."
+  },
+
+  "downloadHistoryEmpty": "Nothing downloaded yet. Downloaded wallpapers land here, ready to set again without a second download.",
+  "@downloadHistoryEmpty": {
+    "description": "Shown when no download has been recorded. Explicit downloads are never recorded, so it stays empty for those by design."
+  },
+
+  "downloadHistorySetAgain": "Set wallpaper {wallpaperId} again",
+  "@downloadHistorySetAgain": {
+    "description": "Accessibility label for one tile in the download history. Tapping it re-applies the downloaded file.",
+    "placeholders": {
+      "wallpaperId": {
+        "type": "String"
+      }
+    }
+  },
+
   "settingsPrivacySection": "Privacy",
   "@settingsPrivacySection": {
     "description": "Heading for the group of privacy settings."

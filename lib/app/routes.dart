@@ -29,4 +29,10 @@ abstract final class TelaRoutes {
 
   /// Private library route name.
   static const String privateLibraryName = 'private-library';
+
+  /// Download history path.
+  static const String downloadHistoryPath = '/downloads';
+
+  /// Download history route name.
+  static const String downloadHistoryName = 'download-history';
 }
