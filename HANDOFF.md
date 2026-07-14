@@ -66,9 +66,11 @@ then verifies it; `ForgetApiKey` drops it. The UI holds only *whether* a key
 exists, never the key — a saved key cannot be read back out of the app.
 
 Verifying is now `GET /settings`, so the same request also brings back the
-account's own browse defaults: its categories, its purity, its toplist range.
-Browse opens on them, "Reset filters" returns to them, and a filter the user set
-by hand is never overwritten by them. Forgetting the key forgets them too.
+account's own browse defaults: its categories and its toplist range. Browse opens
+on them, "Reset filters" returns to them, and a filter the user set by hand is
+never overwritten by them. Forgetting the key forgets them too. The account's
+**purity is deliberately not among them** — browse always opens on safe, and
+sketchy and explicit stay per-session choices in the filter sheet.
 
 Browse is finally a search, not four fixed listings. The app bar holds a search
 field, and a filter sheet behind it edits categories, purity, shape (portrait /
@@ -111,17 +113,18 @@ library now say "nothing here" the same way, and a failure picks its icon from
 what actually failed — the offline cloud for a dead network, not a generic
 error triangle.
 
-**Account `/settings` sync** (`9dd0d6a`, plus `70f6227` and `76471d3` from the
-device pass). Saving an API key now pulls the Wallhaven account's own browse
-defaults — categories, purity, toplist range — and browse opens on them. The
-same request is what *verifies* the key, so the sync is free: it replaced an
-NSFW-purity search that cost the same one of the 45 req/min and learned nothing
-but "valid". A filter the user set by hand is never overwritten, forgetting the
-key drops the defaults with it, and **explicit purity never seeds a default at
-all** (see the decisions). This was Wave 2's last slice.
+**Account `/settings` sync** (`9dd0d6a`, plus `70f6227`, `76471d3` and `e7db95f`
+from the device pass). Saving an API key now pulls the Wallhaven account's own
+browse defaults — **categories and toplist range, and deliberately not purity** —
+and browse opens on them. The same request is what *verifies* the key, so the
+sync is free: it replaced an NSFW-purity search that cost the same one of the
+45 req/min and learned nothing but "valid". A filter the user set by hand is
+never overwritten, and forgetting the key drops the defaults with it. This was
+Wave 2's last slice.
 
-**It has run on hardware, and the device found two things the tests could not.**
-Both are fixed and re-verified there:
+**It has run on hardware, and the device found both of the things that were
+wrong with it.** Neither was findable in a test, and both are fixed and
+re-verified on the phone:
 
 - **A key that predates the sync never synced** (`70f6227`). The phone's database
   held a working API key and no `account.*` rows at all: `SaveApiKey` syncs, so a
@@ -130,9 +133,11 @@ Both are fixed and re-verified there:
   nothing for every existing user until they re-pasted a key that already worked.
   `LoadAccountDefaults` now backfills once when it finds a stored key with no
   stored defaults.
-- **The account's explicit purity opened the front page on explicit** (`76471d3`).
-  See the decision below; this is the one the device was always going to catch,
-  because it only shows up on an account that actually has NSFW enabled.
+- **Syncing the account's purity opened the front page on explicit** (`76471d3`,
+  then `e7db95f`). An account with NSFW enabled turned tela's launch screen into a
+  masonry grid of explicit thumbnails, behind no gate. Purity is now not synced at
+  all — see the decision below. This one only shows up on an account that actually
+  has NSFW enabled, which is why no fixture would ever have caught it.
 
 ## Decisions made
 
@@ -379,30 +384,34 @@ Both are fixed and re-verified there:
   (which it grew for the grid's reload check, `f0c1e10`). The search term is not
   a filter: searching for "sunset" is not an opinion about categories, so an
   adopted default keeps the term.
-- **Only three of the account's five settings are synced.** `resolutions` and
+- **Only two of the account's five settings are synced.** `resolutions` and
   `aspect_ratios` are set by desktop users at a desktop: a synced `16x9` would
   fill a phone grid with landscape wallpapers, and tela already derives `atLeast`
   from the screen it is actually running on — strictly better information than
-  the account has. Categories, purity and toplist range mean the same thing on
-  both, so those three are `AccountSettings` and the other two are dropped at the
-  mapper.
-- **Explicit purity never seeds a default, in any state** — `AccountSettings`
-  stores the account's real purity but `applyTo` seeds `browsablePurity`, which is
-  that minus NSFW. This was found on the device and it is the most important
-  decision in the slice. An account with NSFW enabled made tela's front page a
-  masonry grid of explicit thumbnails at launch, behind no gate. That is exactly
-  what "the account seeds the defaults" means, and it is the one place tela ran
-  against its own grain: every other NSFW rule here fails toward safe (downloads
-  route explicit to app-private, the private library is behind `FLAG_SECURE` and
-  an app-lock, a corrupt purity reads as `nsfw` rather than `sfw`). A phone is the
-  device you unlock on a train. Sketchy still seeds — it needs no key and it is
-  not that — and the Explicit chip is still *offered* while a key is stored, so
-  turning it on is one tap and one session.
+  the account has. `purity` is refused for the reason above. What is left is
+  categories and toplist range: the two that mean the same thing on a phone as on
+  the web, and that carry no risk when they are wrong.
+- **The account's purity is never synced. Browse always opens on safe.** This is
+  the most important decision in the slice, and the device is what forced it: an
+  account with NSFW enabled made tela's launch screen a masonry grid of explicit
+  thumbnails, behind no gate. That is exactly what "the account seeds the defaults"
+  means, and it is the one place tela ran against its own grain — every other NSFW
+  rule here fails toward safe (downloads route explicit to app-private, the private
+  library is behind `FLAG_SECURE` and an app-lock, a corrupt purity reads as `nsfw`
+  rather than `sfw`). A phone is the device you unlock on a train. Sketchy and
+  explicit are now things you turn on for a session in the filter sheet, where the
+  Explicit chip still appears as long as a key is stored.
+- **Purity is dropped from the model, not merely ignored** — the mapper does not
+  read Wallhaven's `purity` list, `AccountSettings` has no purity field, and the
+  repository *deletes* the `account.purity` row an older build wrote. A stored
+  value nothing reads is a value that misleads whoever next opens the database,
+  and a model that carries one is a model where somebody eventually applies it.
+  (The first attempt, `76471d3`, kept the field and narrowed it at the seam. That
+  is one refactor away from the bug coming back.)
 - **Forgetting the key drops the account defaults with it.** They belong to an
-  account this device can no longer reach. This used to be one of two doors on the
-  same hole; `browsablePurity` closed the other one for free, so the load path no
-  longer strips explicit by hand — an explicit default cannot outlive its key and
-  turn browse into a 401 because it is never a default at all. One rule, one place.
+  account this device can no longer reach. This used to be half of a two-door guard
+  against an explicit default outliving its key; not syncing purity at all closed
+  that hole outright, so the load path no longer strips anything by hand.
 - The account defaults are **read back through the port on every load, never
   cached from what the sync returned** — which is what gives the backfill somewhere
   to live.
@@ -432,9 +441,12 @@ Both are fixed and re-verified there:
   and the throwing one is now written in terms of it. A wallpaper with an
   unreadable purity is a bug worth throwing on; an *account* naming a bucket
   Wallhaven added last week and tela does not know yet should cost that bucket
-  and not the sync. Same for `TopRange.tryFromApiValue`. An empty list from
-  Wallhaven means "never narrowed it" and falls back to tela's default, because
-  the literal translation — the `"000"` mask — is a 400.
+  and not the sync. Same for `TopRange.tryFromApiValue` and
+  `CategoryFilter.tryFromApiBits`. An empty list from Wallhaven means "never
+  narrowed it" and falls back to tela's default, because the literal translation
+  — the `"000"` mask — is a 400. (`PurityFilter` has no `tryFromApiBits`: no
+  purity is ever read back from Wallhaven or from disk, so the parse would be
+  dead code, and dead code is where a purity gets applied by accident.)
 
 ## Verification
 
@@ -522,13 +534,14 @@ Both are fixed and re-verified there:
   reaches the screen
 - Account sync: the mapper against a captured `/settings` fixture (plus an
   unknown bucket costing that bucket, an empty list falling back to tela's
-  default, an unreadable range costing the range, and an explicit account read as
-  explicit), `AccountSettings` (the three fields it applies and the seven it
-  leaves alone, `withoutExplicit` including the explicit-only account that must
-  not encode `"000"`, `tryParse` round-trip and each corrupt shape, member-wise
-  equality), `SyncAccountDefaults` (persists, costs exactly one request, stores
-  nothing on a rejected key), `LoadAccountDefaults` (the explicit strip with and
-  without a key), the Drift adapter (round trip, the wire literals on disk,
+  default, an unreadable range costing the range, and — the load-bearing one —
+  an account listing every purity still yielding a query at `100`),
+  `AccountSettings` (the two fields it applies and the eight it leaves alone,
+  including a purity the user chose for this session; `tryParse` round-trip and
+  each corrupt shape; member-wise equality), `SyncAccountDefaults` (persists,
+  costs exactly one request, stores nothing on a rejected key),
+  `LoadAccountDefaults`, the Drift adapter (round trip, the wire literals on
+  disk, **never writing a purity row and deleting the one an older build left**,
   re-sync upserting, forget removing every row and touching no other setting, a
   corrupt or half-written account reading as none), `SaveApiKey` (verifies with
   `/settings` and *not* an NSFW search, keeps the defaults it answered with,
@@ -546,14 +559,19 @@ Both are fixed and re-verified there:
   or the key is rejected
 - **The account sync is verified on hardware** (2026-07-14, Samsung, debug build,
   installed as an update over the previous one):
-  - the backfill fired on first launch and wrote `account.categories=111`,
-    `account.purity=111`, `account.topRange=1M` — and `purity=111` is proof the
-    real `GET /settings` parsed, because tela's own fallback is `100`
-  - the filter sheet then showed the account's three categories and Last month,
-    with **Safe and Sketchy checked and Explicit unchecked but offered**
+  - the backfill fired on first launch and wrote the account's real settings —
+    and the `account.purity=111` it wrote *at the time* is what proved the live
+    `GET /settings` had genuinely parsed, since tela's own fallback would have
+    been `100`. It also proved the bug: that account browses explicit, and so did
+    the front page.
+  - after `e7db95f`, the same device browses **safe** on launch while still
+    opening on the account's categories and Last month
   - the settings table's other rows, the favorites, and the download history all
-    survived the upgrade; permissions still `INTERNET`, `SET_WALLPAPER`,
+    survived every upgrade; permissions still `INTERNET`, `SET_WALLPAPER`,
     `USE_BIOMETRIC`, `USE_FINGERPRINT`; no errors in logcat
+  - **the device still carries a stale `account.purity` row**, which is inert
+    (nothing reads it) and clears itself the next time the key is saved or
+    removed. If you ever see one in a database, that is what it is.
 
 The Random tab's deep paging is the one Wave 1 behaviour never exercised on
 hardware — see below.

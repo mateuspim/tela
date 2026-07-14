@@ -1,5 +1,3 @@
-import 'package:tela/domain/models/api_bits.dart';
-
 /// How explicit a wallpaper is, as Wallhaven classifies it.
 ///
 /// Wallhaven speaks two dialects for purity and they are *not* the same shape:
@@ -79,10 +77,4 @@ extension type const PurityFilter(Set<Purity> purities) {
 
   /// True when this filter cannot be served without an API key.
   bool get requiresApiKey => purities.any((Purity p) => p.requiresApiKey);
-
-  /// Reads back a mask [toApiBits] wrote, or null if [bits] is not one.
-  static PurityFilter? tryFromApiBits(String bits) {
-    final Set<Purity>? selected = decodeApiBits(bits, Purity.values);
-    return selected == null ? null : PurityFilter(selected);
-  }
 }
