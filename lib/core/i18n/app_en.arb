@@ -1,0 +1,58 @@
+{
+  "@@locale": "en",
+
+  "appTitle": "tela",
+  "@appTitle": {
+    "description": "The app name. Lowercase on purpose — it is the brand."
+  },
+
+  "browseTabLatest": "Latest",
+  "@browseTabLatest": {
+    "description": "Browse tab showing the newest uploads."
+  },
+
+  "browseTabTop": "Top",
+  "@browseTabTop": {
+    "description": "Browse tab showing the top-rated wallpapers of the month."
+  },
+
+  "browseTabHot": "Hot",
+  "@browseTabHot": {
+    "description": "Browse tab showing what is trending right now."
+  },
+
+  "browseTabRandom": "Random",
+  "@browseTabRandom": {
+    "description": "Browse tab showing a shuffled selection."
+  },
+
+  "errorInvalidApiKey": "That Wallhaven API key was rejected.",
+  "@errorInvalidApiKey": {
+    "description": "Shown when Wallhaven answers 401."
+  },
+
+  "errorRateLimited": "Too many requests. Waiting for Wallhaven to catch up…",
+  "@errorRateLimited": {
+    "description": "Shown when Wallhaven answers 429 and backoff is exhausted."
+  },
+
+  "errorOffline": "Can't reach Wallhaven. Check your connection.",
+  "@errorOffline": {
+    "description": "Shown when the device has no route to Wallhaven."
+  },
+
+  "errorUnexpected": "Something went wrong loading wallpapers.",
+  "@errorUnexpected": {
+    "description": "Fallback for an unparseable or unexpected API response."
+  },
+
+  "actionRetry": "Retry",
+  "@actionRetry": {
+    "description": "Button that re-runs the failed request."
+  },
+
+  "browseEmpty": "No wallpapers match these filters.",
+  "@browseEmpty": {
+    "description": "Shown when a search returns zero results."
+  }
+}

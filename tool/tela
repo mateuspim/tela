@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Run any flutter/dart command inside the pinned toolchain container.
+#
+#   ./tool/tela analyze
+#   ./tool/tela test
+#   ./tool/tela build apk --release
+#   ./tool/tela devices
+#   ./tool/tela --shell          # drop into the container
+#   ./tool/tela --build-image    # (re)build the toolchain image
+#
+# Caches (pub, gradle) live in named volumes, so they survive `--rm` and a
+# second `test` run doesn't re-resolve the world.
+set -euo pipefail
+
+IMAGE="tela-toolchain"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+build_image() {
+  docker build \
+    --build-arg "UID=$(id -u)" \
+    --build-arg "GID=$(id -g)" \
+    -t "$IMAGE" \
+    -f "$REPO_ROOT/tool/docker/Dockerfile" \
+    "$REPO_ROOT/tool/docker"
+}
+
+case "${1:-}" in
+  --build-image) build_image; exit 0 ;;
+esac
+
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "toolchain image missing — building it once…" >&2
+  build_image
+fi
+
+# --network host: lets the container's adb reach Waydroid, which listens on the
+# host's waydroid0 bridge rather than on anything Docker can see from a bridge net.
+# /dev/bus/usb: the physical-device path for adb.
+DOCKER_ARGS=(
+  --rm
+  --network host
+  -v "$REPO_ROOT:/app"
+  -v "tela-pub-cache:/home/dev/.pub-cache"
+  -v "tela-gradle:/home/dev/.gradle"
+  -w /app
+)
+
+[[ -d /dev/bus/usb ]] && DOCKER_ARGS+=(-v /dev/bus/usb:/dev/bus/usb --device-cgroup-rule='c 189:* rmw')
+[[ -t 0 ]] && DOCKER_ARGS+=(-it)
+
+if [[ "${1:-}" == "--shell" ]]; then
+  exec docker run "${DOCKER_ARGS[@]}" "$IMAGE" bash
+fi
+
+# `dart` is not reachable through `flutter` (there is no `flutter format` any
+# more), so pass it through as its own entrypoint: ./tool/tela dart format .
+if [[ "${1:-}" == "dart" ]]; then
+  shift
+  exec docker run "${DOCKER_ARGS[@]}" "$IMAGE" dart "$@"
+fi
+
+exec docker run "${DOCKER_ARGS[@]}" "$IMAGE" flutter "$@"

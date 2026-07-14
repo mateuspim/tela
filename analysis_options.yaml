@@ -1,0 +1,41 @@
+# The type-safety rules in CLAUDE.md, enforced mechanically rather than by review.
+include: package:very_good_analysis/analysis_options.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+  errors:
+    # Domain models are documented public API; a missing doc comment is a build
+    # failure, not a suggestion. CLAUDE.md: "/// docstrings on every public
+    # function/class".
+    public_member_api_docs: error
+    # A TODO in analyzer output is noise that trains you to ignore real warnings.
+    todo: ignore
+
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "lib/core/i18n/generated/**"
+
+linter:
+  rules:
+    # Formatting is settled by `dart format`, not by lints. CLAUDE.md: "No style
+    # discussion beyond that."
+    require_trailing_commas: false
+    # Contradicts CLAUDE.md, which asks for explicit types unless the type is
+    # obvious on the same line. `final Map<String, String> p = q.toParams();`
+    # is exactly the case the rule would strip and the contract wants kept.
+    omit_local_variable_types: false
+    # Same reason: CLAUDE.md bans untyped functions. A builder callback with
+    # bare `(context, state)` params is exactly that, inference notwithstanding.
+    avoid_types_on_closure_parameters: false
+    # A port with one method is still a port. Collapsing `WallhavenApi` into a
+    # bare function type would delete the seam the whole architecture rests on.
+    one_member_abstracts: false
+    # False positive for our DI style: a named parameter cannot be private, so
+    # `SearchWallpapers({required WallhavenApi api}) : _api = api` is the only
+    # way to expose a public name over a private field.
+    prefer_initializing_formals: false

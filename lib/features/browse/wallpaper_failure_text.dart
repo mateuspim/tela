@@ -1,0 +1,20 @@
+import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/domain/models/wallhaven_failure.dart';
+
+/// Turns a [WallhavenFailure] into a localized sentence.
+///
+/// Lives in the feature layer, not the domain: the domain knows *what* failed,
+/// the UI decides what to say about it. Exhaustive over the sealed failure
+/// type, so a new failure is a compile error here rather than a blank screen.
+///
+/// ```dart
+/// Text(localizedFailure(AppLocalizations.of(context), failure));
+/// ```
+String localizedFailure(AppLocalizations l10n, WallhavenFailure failure) {
+  return switch (failure) {
+    InvalidApiKeyFailure() => l10n.errorInvalidApiKey,
+    RateLimitedFailure() => l10n.errorRateLimited,
+    NetworkFailure() => l10n.errorOffline,
+    UnexpectedResponseFailure() => l10n.errorUnexpected,
+  };
+}
