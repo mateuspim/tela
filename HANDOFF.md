@@ -17,10 +17,12 @@ of the Random tab**, so the shuffle seed carried by
 Wallhaven response. It is unit-tested; a lost seed would show up only as
 repeated images several pages in.
 
-**Wave 2 is now in progress.** Favorites are `0cf2781`, Material You is
-`c056369`, the private library is `a2e5da7` + `5f747a8`, the download history is
-`50485bd`, and the colour filter with the shared status states is `f0c1e10`; see
-"Wave 2 so far" below. **One slice remains: account `/settings` sync.**
+**Wave 2 is code-complete.** Favorites are `0cf2781`, Material You is `c056369`,
+the private library is `a2e5da7` + `5f747a8`, the download history is `50485bd`,
+the colour filter with the shared status states is `f0c1e10`, and the account
+`/settings` sync is `9dd0d6a`; see "Wave 2" below. **Nothing in Wave 2 has run on
+hardware** — that list is "Owed on the device", and it is now the only thing
+between here and Wave 3.
 
 The app supports the thin product loop:
 
@@ -63,6 +65,11 @@ section at the top of Settings. `SaveApiKey` trims the pasted key, stores it, an
 then verifies it; `ForgetApiKey` drops it. The UI holds only *whether* a key
 exists, never the key — a saved key cannot be read back out of the app.
 
+Verifying is now `GET /settings`, so the same request also brings back the
+account's own browse defaults: its categories, its purity, its toplist range.
+Browse opens on them, "Reset filters" returns to them, and a filter the user set
+by hand is never overwritten by them. Forgetting the key forgets them too.
+
 Browse is finally a search, not four fixed listings. The app bar holds a search
 field, and a filter sheet behind it edits categories, purity, shape (portrait /
 landscape / any), sort order, and the toplist range. All of it is one
@@ -72,7 +79,7 @@ the user chose. **The Explicit purity chip appears only once a key is stored** �
 that is the step that was missing for NSFW to be reachable at all, and it is why
 the key slice came first.
 
-## Wave 2 so far
+## Wave 2
 
 **Favorites** (`0cf2781`). Tap the heart on the detail screen to keep a
 wallpaper; the browse app bar opens the shelf. `FavoritesRepository` is a
@@ -103,6 +110,14 @@ centred `Text`s. Browse, favorites, the download history, and the private
 library now say "nothing here" the same way, and a failure picks its icon from
 what actually failed — the offline cloud for a dead network, not a generic
 error triangle.
+
+**Account `/settings` sync** (`9dd0d6a`). Saving an API key now pulls the
+Wallhaven account's own browse defaults — categories, purity, toplist range —
+and browse opens on them. The same request is what *verifies* the key, so the
+sync is free: it replaced an NSFW-purity search that cost the same one of the
+45 req/min and learned nothing but "valid". A filter the user set by hand is
+never overwritten, and forgetting the key drops the defaults with it. This was
+Wave 2's last slice.
 
 ## Decisions made
 
@@ -138,12 +153,13 @@ error triangle.
   does not apply, and `dart:ffi` opens the unversioned `libsqlite3.so` that only
   the dev package's symlink provides. Re-run `./tool/tela --build-image` if the
   Drift tests fail to load the library.
-- **The API key is verified on save, with an NSFW-purity search** — the open
-  question from last session, now closed. That request is the cheapest one
-  Wallhaven *must* 401 for a bad key, so it proves the key without adding Wave 2's
-  `GET /settings` account endpoint to `WallhavenApi` a wave early. It costs one of
-  the 45 req/min, and it means a typo is caught in the dialog rather than three
-  screens later as a mystery empty grid.
+- **The API key is verified on save**, so a typo is caught in the dialog rather
+  than three screens later as a mystery empty grid. It first did that with an
+  NSFW-purity search — the cheapest request Wallhaven *must* 401 for a bad key,
+  chosen so the key slice would not drag Wave 2's `GET /settings` in a wave
+  early. **`GET /settings` is now that request** (see the sync decisions below):
+  same single cost out of the 45 req/min, but it answers with the account's
+  defaults instead of a page of explicit imagery tela immediately throws away.
 - `SaveApiKey` writes the key *before* probing, because the key reaches the
   request through `SecretStore` (via `ApiKeyInterceptor`) — there is no way to
   send a key that isn't stored yet. A test with a store-reading fake API pins the
@@ -338,12 +354,59 @@ error triangle.
   found nothing, favorites has never been used, the history is genuinely empty
   by design for explicit downloads. Only the *failure* states derive their icon,
   because there the failure itself is the fact worth reading.
+- **The account seeds the defaults; it does not overrule a live choice.** This
+  was the open "what wins" question, and the answer is neither extreme. Pulling
+  the account's filters on top of one the user just set by hand would silently
+  undo their choice; writing them to disk and *only* to disk would mean saving a
+  key appears to do nothing until the next launch. So a sync replaces the current
+  query **only while it still equals the old defaults** — and "still equals" is a
+  real comparison, not a guess, because `SearchQuery` already has value equality
+  (which it grew for the grid's reload check, `f0c1e10`). The search term is not
+  a filter: searching for "sunset" is not an opinion about categories, so an
+  adopted default keeps the term.
+- **Only three of the account's five settings are synced.** `resolutions` and
+  `aspect_ratios` are set by desktop users at a desktop: a synced `16x9` would
+  fill a phone grid with landscape wallpapers, and tela already derives `atLeast`
+  from the screen it is actually running on — strictly better information than
+  the account has. Categories, purity and toplist range mean the same thing on
+  both, so those three are `AccountSettings` and the other two are dropped at the
+  mapper.
+- **Forgetting the key drops the account defaults with it, and `LoadAccountDefaults`
+  strips explicit content from them anyway.** Two doors on one hole, in the style
+  of the NSFW storage rules: a stored default may *be* an explicit purity, and an
+  explicit search with no key is a 401 — so browse would open on an error instead
+  of a grid. `ForgetApiKey` deletes the rows, and the load path refuses to hand
+  explicit defaults to a keyless device even if a crash between the two writes (or
+  a hand-edited database) left them there.
+- The account defaults are **read back through the port on every load, never
+  cached from what the sync returned**, precisely so that guard sits on the only
+  path they can reach the UI by.
+- `accountDefaultsProvider` lives in `app/`, not in a feature. Settings *writes*
+  it (a save syncs, a forget clears) and browse *reads* it, and features may not
+  import each other (CLAUDE.md). They meet at the composition root instead.
+- **There is no periodic refresh.** The sync runs once per saved key, from inside
+  `SaveApiKey`. An account's defaults change about as often as its password, and
+  a poll would spend the 45 req/min budget on a question nobody asked.
+- Stored as Wallhaven's own wire literals (`"110"`, `"1M"`), not enum names: they
+  are the values' canonical form, they survive a renamed enum constant, and they
+  read the same in a `sqlite3` shell as they do in a request. Three KV rows, so
+  no migration — the settings table has taken every new setting this way since v1.
+  An unreadable row costs the *whole* account (`tryParse` is all-or-nothing):
+  half an account's defaults is not a state worth having, and "no account" is
+  already a state tela handles — it is where browse starts.
+- `Purity`/`Category` grew `tryFromApiName` beside the throwing `fromApiName`,
+  and the throwing one is now written in terms of it. A wallpaper with an
+  unreadable purity is a bug worth throwing on; an *account* naming a bucket
+  Wallhaven added last week and tela does not know yet should cost that bucket
+  and not the sync. Same for `TopRange.tryFromApiValue`. An empty list from
+  Wallhaven means "never narrowed it" and falls back to tela's default, because
+  the literal translation — the `"000"` mask — is a 400.
 
 ## Verification
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 187 tests pass
+- `./tool/tela test`: 227 tests pass
 - Three-tap browse → detail → Both widget flow: covered
 - Domain use case and all native target/error mappings: covered
 - `/w/{id}` is covered by a detail JSON fixture, mapper boundary tests, and a
@@ -423,27 +486,50 @@ error triangle.
   action, the action fires, each failure gets its own icon and sentence, and
   neither a raw non-Wallhaven error nor a developer-facing failure message ever
   reaches the screen
+- Account sync: the mapper against a captured `/settings` fixture (plus an
+  unknown bucket costing that bucket, an empty list falling back to tela's
+  default, an unreadable range costing the range, and an explicit account read as
+  explicit), `AccountSettings` (the three fields it applies and the seven it
+  leaves alone, `withoutExplicit` including the explicit-only account that must
+  not encode `"000"`, `tryParse` round-trip and each corrupt shape, member-wise
+  equality), `SyncAccountDefaults` (persists, costs exactly one request, stores
+  nothing on a rejected key), `LoadAccountDefaults` (the explicit strip with and
+  without a key), the Drift adapter (round trip, the wire literals on disk,
+  re-sync upserting, forget removing every row and touching no other setting, a
+  corrupt or half-written account reading as none), `SaveApiKey` (verifies with
+  `/settings` and *not* an NSFW search, keeps the defaults it answered with,
+  stores nothing on rejection while leaving the previous key's defaults intact),
+  `ForgetApiKey` (drops the defaults with the key), and the browse controller
+  (opens on the account's, adopts on sync, keeps the search term, and never
+  overrides a hand-set filter — while "Reset" now returns to the account's
+  defaults rather than tela's)
+- `test/features/account_sync_test.dart` is the whole path in one place, which no
+  other test can see: saving a key in settings moves the browse query, forgetting
+  it moves it back (and takes the explicit purity with it), and a hand-set filter
+  survives both
 
 The Random tab's deep paging is the one Wave 1 behaviour never exercised on
 hardware — see below.
 
 ## Start of next session
 
-### 1. Wave 2, last slice
+### 1. The device pass, and then Wave 3
 
-**Account `/settings` sync** is all that is left of Wave 2. `GET /settings` on
-`WallhavenApi`, pulling the account's default purity/categories/resolutions. This
-is also the endpoint that would give the API key a first-class validity check, if
-the NSFW probe used by `SaveApiKey` ever proves too blunt.
+Wave 2 is code-complete, so **the next session's real work is the hardware list
+below** — nothing in Wave 2 has ever run on a phone, and its exit criterion
+("favorites persist, your settings apply, the private library is locked, offline
+browsing works") is a claim about a device, not about a test suite.
 
-The open design question is **when it syncs, and what wins**. tela already has
-browse defaults and a persisted `SearchQuery`; pulling the account's defaults on
-top of a filter the user set by hand would silently undo their choice. Landing
-this as "fetch once when a key is saved, and only seed the *defaults*" is
-probably right, but it is a decision, not an implementation detail.
+After that, Wave 3 is the roadmap's: crop/reposition before apply, daily
+auto-rotate (WorkManager), collections browser, share sheet, and the Omarchy
+sync that closes the desktop↔mobile loop. None of it blocks anything.
 
-Two things were deliberately left out rather than forgotten:
+Three things were deliberately left out rather than forgotten:
 
+- **`/settings` is synced, but nothing pushes back.** tela never writes the
+  account's settings, and Wallhaven's API has no endpoint for it anyway — so a
+  filter changed in tela stays in tela. That is the honest direction of the
+  arrow, and worth saying out loud before someone reads "sync" as two-way.
 - The history has **no way to remove an entry**. "Remove from history" and
   "delete the file" are two different actions, and offering the first next to a
   tile that looks like a file is how someone deletes the wrong thing. Worth
@@ -458,6 +544,13 @@ Two things were deliberately left out rather than forgotten:
 Nothing in Wave 2 has run on hardware yet. In rough order of what would actually
 bite:
 
+- **The account sync against real Wallhaven.** `GET /settings` has only ever been
+  answered by `FakeWallhavenApi`, and it is now the request that decides whether a
+  key is *accepted at all* — if the real endpoint answers in a shape the mapper
+  misreads, a perfectly good key looks rejected. Save a real key and confirm it
+  verifies, then confirm the filter sheet opens on the account's categories and
+  purity. Change a setting on wallhaven.cc, re-save the key, and confirm tela
+  follows. Then remove the key and confirm browse falls back to safe/all/portrait.
 - **The app-lock, end to end.** It has only ever met `FakeAppLock`. Turn it on in
   Settings, leave the private library, come back, and confirm the prompt appears
   and the PIN fallback works. `MainActivity` became a `FlutterFragmentActivity`
