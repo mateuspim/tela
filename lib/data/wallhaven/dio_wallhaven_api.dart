@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:tela/data/wallhaven/wallhaven_mapper.dart';
+import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
@@ -25,7 +26,7 @@ class DioWallhavenApi implements WallhavenApi {
             '/search',
             queryParameters: query.toQueryParameters(),
           );
-      return _mapBody(response.data);
+      return _mapped(response.data, WallhavenMapper.toPage);
     } on DioException catch (error) {
       throw _toFailure(error);
     }
@@ -36,24 +37,38 @@ class DioWallhavenApi implements WallhavenApi {
     try {
       final Response<Map<String, dynamic>> response = await _dio
           .get<Map<String, dynamic>>('/w/$id');
-      return _mapDetailBody(response.data);
+      return _mapped(response.data, WallhavenMapper.toDetails);
     } on DioException catch (error) {
       throw _toFailure(error);
     }
   }
 
-  WallpaperPage _mapBody(Map<String, dynamic>? body) {
-    if (body == null) {
-      throw const UnexpectedResponseFailure('Wallhaven returned an empty body');
+  @override
+  Future<AccountSettings> accountSettings() async {
+    try {
+      // No query string: the key rides the X-API-Key header, the way every
+      // other request here does. Wallhaven documents `?apikey=` for this
+      // endpoint and accepts the header too — the header is the rule.
+      final Response<Map<String, dynamic>> response = await _dio
+          .get<Map<String, dynamic>>('/settings');
+      return _mapped(response.data, WallhavenMapper.toAccountSettings);
+    } on DioException catch (error) {
+      throw _toFailure(error);
     }
-    return WallhavenMapper.toPage(body);
   }
 
-  WallpaperDetails _mapDetailBody(Map<String, dynamic>? body) {
+  /// Runs [map] over a body Dio decoded, refusing an empty one.
+  ///
+  /// A 200 with no body is not something any of the three endpoints does, and
+  /// mapping it would be a null-check inside each mapper instead of one here.
+  T _mapped<T>(
+    Map<String, dynamic>? body,
+    T Function(Map<String, dynamic> body) map,
+  ) {
     if (body == null) {
       throw const UnexpectedResponseFailure('Wallhaven returned an empty body');
     }
-    return WallhavenMapper.toDetails(body);
+    return map(body);
   }
 
   /// Translates transport-level noise into the four things the UI can act on.

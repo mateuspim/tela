@@ -19,6 +19,7 @@ import 'package:tela/features/browse/browse_screen.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
 import '../fakes/fake_secret_store.dart';
+import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
 
 Wallpaper _wallpaper(String id) => Wallpaper(
@@ -47,6 +48,9 @@ Future<void> _pumpBrowse(
         secretStoreProvider.overrideWithValue(
           FakeSecretStore(storedKey: storedKey),
         ),
+        // Browse opens on the synced account defaults, so it reads the settings
+        // store. This one is empty: the app's own defaults still apply.
+        settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
       ],
       child: const MaterialApp(
         localizationsDelegates: <LocalizationsDelegate<Object>>[

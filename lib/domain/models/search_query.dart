@@ -79,6 +79,17 @@ enum TopRange {
   /// The literal the `topRange` query param expects. Case matters: `1M` is a
   /// month, `1m` is not a value Wallhaven accepts.
   final String apiValue;
+
+  /// The range [raw] names, or null when it names none.
+  ///
+  /// Null rather than a throw: both callers read a value tela did not write
+  /// this run — the account's `toplist_range` and the stored copy of it — and
+  /// an unreadable one must cost the range, not the sync.
+  static TopRange? tryFromApiValue(String raw) {
+    return TopRange.values
+        .where((TopRange range) => range.apiValue == raw)
+        .firstOrNull;
+  }
 }
 
 /// Everything that makes one Wallhaven listing different from another.

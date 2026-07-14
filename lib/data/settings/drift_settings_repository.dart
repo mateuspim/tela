@@ -1,4 +1,5 @@
 import 'package:tela/data/db/tela_database.dart';
+import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -21,6 +22,21 @@ class DriftSettingsRepository implements SettingsRepository {
 
   /// A new setting is a new row, never a migration — see the v1 schema note.
   static const String _privateLockKey = 'privacy.privateLibraryLock';
+
+  /// The synced account defaults, stored as the wire literals Wallhaven itself
+  /// uses (`"110"`, `"1M"`). They are the values' canonical form, they survive
+  /// an enum constant being renamed, and they read the same in a `sqlite3`
+  /// shell as they do in a request.
+  static const String _accountCategoriesKey = 'account.categories';
+  static const String _accountPurityKey = 'account.purity';
+  static const String _accountTopRangeKey = 'account.topRange';
+
+  /// Every row [forgetAccountDefaults] drops. The defaults are one setting.
+  static const List<String> _accountKeys = <String>[
+    _accountCategoriesKey,
+    _accountPurityKey,
+    _accountTopRangeKey,
+  ];
 
   final TelaDatabase _db;
 
@@ -52,6 +68,32 @@ class DriftSettingsRepository implements SettingsRepository {
   Future<void> setPrivateLibraryLocked({required bool locked}) {
     return _db.putSetting(_privateLockKey, locked.toString());
   }
+
+  @override
+  Future<AccountSettings?> loadAccountDefaults() async {
+    final String? categories = await _db.settingValue(_accountCategoriesKey);
+    final String? purity = await _db.settingValue(_accountPurityKey);
+    final String? topRange = await _db.settingValue(_accountTopRangeKey);
+    if (categories == null || purity == null || topRange == null) return null;
+
+    // A row that cannot be read costs the defaults, not the app: browse simply
+    // opens on tela's own, which is where it opens before any key is saved.
+    return AccountSettings.tryParse(
+      storedCategories: categories,
+      storedPurity: purity,
+      storedTopRange: topRange,
+    );
+  }
+
+  @override
+  Future<void> saveAccountDefaults(AccountSettings account) async {
+    await _db.putSetting(_accountCategoriesKey, account.categories.toApiBits());
+    await _db.putSetting(_accountPurityKey, account.purity.toApiBits());
+    await _db.putSetting(_accountTopRangeKey, account.topRange.apiValue);
+  }
+
+  @override
+  Future<void> forgetAccountDefaults() => _db.deleteSettings(_accountKeys);
 
   /// Reads one tier, treating an absent, unrecognised, or forbidden row as
   /// [fallback].

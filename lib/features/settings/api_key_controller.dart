@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/account_defaults.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/use_cases/save_api_key.dart';
 
@@ -24,6 +25,7 @@ class ApiKeyController extends AsyncNotifier<bool> {
       apiKey,
     );
     state = const AsyncData<bool>(true);
+    _rereadAccountDefaults();
     return outcome;
   }
 
@@ -31,5 +33,11 @@ class ApiKeyController extends AsyncNotifier<bool> {
   Future<void> forget() async {
     await ref.read(forgetApiKeyProvider)();
     state = const AsyncData<bool>(false);
+    _rereadAccountDefaults();
   }
+
+  /// Both use cases have just written the account defaults through the port —
+  /// a save syncs them, a forget drops them — so whoever holds them is now
+  /// holding a stale copy. Browse listens; this is how it hears.
+  void _rereadAccountDefaults() => ref.invalidate(accountDefaultsProvider);
 }

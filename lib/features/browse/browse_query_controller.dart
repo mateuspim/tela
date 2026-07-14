@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/account_defaults.dart';
+import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 
@@ -15,12 +17,32 @@ final NotifierProvider<BrowseQueryController, SearchQuery> browseQueryProvider =
 /// `atLeast` comes from the screen you are holding. The browse screen layers
 /// both on top of this state before handing the query to a grid.
 ///
+/// The filters it *opens* on come from the Wallhaven account when there is one
+/// — see [_adopt], which is careful about what that may overwrite.
+///
 /// ```dart
 /// ref.read(browseQueryProvider.notifier).search('sunset');
 /// ```
 class BrowseQueryController extends Notifier<SearchQuery> {
+  /// The filters a listing starts from, and what "Reset" resets to: tela's own
+  /// until a Wallhaven account's arrive.
+  SearchQuery _defaults = const SearchQuery();
+
   @override
-  SearchQuery build() => const SearchQuery();
+  SearchQuery build() {
+    ref.listen<AsyncValue<AccountSettings?>>(
+      accountDefaultsProvider,
+      _onAccountDefaults,
+    );
+
+    // Read rather than watch: the listener re-seeds the *filters*, where a
+    // rebuild would throw away the query the user is currently browsing on.
+    final SearchQuery stored = _defaultsOf(
+      ref.read(accountDefaultsProvider).value,
+    );
+    _defaults = stored;
+    return stored;
+  }
 
   /// Sets the free-text term. Empty means "browse", not "search for nothing".
   void search(String term) {
@@ -36,9 +58,44 @@ class BrowseQueryController extends Notifier<SearchQuery> {
     state = filters.copyWith(term: state.term);
   }
 
-  /// Restores the browse defaults: safe content, every category, portrait.
+  /// Restores the defaults: the account's if it has any, tela's otherwise.
   void clearFilters() {
-    state = SearchQuery(term: state.term);
+    state = _withCurrentTerm(_defaults);
+  }
+
+  void _onAccountDefaults(
+    AsyncValue<AccountSettings?>? previous,
+    AsyncValue<AccountSettings?> next,
+  ) {
+    _adopt(_defaultsOf(next.value));
+  }
+
+  /// Takes [defaults] as the new base, and browses on them **only if the user
+  /// has not set a filter by hand**.
+  ///
+  /// This is the whole "what wins" question, and the answer is: the account
+  /// seeds, it does not override. Syncing on top of a filter someone just chose
+  /// would silently undo their choice — but doing nothing at all would mean
+  /// saving a key appears to change nothing until the next launch. "Untouched"
+  /// is exactly `state == the old defaults`, which is a real comparison rather
+  /// than a guess because [SearchQuery] has value equality. The search term is
+  /// not a filter: searching for "sunset" does not mean you have opinions about
+  /// categories.
+  void _adopt(SearchQuery defaults) {
+    final bool untouched = state == _withCurrentTerm(_defaults);
+    _defaults = defaults;
+    if (untouched) state = _withCurrentTerm(defaults);
+  }
+
+  SearchQuery _withCurrentTerm(SearchQuery query) {
+    return query.copyWith(term: state.term);
+  }
+
+  /// The base query [account] asks for, or tela's own when it has none — which
+  /// is also what a forgotten key leaves behind.
+  SearchQuery _defaultsOf(AccountSettings? account) {
+    const SearchQuery own = SearchQuery();
+    return account?.applyTo(own) ?? own;
   }
 }
 

@@ -1,0 +1,89 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:tela/app/account_defaults.dart';
+import 'package:tela/app/providers.dart';
+import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/features/browse/browse_query_controller.dart';
+import 'package:tela/features/settings/api_key_controller.dart';
+
+import '../fakes/fake_secret_store.dart';
+import '../fakes/fake_settings_repository.dart';
+import '../fakes/fake_wallhaven_api.dart';
+
+/// The slice end to end: settings saves a key, and browse follows it.
+///
+/// The two features never import each other — they meet at
+/// [accountDefaultsProvider] — so this is the only place the whole path is
+/// visible at once.
+void main() {
+  test('saving a key adopts the account it belongs to', () async {
+    final ProviderContainer container = _container(account: _explicitAccount);
+    expect(container.read(browseQueryProvider).categories.toApiBits(), '111');
+
+    await container.read(apiKeyProvider.notifier).save('abc123');
+    await container.read(accountDefaultsProvider.future);
+
+    final SearchQuery query = container.read(browseQueryProvider);
+    expect(query.categories.toApiBits(), '010');
+    expect(query.purity.toApiBits(), '111');
+    expect(query.topRange, TopRange.oneWeek);
+  });
+
+  test('forgetting the key takes the account back out of browse', () async {
+    final ProviderContainer container = _container(account: _explicitAccount);
+    await container.read(apiKeyProvider.notifier).save('abc123');
+    await container.read(accountDefaultsProvider.future);
+
+    await container.read(apiKeyProvider.notifier).forget();
+    await container.read(accountDefaultsProvider.future);
+
+    // Back to tela's own — and crucially, no longer asking for explicit
+    // content, which with no key is a 401 rather than a grid.
+    final SearchQuery query = container.read(browseQueryProvider);
+    expect(query.purity.toApiBits(), '100');
+    expect(query.categories.toApiBits(), '111');
+  });
+
+  test('a key the user is still typing over does not change browse', () async {
+    final ProviderContainer container = _container(account: _explicitAccount);
+    container
+        .read(browseQueryProvider.notifier)
+        .applyFilters(
+          const SearchQuery(
+            categories: CategoryFilter(<Category>{Category.people}),
+          ),
+        );
+
+    await container.read(apiKeyProvider.notifier).save('abc123');
+    await container.read(accountDefaultsProvider.future);
+
+    // The account seeds the defaults; it does not overrule a live choice.
+    expect(container.read(browseQueryProvider).categories.toApiBits(), '001');
+  });
+}
+
+/// An account that browses anime and allows everything — every field different
+/// from tela's own defaults.
+const AccountSettings _explicitAccount = AccountSettings(
+  categories: CategoryFilter(<Category>{Category.anime}),
+  purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw}),
+  topRange: TopRange.oneWeek,
+);
+
+ProviderContainer _container({required AccountSettings account}) {
+  final ProviderContainer container = ProviderContainer(
+    overrides: <Override>[
+      wallhavenApiProvider.overrideWithValue(
+        FakeWallhavenApi(account: account),
+      ),
+      secretStoreProvider.overrideWithValue(FakeSecretStore()),
+      settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+    ],
+  );
+  addTearDown(container.dispose);
+  return container;
+}

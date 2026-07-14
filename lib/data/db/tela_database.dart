@@ -197,4 +197,15 @@ class TelaDatabase extends _$TelaDatabase {
       SettingEntriesCompanion.insert(key: key, value: value),
     );
   }
+
+  /// Removes settings. A key that was never written is not an error.
+  ///
+  /// Takes several keys because the callers delete a *setting*, and one setting
+  /// can be more than one row — the account defaults are three.
+  Future<void> deleteSettings(Iterable<String> keys) {
+    final DeleteStatement<$SettingEntriesTable, SettingEntry> statement =
+        delete(settingEntries)
+          ..where(($SettingEntriesTable row) => row.key.isIn(keys));
+    return statement.go();
+  }
 }

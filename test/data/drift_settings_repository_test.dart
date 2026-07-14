@@ -2,6 +2,10 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
+import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 
@@ -82,4 +86,86 @@ void main() {
       expect(await settings.isPrivateLibraryLocked(), isTrue);
     });
   });
+
+  group('DriftSettingsRepository account defaults', () {
+    test('answers null before a key was ever saved', () async {
+      expect(await settings.loadAccountDefaults(), isNull);
+    });
+
+    test('round-trips the synced defaults', () async {
+      await settings.saveAccountDefaults(_account);
+
+      expect(await settings.loadAccountDefaults(), _account);
+    });
+
+    test("stores them as Wallhaven's own literals", () async {
+      await settings.saveAccountDefaults(_account);
+
+      expect(await db.settingValue('account.categories'), '010');
+      expect(await db.settingValue('account.purity'), '110');
+      expect(await db.settingValue('account.topRange'), '1w');
+    });
+
+    test('a re-sync overwrites rather than accumulating rows', () async {
+      await settings.saveAccountDefaults(_account);
+      await settings.saveAccountDefaults(
+        const AccountSettings(
+          categories: CategoryFilter.all,
+          purity: PurityFilter.sfwOnly,
+          topRange: TopRange.oneYear,
+        ),
+      );
+
+      final AccountSettings? loaded = await settings.loadAccountDefaults();
+      expect(loaded?.categories.toApiBits(), '111');
+      expect(loaded?.topRange, TopRange.oneYear);
+    });
+
+    test('forgetting the key removes every row of them', () async {
+      await settings.saveAccountDefaults(_account);
+
+      await settings.forgetAccountDefaults();
+
+      expect(await settings.loadAccountDefaults(), isNull);
+      expect(await db.settingValue('account.purity'), isNull);
+      expect(await db.settingValue('account.categories'), isNull);
+      expect(await db.settingValue('account.topRange'), isNull);
+    });
+
+    test('forgetting them leaves every other setting alone', () async {
+      await settings.saveStorageSettings(
+        StorageSettings.defaults.copyWith(sfwTier: StorageTier.appPrivate),
+      );
+      await settings.saveAccountDefaults(_account);
+
+      await settings.forgetAccountDefaults();
+
+      final StorageSettings storage = await settings.loadStorageSettings();
+      expect(storage.sfwTier, StorageTier.appPrivate);
+    });
+
+    test('a corrupt row costs the defaults, not the app', () async {
+      // Browse simply opens on tela's own, which is where it opens before any
+      // key is saved. A half-read account is not a state worth having.
+      await settings.saveAccountDefaults(_account);
+      await db.putSetting('account.purity', 'sketchy');
+
+      expect(await settings.loadAccountDefaults(), isNull);
+    });
+
+    test('a half-written account reads as no account', () async {
+      await db.putSetting('account.categories', '111');
+
+      expect(await settings.loadAccountDefaults(), isNull);
+    });
+  });
 }
+
+/// An account that browses anime, allows sketchy, and tops by the week — every
+/// field different from tela's own defaults, so a round trip cannot pass by
+/// accidentally reading a default back.
+const AccountSettings _account = AccountSettings(
+  categories: CategoryFilter(<Category>{Category.anime}),
+  purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
+  topRange: TopRange.oneWeek,
+);

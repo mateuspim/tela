@@ -1,3 +1,4 @@
+import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 
 /// Reads and writes the user's persisted preferences.
@@ -23,4 +24,20 @@ abstract interface class SettingsRepository {
 
   /// Turns the private library's lock on or off.
   Future<void> setPrivateLibraryLocked({required bool locked});
+
+  /// The Wallhaven account's browse defaults as this device last synced them,
+  /// or null when no key has ever been saved.
+  ///
+  /// Never throws: a row it cannot read answers null, and null simply means
+  /// tela browses on its own defaults.
+  Future<AccountSettings?> loadAccountDefaults();
+
+  /// Persists [account] as the defaults a fresh listing starts from.
+  Future<void> saveAccountDefaults(AccountSettings account);
+
+  /// Drops the synced defaults, which is what forgetting the API key does.
+  ///
+  /// They belong to an account this device can no longer reach: an explicit
+  /// purity outlives its key by exactly one 401 otherwise.
+  Future<void> forgetAccountDefaults();
 }

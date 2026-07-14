@@ -1,6 +1,8 @@
+import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
@@ -55,6 +57,56 @@ abstract final class WallhavenMapper {
       views: _readInt(data, 'views', fallback: 0),
       favorites: _readInt(data, 'favorites', fallback: 0),
     );
+  }
+
+  /// Maps a `/settings` response body to the account's browse defaults.
+  ///
+  /// Read softer than the other two on purpose. A wallpaper with no `path` is
+  /// useless, but an account setting tela cannot read is merely a *preference*
+  /// it cannot honour — so an unknown category name costs that category, an
+  /// unreadable range costs the range, and an empty list means the account
+  /// never narrowed it and gets tela's own default. Wallhaven's `resolutions`
+  /// and `aspect_ratios` are read by nobody; see [AccountSettings].
+  static AccountSettings toAccountSettings(Map<String, dynamic> body) {
+    final Object? data = body['data'];
+    if (data is! Map<String, dynamic>) {
+      throw UnexpectedResponseFailure(
+        'expected "data" to be an account settings object, '
+        'got ${data.runtimeType}',
+      );
+    }
+    final Set<Category> categories = _readApiNames(
+      data,
+      'categories',
+      Category.tryFromApiName,
+    );
+    final Set<Purity> purities = _readApiNames(
+      data,
+      'purity',
+      Purity.tryFromApiName,
+    );
+    return AccountSettings(
+      categories: categories.isEmpty
+          ? CategoryFilter.all
+          : CategoryFilter(categories),
+      purity: purities.isEmpty ? PurityFilter.sfwOnly : PurityFilter(purities),
+      topRange:
+          TopRange.tryFromApiValue(
+            _readOptionalString(data, 'toplist_range'),
+          ) ??
+          TopRange.oneMonth,
+    );
+  }
+
+  /// Reads a list of API names, dropping every entry [tryParse] cannot read.
+  static Set<T> _readApiNames<T extends Object>(
+    Map<String, dynamic> raw,
+    String key,
+    T? Function(String name) tryParse,
+  ) {
+    final Object? names = raw[key];
+    if (names is! List) return <T>{};
+    return names.whereType<String>().map<T?>(tryParse).nonNulls.toSet();
   }
 
   /// `/search` always sends `meta`; a listing with zero results still does.

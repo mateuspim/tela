@@ -3,9 +3,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/data/wallhaven/wallhaven_mapper.dart';
+import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
@@ -147,4 +149,72 @@ void main() {
       );
     });
   });
+
+  group('WallhavenMapper.toAccountSettings', () {
+    test('maps a captured /settings response to the account defaults', () {
+      final AccountSettings account = WallhavenMapper.toAccountSettings(
+        _fixture('account_settings.json'),
+      );
+
+      expect(account.categories.toApiBits(), '110');
+      expect(account.purity.toApiBits(), '110');
+      expect(account.topRange, TopRange.oneWeek);
+    });
+
+    test('an unreadable name costs that name, not the sync', () {
+      final AccountSettings account = _account(<String, dynamic>{
+        'categories': <String>['anime', 'memes'],
+        'purity': <String>['sfw', 'spicy'],
+        'toplist_range': '1w',
+      });
+
+      expect(account.categories.toApiBits(), '010');
+      expect(account.purity.toApiBits(), '100');
+    });
+
+    test("a filter the account never narrowed is tela's own", () {
+      // Wallhaven sends [] for "no preference"; the encoders would throw on the
+      // "000" mask that literally translates to.
+      final AccountSettings account = _account(<String, dynamic>{
+        'categories': <String>[],
+        'purity': <String>[],
+      });
+
+      expect(account.categories.toApiBits(), '111');
+      expect(account.purity.toApiBits(), '100');
+    });
+
+    test('an unreadable toplist range costs the range', () {
+      expect(
+        _account(<String, dynamic>{'toplist_range': 'forever'}).topRange,
+        TopRange.oneMonth,
+      );
+      expect(
+        _account(<String, dynamic>{}).topRange,
+        TopRange.oneMonth,
+      );
+    });
+
+    test('reads an explicit account as explicit', () {
+      final AccountSettings account = _account(<String, dynamic>{
+        'purity': <String>['sfw', 'sketchy', 'nsfw'],
+      });
+
+      expect(account.purity.toApiBits(), '111');
+    });
+
+    test('fails soft on a payload shape Wallhaven never promised to keep', () {
+      expect(
+        () => WallhavenMapper.toAccountSettings(<String, dynamic>{
+          'data': 'nope',
+        }),
+        throwsA(isA<UnexpectedResponseFailure>()),
+      );
+    });
+  });
+}
+
+/// The account defaults of a `/settings` body carrying only [data].
+AccountSettings _account(Map<String, dynamic> data) {
+  return WallhavenMapper.toAccountSettings(<String, dynamic>{'data': data});
 }

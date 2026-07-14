@@ -1,3 +1,5 @@
+import 'package:tela/domain/models/api_bits.dart';
+
 /// Wallhaven's top-level content buckets.
 ///
 /// Same two-dialect problem as `Purity`: a wallpaper's JSON says `"general"`,
@@ -19,13 +21,23 @@ enum Category {
 
   /// Parses the `category` field of a wallpaper JSON object.
   static Category fromApiName(String raw) {
+    final Category? category = tryFromApiName(raw);
+    if (category == null) {
+      throw ArgumentError('category must be general|anime|people, got "$raw"');
+    }
+    return category;
+  }
+
+  /// Parses a category name, answering null instead of throwing.
+  ///
+  /// For the account's category list, where a bucket tela does not know yet
+  /// should cost that bucket and not the whole sync.
+  static Category? tryFromApiName(String raw) {
     return switch (raw) {
       'general' => Category.general,
       'anime' => Category.anime,
       'people' => Category.people,
-      _ => throw ArgumentError(
-        'category must be general|anime|people, got "$raw"',
-      ),
+      _ => null,
     };
   }
 }
@@ -55,5 +67,11 @@ extension type const CategoryFilter(Set<Category> categories) {
       );
     }
     return bits;
+  }
+
+  /// Reads back a mask [toApiBits] wrote, or null if [bits] is not one.
+  static CategoryFilter? tryFromApiBits(String bits) {
+    final Set<Category>? selected = decodeApiBits(bits, Category.values);
+    return selected == null ? null : CategoryFilter(selected);
   }
 }

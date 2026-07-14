@@ -1,3 +1,5 @@
+import 'package:tela/domain/models/api_bits.dart';
+
 /// How explicit a wallpaper is, as Wallhaven classifies it.
 ///
 /// Wallhaven speaks two dialects for purity and they are *not* the same shape:
@@ -25,13 +27,24 @@ enum Purity {
   /// Purity.fromApiName('nsfw'); // Purity.nsfw
   /// ```
   static Purity fromApiName(String raw) {
+    final Purity? purity = tryFromApiName(raw);
+    if (purity == null) {
+      throw ArgumentError('purity must be sfw|sketchy|nsfw, got "$raw"');
+    }
+    return purity;
+  }
+
+  /// Parses a purity name, answering null instead of throwing.
+  ///
+  /// For payloads where one unreadable name must cost that name and nothing
+  /// else — the account's purity list, where a bucket Wallhaven adds and tela
+  /// does not know yet should not fail the whole sync.
+  static Purity? tryFromApiName(String raw) {
     return switch (raw) {
       'sfw' => Purity.sfw,
       'sketchy' => Purity.sketchy,
       'nsfw' => Purity.nsfw,
-      _ => throw ArgumentError(
-        'purity must be sfw|sketchy|nsfw, got "$raw"',
-      ),
+      _ => null,
     };
   }
 
@@ -66,4 +79,10 @@ extension type const PurityFilter(Set<Purity> purities) {
 
   /// True when this filter cannot be served without an API key.
   bool get requiresApiKey => purities.any((Purity p) => p.requiresApiKey);
+
+  /// Reads back a mask [toApiBits] wrote, or null if [bits] is not one.
+  static PurityFilter? tryFromApiBits(String bits) {
+    final Set<Purity>? selected = decodeApiBits(bits, Purity.values);
+    return selected == null ? null : PurityFilter(selected);
+  }
 }

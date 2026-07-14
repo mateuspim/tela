@@ -1,9 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tela/app/account_defaults.dart';
+import 'package:tela/app/providers.dart';
+import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
+
+import '../fakes/fake_secret_store.dart';
+import '../fakes/fake_settings_repository.dart';
 
 void main() {
   group('BrowseQueryController', () {
@@ -17,6 +24,75 @@ void main() {
       expect(query.ratios, <String>['9x16']);
       expect(query.term, isEmpty);
     });
+
+    test("opens on the account's defaults once they are synced", () async {
+      final ProviderContainer container = _container(account: _account);
+      await container.read(accountDefaultsProvider.future);
+
+      final SearchQuery query = container.read(browseQueryProvider);
+
+      expect(query.categories.toApiBits(), '010');
+      expect(query.purity.toApiBits(), '110');
+      expect(query.topRange, TopRange.oneWeek);
+      // The account has no say over the rest of the query.
+      expect(query.ratios, <String>['9x16']);
+    });
+
+    test('adopting the account leaves the search term alone — searching is '
+        'not an opinion about categories', () async {
+      final ProviderContainer container = _container(account: _account);
+      container.read(browseQueryProvider.notifier).search('sunset');
+
+      await container.read(accountDefaultsProvider.future);
+
+      final SearchQuery query = container.read(browseQueryProvider);
+      expect(query.term, 'sunset');
+      expect(query.categories.toApiBits(), '010');
+    });
+
+    test('never overrides a filter the user set by hand', () async {
+      final ProviderContainer container = _container(account: _account);
+      container
+          .read(browseQueryProvider.notifier)
+          .applyFilters(
+            const SearchQuery(
+              categories: CategoryFilter(<Category>{
+                Category.people,
+              }),
+            ),
+          );
+
+      await container.read(accountDefaultsProvider.future);
+
+      // The sync landed underneath, but the choice on screen is the user's.
+      expect(
+        container.read(browseQueryProvider).categories.toApiBits(),
+        '001',
+      );
+    });
+
+    test(
+      "resetting the filters returns to the account's, not tela's",
+      () async {
+        final ProviderContainer container = _container(account: _account);
+        await container.read(accountDefaultsProvider.future);
+
+        container.read(browseQueryProvider.notifier)
+          ..applyFilters(
+            const SearchQuery(
+              categories: CategoryFilter(<Category>{
+                Category.people,
+              }),
+            ),
+          )
+          ..clearFilters();
+
+        expect(
+          container.read(browseQueryProvider).categories.toApiBits(),
+          '010',
+        );
+      },
+    );
 
     test('trims the search term', () {
       final ProviderContainer container = _container();
@@ -104,8 +180,27 @@ void main() {
   });
 }
 
-ProviderContainer _container() {
-  final ProviderContainer container = ProviderContainer();
+/// An account whose every field differs from tela's own defaults, so adopting
+/// it cannot pass by accidentally reading a default back.
+const AccountSettings _account = AccountSettings(
+  categories: CategoryFilter(<Category>{Category.anime}),
+  purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
+  topRange: TopRange.oneWeek,
+);
+
+/// A container whose Wallhaven account has [account] as its browse defaults, or
+/// no key at all when it is null.
+ProviderContainer _container({AccountSettings? account}) {
+  final ProviderContainer container = ProviderContainer(
+    overrides: <Override>[
+      settingsRepositoryProvider.overrideWithValue(
+        FakeSettingsRepository(accountDefaults: account),
+      ),
+      secretStoreProvider.overrideWithValue(
+        FakeSecretStore(storedKey: account == null ? null : 'abc123'),
+      ),
+    ],
+  );
   addTearDown(container.dispose);
   return container;
 }

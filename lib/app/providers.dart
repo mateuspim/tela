@@ -24,8 +24,10 @@ import 'package:tela/domain/use_cases/apply_download.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
 import 'package:tela/domain/use_cases/forget_api_key.dart';
+import 'package:tela/domain/use_cases/load_account_defaults.dart';
 import 'package:tela/domain/use_cases/save_api_key.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
+import 'package:tela/domain/use_cases/sync_account_defaults.dart';
 import 'package:tela/domain/use_cases/toggle_favorite.dart';
 
 /// The composition root: every port is bound to its adapter exactly once, here.
@@ -128,17 +130,39 @@ final Provider<SearchWallpapers> searchWallpapersProvider =
       ),
     );
 
+/// Pulls the Wallhaven account's browse defaults and stores them.
+final Provider<SyncAccountDefaults> syncAccountDefaultsProvider =
+    Provider<SyncAccountDefaults>(
+      (Ref ref) => SyncAccountDefaults(
+        api: ref.watch(wallhavenApiProvider),
+        settings: ref.watch(settingsRepositoryProvider),
+      ),
+    );
+
+/// Reads back the synced defaults this device may actually browse on.
+final Provider<LoadAccountDefaults> loadAccountDefaultsProvider =
+    Provider<LoadAccountDefaults>(
+      (Ref ref) => LoadAccountDefaults(
+        settings: ref.watch(settingsRepositoryProvider),
+        secrets: ref.watch(secretStoreProvider),
+      ),
+    );
+
 /// Stores an API key, after asking Wallhaven whether it works.
 final Provider<SaveApiKey> saveApiKeyProvider = Provider<SaveApiKey>(
   (Ref ref) => SaveApiKey(
     secrets: ref.watch(secretStoreProvider),
-    api: ref.watch(wallhavenApiProvider),
+    syncDefaults: ref.watch(syncAccountDefaultsProvider),
   ),
 );
 
-/// Drops the stored API key, re-locking NSFW.
+/// Drops the stored API key and the account defaults it unlocked, re-locking
+/// NSFW.
 final Provider<ForgetApiKey> forgetApiKeyProvider = Provider<ForgetApiKey>(
-  (Ref ref) => ForgetApiKey(secrets: ref.watch(secretStoreProvider)),
+  (Ref ref) => ForgetApiKey(
+    secrets: ref.watch(secretStoreProvider),
+    settings: ref.watch(settingsRepositoryProvider),
+  ),
 );
 
 /// Keeps or drops one wallpaper from the local favorites.

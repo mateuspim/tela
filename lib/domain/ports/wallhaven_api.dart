@@ -1,3 +1,4 @@
+import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
@@ -25,4 +26,12 @@ abstract interface class WallhavenApi {
   ///
   /// Uses `GET /w/{id}` and throws the same safe failures as [search].
   Future<WallpaperDetails> wallpaperDetails(String id);
+
+  /// Fetches the browse defaults of the account the stored key belongs to.
+  ///
+  /// Uses `GET /settings`, which serves nobody without a key — so this is also
+  /// the request that tells a good key from a bad one, and `SaveApiKey` uses it
+  /// as exactly that. Throws [InvalidApiKeyFailure] when the key is missing or
+  /// rejected, and the same safe failures as [search] otherwise.
+  Future<AccountSettings> accountSettings();
 }
