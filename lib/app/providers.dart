@@ -6,10 +6,12 @@ import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/secrets/secure_secret_store.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/data/storage/method_channel_image_store.dart';
+import 'package:tela/data/storage/method_channel_screen_guard.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/image_store.dart';
+import 'package:tela/domain/ports/screen_guard.dart';
 import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
@@ -50,6 +52,11 @@ final Provider<WallpaperApplier> wallpaperApplierProvider =
 /// The three-tier image-storage port, bound to Android's scoped-storage API.
 final Provider<ImageStore> imageStoreProvider = Provider<ImageStore>(
   (Ref ref) => MethodChannelImageStore(),
+);
+
+/// The screen-protection port, bound to Android's `FLAG_SECURE`.
+final Provider<ScreenGuard> screenGuardProvider = Provider<ScreenGuard>(
+  (Ref ref) => MethodChannelScreenGuard(),
 );
 
 /// tela's SQLite database, opened once and closed with the provider scope.

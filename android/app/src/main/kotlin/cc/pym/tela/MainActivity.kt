@@ -3,6 +3,7 @@ package cc.pym.tela
 import android.content.Intent
 import android.net.Uri
 import android.app.WallpaperManager
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -28,6 +29,31 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             IMAGE_STORE_CHANNEL,
         ).setMethodCallHandler(::handleImageStoreCall)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SCREEN_CHANNEL,
+        ).setMethodCallHandler(::handleScreenCall)
+    }
+
+    /**
+     * Turns FLAG_SECURE on and off for the private library.
+     *
+     * The flag belongs to the window, not to a route, so the screen that needs
+     * it asks for it on the way in and gives it back on the way out. Left on, it
+     * would block screenshots of the whole app; never set, an explicit wallpaper
+     * would sit in the app-switcher thumbnail for anyone to see.
+     */
+    private fun handleScreenCall(call: MethodCall, result: MethodChannel.Result) {
+        if (call.method != "setSecure") {
+            result.notImplemented()
+            return
+        }
+        if (call.argument<Boolean>("secure") == true) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        result.success(null)
     }
 
     override fun onDestroy() {
@@ -54,10 +80,15 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleImageStoreCall(call: MethodCall, result: MethodChannel.Result) {
-        if (call.method != "storeImage") {
-            result.notImplemented()
-            return
+        when (call.method) {
+            "storeImage" -> handleStoreImage(call, result)
+            "listPrivateImages" -> onStorageThread(result) { ImageStorage(this).listPrivate() }
+            "deletePrivateImage" -> handleDeletePrivateImage(call, result)
+            else -> result.notImplemented()
         }
+    }
+
+    private fun handleStoreImage(call: MethodCall, result: MethodChannel.Result) {
         val request = imageStoreRequest(call) ?: run {
             result.success(imageStoreFailure("unavailable"))
             return
@@ -67,6 +98,29 @@ class MainActivity : FlutterActivity() {
             return
         }
         storeImage(request, result)
+    }
+
+    private fun handleDeletePrivateImage(call: MethodCall, result: MethodChannel.Result) {
+        val id = call.argument<String>("id") ?: run {
+            result.success(imageStoreFailure("unavailable"))
+            return
+        }
+        onStorageThread(result) { ImageStorage(this).deletePrivate(id) }
+    }
+
+    /** Runs filesystem work off the UI thread, answering on it. */
+    private fun onStorageThread(
+        result: MethodChannel.Result,
+        work: () -> Map<String, Any>,
+    ) {
+        imageStoreExecutor.execute {
+            val response = try {
+                work()
+            } catch (_: Exception) {
+                imageStoreFailure("unavailable")
+            }
+            runOnUiThread { result.success(response) }
+        }
     }
 
     private fun imageStoreRequest(call: MethodCall): ImageStoreRequest? {
@@ -209,6 +263,7 @@ class MainActivity : FlutterActivity() {
     private companion object {
         const val WALLPAPER_CHANNEL = "cc.pym.tela/wallpaper"
         const val IMAGE_STORE_CHANNEL = "cc.pym.tela/images"
+        const val SCREEN_CHANNEL = "cc.pym.tela/screen"
         const val OUTSIDE_GALLERY_DIRECTORY_REQUEST = 401
         const val PREFERENCES = "tela.storage"
         const val OUTSIDE_GALLERY_TREE = "outsideGalleryTree"

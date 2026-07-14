@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/data/storage/method_channel_image_store.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 
@@ -77,6 +78,119 @@ void main() {
       ),
       throwsA(_failureWith(ImageStoreProblem.notConfigured)),
     );
+  });
+
+  group('privateImages', () {
+    test('maps the native listing into domain images', () async {
+      final _FakeImageStoreChannel fake = _FakeImageStoreChannel(
+        response: <Object?, Object?>{
+          'success': true,
+          'images': <Object?>[
+            <Object?, Object?>{
+              'id': 'e7jvjd',
+              'location': 'file:///data/user/0/cc.pym.tela/files/w-e7jvjd.jpg',
+              'savedAt': 1750000000000,
+              'sizeBytes': 2048,
+            },
+          ],
+        },
+      );
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: fake.call,
+      );
+
+      final List<PrivateImage> images = await store.privateImages();
+
+      expect(fake.receivedMethod, 'listPrivateImages');
+      expect(images.single.id, 'e7jvjd');
+      expect(images.single.sizeBytes, 2048);
+      expect(
+        images.single.savedAt,
+        DateTime.fromMillisecondsSinceEpoch(1750000000000),
+      );
+    });
+
+    test('an empty tier lists nothing rather than failing', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: <Object?, Object?>{'success': true, 'images': <Object?>[]},
+        ).call,
+      );
+
+      expect(await store.privateImages(), isEmpty);
+    });
+
+    test('skips a mangled entry instead of emptying the library', () async {
+      // One unreadable row must not read as "all my files are gone".
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: <Object?, Object?>{
+            'success': true,
+            'images': <Object?>[
+              <Object?, Object?>{'id': 'broken'},
+              <Object?, Object?>{
+                'id': 'intact',
+                'location': 'file:///files/w-intact.jpg',
+                'savedAt': 1750000000000,
+                'sizeBytes': 1,
+              },
+            ],
+          },
+        ).call,
+      );
+
+      final List<PrivateImage> images = await store.privateImages();
+
+      expect(images.map((PrivateImage image) => image.id), <String>['intact']);
+    });
+
+    test('maps a native listing failure to a safe failure', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: <Object?, Object?>{
+            'success': false,
+            'errorCode': 'unavailable',
+          },
+        ).call,
+      );
+
+      await expectLater(
+        store.privateImages(),
+        throwsA(_failureWith(ImageStoreProblem.unavailable)),
+      );
+    });
+  });
+
+  group('deletePrivateImage', () {
+    test('sends the id to the native delete', () async {
+      final _FakeImageStoreChannel fake = _FakeImageStoreChannel(
+        response: <Object?, Object?>{'success': true},
+      );
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: fake.call,
+      );
+
+      await store.deletePrivateImage('e7jvjd');
+
+      expect(fake.receivedMethod, 'deletePrivateImage');
+      expect(fake.receivedArguments, <String, String>{'id': 'e7jvjd'});
+    });
+
+    test('maps a refused delete to a safe failure', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: <Object?, Object?>{
+            'success': false,
+            'errorCode': 'unavailable',
+          },
+        ).call,
+      );
+
+      await expectLater(
+        store.deletePrivateImage('e7jvjd'),
+        throwsA(_failureWith(ImageStoreProblem.unavailable)),
+      );
+    });
   });
 }
 

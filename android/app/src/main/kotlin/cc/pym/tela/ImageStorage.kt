@@ -67,7 +67,8 @@ class ImageStorage(private val context: Context) {
         outsideGalleryTree: String?,
     ): Map<String, Any> {
         val tree = outsideGalleryTree ?: return failure("notConfigured")
-        val directory = privateDirectory(Uri.parse(tree)) ?: return failure("unavailable")
+        val directory = outsideGalleryDirectory(Uri.parse(tree))
+            ?: return failure("unavailable")
         if (!ensureNoMediaMarker(directory)) return failure("unavailable")
         val resolver = context.contentResolver
         val file = DocumentsContract.createDocument(
@@ -87,14 +88,61 @@ class ImageStorage(private val context: Context) {
     }
 
     private fun storePrivately(request: ImageStoreRequest): Map<String, Any> {
-        val directory = File(context.filesDir, "wallpapers")
+        val directory = privateDirectory()
         if (!directory.exists() && !directory.mkdirs()) return failure("unavailable")
         val file = File(directory, fileName(request))
         file.outputStream().use { output -> copyRemote(request.imageUrl, output) }
         return success(Uri.fromFile(file))
     }
 
-    private fun privateDirectory(tree: Uri): Uri? {
+    /**
+     * Lists the app-private tier, newest first.
+     *
+     * Only this tier is listable: the other two land where the system gallery or
+     * a file manager already shows them. These files are visible to nothing but
+     * tela, so without this they can only be written, never seen.
+     */
+    fun listPrivate(): Map<String, Any> {
+        val files = privateDirectory().listFiles()?.filter { it.isFile } ?: emptyList()
+        val images = files
+            .sortedByDescending { it.lastModified() }
+            .mapNotNull { file ->
+                val id = idOf(file.name) ?: return@mapNotNull null
+                mapOf(
+                    "id" to id,
+                    "location" to Uri.fromFile(file).toString(),
+                    "savedAt" to file.lastModified(),
+                    "sizeBytes" to file.length(),
+                )
+            }
+        return mapOf("success" to true, "images" to images)
+    }
+
+    /**
+     * Deletes one app-private image.
+     *
+     * The id is matched against [VALID_ID] before it is used to build any path.
+     * It arrives over a method channel, and an id like `../../databases/tela` is
+     * how a listing feature becomes an arbitrary-file-delete.
+     */
+    fun deletePrivate(id: String): Map<String, Any> {
+        if (!VALID_ID.matches(id)) return failure("unavailable")
+        val matches = privateDirectory()
+            .listFiles()
+            ?.filter { it.isFile && idOf(it.name) == id }
+            ?: emptyList()
+        if (matches.isEmpty()) return failure("unavailable")
+        if (!matches.all { it.delete() }) return failure("unavailable")
+        return mapOf("success" to true)
+    }
+
+    private fun privateDirectory(): File = File(context.filesDir, "wallpapers")
+
+    /** Recovers the Wallhaven id from a file tela itself wrote, or null. */
+    private fun idOf(fileName: String): String? =
+        PRIVATE_FILE.matchEntire(fileName)?.groupValues?.get(1)
+
+    private fun outsideGalleryDirectory(tree: Uri): Uri? {
         if (tree.authority != EXTERNAL_STORAGE_PROVIDER) return null
         val root = DocumentsContract.buildDocumentUriUsingTree(
             tree,
@@ -202,6 +250,9 @@ class ImageStorage(private val context: Context) {
         const val EXTERNAL_STORAGE_PROVIDER = "com.android.externalstorage.documents"
         const val NETWORK_TIMEOUT_MS = 30_000
         val VALID_ID = Regex("[A-Za-z0-9_-]{1,64}")
+
+        /** Matches only the names tela writes, and captures the id back out. */
+        val PRIVATE_FILE = Regex("wallhaven-([A-Za-z0-9_-]{1,64})\\.(jpg|jpeg|png|webp)")
         val SUPPORTED_PURITIES = setOf("sfw", "sketchy", "nsfw")
         val SUPPORTED_TIERS = setOf("sharedGallery", "filesOutsideGallery", "appPrivate")
     }

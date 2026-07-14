@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -60,7 +62,31 @@ class _SettingsList extends StatelessWidget {
           selected: settings.nsfwTier,
           note: l10n.settingsDownloadsNsfwNote,
         ),
+        const Divider(),
+        _Header(title: l10n.settingsPrivacySection),
+        const _PrivateLibraryTile(),
       ],
+    );
+  }
+}
+
+/// The way into the private library.
+///
+/// It lives here rather than in the browse app bar on purpose: this is where
+/// explicit downloads land, and a heart-shaped shortcut to them on the app's
+/// front page is not what anyone wants over a shoulder.
+class _PrivateLibraryTile extends StatelessWidget {
+  const _PrivateLibraryTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return ListTile(
+      leading: const Icon(Icons.lock_outline),
+      title: Text(l10n.privateLibraryTitle),
+      subtitle: Text(l10n.privateLibraryOpenDetail),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => context.pushNamed(TelaRoutes.privateLibraryName),
     );
   }
 }

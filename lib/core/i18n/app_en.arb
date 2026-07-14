@@ -413,5 +413,60 @@
   "settingsDownloadsNsfwNote": "Explicit wallpapers are never added to the gallery.",
   "@settingsDownloadsNsfwNote": {
     "description": "States the hard NSFW rule, so the missing Gallery option does not read as a bug."
+  },
+
+  "settingsPrivacySection": "Privacy",
+  "@settingsPrivacySection": {
+    "description": "Heading for the group of privacy settings."
+  },
+
+  "privateLibraryTitle": "Private library",
+  "@privateLibraryTitle": {
+    "description": "Title of the screen listing app-private downloads. Matches the storage tier's name."
+  },
+
+  "privateLibraryOpenDetail": "Wallpapers only tela can open. Hidden from screenshots.",
+  "@privateLibraryOpenDetail": {
+    "description": "Subtitle of the settings entry that opens the private library."
+  },
+
+  "privateLibraryEmpty": "Nothing here. Wallpapers downloaded to the private library appear on this screen.",
+  "@privateLibraryEmpty": {
+    "description": "Shown when the app-private tier holds no images."
+  },
+
+  "privateLibraryUnavailable": "Couldn't open the private library.",
+  "@privateLibraryUnavailable": {
+    "description": "Safe fallback when the app-private tier cannot be listed. Never names a path."
+  },
+
+  "privateLibraryImageLabel": "Private wallpaper {wallpaperId}",
+  "@privateLibraryImageLabel": {
+    "description": "Accessibility label for one image in the private library.",
+    "placeholders": {
+      "wallpaperId": {
+        "type": "String"
+      }
+    }
+  },
+
+  "privateLibraryDeleteTitle": "Delete this wallpaper?",
+  "@privateLibraryDeleteTitle": {
+    "description": "Title of the confirmation shown before an app-private file is deleted."
+  },
+
+  "privateLibraryDeleteBody": "It will be removed from this device. This cannot be undone.",
+  "@privateLibraryDeleteBody": {
+    "description": "Explains that deleting an app-private file is permanent."
+  },
+
+  "privateLibraryDelete": "Delete",
+  "@privateLibraryDelete": {
+    "description": "Confirms deleting one app-private file."
+  },
+
+  "privateLibraryDeleteFailure": "Couldn't delete this wallpaper.",
+  "@privateLibraryDeleteFailure": {
+    "description": "Safe fallback when an app-private file cannot be deleted."
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/stored_image.dart';
@@ -45,11 +46,75 @@ class MethodChannelImageStore implements ImageStore {
     }
   }
 
+  @override
+  Future<List<PrivateImage>> privateImages() async {
+    try {
+      final Object? raw = await _invokeMethod(
+        'listPrivateImages',
+        const <String, String>{},
+      );
+      return _privateImagesFrom(raw);
+    } on PlatformException catch (error) {
+      throw ImageStoreFailure(_problemFor(error.code));
+    }
+  }
+
+  @override
+  Future<void> deletePrivateImage(String id) async {
+    try {
+      final Object? raw = await _invokeMethod(
+        'deletePrivateImage',
+        <String, String>{
+          'id': id,
+        },
+      );
+      if (raw is Map<Object?, Object?> && raw['success'] == true) return;
+      final Object? code = raw is Map<Object?, Object?>
+          ? raw['errorCode']
+          : null;
+      throw ImageStoreFailure(_problemFor(code));
+    } on PlatformException catch (error) {
+      throw ImageStoreFailure(_problemFor(error.code));
+    }
+  }
+
   static Future<Object?> _invokeNativeMethod(
     String method,
     Map<String, String> arguments,
   ) {
     return _channel.invokeMethod<Object?>(method, arguments);
+  }
+
+  /// Maps the native listing, skipping any entry the platform mangled.
+  ///
+  /// A single unreadable row must not empty the whole library — the user would
+  /// read that as "my files are gone", which is far worse than one lost tile.
+  List<PrivateImage> _privateImagesFrom(Object? raw) {
+    if (raw is! Map<Object?, Object?> || raw['success'] != true) {
+      final Object? code = raw is Map<Object?, Object?>
+          ? raw['errorCode']
+          : null;
+      throw ImageStoreFailure(_problemFor(code));
+    }
+    final Object? images = raw['images'];
+    if (images is! List<Object?>) return const <PrivateImage>[];
+    return images.map(_privateImageFrom).whereType<PrivateImage>().toList();
+  }
+
+  PrivateImage? _privateImageFrom(Object? raw) {
+    if (raw is! Map<Object?, Object?>) return null;
+    final Object? id = raw['id'];
+    final Object? location = raw['location'];
+    final Object? savedAt = raw['savedAt'];
+    final Object? sizeBytes = raw['sizeBytes'];
+    if (id is! String || location is! String) return null;
+    if (savedAt is! int || sizeBytes is! int) return null;
+    return PrivateImage(
+      id: id,
+      location: Uri.parse(location),
+      savedAt: DateTime.fromMillisecondsSinceEpoch(savedAt),
+      sizeBytes: sizeBytes,
+    );
   }
 
   StoredImage _storedImageFrom(Object? raw, StorageTier tier) {

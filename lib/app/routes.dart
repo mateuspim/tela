@@ -23,4 +23,10 @@ abstract final class TelaRoutes {
 
   /// Favorites route name.
   static const String favoritesName = 'favorites';
+
+  /// Private library path.
+  static const String privateLibraryPath = '/private';
+
+  /// Private library route name.
+  static const String privateLibraryName = 'private-library';
 }
