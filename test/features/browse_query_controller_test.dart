@@ -23,7 +23,7 @@ void main() {
 
       expect(query.purity.toApiBits(), '100');
       expect(query.categories.toApiBits(), '111');
-      expect(query.ratios, <String>['9x16']);
+      expect(query.ratios, <RatioChoice>[const ExactRatio(9, 16)]);
       expect(query.term, isEmpty);
     });
 
@@ -38,7 +38,7 @@ void main() {
       // The account has no say over the rest of the query — least of all the
       // purity, which always opens on safe.
       expect(query.purity.toApiBits(), '100');
-      expect(query.ratios, <String>['9x16']);
+      expect(query.ratios, <RatioChoice>[const ExactRatio(9, 16)]);
     });
 
     test('adopting the account leaves the search term alone — searching is '
@@ -109,7 +109,7 @@ void main() {
 
       expect(query.categories.toApiBits(), '001');
       expect(query.topRange, TopRange.oneYear);
-      expect(query.ratios, <String>['16x9']);
+      expect(query.ratios, <RatioChoice>[const ExactRatio(16, 9)]);
       expect(query.order, SortOrder.asc);
       // A saved snapshot cannot carry a purity either. Browse still opens safe.
       expect(query.purity.toApiBits(), '100');
@@ -300,27 +300,6 @@ void main() {
       ]);
     });
   });
-
-  group('RatioChoice', () {
-    test('reads the choice back out of a query', () {
-      expect(RatioChoice.of(const SearchQuery()), RatioChoice.portrait);
-      expect(
-        RatioChoice.of(const SearchQuery(ratios: <String>['16x9'])),
-        RatioChoice.landscape,
-      );
-      expect(
-        RatioChoice.of(const SearchQuery(ratios: <String>[])),
-        RatioChoice.any,
-      );
-    });
-
-    test('falls back to any for a ratio set nothing offers', () {
-      expect(
-        RatioChoice.of(const SearchQuery(ratios: <String>['21x9'])),
-        RatioChoice.any,
-      );
-    });
-  });
 }
 
 /// An account whose every field differs from tela's own defaults, so adopting
@@ -335,7 +314,7 @@ const AccountSettings _account = AccountSettings(
 const BrowseDefaults _device = BrowseDefaults(
   categories: CategoryFilter(<Category>{Category.people}),
   topRange: TopRange.oneYear,
-  ratios: <String>['16x9'],
+  ratios: <RatioChoice>[ExactRatio(16, 9)],
   order: SortOrder.asc,
 );
 

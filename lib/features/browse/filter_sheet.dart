@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/browse_defaults.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/browse_filter_text.dart';
+import 'package:tela/core/ui/screen_resolution.dart';
 import 'package:tela/core/ui/wallpaper_swatch.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/category.dart';
@@ -118,17 +119,37 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
     );
   }
 
+  /// Chips, not a radio: Wallhaven unions the `ratios` param, so asking for
+  /// `9x16` *and* `16x9` is one listing containing both — the opposite of
+  /// `colors`, where a second value replaces the first.
+  ///
+  /// The device's own reduced shape leads, and is the recommendation: Wallhaven
+  /// accepts an arbitrary `WxH`, so a phone that reduces to 9×20 can ask for
+  /// exactly its own shape even though no standard dropdown offers one.
+  ///
+  /// "Any shape" leads the row and is selected whenever no chip is, so the row
+  /// never reads as "nothing chosen yet" when it means "every shape".
   Widget _ratios(AppLocalizations l10n) {
-    return SegmentedButton<RatioChoice>(
-      segments: <ButtonSegment<RatioChoice>>[
-        for (final RatioChoice choice in RatioChoice.values)
-          ButtonSegment<RatioChoice>(
-            value: choice,
-            label: Text(ratioLabel(l10n, choice)),
+    final ExactRatio screen = ExactRatio.ofScreen(screenResolution(context));
+    final List<RatioChoice> selected = _draft.ratios;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: <Widget>[
+        FilterChip(
+          label: Text(l10n.ratioAny),
+          selected: selected.isEmpty,
+          onSelected: (bool _) => _clearRatios(),
+        ),
+        for (final RatioChoice choice in offerableRatios(
+          screenResolution(context),
+        ))
+          FilterChip(
+            label: Text(ratioLabel(l10n, choice, screen: screen)),
+            selected: selected.contains(choice),
+            onSelected: (bool _) => _toggleRatio(choice),
           ),
       ],
-      selected: <RatioChoice>{RatioChoice.of(_draft)},
-      onSelectionChanged: _chooseRatio,
     );
   }
 
@@ -223,8 +244,18 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
     setState(() => _draft = _draft.copyWith(purity: PurityFilter(next)));
   }
 
-  void _chooseRatio(Set<RatioChoice> chosen) {
-    setState(() => _draft = _draft.copyWith(ratios: chosen.single.ratios));
+  /// Adds or removes one shape. Unlike the categories and the purities, the
+  /// last chip *may* be turned off: an empty `ratios` is a legitimate request —
+  /// it is how you ask Wallhaven for every shape — where an empty category mask
+  /// is a 400.
+  void _toggleRatio(RatioChoice choice) {
+    final List<RatioChoice> next = <RatioChoice>[..._draft.ratios];
+    if (!next.remove(choice)) next.add(choice);
+    setState(() => _draft = _draft.copyWith(ratios: next));
+  }
+
+  void _clearRatios() {
+    setState(() => _draft = _draft.copyWith(ratios: const <RatioChoice>[]));
   }
 
   /// Selects [color], or clears the filter when it is null or already selected.

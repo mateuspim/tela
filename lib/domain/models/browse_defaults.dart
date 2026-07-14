@@ -1,5 +1,6 @@
 import 'package:meta/meta.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 
@@ -93,7 +94,7 @@ class BrowseDefaults {
   const BrowseDefaults({
     this.categories = CategoryFilter.all,
     this.topRange = TopRange.oneMonth,
-    this.ratios = const <String>['9x16'],
+    this.ratios = const <RatioChoice>[ExactRatio(9, 16)],
     this.order = SortOrder.desc,
     this.color,
   });
@@ -138,7 +139,9 @@ class BrowseDefaults {
     return BrowseDefaults(
       categories: categories,
       topRange: topRange,
-      ratios: _parseRatios(storedRatios),
+      // An empty stored list is "any shape", which is a real choice — not a
+      // missing one — so it must not decay into tela's portrait default.
+      ratios: RatioChoice.readAll(storedRatios),
       order: order,
       // One unreadable swatch costs the colour, not the snapshot: the filter is
       // still a filter without it, and "any colour" is a legitimate state.
@@ -154,8 +157,8 @@ class BrowseDefaults {
   /// The toplist window, for the tabs that use one.
   final TopRange topRange;
 
-  /// Aspect ratios, e.g. `9x16`. Empty means no ratio filter at all.
-  final List<String> ratios;
+  /// Aspect ratios to accept, as a union. Empty means no ratio filter at all.
+  final List<RatioChoice> ratios;
 
   /// Direction of the tab's sorting.
   final SortOrder order;
@@ -164,7 +167,7 @@ class BrowseDefaults {
   final WallpaperColor? color;
 
   /// The stored form of [ratios]: a comma-joined list, empty for "any shape".
-  String encodedRatios() => ratios.join(',');
+  String encodedRatios() => RatioChoice.encode(ratios) ?? '';
 
   /// Returns [query] with these defaults applied, and everything they do not
   /// speak for — the purity, the term, the tab's sorting, the screen-derived
@@ -183,13 +186,6 @@ class BrowseDefaults {
           order: order,
         )
         .withColor(color);
-  }
-
-  /// An empty stored list is "any shape", which is a real choice — not a
-  /// missing one — so it must not decay into tela's portrait default.
-  static List<String> _parseRatios(String stored) {
-    if (stored.isEmpty) return const <String>[];
-    return stored.split(',');
   }
 
   /// Value equality over the encoded filter, element-wise where it must be.

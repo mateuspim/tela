@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
@@ -64,6 +65,23 @@ void main() {
       expect(params['order'], 'desc');
       expect(params['ratios'], '9x16');
       expect(params['page'], '1');
+    });
+
+    test('unions the ratios, because that is what the API does with them', () {
+      final Map<String, String> params = const SearchQuery(
+        ratios: <RatioChoice>[ExactRatio(9, 16), ShapeRatio.landscape],
+      ).toQueryParameters();
+
+      expect(params['ratios'], '9x16,landscape');
+    });
+
+    test('sends no `ratios` at all for "any shape"', () {
+      // Not an empty `ratios=`, which is not how you ask for every shape.
+      final Map<String, String> params = const SearchQuery(
+        ratios: <RatioChoice>[],
+      ).toQueryParameters();
+
+      expect(params.containsKey('ratios'), isFalse);
     });
 
     test('never puts the API key in the query string', () {
@@ -168,7 +186,7 @@ void main() {
       expect(const SearchQuery(term: 'cats'), isNot(const SearchQuery()));
       expect(const SearchQuery().atPage(2), isNot(const SearchQuery()));
       expect(
-        const SearchQuery(ratios: <String>['16x9']),
+        const SearchQuery(ratios: <RatioChoice>[ExactRatio(16, 9)]),
         isNot(const SearchQuery()),
       );
       expect(
@@ -214,7 +232,7 @@ void main() {
         purity: PurityFilter({Purity.sketchy}),
         categories: CategoryFilter({Category.anime}),
         atLeast: Resolution(1080, 2400),
-        ratios: <String>['16x9'],
+        ratios: <RatioChoice>[ExactRatio(16, 9)],
         page: 3,
         seed: 'abc123',
       );

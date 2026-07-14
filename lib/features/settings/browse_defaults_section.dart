@@ -11,8 +11,6 @@ import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
-import 'package:tela/domain/models/ratio_choice.dart';
-import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
 
@@ -112,11 +110,10 @@ class _Choices extends ConsumerWidget {
     final String categories = defaults.categories.categories
         .map((Category category) => categoryLabel(l10n, category))
         .join(', ');
-    final SearchQuery shaped = defaults.applyTo(const SearchQuery());
     return <String>[
       categories,
       topRangeLabel(l10n, defaults.topRange),
-      ratioLabel(l10n, RatioChoice.of(shaped)),
+      ratiosLabel(l10n, defaults.ratios),
     ].join(' · ');
   }
 }

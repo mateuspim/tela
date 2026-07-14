@@ -5,6 +5,7 @@ import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -252,7 +253,7 @@ void main() {
     });
 
     test('an empty ratio list round-trips as "any shape"', () async {
-      const BrowseDefaults anyShape = BrowseDefaults(ratios: <String>[]);
+      const BrowseDefaults anyShape = BrowseDefaults(ratios: <RatioChoice>[]);
 
       await settings.saveDeviceDefaults(anyShape);
 
@@ -283,7 +284,7 @@ void main() {
 final BrowseDefaults _device = BrowseDefaults(
   categories: const CategoryFilter(<Category>{Category.people}),
   topRange: TopRange.oneYear,
-  ratios: const <String>['16x9'],
+  ratios: const <RatioChoice>[ExactRatio(16, 9)],
   order: SortOrder.asc,
   color: WallpaperColor('#0066cc'),
 );

@@ -17,6 +17,7 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/browse_screen.dart';
+import 'package:tela/features/browse/filter_sheet.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
 import '../fakes/fake_secret_store.dart';
@@ -417,6 +418,72 @@ void main() {
     );
     expect(reopened.purity.toApiBits(), '100');
   });
+
+  testWidgets('offers the shape of the screen the user is actually holding', (
+    WidgetTester tester,
+  ) async {
+    _phoneViewport(tester);
+    await _pumpBrowse(tester, FakeWallhavenApi());
+
+    await _openFilters(tester);
+
+    // A 1080x2400 phone reduces to 9x20 — a shape in no wallpaper site's
+    // dropdown, which Wallhaven honours anyway. That it can be offered at all
+    // is the whole finding behind this filter.
+    expect(find.text('9×20 · your screen'), findsOneWidget);
+  });
+
+  testWidgets('the ratio chips are a union: picking two asks for both', (
+    WidgetTester tester,
+  ) async {
+    _phoneViewport(tester);
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await _openFilters(tester);
+    // Portrait 9x16 is on by default; add a second shape rather than replacing
+    // it. This is the difference from the colour swatches, which are a radio
+    // because `colors` matches one bucket at a time in the API.
+    await _tapInSheet(tester, find.widgetWithText(FilterChip, '16×9'));
+    await _applyFilters(tester);
+
+    expect(SearchQueryFacts(api.receivedQueries.last).ratios, '9x16,16x9');
+  });
+
+  testWidgets('a keyword shape is offered beside the exact ones', (
+    WidgetTester tester,
+  ) async {
+    _phoneViewport(tester);
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await _openFilters(tester);
+    // `portrait` is broader than any exact ratio and is not a synonym for one:
+    // it returns everything taller than it is wide.
+    await _tapInSheet(tester, find.widgetWithText(FilterChip, 'Any portrait'));
+    await _applyFilters(tester);
+
+    expect(
+      SearchQueryFacts(api.receivedQueries.last).ratios,
+      '9x16,portrait',
+    );
+  });
+
+  testWidgets('"Any shape" sends no ratios param at all', (
+    WidgetTester tester,
+  ) async {
+    _phoneViewport(tester);
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await _openFilters(tester);
+    await _tapInSheet(tester, find.widgetWithText(FilterChip, 'Any shape'));
+    await _applyFilters(tester);
+
+    // Not an empty `ratios=`, which is not how you ask Wallhaven for every
+    // shape. The last ratio chip *may* be turned off, unlike the last category.
+    expect(SearchQueryFacts(api.receivedQueries.last).ratios, isNull);
+  });
 }
 
 /// Types [term] into the search field and submits it, as the keyboard would.
@@ -464,6 +531,53 @@ List<String?> _sortingsRequested(FakeWallhavenApi api) {
       .toList();
 }
 
+/// Pretends the test is running on a 1080x2400 phone, until the test ends.
+///
+/// The default test viewport (800x600 at dpr 3) reduces to 4x3, which is one of
+/// the standard shapes — so it could never show that the device's *own* ratio
+/// is offered even when it is not a standard one. A real phone reduces to 9x20,
+/// which appears in no dropdown and which Wallhaven honours anyway.
+void _phoneViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1080, 2400);
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
+}
+
+/// Taps something inside the filter sheet, scrolling it into view first.
+///
+/// The sheet is a [ListView]: a control below the fold is not merely
+/// off-screen, it is *not built*, so a plain finder reports it missing rather
+/// than hidden. And the scrollable is named explicitly, because the browse grid
+/// is still mounted *behind* the sheet and is the first [Scrollable] in the
+/// tree — the obvious `find.byType(Scrollable).first` drags the listing rather
+/// than the sheet.
+Future<void> _tapInSheet(WidgetTester tester, Finder target) async {
+  await tester.scrollUntilVisible(
+    target,
+    120,
+    scrollable: find
+        .descendant(
+          of: find.byType(FilterSheet),
+          matching: find.byType(Scrollable),
+        )
+        .first,
+  );
+  // A ListView builds a little beyond its own viewport, so the scroll above
+  // stops as soon as the target is *built* — while it is still clipped. A tap
+  // on a clipped widget silently misses. This is what puts it on screen.
+  await tester.ensureVisible(target);
+  await tester.pump();
+  await tester.tap(target);
+  await tester.pump();
+}
+
+/// Applies the sheet's draft and lets the grid re-query.
+Future<void> _applyFilters(WidgetTester tester) async {
+  await tester.tap(find.text('Show wallpapers'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
 /// Opens the filter sheet from the browse app bar.
 Future<void> _openFilters(WidgetTester tester) async {
   await tester.tap(find.byTooltip('Filters'));
@@ -475,12 +589,8 @@ Future<void> _openFilters(WidgetTester tester) async {
 ///
 /// The swatches have no text — the hex in their semantics label is the only
 /// name they have, which is exactly why they carry one.
-Future<void> _tapSwatch(WidgetTester tester, WallpaperColor color) async {
-  await tester.tap(
-    find.bySemanticsLabel('Color ${color.hex}'),
-    warnIfMissed: false,
-  );
-  await tester.pump();
+Future<void> _tapSwatch(WidgetTester tester, WallpaperColor color) {
+  return _tapInSheet(tester, find.bySemanticsLabel('Color ${color.hex}'));
 }
 
 /// Reads the wire-level facts of a query without reaching into the API adapter.
@@ -498,4 +608,7 @@ class SearchQueryFacts {
 
   /// The `colors` param — bare hex, no leading `#`, absent when unfiltered.
   String? get colors => _params['colors'];
+
+  /// The `ratios` param — comma-joined, absent when every shape is wanted.
+  String? get ratios => _params['ratios'];
 }

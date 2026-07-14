@@ -146,19 +146,50 @@
     "description": "Purity: NSFW. Offered only when an API key is stored."
   },
 
-  "ratioPortrait": "Portrait",
+  "ratioPortrait": "Any portrait",
   "@ratioPortrait": {
-    "description": "Aspect-ratio choice: phone-shaped wallpapers."
+    "description": "Aspect-ratio choice: Wallhaven's `portrait` keyword — every shape taller than it is wide, not one exact ratio."
   },
 
-  "ratioLandscape": "Landscape",
+  "ratioLandscape": "Any landscape",
   "@ratioLandscape": {
-    "description": "Aspect-ratio choice: desktop-shaped wallpapers."
+    "description": "Aspect-ratio choice: Wallhaven's `landscape` keyword — every shape wider than it is tall, not one exact ratio."
   },
 
-  "ratioAny": "Any",
+  "ratioAny": "Any shape",
   "@ratioAny": {
-    "description": "Aspect-ratio choice: no ratio filter."
+    "description": "Clears the ratio filter. Selected when no ratio chip is, so the row never reads as 'nothing chosen yet' when it means 'every shape'."
+  },
+
+  "ratioExact": "{width}×{height}",
+  "@ratioExact": {
+    "description": "One exact aspect ratio chip, e.g. 16×9. A multiplication sign, not the API's literal 'x'.",
+    "placeholders": {
+      "width": {
+        "type": "int"
+      },
+      "height": {
+        "type": "int"
+      }
+    }
+  },
+
+  "ratioScreen": "{width}×{height} · your screen",
+  "@ratioScreen": {
+    "description": "The device's own reduced aspect ratio, offered first as the recommendation. Wallhaven accepts any exact ratio, so this is offerable even on a phone whose 9×20 shape appears in no standard dropdown.",
+    "placeholders": {
+      "width": {
+        "type": "int"
+      },
+      "height": {
+        "type": "int"
+      }
+    }
+  },
+
+  "filterRatioHint": "Shapes add up: pick several to see them all.",
+  "@filterRatioHint": {
+    "description": "Explains that the ratio chips are a union, unlike the colour swatches which are a radio."
   },
 
   "orderDescending": "Descending",

@@ -1,6 +1,7 @@
 import 'package:meta/meta.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 
@@ -114,7 +115,7 @@ class SearchQuery {
     this.order = SortOrder.desc,
     this.topRange = TopRange.oneMonth,
     this.atLeast,
-    this.ratios = const <String>['9x16'],
+    this.ratios = const <RatioChoice>[ExactRatio(9, 16)],
     this.color,
     this.page = 1,
     this.seed,
@@ -144,8 +145,10 @@ class SearchQuery {
   /// isn't full of images too small for the phone.
   final Resolution? atLeast;
 
-  /// Aspect ratios, e.g. `9x16`. Portrait-first, because this is a phone.
-  final List<String> ratios;
+  /// Aspect ratios to accept, as a **union**: `[16x9, 9x16]` asks for both.
+  /// Empty means no ratio filter at all. Portrait-first, because this is a
+  /// phone.
+  final List<RatioChoice> ratios;
 
   /// Dominant colour to match, from Wallhaven's fixed palette. Null means "any
   /// colour", which is not the same request as any particular one.
@@ -196,7 +199,7 @@ class SearchQuery {
     SortOrder? order,
     TopRange? topRange,
     Resolution? atLeast,
-    List<String>? ratios,
+    List<RatioChoice>? ratios,
     WallpaperColor? color,
     int? page,
     String? seed,
@@ -276,7 +279,7 @@ class SearchQuery {
       'order': order.apiValue,
       if (sorting.usesTopRange) 'topRange': topRange.apiValue,
       if (atLeast != null) 'atleast': atLeast!.toApiValue(),
-      if (ratios.isNotEmpty) 'ratios': ratios.join(','),
+      'ratios': ?RatioChoice.encode(ratios),
       if (color != null) 'colors': color!.toApiValue(),
       'page': '$page',
       'seed': ?seed,

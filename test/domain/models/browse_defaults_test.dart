@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
@@ -13,7 +14,7 @@ void main() {
 
       expect(captured.categories.toApiBits(), '010');
       expect(captured.topRange, TopRange.oneWeek);
-      expect(captured.ratios, <String>['16x9']);
+      expect(captured.ratios, <RatioChoice>[const ExactRatio(16, 9)]);
       expect(captured.order, SortOrder.asc);
       expect(captured.color, WallpaperColor('#0066cc'));
     });
@@ -53,7 +54,7 @@ void main() {
 
       expect(query.categories.toApiBits(), '010');
       expect(query.topRange, TopRange.oneWeek);
-      expect(query.ratios, <String>['16x9']);
+      expect(query.ratios, <RatioChoice>[const ExactRatio(16, 9)]);
       expect(query.order, SortOrder.asc);
       expect(query.color, WallpaperColor('#0066cc'));
     });
@@ -137,10 +138,10 @@ void main() {
       // Deliberately not const: two const snapshots would be canonicalized to
       // the *same object*, and identity would pass a test about equality.
       final BrowseDefaults one = BrowseDefaults(
-        ratios: List<String>.of(<String>['9x16']),
+        ratios: List<RatioChoice>.of(<RatioChoice>[const ExactRatio(9, 16)]),
       );
       final BrowseDefaults same = BrowseDefaults(
-        ratios: List<String>.of(<String>['9x16']),
+        ratios: List<RatioChoice>.of(<RatioChoice>[const ExactRatio(9, 16)]),
       );
 
       expect(one, same);
@@ -152,7 +153,7 @@ void main() {
 
       expect(base, isNot(const BrowseDefaults(topRange: TopRange.oneYear)));
       expect(base, isNot(const BrowseDefaults(order: SortOrder.asc)));
-      expect(base, isNot(const BrowseDefaults(ratios: <String>[])));
+      expect(base, isNot(const BrowseDefaults(ratios: <RatioChoice>[])));
       expect(base, isNot(base.applyToColor(WallpaperColor('#0066cc'))));
     });
   });
@@ -181,7 +182,7 @@ void main() {
 final SearchQuery _browsing = SearchQuery(
   categories: const CategoryFilter(<Category>{Category.anime}),
   topRange: TopRange.oneWeek,
-  ratios: const <String>['16x9'],
+  ratios: const <RatioChoice>[ExactRatio(16, 9)],
   order: SortOrder.asc,
   color: WallpaperColor('#0066cc'),
 );

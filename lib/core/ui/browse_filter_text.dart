@@ -12,15 +12,38 @@ import 'package:tela/domain/models/search_query.dart';
 
 /// The user-facing name of a [RatioChoice].
 ///
+/// An exact ratio reads as `16×9` — a multiplication sign, not the API's
+/// literal `x`. Pass [screen] to have the device's own shape name itself as the
+/// recommendation it is; without it, it reads like any other ratio.
+///
 /// ```dart
-/// ratioLabel(l10n, RatioChoice.portrait); // 'Portrait'
+/// ratioLabel(l10n, ShapeRatio.portrait); // 'Any portrait'
 /// ```
-String ratioLabel(AppLocalizations l10n, RatioChoice choice) {
+String ratioLabel(
+  AppLocalizations l10n,
+  RatioChoice choice, {
+  ExactRatio? screen,
+}) {
   return switch (choice) {
-    RatioChoice.portrait => l10n.ratioPortrait,
-    RatioChoice.landscape => l10n.ratioLandscape,
-    RatioChoice.any => l10n.ratioAny,
+    ShapeRatio.portrait => l10n.ratioPortrait,
+    ShapeRatio.landscape => l10n.ratioLandscape,
+    final ExactRatio ratio when ratio == screen => l10n.ratioScreen(
+      ratio.width,
+      ratio.height,
+    ),
+    final ExactRatio ratio => l10n.ratioExact(ratio.width, ratio.height),
   };
+}
+
+/// How a whole ratio filter reads in a one-line summary, e.g. `9×20, 16×9`.
+///
+/// "Any shape" for the empty list, which is what an unfiltered listing means —
+/// never an empty string, which would read as a summary that failed to load.
+String ratiosLabel(AppLocalizations l10n, List<RatioChoice> ratios) {
+  if (ratios.isEmpty) return l10n.ratioAny;
+  return ratios
+      .map((RatioChoice choice) => ratioLabel(l10n, choice))
+      .join(', ');
 }
 
 /// The user-facing name of a [Sorting] — the label on its browse tab.

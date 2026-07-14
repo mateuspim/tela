@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/use_cases/load_account_defaults.dart';
 import 'package:tela/domain/use_cases/resolve_browse_defaults.dart';
@@ -77,7 +78,7 @@ const AccountSettings _account = AccountSettings(
 const BrowseDefaults _device = BrowseDefaults(
   categories: CategoryFilter(<Category>{Category.people}),
   topRange: TopRange.oneYear,
-  ratios: <String>['16x9'],
+  ratios: <RatioChoice>[ExactRatio(16, 9)],
   order: SortOrder.asc,
 );
 
