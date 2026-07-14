@@ -2,9 +2,57 @@
 
 Updated: 2026-07-14
 
+## The two filters, and what the real server actually said (Wave 3, slices 1–2)
+
+The newest work, and the one to read first. **Wave 3's last two slices are built,
+and they are the first thing in tela that was designed against the live Wallhaven
+API rather than against its docs** — the docs 403 from here, so the vocabulary was
+settled by `curl`ing the real `/search` and reading back what came out. That is
+worth knowing because *four* of the design decisions below exist only because the
+server was asked, and every one of them contradicts what a reasonable person would
+have assumed.
+
+**Read this first, because it is the finding the whole ratio slice turns on:
+Wallhaven's `ratios` takes an arbitrary `WxH`, not a fixed vocabulary.**
+`ratios=9x20` comes back with 24 wallpapers, every one of them at ratio 0.45;
+`9x19` likewise at 0.47. So a modern phone can ask for *exactly its own shape* —
+which appears in no wallpaper site's dropdown — and the fallback rule this slice
+was expected to need (what do you offer a 9x20 phone?) simply evaporated.
+
+The other three, each of which changed the code:
+
+- **An unreadable `ratios` value is silently ignored**, and answered with an
+  *unfiltered* grid. `ratios=bogus` returns the same mixed listing as no filter at
+  all. So a corrupt literal must be caught in `RatioChoice.tryParse`, or it reads
+  on screen as a filter that quietly does nothing.
+- **`resolutions` fails the opposite way: `resolutions=bogus` returns *zero*
+  results.** It is an exact match, so an unpopular size is not a narrower listing,
+  it is an *empty* one. `720x1280` has **no wallpapers at all** on the real server.
+  That is why `offerableResolutions` offers only sizes Wallhaven actually has, why
+  the portrait ladder starts at 1080p, and why the Exactly mode says out loud that
+  few wallpapers match a phone-shaped size. Wallhaven is largely a *desktop*
+  wallpaper site; Exactly is really for the desktop-sync tier, and Automatic stays
+  the default.
+- **`atleast` and `resolutions` conflict.** Sent together, Wallhaven honours
+  `atleast` and silently ignores `resolutions`. `ResolutionFilter` is therefore a
+  **sealed** type — Automatic / AtLeast / Exactly — so the combination that loses
+  is not expressible. That is a proof rather than a check, and it is the reason the
+  resolution filter is a *mode* rather than two independent fields.
+
+**`SearchQuery.atLeast`'s `copyWith`-cannot-clear trap is retired**, as PLAN
+promised: the field is now a non-nullable `ResolutionFilter`, so there is no
+cleared state to be unable to express. The same hole is still open for `seed`.
+
+**Neither slice has run on hardware** — see "Owed on the device". The distinction
+matters and cuts the *opposite* way from the sorting slice: there, a fake could
+prove tela *built* `sorting=views` but not that Wallhaven *honoured* it. Here
+Wallhaven's half is the half that is proven, by real requests; what has never
+happened is **tela itself sending a `ratios=9x20` or a `resolutions=` to the real
+server**. Only `FakeWallhavenApi` has seen those params.
+
 ## Every sorting is reachable (Wave 3, slice 3)
 
-The newest slice, and the one to read first. **Three of Wallhaven's seven
+Slice 3, and now one wave behind. **Three of Wallhaven's seven
 sortings could not be reached at all** — `relevance`, `views` and `favorites`
 have been in the `Sorting` enum since Wave 1, and nothing could select them,
 because the tab *was* the sorting and there were four tabs. The bar is now
@@ -108,6 +156,12 @@ persists, switching sources moves the live grid, and the snapshot survives a
 restart.
 
 ## Current milestone
+
+**Wave 3 is code-complete**, and its four slices are: the tag/uploader links
+(`984b546`), every sorting reachable (`eb2af8a`), the ratio filter (`7f41d13`) and
+the resolution filter (`1c90b86`). The first two ran on the tablet; **the two
+filters have not run on hardware at all** — read the top of this file, and then
+"Start of next session".
 
 Wave 0 is complete at `209101c`. Wave 1 landed slice by slice: the apply core
 loop is `bcba151`, detail metadata is `36ec9f9`, three-tier downloads are
@@ -783,11 +837,124 @@ re-verified on the phone:
   next to it would promise the user's own saved wallpapers rather than
   Wallhaven's most-favorited. These are wire sortings, not the local library.
 
+- **The ratio chips are a union; the colour swatches are a radio. Both match the
+  API, and the difference is not a style choice.** Wallhaven's `ratios` genuinely
+  unions (`ratios=16x9,9x16` returns both, checked), where its `colors` matches one
+  palette bucket at a time. A control that lies about which of those it is produces
+  a filter the user cannot predict.
+- **The last ratio chip *may* be turned off, unlike the last category or purity.**
+  An empty `ratios` is a legitimate request — it is how you ask Wallhaven for every
+  shape, and the param is simply omitted — where an empty category mask is a `000`
+  that throws. So `toggledChoice`'s refuse-to-empty rule deliberately does not
+  apply here, and "Any shape" leads the row for the same reason "Any color" leads
+  the palette: a row of chips with nothing selected must not read as "nothing
+  chosen yet" when it means "everything".
+- **`ExactRatio.ofScreen` takes the *standard spelling* of the shape it reduces
+  to.** A 2560x1600 tablet reduces to `8x5`, which Wallhaven honours exactly as it
+  honours `16x10` — both answer with ratio 1.6, so this is not the server rejecting
+  anything. It is that `offerableRatios` would otherwise offer **both**: two chips,
+  one filter, where selecting one leaves the other looking unselected. `==`
+  distinguishes them (they are different strings on the wire) and `isSameShapeAs`
+  does not, which is the whole reason both exist.
+- **`ShapeRatio` is an enum implementing the sealed `RatioChoice`.** Not
+  decoration: it makes a `switch` over a ratio exhaustive over *both* keywords, so
+  a third one Wallhaven adds later is a compile error at every label rather than a
+  chip with a raw wire word (`portrait`) rendered on it. The first cut was a class,
+  and it needed a dead fallback branch that did exactly that.
+- **`AutomaticResolution` carries no size, and `SearchQuery.forScreen` is what
+  answers it.** The domain has no idea how big the screen is — that is precisely
+  why `atLeast` used to be imposed by the *widget* — so "Automatic" travels as an
+  intention and is turned into a real `atleast` at the one point a `BuildContext`
+  can answer the question. It resolves the *default* and never overrules a choice:
+  a user who asked for 4K must not have their phone's screen substituted for it. A
+  mutation test pins that (deleting the guard fails four tests, two of them widget
+  tests).
+- **Switching resolution mode seeds with the screen.** Both picked modes need a
+  size before they mean anything, and the screen is what Automatic was already
+  asking for — so switching mode changes what the user *can* edit without changing
+  the listing under them.
+- **An unreadable resolution row costs the filter; an unreadable *ratio* costs only
+  that ratio.** Deliberately different fail-softs. A ratio list drops the bad entry
+  and keeps the rest, like `WallpaperColor.readAll`. A resolution list is
+  *exact*: silently dropping one entry leaves a filter asking for a **different**
+  set of wallpapers, not a smaller one — so `exact:1920x1080,bogus` reads as no
+  filter at all, and browse falls back to Automatic, which is somewhere it is
+  always happy to be.
+- **Wallhaven's `21x9` is a *family*, not an exact ratio**, and the resolution
+  buckets are labelled with Wallhaven's names rather than the mathematically
+  reduced ones. Neither `2560x1080` (which is 64x27) nor `3440x1440` (43x18)
+  reduces to 21x9, and `ratios=21x9` returns both — along with 2.33, 2.37 *and*
+  2.39. So the heading over a bucket is the label that actually **finds** the sizes
+  filed under it, which is the only property that matters. A test asserts every
+  offered size sits within 3% of its own bucket's heading; a size in the wrong
+  bucket would be a chip that filters out the thing sitting next to it.
+- **Every dimension placeholder in the ARB is a `String`, never an `int`.** An
+  `int` placeholder is rendered through `NumberFormat`, which groups thousands — so
+  a 1080x2400 phone read back on screen as **`1,080×2,400`**. A pixel count is a
+  label, not a quantity. A widget test caught it, and only because the *ratio*
+  labels (9, 20) are all under 1000 and happily hid the bug.
+- **`Resolution.tryParse` now sits beside the throwing `Resolution.parse`**, the
+  same pairing as `Purity.tryFromApiName` / `fromApiName`. A wallpaper whose size
+  tela cannot read is a bug worth throwing on; a *stored filter* that has gone bad
+  should cost the filter, not the screen it sits on. (It also removes an
+  `avoid_catching_errors` lint the first cut earned by catching `ArgumentError`.)
+- **The custom W×H is a dialog, not two fields in the sheet.** A half-typed
+  `1920x` is not a resolution, and a filter that re-queried on every keystroke would
+  spend the 45 req/min budget on prefixes — the same reason search runs on submit.
+  It refuses anything that will not parse, because Wallhaven answers an unparseable
+  `resolutions` with an *empty grid* rather than an error: a typo would read as "no
+  wallpapers are this size", which is a lie, and an unfixable-looking one.
+- **The resolution filter *is* in `BrowseDefaults`, where `atLeast` deliberately
+  was not.** The old field came from the screen and was choosable by nobody, so
+  there was nothing to save. Now that it is a filter the user sets, a snapshot has
+  to carry it — and a saved `AutomaticResolution` still means "fit the screen", so
+  a snapshot stays portable between devices. One new `device.resolution` KV row; an
+  absent one reads as Automatic, so a device that upgrades browses exactly as it
+  did yesterday. No migration, as every setting since v1.
+
 ## Verification
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 314 tests pass
+- `./tool/tela test`: 356 tests pass
+
+- **Wallhaven's own behaviour is verified by real requests**, not by fixtures and
+  not from the docs (which 403 from here). Every claim the two filter slices rest
+  on was `curl`ed against the live `/search` on 2026-07-14 and checked by reading
+  back the `ratio` and `dimension_x/y` of what came out — not merely the result
+  *count*, which proves nothing here, since `ratios=bogus` returns a full page of
+  24 like everything else. The findings are at the top of this file.
+- The ratio model: both dialects encode, the list unions, "any shape" encodes as
+  *no param* rather than an empty one, every offered shape round-trips, a value
+  that names nothing reads back as null (the load-bearing one — Wallhaven ignores
+  such a value and answers unfiltered), one corrupt ratio costs that ratio and not
+  the list, `ofScreen` reduces and then takes the standard spelling of its own
+  shape, and `offerableRatios` never offers the device twice
+- The resolution model: each mode's params, **never `atleast` and `resolutions`
+  together** (a proof, not a check — the type is sealed), an exact filter with no
+  sizes refused, each mode round-tripping through storage as its wire literal, a
+  row that names nothing reading as null, one unreadable size costing the *whole*
+  exact filter, and `forScreen` answering Automatic while leaving a chosen filter
+  exactly as it is
+- `offerableResolutions`: leads with the shape of the screen and offers the screen
+  itself, does not offer it twice when it is standard, **offers no size Wallhaven
+  has no wallpapers at** (720x1280 and 1280x720 are absent by name), and every
+  offered size really does sit under the heading that finds it
+- The browse screen, end to end against a fake: the device's own 9×20 shape is
+  offered on a phone viewport, picking a second shape asks for **both** (a
+  radio-style toggle fails this — confirmed by mutating `_toggleRatio`), a keyword
+  shape sits beside the exact ones, "Any shape" sends no `ratios` at all, the
+  resolution filter opens on Automatic and says which screen it is fitting,
+  "Exactly" sends `resolutions` and **no** `atleast` with it, and "At least"
+  re-queries with the size that was picked
+- Both load-bearing resolution rules were **confirmed to fail against deliberately
+  mutated code** before the tests were kept: dropping `forScreen`'s guard (so it
+  overrules a chosen filter) fails four tests, two of them widget tests; and
+  letting an unreadable stored row decay to anything but Automatic fails the
+  snapshot test
+- The Drift adapter: each resolution filter round-trips, the wire literal is on
+  disk (`device.resolution` = `auto`), and **a snapshot saved before the filter
+  existed reads as Automatic** — which is the upgrade path every device takes
 - **The app-lock, end to end, on hardware** (2026-07-14, Samsung SM-X730): the
   gate raises a real BiometricPrompt (`BiometricService/PreAuthInfo: Package:
   cc.pym.tela` in logcat), a dismissed prompt lists nothing, and the fail-open is
@@ -1039,37 +1206,34 @@ hardware — see below.
 
 ## Start of next session
 
-### 1. Wave 3: search & discovery
+### 1. Put Wave 3's two filters on a phone
 
-**Wave 2 is done, on hardware.** The device pass is behind us and it earned its
-keep — see the top of this file for what it found. What is left of it is the short
-list in "Owed on the device", none of which blocks anything.
+**Wave 3 is code-complete.** All four slices are built. Slices 3 and 4 ran on the
+tablet; **slices 1 and 2 — the ratio and resolution filters — have never run on
+hardware at all.** Closing that is the single most valuable thing the next session
+can do, and it is cheap: the design is done, the tests are green, and the device
+pass of 2026-07-14 found four bugs in Wave 2 that a green test suite could not.
 
-**The next session's work is Wave 3, and PLAN.md §12 now spells it out.** It is
-mostly the filters Wave 2 *named* but did not finish ("color/resolution/ratio
-filters" — colour landed, the other two did not), plus the two ways *into* a
-listing that tela prints on screen and will not let you follow. Agreed with the
-user, 2026-07-14:
+What to check, in the order it would bite:
 
-1. **Resolution filter.** `atleast` is currently imposed by the browse screen
-   from the device's own screen and cannot be changed at all. It becomes
-   *Automatic* (still the default) / *At least* / *Exactly* — the last being the
-   `resolutions` param, which tela does not send today — over buckets grouped by
-   ratio plus a custom W×H. Retires `SearchQuery.atLeast`'s
-   `copyWith`-cannot-clear trap on the way past.
-2. **Ratio filter, expanded.** `RatioChoice`'s portrait/landscape/any becomes a
-   multi-select over Wallhaven's real vocabulary, with the device's own reduced
-   ratio offered first as the recommendation. Ratios are a **union** in the API,
-   unlike `colors` — so chips, not a radio.
-3. ~~**Every sorting reachable.**~~ **Built and verified on hardware,
-   2026-07-14** — read the top of this file.
-4. ~~**Tags and the uploader become links.**~~ **Built and verified on hardware,
-   2026-07-14** — read the top of this file.
+1. **A `ratios=9x20` request, sent by tela and answered by Wallhaven.** The
+   server's half is proven by real `curl`s; tela's half has only ever met
+   `FakeWallhavenApi`. Open the filter sheet, tap the "· your screen" chip, and
+   confirm the grid comes back full of phone-shaped wallpapers rather than empty.
+2. **The Exactly mode against the real server.** Pick the device's own size and
+   confirm the grid is *short but not empty* — 1080x2400 had ~66 wallpapers on
+   2026-07-14 — then pick a 16×9 desktop size and confirm it fills. An empty grid
+   would mean `resolutions` is not reaching Wallhaven the way the probe says.
+3. **The sheet's height, one-handed.** The ratio group added ~15 chips and the
+   resolution group a mode switch plus several ladders, on top of a palette that
+   was already 29 swatches. **The filter sheet is now by far the tallest thing in
+   the app**, and nobody has scrolled it on a real phone. The pinned apply bar is
+   what makes it survivable, and that claim is under much more strain than when it
+   was written.
+4. **The custom W×H dialog**, which has never been typed into on a device.
 
-**Slices 1 and 2 are what is left of Wave 3**, and they are the two that
-overlap: the resolution filter's buckets group *by ratio*, and the ratio filter
-offers the device's own reduced ratio first. Taking the ratio filter first reads
-more naturally.
+**This is one trip with the rest of the phone list** — the palette, the launch
+grid, and the seven-tab scrolling bar all need an actual phone too.
 
 PLAN's old Wave 3 (crop/reposition, daily auto-rotate, collections, share sheet,
 Omarchy sync) is now **Wave 4**.
@@ -1106,10 +1270,14 @@ Three things were deliberately left out rather than forgotten:
   tile looks exactly like a file, so the confirmation says in plain words that
   the wallpaper stays where it was downloaded, and the button is "Remove", never
   "Delete". A widget test pins that sentence.
-- **Only `color` got a `withColor`.** `SearchQuery.atLeast` and `seed` have the
-  same `copyWith`-cannot-clear hole; neither is ever cleared today, so neither
-  was given an escape hatch it does not need yet. Whoever needs to clear one
-  first will find the trap — see the decision above.
+- **Only `color` got a `withColor`, and `atLeast` no longer needs one.** The
+  `copyWith`-cannot-clear hole was called out here for `atLeast` and `seed`; the
+  resolution slice (`1c90b86`) retired it for the first by making the field a
+  **non-nullable** `ResolutionFilter` — there is no cleared state left to be unable
+  to express, which is a better answer than a second escape-hatch method. `seed`
+  still has the hole and is still never cleared. Whoever needs to clear it first
+  will find the trap, and should consider doing what the resolution filter did
+  rather than what the colour filter did.
 
 ### 2. Owed on the device
 
@@ -1118,13 +1286,21 @@ Three things were deliberately left out rather than forgotten:
 listings, remove-from-history, and "set again" including the re-fetch fallback.
 What follows is what the tablet could *not* settle.
 
+**Neither Wave 3 filter has run on hardware.** The ratio and resolution filters
+(`7f41d13`, `1c90b86`) are the newest and largest gap: tela has never *sent* a
+`ratios=9x20` or a `resolutions=` to the real server, only to a fake. Wallhaven's
+side of both contracts is proven by real requests (see the top of this file), which
+is the opposite of the usual gap and worth being precise about. The full check list
+is in "Start of next session".
+
 **The device is a Samsung SM-X730 — a tablet, not a phone.** Everything on this
-list works there, but three claims it cannot settle: whether the 29-swatch palette
-is usable one-handed, how the launch grid reads on a small screen, and whether
-the seven-tab sorting bar scrolls sanely — at 2560px every tab fits at once, so
-the scrolling that the bar exists for has never actually happened. All three are
-still owed on an actual phone. **It also has no screen lock**, which is why the
-PIN fallback is untestable on it — and, not coincidentally, why the app-lock
+list works there, but four claims it cannot settle: whether the 29-swatch palette
+is usable one-handed, **whether the now much taller filter sheet is** (the ratio
+and resolution groups roughly doubled it), how the launch grid reads on a small
+screen, and whether the seven-tab sorting bar scrolls sanely — at 2560px every tab
+fits at once, so the scrolling that the bar exists for has never actually happened.
+All four are still owed on an actual phone. **It also has no screen lock**, which is
+why the PIN fallback is untestable on it — and, not coincidentally, why the app-lock
 fail-open bit there first.
 
 **One gap the hardware could not close**, and it is not tela's fault: this
