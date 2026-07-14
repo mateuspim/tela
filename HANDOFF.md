@@ -6,13 +6,21 @@ Updated: 2026-07-14
 
 Wave 0 is complete at `209101c`. Wave 1 landed slice by slice: the apply core
 loop is `bcba151`, detail metadata is `36ec9f9`, three-tier downloads are
-`28fa0b1` + `568e1ef`, and persisted per-purity storage settings are `1d8e4de`.
-API-key entry and search + filters are both in the working tree, uncommitted.
+`28fa0b1` + `568e1ef`, persisted per-purity storage settings are `1d8e4de`,
+API-key entry is `be7c7d2`, and search + filters are `a3baacd`.
 
-**Wave 1 is now feature-complete in code, and unverified on hardware.** Nothing
-in it has run on a physical device yet — see "Start of next session".
+**Wave 1 is complete and smoke-tested on the device.** Apply (home/lock/both),
+all three download tiers, a real API key against real Wallhaven, and the
+explicit listing all pass on hardware. One item was not exercised: **deep paging
+of the Random tab**, so the shuffle seed carried by
+`SearchWallpapers.nextPageAfter` has still never survived a real multi-page
+Wallhaven response. It is unit-tested; a lost seed would show up only as
+repeated images several pages in.
 
-The app now supports the thin product loop:
+**Wave 2 is now in progress.** Favorites are `0cf2781` and Material You is
+`c056369`; see "Wave 2 so far" below.
+
+The app supports the thin product loop:
 
 1. Tap a real Wallhaven tile.
 2. Preview the full-resolution image with pinch zoom.
@@ -61,6 +69,16 @@ its `Sorting` on top and the screen layers `atLeast`, because neither is a filte
 the user chose. **The Explicit purity chip appears only once a key is stored** —
 that is the step that was missing for NSFW to be reachable at all, and it is why
 the key slice came first.
+
+## Wave 2 so far
+
+**Favorites** (`0cf2781`). Tap the heart on the detail screen to keep a
+wallpaper; the browse app bar opens the shelf. `FavoritesRepository` is a
+pure-domain port with a Drift adapter, and `ToggleFavorite` returns the state it
+landed in so the heart renders from the answer rather than re-reading the store.
+
+**Material You** (`c056369`). `DynamicColorBuilder` feeds the device palette to
+`TelaTheme`, which harmonizes it. The seed stays a live path, not a placeholder.
 
 ## Decisions made
 
@@ -149,12 +167,41 @@ the key slice came first.
   Android 11+ without broader access, and a MediaStore row would violate the
   NSFW non-indexing invariant. Only the local external-storage documents
   provider is accepted, preserving file-manager / USB-MTP reachability.
+- **Favorites store the whole wallpaper row, not just its Wallhaven id.** An
+  id-only table would need the network to render the favorites grid, and
+  offline-readable favorites are the entire reason the feature exists (it is
+  PLAN's Wave 2 exit criterion). Every field apply and download need is in the
+  row, so a favorite can still be set as a wallpaper in airplane mode.
+- **An unrecognised stored purity reads back as `nsfw`, not `sfw`** — the
+  deliberate opposite of every other fallback in the codebase, which all fail
+  toward the safe default. Purity is what routes a download and gates MediaStore
+  indexing, so a corrupt row misread as safe is the one mistake that could index
+  an explicit image. Misread as explicit it is merely over-protected.
+- Favorites are **local**, and are not Wallhaven's account favorites. Syncing
+  those is a different feature and belongs with the `/settings` account slice.
+- The v1→v2 migration **adds** a table rather than recreating the database, and
+  a test builds a v1 database by hand with raw `sqlite3` to prove the settings
+  survive it (drift can only ever create the *current* schema, so nothing else
+  exercises the upgrade path a real phone takes). The device carries real
+  download destinations; "the app forgot my settings" is the exact failure
+  `91cb7b0` spent a session chasing, and it must not come back as a migration
+  bug.
+- `flutter_staggered_grid_view` became a **direct** dependency. The favorites
+  grid is unpaged, so it cannot use `infinite_scroll_pagination`'s
+  `PagedMasonryGridView`, and importing a transitive dependency is both a lint
+  error and a version-resolution trap.
+- A Material You palette whose brightness disagrees with the one requested is
+  **refused**, not adapted: a light scheme rendered in dark mode is how you get
+  white-on-white text. Quiet-but-wrong beats unreadable. The seed is not dead
+  code — Monet is Android 12+ and tela's minSdk is 29.
+- `dynamic_color` compiles under the pinned AGP 9 toolchain, which is precisely
+  what `flutter_wallpaper_plus` could not do. Both APKs still build.
 
 ## Verification
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 96 tests pass
+- `./tool/tela test`: 123 tests pass
 - Three-tap browse → detail → Both widget flow: covered
 - Domain use case and all native target/error mappings: covered
 - `/w/{id}` is covered by a detail JSON fixture, mapper boundary tests, and a
@@ -184,52 +231,54 @@ the key slice came first.
   the Explicit chip is absent with no key, present with one, and applying it
   re-queries at purity `101` rather than leaving the old page up
 
-The Android 16 tablet was initially visible to Flutter, but its ADB USB
-transport disappeared before install, and it has not come back (`./tool/tela
-devices` lists only Linux). Physical Home/Lock/Both application and the
-three-tier download walkthrough remain smoke-test pending.
+- Favorites are covered at every layer: the use case (saves an unsaved
+  wallpaper, forgets a saved one without re-saving it, round-trips to the state
+  it started in, leaves other favorites alone), the Drift adapter (every field
+  of the round trip, newest-first ordering, upsert-not-append, forget as a
+  no-op, an NSFW favorite surviving as NSFW, and both fail-safe parses), and the
+  screens (empty state, a tile per favorite in order, the heart filling and
+  emptying, and the grid rendering with no API bound at all)
+- The v1→v2 migration is tested against a hand-built v1 database: the settings
+  survive and the favorites table appears
+- Material You: the device palette is used, a missing one falls back to the
+  seed, a wrong-brightness one is refused, and the chrome stays untinted
+- `./tool/tela build apk --debug`: passes with `dynamic_color` and the new schema
+
+The Random tab's deep paging is the one Wave 1 behaviour never exercised on
+hardware — see below.
 
 ## Start of next session
 
-### 1. Smoke-test on the device (blocked two sessions running)
+### 1. Wave 2, continued
 
-**Uninstall tela from the device once before the next run.** The copy installed
-there is signed with a debug key that no longer exists, so the first run after
-the `~/.android` fix still hits a signature mismatch and still wipes data. After
-that one uninstall, installs are stable and app data survives — which is what
-makes any persistence test below meaningful. Every "did it persist?" result
-recorded before this fix is worthless: the app was being reinstalled clean each
-time.
+Three slices remain, in the order they unblock each other:
 
-Reconnect the Android 16 device and install the debug APK. Smoke-test Home,
-Lock, and Both with one portrait and one large landscape wallpaper; then test
-all three download tiers. For Gallery, confirm it appears in Photos. For Files,
-pick a local shared-storage directory when Android's picker opens, then confirm
-the resulting `tela/.nomedia` directory is visible through USB/MTP but absent
-from Photos. For Private library, confirm no gallery entry is created. Then
-change a destination in Settings, kill the app, reopen it, and confirm the choice
-survived — the Drift path has only ever run against an in-memory database, never
-a real file on a device. Record any OEM behavior here.
+**Private library** (`FLAG_SECURE` + app-lock). The `appPrivate` tier has been
+written to since Wave 1 but there is still no way to *see* what is in it, so
+NSFW downloads are currently write-only. This needs a new port method to list
+stored images (`ImageStore` can write but not enumerate), `FLAG_SECURE` on the
+screen so it cannot be screenshotted or thumbnailed in the app switcher, and an
+optional biometric/PIN gate. It is the largest remaining slice and the one that
+closes CLAUDE.md's NSFW rules.
 
-Now also worth a pass on the device: save a **real** Wallhaven key in Settings and
-confirm it comes back verified. The whole save path has only ever run against fake
-stores — never against the Android Keystore, and never against Wallhaven itself,
-so the NSFW probe has not once made a real request. Then kill the app, reopen it,
-and confirm Settings still says the key is saved.
+**Download history + "set again."** Persist downloads in Drift (the database is
+already open and now has two tables), so a wallpaper that is already on the
+device can be re-applied without re-fetching it.
 
-Search and filters need the same pass: run an explicit listing end to end for the
-first time (Filters → Explicit → Show wallpapers), and confirm the NSFW rules hold
-where it counts — download an explicit wallpaper and check it is **not** in Photos
-under any tier. Also scroll deep into the Random tab: the shuffle seed carries
-through `SearchWallpapers.nextPageAfter`, which is covered by unit tests but has
-never paged a real Wallhaven response, and a lost seed shows up only as repeated
-images several pages in.
+**Account `/settings` sync.** `GET /settings` on `WallhavenApi`, pulling the
+account's default purity/categories/resolutions. This is also the endpoint that
+would give the API key a first-class validity check, if the NSFW probe used by
+`SaveApiKey` ever proves too blunt.
 
-### 2. Then: Wave 2
+Then: the colour filter, and consistent error/empty/offline states across the
+grids.
 
-Wave 1 is code-complete, so once the device pass is clean there is no Wave 1 work
-left to schedule. Wave 2 is favorites (the Drift database is already open and its
-settings table is the first of them), Material You dynamic colour, and the account
-endpoints — `GET /settings` among them, which is the one Wave 2 pulls in that
-would *also* give the API key a first-class validity check, if the NSFW probe ever
-proves too blunt.
+### 2. Still owed on the device
+
+Deep-scroll the **Random** tab. The shuffle seed carries through
+`SearchWallpapers.nextPageAfter`, which is unit-tested but has never paged a
+real Wallhaven response; a lost seed shows up only as repeated images several
+pages in. Everything else in Wave 1 passed on hardware.
+
+Worth a look once the private library lands: confirm on-device that an explicit
+download is reachable *in tela* and still absent from Photos.
