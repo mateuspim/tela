@@ -1,4 +1,5 @@
 import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 
@@ -9,13 +10,19 @@ class FakeSettingsRepository implements SettingsRepository {
     StorageSettings? settings,
     bool privateLibraryLocked = false,
     AccountSettings? accountDefaults,
+    BrowseDefaultsSource source = BrowseDefaultsSource.account,
+    BrowseDefaults? deviceDefaults,
   }) : _settings = settings ?? StorageSettings.defaults,
        _privateLibraryLocked = privateLibraryLocked,
-       _accountDefaults = accountDefaults;
+       _accountDefaults = accountDefaults,
+       _source = source,
+       _deviceDefaults = deviceDefaults;
 
   StorageSettings _settings;
   bool _privateLibraryLocked;
   AccountSettings? _accountDefaults;
+  BrowseDefaultsSource _source;
+  BrowseDefaults? _deviceDefaults;
 
   /// The settings a save last wrote, readable by assertions.
   StorageSettings get saved => _settings;
@@ -25,6 +32,12 @@ class FakeSettingsRepository implements SettingsRepository {
 
   /// The account defaults currently stored, if any.
   AccountSettings? get accountSaved => _accountDefaults;
+
+  /// The source browse currently takes its defaults from.
+  BrowseDefaultsSource get sourceSaved => _source;
+
+  /// The device snapshot currently stored, if any.
+  BrowseDefaults? get deviceSaved => _deviceDefaults;
 
   @override
   Future<StorageSettings> loadStorageSettings() async => _settings;
@@ -53,5 +66,21 @@ class FakeSettingsRepository implements SettingsRepository {
   @override
   Future<void> forgetAccountDefaults() async {
     _accountDefaults = null;
+  }
+
+  @override
+  Future<BrowseDefaultsSource> loadBrowseDefaultsSource() async => _source;
+
+  @override
+  Future<void> setBrowseDefaultsSource(BrowseDefaultsSource source) async {
+    _source = source;
+  }
+
+  @override
+  Future<BrowseDefaults?> loadDeviceDefaults() async => _deviceDefaults;
+
+  @override
+  Future<void> saveDeviceDefaults(BrowseDefaults defaults) async {
+    _deviceDefaults = defaults;
   }
 }

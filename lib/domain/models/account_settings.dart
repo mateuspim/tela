@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/search_query.dart';
 
@@ -24,8 +25,11 @@ import 'package:tela/domain/models/search_query.dart';
 /// What is left is categories and toplist range: the two that mean the same
 /// thing on a phone as on the web, and that carry no risk when they are wrong.
 ///
+/// Whether browse actually *opens* on them is now the user's choice, not this
+/// class's: see [BrowseDefaultsSource].
+///
 /// ```dart
-/// final SearchQuery browse = account.applyTo(const SearchQuery());
+/// final BrowseDefaults defaults = account.toBrowseDefaults();
 /// ```
 @immutable
 class AccountSettings {
@@ -57,11 +61,14 @@ class AccountSettings {
   /// The account's toplist window.
   final TopRange topRange;
 
-  /// Returns [query] with these defaults applied, and everything else — the
-  /// purity, the search term, the sorting, the screen-derived `atLeast` —
-  /// untouched.
-  SearchQuery applyTo(SearchQuery query) {
-    return query.copyWith(categories: categories, topRange: topRange);
+  /// These defaults as the filters browse opens on.
+  ///
+  /// The account speaks for two of the five fields in [BrowseDefaults]; the
+  /// rest keep tela's own values, because the account has no opinion tela is
+  /// willing to take on them (see the class doc, and [BrowseDefaults] on
+  /// purity).
+  BrowseDefaults toBrowseDefaults() {
+    return BrowseDefaults(categories: categories, topRange: topRange);
   }
 
   /// Value equality over the *encoded* filter.

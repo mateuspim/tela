@@ -169,7 +169,14 @@ void main() {
         'categories': <String>['anime'],
       });
 
-      expect(account.applyTo(const SearchQuery()).purity.toApiBits(), '100');
+      expect(
+        account
+            .toBrowseDefaults()
+            .applyTo(const SearchQuery())
+            .purity
+            .toApiBits(),
+        '100',
+      );
     });
 
     test('an unreadable name costs that name, not the sync', () {

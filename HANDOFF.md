@@ -2,6 +2,33 @@
 
 Updated: 2026-07-14
 
+## Browse defaults: a switch, not a heuristic
+
+The newest slice, and the one to read first. **Where browse takes its opening
+filters from is now the user's choice**, in Settings: the Wallhaven account, or a
+snapshot saved from this device's filter sheet ("Save as default", next to
+Reset). It replaces the invisible rule that used to answer the question — the
+account's defaults were adopted only while the current query still equalled the
+old ones, which worked but could not be seen, predicted, or overruled.
+
+`BrowseDefaults` is the model (categories, toplist range, ratios, order, colour),
+`BrowseDefaultsSource` the choice, `ResolveBrowseDefaults` the use case that picks
+between them, and `browseDefaultsProvider` (in `app/`, beside the account one, for
+the same "two features meet here" reason) the thing browse reads. `AccountSettings`
+no longer applies itself to a query; it converts to a `BrowseDefaults` like any
+other source. Storage is four new KV rows plus the source — no migration, as every
+setting since v1.
+
+**Purity is still not a field, in either source.** Not the account's — that was the
+device bug of this morning — and not a snapshot you save, which would do the
+identical thing with the user's own fingerprints on it. It is structurally absent
+from `BrowseDefaults`, not merely unread.
+
+**It has run on hardware, and the device found the bug in it** (see "Owed on the
+device" for what that leaves). Everything else about it is verified: the toggle
+persists, switching sources moves the live grid, and the snapshot survives a
+restart.
+
 ## Current milestone
 
 Wave 0 is complete at `209101c`. Wave 1 landed slice by slice: the apply core
@@ -415,6 +442,45 @@ re-verified on the phone:
 - The account defaults are **read back through the port on every load, never
   cached from what the sync returned** — which is what gives the backfill somewhere
   to live.
+- **The browse defaults are a switch the user sets, not a rule tela infers.** The
+  old heuristic ("the account seeds, it does not override") was correct and
+  invisible: nobody could see which source had won, or say they wanted the other.
+  A radio in Settings answers the question out loud, and the heuristic survives
+  only where it is still needed — a *changed source* is a deliberate act and
+  resets the listing outright, while defaults arriving late from the source
+  already in force (the backfill, a manual refresh) still refuse to overwrite a
+  filter set by hand. Those are different events and they deserve different
+  answers; `ActiveBrowseDefaults` carries the source precisely so browse can tell
+  them apart.
+- **A saved snapshot carries no purity either, and that is the same rule, not a
+  new one.** Every argument against syncing the account's purity — a phone is the
+  device you unlock on a train, a masonry grid of explicit thumbnails behind no
+  gate — applies unchanged to a default the user saved themselves. So `Sketchy`
+  survives "Save as default" *for the session* and is absent from the snapshot;
+  the next launch opens safe. Only `clearFilters` (Reset) returns purity to safe
+  within a session.
+- **Adopted defaults are applied onto the live query, never a fresh one.** They
+  speak for five fields and must leave the rest exactly as they were — the term,
+  the tab's sorting, and the purity. The first cut applied them to a fresh
+  `SearchQuery`, which meant saving your filters while Sketchy was on knocked the
+  grid back to Safe underneath you. A default that silently un-does a choice you
+  made one tap ago is worse than no default.
+- **Each Settings row summarises its own source, never the one in force.** Found
+  on hardware (2026-07-14): the account's row rendered whichever defaults were
+  *active*, so with the device selected it read the device's filters back at you —
+  on a device whose snapshot said "Last 24 hours" and whose account says "Last
+  month". That line is what you consult *before* switching, so a wrong one is
+  worse than none. No fixture caught it because every test had the two sources
+  agreeing or only one populated; it needs a real device where they disagree.
+  `deviceDefaultsProvider` exists to give the device row its own answer.
+- **Switching the source keeps the snapshot it switched away from.** Choosing the
+  account is not a request to delete the filters you saved, and a user toggling
+  between them must not pay for it twice.
+- `SearchQuery.withColor` earns its keep again: a snapshot saved with *no* colour
+  has to be able to clear one, and `copyWith` reads a null colour as "leave it
+  alone". Without it an adopted default would be unable to turn the swatch off,
+  and the Drift adapter would have to be careful too — which is why saving a
+  colourless snapshot **deletes** `device.color` rather than upserting it.
 - **A stored key with no stored defaults backfills, once.** The sync runs inside
   `SaveApiKey`, so it only ever fires on a *save*; every user upgrading with a key
   already in place would have been handed a feature that does nothing until they
@@ -452,7 +518,7 @@ re-verified on the phone:
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 232 tests pass
+- `./tool/tela test`: 275 tests pass
 - Three-tap browse → detail → Both widget flow: covered
 - Domain use case and all native target/error mappings: covered
 - `/w/{id}` is covered by a detail JSON fixture, mapper boundary tests, and a
@@ -573,6 +639,32 @@ re-verified on the phone:
     (nothing reads it) and clears itself the next time the key is saved or
     removed. If you ever see one in a database, that is what it is.
 
+- Browse defaults: the model (capture from a query, apply back, the purity and
+  the term never captured, a colour cleared that `copyWith` could not, an empty
+  ratio list surviving as "any shape", every corrupt shape, element-wise
+  equality), the Drift adapter (round trip, the wire literals on disk, **never a
+  `device.purity` row**, upsert-not-append, the colour row *deleted* rather than
+  left behind, an absent source reading as the account, a corrupt one too),
+  `ResolveBrowseDefaults` (each source, either source falling back to tela's own
+  when it has nothing stored, and — pinned across both — a query that still opens
+  on `100`), the browse controller (opens on the device's snapshot, a source
+  switch overruling a hand-set filter while a *sync* still may not, a
+  session-chosen purity surviving an adopted snapshot, saving switching the source),
+  and the screens: Settings renders both sources, withholds the account without a
+  key, persists a pick, refreshes from Wallhaven, keeps its defaults when the
+  refresh fails, and **summarises each source on its own terms** — plus the filter
+  sheet saving a snapshot that browses immediately and carries no purity
+- **The browse-defaults switch is verified on hardware** (2026-07-14, Samsung
+  SM-X730 / Android 16, debug build, installed as an update):
+  - the upgrade wrote **no** `browse.defaults.source` row, and an absent one reads
+    as the account — a device that upgrades browses exactly as it did yesterday
+  - saving a snapshot, switching sources, and switching back all persist, and the
+    live grid follows: the filter sheet moved from the snapshot's Any / Last 24
+    hours to the account's Portrait / Last month on the switch alone
+  - the device found the summary bug above, which is now fixed and re-verified:
+    the two rows render "Last month · Portrait" and "Last 24 hours · Any"
+  - switching away from the device keeps its snapshot on disk
+
 The Random tab's deep paging is the one Wave 1 behaviour never exercised on
 hardware — see below.
 
@@ -592,9 +684,10 @@ sync that closes the desktop↔mobile loop. None of it blocks anything.
 Three things were deliberately left out rather than forgotten:
 
 - **`/settings` is synced, but nothing pushes back.** tela never writes the
-  account's settings, and Wallhaven's API has no endpoint for it anyway — so a
-  filter changed in tela stays in tela. That is the honest direction of the
-  arrow, and worth saying out loud before someone reads "sync" as two-way.
+  account's settings, and Wallhaven's API has no endpoint for it anyway (confirmed
+  again this session) — so a filter changed in tela stays in tela, and "Save as
+  default" saves it *here*. That is the honest direction of the arrow, and worth
+  saying out loud before someone reads "sync" as two-way.
 - The history has **no way to remove an entry**. "Remove from history" and
   "delete the file" are two different actions, and offering the first next to a
   tile that looks like a file is how someone deletes the wrong thing. Worth
@@ -606,15 +699,30 @@ Three things were deliberately left out rather than forgotten:
 
 ### 2. Owed on the device
 
-**The account sync is done** (see Verification). Everything else in Wave 2 has
-still never run on hardware. In rough order of what would actually bite:
+**The account sync and the browse-defaults switch are done** (see Verification).
 
-- **Saving a key from scratch, and removing one.** The sync was only ever seen
-  *backfilling* an existing key. `SaveApiKey`'s own path — paste a key, watch it
-  verify against `/settings`, watch the defaults land — has not run on the device,
-  and neither has `ForgetApiKey` dropping the `account.*` rows. Remove the key and
-  confirm browse falls back to safe / all categories / portrait, and that the
-  Explicit chip disappears.
+**The device is a Samsung SM-X730 — a tablet, not a phone.** Everything on this
+list works there, but two claims it cannot settle: whether the 29-swatch palette
+is usable one-handed, and how the launch grid reads on a small screen. Both are
+still owed on an actual phone.
+
+**One gap the hardware could not close**, and it is not tela's fault: this
+account's browse settings (`categories=111`, `toplist_range=1M`) happen to be
+*identical to tela's own defaults*, so "the account's defaults were adopted" and
+"tela fell back to its own" render the same screen. The `/settings` response was
+confirmed by hand with `curl` and the database matches it field for field, so the
+sync is verified as faithful — but **browse visibly adopting an account default
+that differs from tela's has still never been seen.** To close it: change the
+account's Browsing settings on wallhaven.cc (and press *Save Changes* — the form
+does not autosave), then hit **Refresh from Wallhaven** in Settings and watch the
+summary and the filter sheet move. Note the old canary is gone: `account.purity`
+used to prove a live parse, since tela's fallback (`100`) differed from what the
+account said — with purity no longer synced, a failed parse and an all-defaults
+account are indistinguishable from the rows alone.
+
+Everything else in Wave 2 has still never run on hardware. In rough order of what
+would actually bite:
+
 - **The app-lock, end to end.** It has only ever met `FakeAppLock`. Turn it on in
   Settings, leave the private library, come back, and confirm the prompt appears
   and the PIN fallback works. `MainActivity` became a `FlutterFragmentActivity`

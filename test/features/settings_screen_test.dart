@@ -5,6 +5,10 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/domain/models/browse_defaults.dart';
+import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
@@ -126,7 +130,173 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('offers both browse-default sources, on the account by default', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(accountDefaults: _account),
+      secrets: FakeSecretStore(storedKey: 'abc123'),
+    );
+
+    expect(find.text('Wallhaven account'), findsWidgets);
+    expect(find.text('This device'), findsOneWidget);
+    expect(_selectedSource(tester), BrowseDefaultsSource.account);
+    // The account's own filters, summarised — not tela's.
+    expect(find.textContaining('Anime'), findsOneWidget);
+    expect(find.textContaining('Last week'), findsOneWidget);
+  });
+
+  testWidgets('withholds the account source until a key is stored — there is '
+      'no account to read without one', (WidgetTester tester) async {
+    await _pumpSettings(tester, FakeSettingsRepository());
+
+    expect(
+      find.text("Add an API key to use your account's settings."),
+      findsOneWidget,
+    );
+    final RadioListTile<BrowseDefaultsSource> account = tester
+        .widget<RadioListTile<BrowseDefaultsSource>>(
+          find.byWidgetPredicate(
+            (Widget widget) =>
+                widget is RadioListTile<BrowseDefaultsSource> &&
+                widget.value == BrowseDefaultsSource.account,
+          ),
+        );
+    expect(account.enabled, isFalse);
+  });
+
+  testWidgets('each row summarises its own source, never the one in force', (
+    WidgetTester tester,
+  ) async {
+    // Regression: the account row rendered whichever defaults were *active*, so
+    // selecting the device made the account's line read back the device's
+    // filters — and that line is what you consult before switching. Found on
+    // hardware (2026-07-14), where a device snapshot of "Last 24 hours" showed
+    // up on an account whose toplist range is Last month.
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(
+        accountDefaults: _account,
+        source: BrowseDefaultsSource.device,
+        deviceDefaults: _device,
+      ),
+      secrets: FakeSecretStore(storedKey: 'abc123'),
+    );
+
+    expect(_selectedSource(tester), BrowseDefaultsSource.device);
+    // The account's own: anime, by the week.
+    expect(find.textContaining('Anime · Last week'), findsOneWidget);
+    // The device's own: people, by the year — and never on the account's row.
+    expect(find.textContaining('People · Last year'), findsOneWidget);
+  });
+
+  testWidgets('the device row says how to save one before one exists', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(accountDefaults: _account),
+      secrets: FakeSecretStore(storedKey: 'abc123'),
+    );
+
+    expect(find.text('Set filters, then tap Save as default.'), findsOneWidget);
+  });
+
+  testWidgets('picking a source persists it', (WidgetTester tester) async {
+    final FakeSettingsRepository settings = FakeSettingsRepository(
+      accountDefaults: _account,
+    );
+    await _pumpSettings(
+      tester,
+      settings,
+      secrets: FakeSecretStore(storedKey: 'abc123'),
+    );
+
+    await tester.tap(find.text('This device'));
+    await tester.pumpAndSettle();
+
+    expect(settings.sourceSaved, BrowseDefaultsSource.device);
+    expect(_selectedSource(tester), BrowseDefaultsSource.device);
+  });
+
+  testWidgets('refreshing re-pulls the account and says so', (
+    WidgetTester tester,
+  ) async {
+    final FakeSettingsRepository settings = FakeSettingsRepository(
+      accountDefaults: _account,
+    );
+    final FakeWallhavenApi api = FakeWallhavenApi(account: _refreshed);
+    await _pumpSettings(
+      tester,
+      settings,
+      secrets: FakeSecretStore(storedKey: 'abc123'),
+      api: api,
+    );
+
+    await tester.tap(find.byIcon(Icons.refresh));
+    await tester.pumpAndSettle();
+
+    expect(api.accountSettingsCalls, 1);
+    expect(settings.accountSaved, _refreshed);
+    expect(
+      find.text('Browse defaults updated from your account.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a refresh tela cannot make keeps the defaults it already had', (
+    WidgetTester tester,
+  ) async {
+    final FakeSettingsRepository settings = FakeSettingsRepository(
+      accountDefaults: _account,
+    );
+    await _pumpSettings(
+      tester,
+      settings,
+      secrets: FakeSecretStore(storedKey: 'abc123'),
+      api: FakeWallhavenApi(failure: const NetworkFailure()),
+    );
+
+    await tester.tap(find.byIcon(Icons.refresh));
+    await tester.pumpAndSettle();
+
+    // Being offline says nothing about an account, exactly as it says nothing
+    // about a key.
+    expect(settings.accountSaved, _account);
+    expect(find.textContaining('Anime'), findsOneWidget);
+  });
 }
+
+/// The source the browse-defaults radio currently has selected.
+BrowseDefaultsSource? _selectedSource(WidgetTester tester) {
+  return tester
+      .widget<RadioGroup<BrowseDefaultsSource>>(
+        find.byType(RadioGroup<BrowseDefaultsSource>),
+      )
+      .groupValue;
+}
+
+/// An account browsing anime by the week — every field differs from tela's own
+/// defaults, so a summary cannot pass by reading a default back.
+const AccountSettings _account = AccountSettings(
+  categories: CategoryFilter(<Category>{Category.anime}),
+  topRange: TopRange.oneWeek,
+);
+
+/// What the account says after somebody changed it on the web.
+const AccountSettings _refreshed = AccountSettings(
+  categories: CategoryFilter(<Category>{Category.general}),
+  topRange: TopRange.oneYear,
+);
+
+/// A snapshot sharing no field with [_account], so one row cannot pass for the
+/// other.
+const BrowseDefaults _device = BrowseDefaults(
+  categories: CategoryFilter(<Category>{Category.people}),
+  topRange: TopRange.oneYear,
+);
 
 /// Opens the key dialog, types [key], and saves.
 Future<void> _enterKey(WidgetTester tester, String key) async {
@@ -152,11 +322,12 @@ Future<void> _pumpSettings(
   FakeSecretStore? secrets,
   FakeWallhavenApi? api,
 }) async {
-  // Settings is a scrolling list, and it grew a download-history tile. On a
-  // phone-sized test viewport the explicit picker falls below the fold and is
-  // never built, which reads as "the setting vanished" rather than "scroll".
+  // Settings is a scrolling list, and it keeps growing — a download-history
+  // tile, and now the browse-defaults switch. On a phone-sized test viewport
+  // the pickers below the fold are never built, which reads as "the setting
+  // vanished" rather than "scroll down". Every new section pushes this taller.
   tester.view
-    ..physicalSize = const Size(1080, 3600)
+    ..physicalSize = const Size(1080, 5000)
     ..devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 

@@ -3,10 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/wallpaper_color.dart';
 
 void main() {
   late TelaDatabase db;
@@ -173,7 +175,118 @@ void main() {
       expect(await settings.loadAccountDefaults(), isNull);
     });
   });
+
+  group('browse defaults source', () {
+    test('answers the account before anything is chosen — an upgrade must not '
+        "silently move somebody's front page", () async {
+      expect(
+        await settings.loadBrowseDefaultsSource(),
+        BrowseDefaultsSource.account,
+      );
+    });
+
+    test('round-trips the chosen source', () async {
+      await settings.setBrowseDefaultsSource(BrowseDefaultsSource.device);
+
+      expect(
+        await settings.loadBrowseDefaultsSource(),
+        BrowseDefaultsSource.device,
+      );
+      expect(await db.settingValue('browse.defaults.source'), 'device');
+    });
+
+    test('an unreadable source costs the choice, not the app', () async {
+      await db.putSetting('browse.defaults.source', 'cloud');
+
+      expect(
+        await settings.loadBrowseDefaultsSource(),
+        BrowseDefaultsSource.account,
+      );
+    });
+  });
+
+  group('device defaults', () {
+    test('answers null before a snapshot is saved', () async {
+      expect(await settings.loadDeviceDefaults(), isNull);
+    });
+
+    test('round-trips every field of a snapshot', () async {
+      await settings.saveDeviceDefaults(_device);
+
+      expect(await settings.loadDeviceDefaults(), _device);
+    });
+
+    test('stores the wire literals, readable in a sqlite3 shell', () async {
+      await settings.saveDeviceDefaults(_device);
+
+      expect(await db.settingValue('device.categories'), '001');
+      expect(await db.settingValue('device.topRange'), '1y');
+      expect(await db.settingValue('device.ratios'), '16x9');
+      expect(await db.settingValue('device.order'), 'asc');
+      expect(await db.settingValue('device.color'), '#0066cc');
+    });
+
+    test('never writes a device.purity row', () async {
+      await settings.saveDeviceDefaults(_device);
+
+      expect(await db.settingValue('device.purity'), isNull);
+    });
+
+    test('re-saving upserts rather than stacking', () async {
+      await settings.saveDeviceDefaults(_device);
+      await settings.saveDeviceDefaults(const BrowseDefaults());
+
+      expect(await settings.loadDeviceDefaults(), const BrowseDefaults());
+    });
+
+    test('clearing the colour deletes the row rather than leaving the last '
+        'swatch behind', () async {
+      await settings.saveDeviceDefaults(_device);
+
+      await settings.saveDeviceDefaults(const BrowseDefaults());
+
+      // An upsert-only save would quietly re-apply a filter the user just
+      // turned off: "any colour" is the absence of the row.
+      expect(await db.settingValue('device.color'), isNull);
+      expect((await settings.loadDeviceDefaults())?.color, isNull);
+    });
+
+    test('an empty ratio list round-trips as "any shape"', () async {
+      const BrowseDefaults anyShape = BrowseDefaults(ratios: <String>[]);
+
+      await settings.saveDeviceDefaults(anyShape);
+
+      expect((await settings.loadDeviceDefaults())?.ratios, isEmpty);
+    });
+
+    test('a corrupt or half-written snapshot reads as none', () async {
+      await settings.saveDeviceDefaults(_device);
+      await db.putSetting('device.topRange', 'yesterday');
+
+      expect(await settings.loadDeviceDefaults(), isNull);
+    });
+
+    test('saving a snapshot touches no other setting', () async {
+      await settings.setPrivateLibraryLocked(locked: true);
+      await settings.saveAccountDefaults(_account);
+
+      await settings.saveDeviceDefaults(_device);
+
+      expect(await settings.isPrivateLibraryLocked(), isTrue);
+      expect(await settings.loadAccountDefaults(), _account);
+    });
+  });
 }
+
+/// A snapshot whose every field differs from tela's own defaults, so a round
+/// trip cannot pass by accidentally reading a default back.
+final BrowseDefaults _device = BrowseDefaults(
+  categories: const CategoryFilter(<Category>{Category.people}),
+  topRange: TopRange.oneYear,
+  ratios: const <String>['16x9'],
+  order: SortOrder.asc,
+  color: WallpaperColor('#0066cc'),
+);
 
 /// An account that browses anime and tops by the week — both fields different
 /// from tela's own defaults, so a round trip cannot pass by accidentally

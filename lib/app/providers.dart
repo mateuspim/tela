@@ -25,6 +25,7 @@ import 'package:tela/domain/use_cases/apply_wallpaper.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
 import 'package:tela/domain/use_cases/forget_api_key.dart';
 import 'package:tela/domain/use_cases/load_account_defaults.dart';
+import 'package:tela/domain/use_cases/resolve_browse_defaults.dart';
 import 'package:tela/domain/use_cases/save_api_key.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
 import 'package:tela/domain/use_cases/sync_account_defaults.dart';
@@ -146,6 +147,15 @@ final Provider<LoadAccountDefaults> loadAccountDefaultsProvider =
         settings: ref.watch(settingsRepositoryProvider),
         secrets: ref.watch(secretStoreProvider),
         syncDefaults: ref.watch(syncAccountDefaultsProvider),
+      ),
+    );
+
+/// Picks the defaults browse actually opens on, from the source the user chose.
+final Provider<ResolveBrowseDefaults> resolveBrowseDefaultsProvider =
+    Provider<ResolveBrowseDefaults>(
+      (Ref ref) => ResolveBrowseDefaults(
+        settings: ref.watch(settingsRepositoryProvider),
+        loadAccount: ref.watch(loadAccountDefaultsProvider),
       ),
     );
 

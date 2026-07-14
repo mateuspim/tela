@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
@@ -40,6 +41,7 @@ Future<void> _pumpBrowse(
   WidgetTester tester,
   FakeWallhavenApi api, {
   String? storedKey,
+  FakeSettingsRepository? settings,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -48,9 +50,11 @@ Future<void> _pumpBrowse(
         secretStoreProvider.overrideWithValue(
           FakeSecretStore(storedKey: storedKey),
         ),
-        // Browse opens on the synced account defaults, so it reads the settings
-        // store. This one is empty: the app's own defaults still apply.
-        settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+        // Browse opens on whichever defaults the user chose, so it reads the
+        // settings store. An empty one means tela's own still apply.
+        settingsRepositoryProvider.overrideWithValue(
+          settings ?? FakeSettingsRepository(),
+        ),
       ],
       child: const MaterialApp(
         localizationsDelegates: <LocalizationsDelegate<Object>>[
@@ -276,6 +280,51 @@ void main() {
     // you have to go looking for is one that doesn't get pressed.
     expect(find.text('Show wallpapers'), findsOne);
     expect(tester.getSize(find.text('Show wallpapers')).height, greaterThan(0));
+  });
+
+  testWidgets('saving the filters as a default keeps them, and browses on '
+      'them', (WidgetTester tester) async {
+    final FakeSettingsRepository settings = FakeSettingsRepository();
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api, settings: settings);
+
+    await _openFilters(tester);
+    await tester.tap(find.widgetWithText(FilterChip, 'Anime'));
+    await tester.pump();
+    await tester.tap(find.text('Save as default'));
+    await tester.pumpAndSettle();
+
+    // Kept, as the device's snapshot, and browsed on — a "save as default" that
+    // left the grid on the old filters would be a button that does nothing.
+    expect(settings.sourceSaved, BrowseDefaultsSource.device);
+    expect(settings.deviceSaved?.categories.toApiBits(), '101');
+    expect(api.receivedQueries.last.categories.toApiBits(), '101');
+    expect(find.text('Saved as your browse defaults.'), findsOneWidget);
+  });
+
+  testWidgets('a saved default never carries a purity, so browse still opens '
+      'on safe', (WidgetTester tester) async {
+    final FakeSettingsRepository settings = FakeSettingsRepository();
+    await _pumpBrowse(
+      tester,
+      FakeWallhavenApi(),
+      storedKey: 'abc123',
+      settings: settings,
+    );
+
+    await _openFilters(tester);
+    await tester.tap(find.widgetWithText(FilterChip, 'Explicit'));
+    await tester.pump();
+    await tester.tap(find.text('Save as default'));
+    await tester.pumpAndSettle();
+
+    // The session keeps the explicit chip the user just pressed, but nothing
+    // about it reaches the snapshot — the next launch opens on safe.
+    expect(settings.deviceSaved, isNotNull);
+    final SearchQuery reopened = settings.deviceSaved!.applyTo(
+      const SearchQuery(),
+    );
+    expect(reopened.purity.toApiBits(), '100');
   });
 }
 

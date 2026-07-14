@@ -1,4 +1,5 @@
 import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 
 /// Reads and writes the user's persisted preferences.
@@ -40,4 +41,23 @@ abstract interface class SettingsRepository {
   /// They belong to an account this device can no longer reach: an explicit
   /// purity outlives its key by exactly one 401 otherwise.
   Future<void> forgetAccountDefaults();
+
+  /// Where browse takes its opening filters from.
+  ///
+  /// Answers [BrowseDefaultsSource.account] when never set, which is what every
+  /// build before the switch did — an upgrade must not silently move somebody's
+  /// front page. Never throws: an unreadable row answers the same.
+  Future<BrowseDefaultsSource> loadBrowseDefaultsSource();
+
+  /// Persists which source browse opens on.
+  Future<void> setBrowseDefaultsSource(BrowseDefaultsSource source);
+
+  /// The filters saved from this device's filter sheet, or null when none have
+  /// been saved — in which case tela's own defaults stand in.
+  ///
+  /// Never throws: a snapshot it cannot read answers null.
+  Future<BrowseDefaults?> loadDeviceDefaults();
+
+  /// Persists [defaults] as the snapshot the device browses on.
+  Future<void> saveDeviceDefaults(BrowseDefaults defaults);
 }

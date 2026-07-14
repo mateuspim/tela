@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tela/app/account_defaults.dart';
+import 'package:tela/app/browse_defaults.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
@@ -16,7 +16,7 @@ import '../fakes/fake_wallhaven_api.dart';
 /// The slice end to end: settings saves a key, and browse follows it.
 ///
 /// The two features never import each other — they meet at
-/// [accountDefaultsProvider] — so this is the only place the whole path is
+/// [browseDefaultsProvider] — so this is the only place the whole path is
 /// visible at once.
 void main() {
   test('saving a key adopts the account it belongs to', () async {
@@ -24,7 +24,7 @@ void main() {
     expect(container.read(browseQueryProvider).categories.toApiBits(), '111');
 
     await container.read(apiKeyProvider.notifier).save('abc123');
-    await container.read(accountDefaultsProvider.future);
+    await container.read(browseDefaultsProvider.future);
 
     final SearchQuery query = container.read(browseQueryProvider);
     expect(query.categories.toApiBits(), '010');
@@ -38,10 +38,10 @@ void main() {
   test('forgetting the key takes the account back out of browse', () async {
     final ProviderContainer container = _container(account: _explicitAccount);
     await container.read(apiKeyProvider.notifier).save('abc123');
-    await container.read(accountDefaultsProvider.future);
+    await container.read(browseDefaultsProvider.future);
 
     await container.read(apiKeyProvider.notifier).forget();
-    await container.read(accountDefaultsProvider.future);
+    await container.read(browseDefaultsProvider.future);
 
     // Back to tela's own: the defaults belong to an account this device can no
     // longer reach.
@@ -61,7 +61,7 @@ void main() {
         );
 
     await container.read(apiKeyProvider.notifier).save('abc123');
-    await container.read(accountDefaultsProvider.future);
+    await container.read(browseDefaultsProvider.future);
 
     // The account seeds the defaults; it does not overrule a live choice.
     expect(container.read(browseQueryProvider).categories.toApiBits(), '001');

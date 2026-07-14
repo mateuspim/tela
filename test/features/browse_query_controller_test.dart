@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tela/app/account_defaults.dart';
+import 'package:tela/app/browse_defaults.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 
@@ -27,7 +29,7 @@ void main() {
 
     test("opens on the account's defaults once they are synced", () async {
       final ProviderContainer container = _container(account: _account);
-      await container.read(accountDefaultsProvider.future);
+      await container.read(browseDefaultsProvider.future);
 
       final SearchQuery query = container.read(browseQueryProvider);
 
@@ -44,7 +46,7 @@ void main() {
       final ProviderContainer container = _container(account: _account);
       container.read(browseQueryProvider.notifier).search('sunset');
 
-      await container.read(accountDefaultsProvider.future);
+      await container.read(browseDefaultsProvider.future);
 
       final SearchQuery query = container.read(browseQueryProvider);
       expect(query.term, 'sunset');
@@ -63,7 +65,7 @@ void main() {
             ),
           );
 
-      await container.read(accountDefaultsProvider.future);
+      await container.read(browseDefaultsProvider.future);
 
       // The sync landed underneath, but the choice on screen is the user's.
       expect(
@@ -76,7 +78,7 @@ void main() {
       "resetting the filters returns to the account's, not tela's",
       () async {
         final ProviderContainer container = _container(account: _account);
-        await container.read(accountDefaultsProvider.future);
+        await container.read(browseDefaultsProvider.future);
 
         container.read(browseQueryProvider.notifier)
           ..applyFilters(
@@ -91,6 +93,110 @@ void main() {
         expect(
           container.read(browseQueryProvider).categories.toApiBits(),
           '010',
+        );
+      },
+    );
+
+    test("opens on the device's snapshot when that is the source", () async {
+      final ProviderContainer container = _container(
+        source: BrowseDefaultsSource.device,
+        account: _account,
+        device: _device,
+      );
+      await container.read(browseDefaultsProvider.future);
+
+      final SearchQuery query = container.read(browseQueryProvider);
+
+      expect(query.categories.toApiBits(), '001');
+      expect(query.topRange, TopRange.oneYear);
+      expect(query.ratios, <String>['16x9']);
+      expect(query.order, SortOrder.asc);
+      // A saved snapshot cannot carry a purity either. Browse still opens safe.
+      expect(query.purity.toApiBits(), '100');
+    });
+
+    test(
+      'switching the source overrules a filter set by hand — a switch you '
+      'just flipped in Settings is not something the old listing outranks',
+      () async {
+        final ProviderContainer container = _container(
+          account: _account,
+          device: _device,
+        );
+        await container.read(browseDefaultsProvider.future);
+        container
+            .read(browseQueryProvider.notifier)
+            .applyFilters(
+              const SearchQuery(
+                categories: CategoryFilter(<Category>{Category.general}),
+              ),
+            );
+
+        await container
+            .read(browseDefaultsProvider.notifier)
+            .useSource(BrowseDefaultsSource.device);
+        await container.read(browseDefaultsProvider.future);
+
+        // Unlike a *sync* landing underneath, which must not.
+        expect(
+          container.read(browseQueryProvider).categories.toApiBits(),
+          '001',
+        );
+      },
+    );
+
+    test(
+      'adopting a snapshot leaves a purity chosen for this session alone',
+      () async {
+        final ProviderContainer container = _container(
+          account: _account,
+          device: _device,
+        );
+        await container.read(browseDefaultsProvider.future);
+        container
+            .read(browseQueryProvider.notifier)
+            .applyFilters(
+              const SearchQuery(
+                purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
+              ),
+            );
+
+        await container
+            .read(browseDefaultsProvider.notifier)
+            .useSource(BrowseDefaultsSource.device);
+        await container.read(browseDefaultsProvider.future);
+
+        // The snapshot carries no purity, so it must not switch the grid back
+        // to safe under someone who turned sketchy on a moment ago.
+        final SearchQuery query = container.read(browseQueryProvider);
+        expect(query.purity.toApiBits(), '110');
+        expect(query.categories.toApiBits(), '001');
+      },
+    );
+
+    test(
+      'saving the current filters keeps them, and switches the source',
+      () async {
+        final ProviderContainer container = _container(account: _account);
+        await container.read(browseDefaultsProvider.future);
+
+        await container
+            .read(browseDefaultsProvider.notifier)
+            .saveDeviceDefaults(
+              const SearchQuery(
+                categories: CategoryFilter(<Category>{Category.general}),
+                topRange: TopRange.oneDay,
+              ),
+            );
+        await container.read(browseDefaultsProvider.future);
+
+        final SearchQuery query = container.read(browseQueryProvider);
+        expect(query.categories.toApiBits(), '100');
+        expect(query.topRange, TopRange.oneDay);
+        // Saving without switching would be a button that does nothing.
+        expect(
+          container.read(browseDefaultsProvider).value?.source,
+          BrowseDefaultsSource.device,
         );
       },
     );
@@ -188,13 +294,30 @@ const AccountSettings _account = AccountSettings(
   topRange: TopRange.oneWeek,
 );
 
+/// A snapshot whose every field differs from both tela's defaults and
+/// [_account]'s, so adopting one cannot be mistaken for the other.
+const BrowseDefaults _device = BrowseDefaults(
+  categories: CategoryFilter(<Category>{Category.people}),
+  topRange: TopRange.oneYear,
+  ratios: <String>['16x9'],
+  order: SortOrder.asc,
+);
+
 /// A container whose Wallhaven account has [account] as its browse defaults, or
 /// no key at all when it is null.
-ProviderContainer _container({AccountSettings? account}) {
+ProviderContainer _container({
+  AccountSettings? account,
+  BrowseDefaults? device,
+  BrowseDefaultsSource source = BrowseDefaultsSource.account,
+}) {
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       settingsRepositoryProvider.overrideWithValue(
-        FakeSettingsRepository(accountDefaults: account),
+        FakeSettingsRepository(
+          accountDefaults: account,
+          deviceDefaults: device,
+          source: source,
+        ),
       ),
       secretStoreProvider.overrideWithValue(
         FakeSecretStore(storedKey: account == null ? null : 'abc123'),

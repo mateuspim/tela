@@ -1,60 +1,38 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
-import 'package:tela/domain/models/purity.dart';
-import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/wallpaper_color.dart';
 
 void main() {
-  group('applyTo', () {
-    test('applies the two fields the account is allowed to set', () {
-      final SearchQuery query = _account.applyTo(const SearchQuery());
+  group('toBrowseDefaults', () {
+    test('carries the two fields the account is allowed to set', () {
+      final BrowseDefaults defaults = _account.toBrowseDefaults();
 
-      expect(query.categories.toApiBits(), '010');
-      expect(query.topRange, TopRange.oneWeek);
+      expect(defaults.categories.toApiBits(), '010');
+      expect(defaults.topRange, TopRange.oneWeek);
     });
 
-    test('never touches the purity — browse always opens on safe, whatever '
-        'the account browses on', () {
-      final SearchQuery query = _account.applyTo(const SearchQuery());
+    test("keeps tela's own values for the three the account cannot set", () {
+      final BrowseDefaults defaults = _account.toBrowseDefaults();
+
+      // `resolutions` and `aspect_ratios` are set by desktop users at a
+      // desktop: a synced 16x9 would fill a phone grid with landscape
+      // wallpapers. The account has no colour at all.
+      expect(defaults.ratios, const BrowseDefaults().ratios);
+      expect(defaults.order, const BrowseDefaults().order);
+      expect(defaults.color, isNull);
+    });
+
+    test('opens browse on safe, whatever the account browses on', () {
+      // The whole reason purity is not a field: an account with NSFW enabled
+      // made the launch screen a grid of explicit thumbnails (hardware,
+      // 2026-07-14). There is nothing here for it to come back through.
+      final SearchQuery query = _account.toBrowseDefaults().applyTo(
+        const SearchQuery(),
+      );
 
       expect(query.purity.toApiBits(), '100');
-    });
-
-    test('leaves a purity the user chose for this session alone', () {
-      // Turning Explicit on in the filter sheet must survive an account sync;
-      // the account seeds a *fresh* query, it does not police an open one.
-      const SearchQuery browsing = SearchQuery(
-        purity: PurityFilter(<Purity>{Purity.sfw, Purity.nsfw}),
-      );
-
-      expect(_account.applyTo(browsing).purity.toApiBits(), '101');
-    });
-
-    test('leaves everything the account has no business setting', () {
-      final WallpaperColor blue = WallpaperColor('#0066cc');
-      final SearchQuery browsing = SearchQuery(
-        term: 'sunset',
-        sorting: Sorting.hot,
-        atLeast: const Resolution(1440, 3120),
-        ratios: const <String>['16x9'],
-        color: blue,
-        page: 3,
-        seed: 'abc',
-      );
-
-      final SearchQuery query = _account.applyTo(browsing);
-
-      expect(query.term, 'sunset');
-      expect(query.sorting, Sorting.hot);
-      expect(query.atLeast, const Resolution(1440, 3120));
-      // Ratios and resolutions are the two fields the account has and tela
-      // refuses to sync — a desktop's 16x9 is not a phone's problem.
-      expect(query.ratios, <String>['16x9']);
-      expect(query.color, blue);
-      expect(query.page, 3);
-      expect(query.seed, 'abc');
     });
   });
 

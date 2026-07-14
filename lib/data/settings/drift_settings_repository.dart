@@ -1,8 +1,10 @@
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 
 /// Stores settings as key/value rows in tela's SQLite database.
@@ -43,6 +45,20 @@ class DriftSettingsRepository implements SettingsRepository {
     _accountTopRangeKey,
     _legacyAccountPurityKey,
   ];
+
+  /// Which of the two the user picked. Absent means the account, which is what
+  /// every build before the switch browsed on.
+  static const String _sourceKey = 'browse.defaults.source';
+
+  /// The device's saved snapshot. Stored as the same wire literals the
+  /// account's rows use, and for the same reasons: canonical, rename-proof, and
+  /// readable in a `sqlite3` shell. There is deliberately no `device.purity`
+  /// row — see [BrowseDefaults].
+  static const String _deviceCategoriesKey = 'device.categories';
+  static const String _deviceTopRangeKey = 'device.topRange';
+  static const String _deviceRatiosKey = 'device.ratios';
+  static const String _deviceOrderKey = 'device.order';
+  static const String _deviceColorKey = 'device.color';
 
   final TelaDatabase _db;
 
@@ -99,6 +115,60 @@ class DriftSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> forgetAccountDefaults() => _db.deleteSettings(_accountKeys);
+
+  @override
+  Future<BrowseDefaultsSource> loadBrowseDefaultsSource() async {
+    final String? stored = await _db.settingValue(_sourceKey);
+    if (stored == null) return BrowseDefaultsSource.account;
+    // An unreadable row costs the choice, not the app: the account's defaults
+    // are where every build before this switch already opened.
+    return BrowseDefaultsSource.tryFromName(stored) ??
+        BrowseDefaultsSource.account;
+  }
+
+  @override
+  Future<void> setBrowseDefaultsSource(BrowseDefaultsSource source) {
+    return _db.putSetting(_sourceKey, source.name);
+  }
+
+  @override
+  Future<BrowseDefaults?> loadDeviceDefaults() async {
+    final String? categories = await _db.settingValue(_deviceCategoriesKey);
+    final String? topRange = await _db.settingValue(_deviceTopRangeKey);
+    final String? ratios = await _db.settingValue(_deviceRatiosKey);
+    final String? order = await _db.settingValue(_deviceOrderKey);
+    if (categories == null ||
+        topRange == null ||
+        ratios == null ||
+        order == null) {
+      return null;
+    }
+
+    return BrowseDefaults.tryParse(
+      storedCategories: categories,
+      storedTopRange: topRange,
+      storedRatios: ratios,
+      storedOrder: order,
+      storedColor: await _db.settingValue(_deviceColorKey),
+    );
+  }
+
+  @override
+  Future<void> saveDeviceDefaults(BrowseDefaults defaults) async {
+    await _db.putSetting(_deviceCategoriesKey, defaults.categories.toApiBits());
+    await _db.putSetting(_deviceTopRangeKey, defaults.topRange.apiValue);
+    await _db.putSetting(_deviceRatiosKey, defaults.encodedRatios());
+    await _db.putSetting(_deviceOrderKey, defaults.order.name);
+    // "Any colour" is the *absence* of the row, not a row saying nothing — an
+    // upsert-only save would leave the last swatch behind and quietly re-apply
+    // a filter the user just turned off.
+    final WallpaperColor? color = defaults.color;
+    if (color == null) {
+      await _db.deleteSettings(<String>[_deviceColorKey]);
+      return;
+    }
+    await _db.putSetting(_deviceColorKey, color.hex);
+  }
 
   /// Reads one tier, treating an absent, unrecognised, or forbidden row as
   /// [fallback].

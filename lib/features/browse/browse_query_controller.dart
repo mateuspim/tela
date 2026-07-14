@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:tela/app/account_defaults.dart';
-import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/app/browse_defaults.dart';
+import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 
@@ -17,31 +17,34 @@ final NotifierProvider<BrowseQueryController, SearchQuery> browseQueryProvider =
 /// `atLeast` comes from the screen you are holding. The browse screen layers
 /// both on top of this state before handing the query to a grid.
 ///
-/// The filters it *opens* on come from the Wallhaven account when there is one
-/// — see [_adopt], which is careful about what that may overwrite.
+/// The filters it *opens* on come from [browseDefaultsProvider] — the Wallhaven
+/// account's, or this device's saved snapshot, whichever the user picked in
+/// Settings. See `_onDefaults` for what a change to that may overwrite.
 ///
 /// ```dart
 /// ref.read(browseQueryProvider.notifier).search('sunset');
 /// ```
 class BrowseQueryController extends Notifier<SearchQuery> {
-  /// The filters a listing starts from, and what "Reset" resets to: tela's own
-  /// until a Wallhaven account's arrive.
-  SearchQuery _defaults = const SearchQuery();
+  /// The filters a listing starts from, and what "Reset" resets to.
+  BrowseDefaults _defaults = const BrowseDefaults();
+
+  /// The source [_defaults] came from, so a *change* of source can be told
+  /// apart from the same source answering differently.
+  BrowseDefaultsSource? _source;
 
   @override
   SearchQuery build() {
-    ref.listen<AsyncValue<AccountSettings?>>(
-      accountDefaultsProvider,
-      _onAccountDefaults,
+    ref.listen<AsyncValue<ActiveBrowseDefaults>>(
+      browseDefaultsProvider,
+      _onDefaults,
     );
 
     // Read rather than watch: the listener re-seeds the *filters*, where a
     // rebuild would throw away the query the user is currently browsing on.
-    final SearchQuery stored = _defaultsOf(
-      ref.read(accountDefaultsProvider).value,
-    );
-    _defaults = stored;
-    return stored;
+    final ActiveBrowseDefaults? active = ref.read(browseDefaultsProvider).value;
+    _source = active?.source;
+    _defaults = active?.defaults ?? const BrowseDefaults();
+    return _defaults.applyTo(const SearchQuery());
   }
 
   /// Sets the free-text term. Empty means "browse", not "search for nothing".
@@ -58,81 +61,52 @@ class BrowseQueryController extends Notifier<SearchQuery> {
     state = filters.copyWith(term: state.term);
   }
 
-  /// Restores the defaults: the account's if it has any, tela's otherwise.
+  /// Restores the defaults browse currently opens on.
+  ///
+  /// Onto a *fresh* query, so this is also the one place the purity goes back
+  /// to safe — "Reset filters" is the button that undoes a sketchy or explicit
+  /// session. The term survives: it is not a filter.
   void clearFilters() {
-    state = _withCurrentTerm(_defaults);
+    state = _defaults.applyTo(const SearchQuery()).copyWith(term: state.term);
   }
 
-  void _onAccountDefaults(
-    AsyncValue<AccountSettings?>? previous,
-    AsyncValue<AccountSettings?> next,
+  void _onDefaults(
+    AsyncValue<ActiveBrowseDefaults>? previous,
+    AsyncValue<ActiveBrowseDefaults> next,
   ) {
-    _adopt(_defaultsOf(next.value));
+    final ActiveBrowseDefaults? active = next.value;
+    if (active == null) return;
+
+    // A changed source is the user standing in Settings saying "take my
+    // defaults from *there* now". Nothing about the listing they left behind
+    // outranks that, so it is adopted outright — including over filters they
+    // set by hand, which is the whole point of having asked.
+    final bool switched = _source != null && _source != active.source;
+    _source = active.source;
+    _adopt(active.defaults, outright: switched);
   }
 
-  /// Takes [defaults] as the new base, and browses on them **only if the user
-  /// has not set a filter by hand**.
+  /// Takes [defaults] as the new base, and browses on them — **only if the user
+  /// has not set a filter by hand**, unless [outright].
   ///
-  /// This is the whole "what wins" question, and the answer is: the account
-  /// seeds, it does not override. Syncing on top of a filter someone just chose
-  /// would silently undo their choice — but doing nothing at all would mean
-  /// saving a key appears to change nothing until the next launch. "Untouched"
-  /// is exactly `state == the old defaults`, which is a real comparison rather
-  /// than a guess because [SearchQuery] has value equality. The search term is
-  /// not a filter: searching for "sunset" does not mean you have opinions about
-  /// categories.
-  void _adopt(SearchQuery defaults) {
-    final bool untouched = state == _withCurrentTerm(_defaults);
+  /// The guarded case is defaults arriving *late* from the source already in
+  /// force: the account backfill, or a manual refresh. Landing those on top of
+  /// a filter someone just chose would silently undo it — but doing nothing at
+  /// all would mean saving a key appears to change nothing until the next
+  /// launch. "Untouched" is a real comparison rather than a guess:
+  /// [BrowseDefaults] has value equality, so the live query's own filters
+  /// either still encode the old defaults or they do not.
+  ///
+  /// Applied onto the **current** query, not a fresh one, so what the defaults
+  /// do not speak for survives: the term, the tab's sorting, and — the
+  /// load-bearing one — the purity. Adopting a snapshot must not quietly switch
+  /// the grid back to safe under someone who turned sketchy on for this
+  /// session. Purity only goes back to safe on a relaunch or an explicit
+  /// [clearFilters].
+  void _adopt(BrowseDefaults defaults, {required bool outright}) {
+    final bool untouched = BrowseDefaults.of(state) == _defaults;
     _defaults = defaults;
-    if (untouched) state = _withCurrentTerm(defaults);
-  }
-
-  SearchQuery _withCurrentTerm(SearchQuery query) {
-    return query.copyWith(term: state.term);
-  }
-
-  /// The base query [account] asks for, or tela's own when it has none — which
-  /// is also what a forgotten key leaves behind.
-  SearchQuery _defaultsOf(AccountSettings? account) {
-    const SearchQuery own = SearchQuery();
-    return account?.applyTo(own) ?? own;
-  }
-}
-
-/// The aspect ratios a listing asks for, as the three choices worth offering on
-/// a phone.
-///
-/// Wallhaven takes an open-ended ratio list, but "portrait / landscape / any" is
-/// the only cut of it a wallpaper app needs. Named for the ratios it sets, not
-/// `Orientation`, which is already a Flutter enum.
-enum RatioChoice {
-  /// Phone-shaped. The default, because this is a phone.
-  portrait(<String>['9x16']),
-
-  /// Desktop-shaped, for downloading to sync elsewhere.
-  landscape(<String>['16x9']),
-
-  /// No ratio filter at all.
-  any(<String>[]);
-
-  const RatioChoice(this.ratios);
-
-  /// The `ratios` param value this choice stands for.
-  final List<String> ratios;
-
-  /// The choice [query] currently expresses.
-  ///
-  /// Falls back to [any] for a ratio set we never offered: nothing in the app
-  /// builds one today, but [SearchQuery] permits it and this must not throw.
-  static RatioChoice of(SearchQuery query) {
-    return RatioChoice.values.firstWhere(
-      (RatioChoice choice) => _sameRatios(choice.ratios, query.ratios),
-      orElse: () => RatioChoice.any,
-    );
-  }
-
-  static bool _sameRatios(List<String> a, List<String> b) {
-    return a.length == b.length && a.toSet().containsAll(b);
+    if (outright || untouched) state = defaults.applyTo(state);
   }
 }
 

@@ -1,6 +1,14 @@
+/// The user-facing names of the browse filters.
+///
+/// In `core/ui` rather than `features/browse` because two features now render
+/// the same filters: the filter sheet edits them, and Settings summarises them
+/// under the browse-defaults switch. `core` may not import a feature
+/// (CLAUDE.md), which is also why [RatioChoice] is a domain model.
+library;
+
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/features/browse/browse_query_controller.dart';
 
 /// The user-facing name of a [RatioChoice].
 ///

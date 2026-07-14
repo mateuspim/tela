@@ -91,6 +91,16 @@
     "description": "Restores the default filters."
   },
 
+  "filterSaveAsDefault": "Save as default",
+  "@filterSaveAsDefault": {
+    "description": "Keeps the edited filters as the ones browse opens on."
+  },
+
+  "filterSavedAsDefault": "Saved as your browse defaults.",
+  "@filterSavedAsDefault": {
+    "description": "Confirms that the filters are now this device's defaults."
+  },
+
   "categoryGeneral": "General",
   "@categoryGeneral": {
     "description": "Wallhaven category: everything that is not anime or people."
@@ -360,6 +370,46 @@
   "settingsAccountSection": "Wallhaven account",
   "@settingsAccountSection": {
     "description": "Heading for the group of Wallhaven-account settings."
+  },
+
+  "settingsBrowseDefaultsSection": "Browse defaults",
+  "@settingsBrowseDefaultsSection": {
+    "description": "Heading for the choice of where browse takes its filters from."
+  },
+
+  "browseDefaultsAccount": "Wallhaven account",
+  "@browseDefaultsAccount": {
+    "description": "Option: open browse on the account's own browse settings."
+  },
+
+  "browseDefaultsDevice": "This device",
+  "@browseDefaultsDevice": {
+    "description": "Option: open browse on the filters saved on this device."
+  },
+
+  "browseDefaultsNeedsKey": "Add an API key to use your account's settings.",
+  "@browseDefaultsNeedsKey": {
+    "description": "Why the account option cannot be picked without a key."
+  },
+
+  "browseDefaultsDeviceHint": "Set filters, then tap Save as default.",
+  "@browseDefaultsDeviceHint": {
+    "description": "How to save a snapshot, shown before one exists."
+  },
+
+  "browseDefaultsNotSynced": "Not synced yet.",
+  "@browseDefaultsNotSynced": {
+    "description": "The account has a key but tela has not read its settings."
+  },
+
+  "browseDefaultsRefresh": "Refresh from Wallhaven",
+  "@browseDefaultsRefresh": {
+    "description": "Re-pulls the account's browse settings."
+  },
+
+  "browseDefaultsRefreshed": "Browse defaults updated from your account.",
+  "@browseDefaultsRefreshed": {
+    "description": "Confirms a successful refresh of the account's settings."
   },
 
   "settingsApiKeyTitle": "API key",

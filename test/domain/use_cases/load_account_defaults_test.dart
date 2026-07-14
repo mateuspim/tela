@@ -33,7 +33,14 @@ void main() {
 
     final AccountSettings? defaults = await load();
 
-    expect(defaults?.applyTo(const SearchQuery()).purity.toApiBits(), '100');
+    expect(
+      defaults
+          ?.toBrowseDefaults()
+          .applyTo(const SearchQuery())
+          .purity
+          .toApiBits(),
+      '100',
+    );
   });
 
   group('backfill', () {

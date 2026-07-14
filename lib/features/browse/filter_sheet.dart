@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/browse_defaults.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/browse_filter_text.dart';
 import 'package:tela/core/ui/wallpaper_swatch.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
-import 'package:tela/features/browse/browse_filter_text.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
 
@@ -188,12 +190,21 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
     );
   }
 
+  /// A [Wrap], not a [Row]: three buttons overflow a narrow phone, and an apply
+  /// button that has fallen off the edge is one that does not get pressed (the
+  /// same failure the pinned action bar was added to fix).
   Widget _actions(AppLocalizations l10n) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
+    return Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 8,
+      runSpacing: 8,
       children: <Widget>[
+        TextButton.icon(
+          onPressed: _saveAsDefault,
+          icon: const Icon(Icons.push_pin_outlined),
+          label: Text(l10n.filterSaveAsDefault),
+        ),
         TextButton(onPressed: _reset, child: Text(l10n.filterReset)),
-        const SizedBox(width: 8),
         FilledButton(onPressed: _apply, child: Text(l10n.filterApply)),
       ],
     );
@@ -238,6 +249,27 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
   void _reset() {
     ref.read(browseQueryProvider.notifier).clearFilters();
     Navigator.of(context).pop();
+  }
+
+  /// Keeps the draft as this device's defaults, and browses on it.
+  ///
+  /// Applies the draft first, so the purity the user picked for this session
+  /// still lands: the saved snapshot deliberately carries no purity, so
+  /// adopting it is not what would put a chosen "Sketchy" on screen. Saving
+  /// also switches the source to this device — a "save these as my default"
+  /// that left browse still opening on the account's would be a button that
+  /// appears to do nothing.
+  Future<void> _saveAsDefault() async {
+    final SearchQuery saved = _draft;
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final String confirmation = AppLocalizations.of(
+      context,
+    ).filterSavedAsDefault;
+
+    ref.read(browseQueryProvider.notifier).applyFilters(saved);
+    Navigator.of(context).pop();
+    await ref.read(browseDefaultsProvider.notifier).saveDeviceDefaults(saved);
+    messenger.showSnackBar(SnackBar(content: Text(confirmation)));
   }
 }
 
