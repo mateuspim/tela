@@ -3,6 +3,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 
@@ -119,7 +120,7 @@ void main() {
       );
       expect(
         const SearchQuery(
-          atLeast: Resolution(1080, 2400),
+          resolution: AtLeastResolution(Resolution(1080, 2400)),
         ).toQueryParameters()['atleast'],
         '1080x2400',
       );
@@ -161,13 +162,13 @@ void main() {
         term: 'sunset',
         purity: PurityFilter({Purity.sfw, Purity.nsfw}),
         categories: CategoryFilter({Category.anime}),
-        atLeast: Resolution(1080, 2400),
+        resolution: AtLeastResolution(Resolution(1080, 2400)),
       );
       const SearchQuery same = SearchQuery(
         term: 'sunset',
         purity: PurityFilter({Purity.nsfw, Purity.sfw}),
         categories: CategoryFilter({Category.anime}),
-        atLeast: Resolution(1080, 2400),
+        resolution: AtLeastResolution(Resolution(1080, 2400)),
       );
 
       // Set members in a different order are the same filter. Without this the
@@ -231,7 +232,7 @@ void main() {
         sorting: Sorting.toplist,
         purity: PurityFilter({Purity.sketchy}),
         categories: CategoryFilter({Category.anime}),
-        atLeast: Resolution(1080, 2400),
+        resolution: AtLeastResolution(Resolution(1080, 2400)),
         ratios: <RatioChoice>[ExactRatio(16, 9)],
         page: 3,
         seed: 'abc123',

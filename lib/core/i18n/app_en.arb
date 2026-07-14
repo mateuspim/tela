@@ -166,10 +166,10 @@
     "description": "One exact aspect ratio chip, e.g. 16×9. A multiplication sign, not the API's literal 'x'.",
     "placeholders": {
       "width": {
-        "type": "int"
+        "type": "String"
       },
       "height": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -179,10 +179,10 @@
     "description": "The device's own reduced aspect ratio, offered first as the recommendation. Wallhaven accepts any exact ratio, so this is offerable even on a phone whose 9×20 shape appears in no standard dropdown.",
     "placeholders": {
       "width": {
-        "type": "int"
+        "type": "String"
       },
       "height": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -190,6 +190,90 @@
   "filterRatioHint": "Shapes add up: pick several to see them all.",
   "@filterRatioHint": {
     "description": "Explains that the ratio chips are a union, unlike the colour swatches which are a radio."
+  },
+
+  "filterResolution": "Size",
+  "@filterResolution": {
+    "description": "Heading of the resolution filter in the filter sheet."
+  },
+
+  "resolutionAutomatic": "Automatic",
+  "@resolutionAutomatic": {
+    "description": "Resolution mode: nothing smaller than this device's own screen. The default."
+  },
+
+  "resolutionAtLeast": "At least",
+  "@resolutionAtLeast": {
+    "description": "Resolution mode: nothing smaller than a size the user picks."
+  },
+
+  "resolutionExactly": "Exactly",
+  "@resolutionExactly": {
+    "description": "Resolution mode: only these sizes, nothing else. Wallhaven's `resolutions` param."
+  },
+
+  "resolutionAutomaticHint": "Nothing smaller than this screen ({width}×{height}).",
+  "@resolutionAutomaticHint": {
+    "description": "Explains what Automatic does, naming the device's own screen so it is not a mystery.",
+    "placeholders": {
+      "width": {
+        "type": "String"
+      },
+      "height": {
+        "type": "String"
+      }
+    }
+  },
+
+  "resolutionExactlyHint": "Only these exact sizes. Few wallpapers match a phone-shaped one.",
+  "@resolutionExactlyHint": {
+    "description": "Warns that `resolutions` is an exact match, so a portrait size returns a very short listing — Wallhaven is largely a desktop wallpaper site."
+  },
+
+  "resolutionValue": "{width}×{height}",
+  "@resolutionValue": {
+    "description": "One resolution, e.g. 1920×1080. A multiplication sign, not the API's literal 'x'.",
+    "placeholders": {
+      "width": {
+        "type": "String"
+      },
+      "height": {
+        "type": "String"
+      }
+    }
+  },
+
+  "resolutionScreen": "{width}×{height} · your screen",
+  "@resolutionScreen": {
+    "description": "The device's own resolution, offered among the exact sizes because 'exactly the screen I am holding' is the one a phone user is likely to want.",
+    "placeholders": {
+      "width": {
+        "type": "String"
+      },
+      "height": {
+        "type": "String"
+      }
+    }
+  },
+
+  "resolutionCustom": "Custom size",
+  "@resolutionCustom": {
+    "description": "Opens a dialog for a width and height Wallhaven's own ladders do not offer. Also the dialog's title."
+  },
+
+  "resolutionWidth": "Width",
+  "@resolutionWidth": {
+    "description": "Label of the width field in the custom-size dialog."
+  },
+
+  "resolutionHeight": "Height",
+  "@resolutionHeight": {
+    "description": "Label of the height field in the custom-size dialog."
+  },
+
+  "resolutionAdd": "Add",
+  "@resolutionAdd": {
+    "description": "Confirms the custom size and adds it to the filter."
   },
 
   "orderDescending": "Descending",

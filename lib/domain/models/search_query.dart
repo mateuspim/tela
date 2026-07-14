@@ -3,6 +3,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 
 /// How Wallhaven orders results. The browse tabs are just three of these.
@@ -114,7 +115,7 @@ class SearchQuery {
     this.sorting = Sorting.dateAdded,
     this.order = SortOrder.desc,
     this.topRange = TopRange.oneMonth,
-    this.atLeast,
+    this.resolution = const AutomaticResolution(),
     this.ratios = const <RatioChoice>[ExactRatio(9, 16)],
     this.color,
     this.page = 1,
@@ -141,9 +142,10 @@ class SearchQuery {
   /// Look-back window; only sent when [Sorting.usesTopRange].
   final TopRange topRange;
 
-  /// Minimum acceptable resolution. Defaulted to the device screen so the grid
-  /// isn't full of images too small for the phone.
-  final Resolution? atLeast;
+  /// How the listing constrains image size: the screen, a minimum, or an exact
+  /// set. Non-nullable, so there is no "cleared" state to be unable to
+  /// express — see [withColor] for the trap this used to sit in.
+  final ResolutionFilter resolution;
 
   /// Aspect ratios to accept, as a **union**: `[16x9, 9x16]` asks for both.
   /// Empty means no ratio filter at all. Portrait-first, because this is a
@@ -165,6 +167,22 @@ class SearchQuery {
   /// callers can't accidentally mutate the rest of the query while scrolling.
   SearchQuery atPage(int page) => copyWith(page: page);
 
+  /// Returns a copy whose [AutomaticResolution] has been answered by [screen].
+  ///
+  /// The domain cannot know how big the screen is, so "Automatic" travels as an
+  /// intention and is turned into a real `atleast` here — at the one moment a
+  /// widget can answer the question. A filter the user chose by hand is left
+  /// exactly as it is: this resolves the default, it does not overrule a
+  /// choice.
+  ///
+  /// ```dart
+  /// query.forScreen(screenResolution(context));
+  /// ```
+  SearchQuery forScreen(Resolution screen) {
+    if (resolution is! AutomaticResolution) return this;
+    return copyWith(resolution: AtLeastResolution(screen));
+  }
+
   /// Returns a copy filtered by [color], or by no colour when it is null.
   ///
   /// Not a [copyWith] parameter, and that is the whole point: `copyWith` fills
@@ -179,7 +197,7 @@ class SearchQuery {
       sorting: sorting,
       order: order,
       topRange: topRange,
-      atLeast: atLeast,
+      resolution: resolution,
       ratios: ratios,
       color: color,
       page: page,
@@ -198,7 +216,7 @@ class SearchQuery {
     Sorting? sorting,
     SortOrder? order,
     TopRange? topRange,
-    Resolution? atLeast,
+    ResolutionFilter? resolution,
     List<RatioChoice>? ratios,
     WallpaperColor? color,
     int? page,
@@ -211,7 +229,7 @@ class SearchQuery {
       sorting: sorting ?? this.sorting,
       order: order ?? this.order,
       topRange: topRange ?? this.topRange,
-      atLeast: atLeast ?? this.atLeast,
+      resolution: resolution ?? this.resolution,
       ratios: ratios ?? this.ratios,
       color: color ?? this.color,
       page: page ?? this.page,
@@ -234,7 +252,7 @@ class SearchQuery {
         other.sorting == sorting &&
         other.order == order &&
         other.topRange == topRange &&
-        other.atLeast == atLeast &&
+        other.resolution == resolution &&
         _sameElements(other.ratios, ratios) &&
         other.color == color &&
         other.page == page &&
@@ -250,7 +268,7 @@ class SearchQuery {
       sorting,
       order,
       topRange,
-      atLeast,
+      resolution,
       Object.hashAllUnordered(ratios),
       color,
       page,
@@ -278,7 +296,7 @@ class SearchQuery {
       'sorting': sorting.apiValue,
       'order': order.apiValue,
       if (sorting.usesTopRange) 'topRange': topRange.apiValue,
-      if (atLeast != null) 'atleast': atLeast!.toApiValue(),
+      ...resolution.toQueryParameters(),
       'ratios': ?RatioChoice.encode(ratios),
       if (color != null) 'colors': color!.toApiValue(),
       'page': '$page',

@@ -9,6 +9,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
@@ -60,7 +61,8 @@ void main() {
 
     final SearchQuery query = api.receivedQueries.single;
     expect(query.sorting, Sorting.dateAdded);
-    expect(query.atLeast, isNotNull);
+    // Automatic is resolved into a real minimum by the screen it opened on.
+    expect(query.resolution, isA<AtLeastResolution>());
   });
 
   testWidgets('the filters the user is browsing under still apply here', (

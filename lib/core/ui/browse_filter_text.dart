@@ -8,6 +8,8 @@ library;
 
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
+import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 
 /// The user-facing name of a [RatioChoice].
@@ -28,10 +30,48 @@ String ratioLabel(
     ShapeRatio.portrait => l10n.ratioPortrait,
     ShapeRatio.landscape => l10n.ratioLandscape,
     final ExactRatio ratio when ratio == screen => l10n.ratioScreen(
-      ratio.width,
-      ratio.height,
+      '${ratio.width}',
+      '${ratio.height}',
     ),
-    final ExactRatio ratio => l10n.ratioExact(ratio.width, ratio.height),
+    final ExactRatio ratio => l10n.ratioExact(
+      '${ratio.width}',
+      '${ratio.height}',
+    ),
+  };
+}
+
+/// The user-facing name of one [Resolution], e.g. `1920×1080`.
+///
+/// Pass [screen] to have the device's own size name itself, for the same reason
+/// the device's own ratio does: "exactly the screen I am holding" is the one
+/// exact size a phone user is likely to want, and it is in no standard ladder.
+///
+/// The dimensions go in as **strings**, and every dimension placeholder in the
+/// ARB is a `String` for the same reason: an `int` placeholder is rendered
+/// through `NumberFormat`, which groups thousands — so a 1080x2400 phone read
+/// back as `1,080×2,400`. A pixel count is a label, not a quantity.
+String resolutionLabel(
+  AppLocalizations l10n,
+  Resolution size, {
+  Resolution? screen,
+}) {
+  final String width = '${size.width}';
+  final String height = '${size.height}';
+  if (size == screen) return l10n.resolutionScreen(width, height);
+  return l10n.resolutionValue(width, height);
+}
+
+/// How a whole resolution filter reads in a one-line summary.
+String resolutionFilterLabel(AppLocalizations l10n, ResolutionFilter filter) {
+  return switch (filter) {
+    AutomaticResolution() => l10n.resolutionAutomatic,
+    final AtLeastResolution at =>
+      '${l10n.resolutionAtLeast} '
+          '${resolutionLabel(l10n, at.minimum)}',
+    final ExactResolutions exact =>
+      exact.sizes
+          .map((Resolution size) => resolutionLabel(l10n, size))
+          .join(', '),
   };
 }
 

@@ -9,9 +9,11 @@ import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
+import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
+import 'package:tela/features/browse/resolution_filter_field.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
 
 /// Opens the filter sheet over the browse grid.
@@ -69,6 +71,10 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
                 ),
                 _FilterGroup(title: l10n.filterPurity, child: _purities(l10n)),
                 _FilterGroup(title: l10n.filterRatio, child: _ratios(l10n)),
+                _FilterGroup(
+                  title: l10n.filterResolution,
+                  child: _resolution(),
+                ),
                 _FilterGroup(title: l10n.filterColor, child: _colors(l10n)),
                 _FilterGroup(title: l10n.filterOrder, child: _order(l10n)),
                 _FilterGroup(
@@ -150,6 +156,16 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
             onSelected: (bool _) => _toggleRatio(choice),
           ),
       ],
+    );
+  }
+
+  /// The one filter that used to be imposed rather than chosen: `atleast` came
+  /// from the device's own screen and could not be changed at all.
+  Widget _resolution() {
+    return ResolutionFilterField(
+      value: _draft.resolution,
+      onChanged: (ResolutionFilter resolution) =>
+          setState(() => _draft = _draft.copyWith(resolution: resolution)),
     );
   }
 

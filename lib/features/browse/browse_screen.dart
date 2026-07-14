@@ -16,9 +16,10 @@ import 'package:tela/features/browse/wallpaper_grid.dart';
 ///
 /// Each tab is the same [WallpaperGrid] under a different [Sorting] — the tabs
 /// are a query difference, not six screens. The search term and the filters
-/// live in [browseQueryProvider] and are shared by all of them; only `sorting`
-/// and `atLeast` are layered on here, because neither is a filter the user
-/// picked.
+/// live in [browseQueryProvider] and are shared by all of them; `sorting` is
+/// layered on here because it belongs to the tab rather than to the user's
+/// filters, and `forScreen` is what answers an *Automatic* resolution filter,
+/// which is the one filter only a widget can resolve.
 ///
 /// The tab list is not fixed. Relevance appears only while a search term is set
 /// (see [offerableSortings]) and is selected on submit, so the bar grows and
@@ -62,7 +63,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
 
     final SearchQuery base = ref
         .watch(browseQueryProvider)
-        .copyWith(atLeast: screenResolution(context));
+        .forScreen(screenResolution(context));
     final List<Sorting> sortings = offerableSortings(
       hasTerm: base.term.isNotEmpty,
     );

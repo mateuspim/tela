@@ -4,6 +4,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 
@@ -64,7 +65,6 @@ void main() {
         term: 'sunset',
         sorting: Sorting.hot,
         purity: PurityFilter(<Purity>{Purity.sketchy}),
-        atLeast: Resolution(1440, 3120),
         page: 3,
         seed: 'abc',
       );
@@ -76,9 +76,45 @@ void main() {
       // Adopting a default must not switch the grid back to safe under someone
       // who turned sketchy on for this session.
       expect(query.purity.toApiBits(), '010');
-      expect(query.atLeast, const Resolution(1440, 3120));
       expect(query.page, 3);
       expect(query.seed, 'abc');
+    });
+
+    test('carries the resolution filter, which it once could not', () {
+      // It used to be `atLeast`, imposed by the browse screen from the device's
+      // own screen and choosable by nobody — so there was nothing to save. Now
+      // that it is a filter the user sets, a snapshot has to carry it.
+      final SearchQuery browsing = SearchQuery(
+        resolution: ExactResolutions(const <Resolution>[
+          Resolution(1920, 1080),
+        ]),
+      );
+
+      final BrowseDefaults captured = BrowseDefaults.of(browsing);
+
+      expect(
+        captured.resolution,
+        ExactResolutions(const <Resolution>[Resolution(1920, 1080)]),
+      );
+      expect(
+        captured.applyTo(const SearchQuery()).resolution,
+        ExactResolutions(const <Resolution>[Resolution(1920, 1080)]),
+      );
+    });
+
+    test('an absent resolution row reads as Automatic', () {
+      // Which is what every snapshot saved before this filter existed browsed
+      // on, so a device that upgrades browses exactly as it did yesterday.
+      final BrowseDefaults? parsed = _parse();
+
+      expect(parsed?.resolution, const AutomaticResolution());
+    });
+
+    test('an unreadable resolution costs the filter, not the snapshot', () {
+      final BrowseDefaults? parsed = _parse(resolution: 'exact:nonsense');
+
+      expect(parsed, isNotNull);
+      expect(parsed?.resolution, const AutomaticResolution());
     });
 
     test('clears a colour the defaults do not carry', () {
@@ -193,6 +229,7 @@ BrowseDefaults? _parse({
   String ratios = '9x16',
   String order = 'desc',
   String? color,
+  String? resolution,
 }) {
   return BrowseDefaults.tryParse(
     storedCategories: categories,
@@ -200,6 +237,7 @@ BrowseDefaults? _parse({
     storedRatios: ratios,
     storedOrder: order,
     storedColor: color,
+    storedResolution: resolution,
   );
 }
 

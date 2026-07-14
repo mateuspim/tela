@@ -18,17 +18,35 @@ class Resolution {
   /// Resolution.parse('1920x1080'); // Resolution(1920, 1080)
   /// ```
   factory Resolution.parse(String raw) {
-    final List<String> parts = raw.split('x');
-    if (parts.length != 2) {
-      throw ArgumentError('resolution must be "<width>x<height>", got "$raw"');
-    }
-    final int? width = int.tryParse(parts[0]);
-    final int? height = int.tryParse(parts[1]);
-    if (width == null || height == null || width <= 0 || height <= 0) {
+    final Resolution? parsed = Resolution.tryParse(raw);
+    if (parsed == null) {
       throw ArgumentError(
         'resolution must be "<width>x<height>" with positive integers, '
         'got "$raw"',
       );
+    }
+    return parsed;
+  }
+
+  /// The resolution [raw] names, or null when it names none.
+  ///
+  /// Beside the throwing [Resolution.parse], and for the same reason
+  /// `Purity.tryFromApiName` sits beside `Purity.fromApiName`: a wallpaper
+  /// whose size tela cannot read is a bug worth throwing on, while a *stored*
+  /// filter that has gone bad should cost the filter and not the screen it sits
+  /// on.
+  ///
+  /// ```dart
+  /// Resolution.tryParse('nonsense'); // null
+  /// ```
+  static Resolution? tryParse(String raw) {
+    final List<String> parts = raw.split('x');
+    if (parts.length != 2) return null;
+
+    final int? width = int.tryParse(parts[0]);
+    final int? height = int.tryParse(parts[1]);
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return null;
     }
     return Resolution(width, height);
   }

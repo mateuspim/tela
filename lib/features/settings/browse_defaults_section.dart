@@ -114,6 +114,7 @@ class _Choices extends ConsumerWidget {
       categories,
       topRangeLabel(l10n, defaults.topRange),
       ratiosLabel(l10n, defaults.ratios),
+      resolutionFilterLabel(l10n, defaults.resolution),
     ].join(' · ');
   }
 }

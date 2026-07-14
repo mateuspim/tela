@@ -12,10 +12,11 @@ final NotifierProvider<BrowseQueryController, SearchQuery> browseQueryProvider =
 
 /// The search term and filters, as one [SearchQuery] every tab shares.
 ///
-/// Two fields of the query are deliberately *not* held here, because they are
-/// not the user's filter choice: `sorting` belongs to the tab you are on, and
-/// `atLeast` comes from the screen you are holding. The browse screen layers
-/// both on top of this state before handing the query to a grid.
+/// One field of the query is deliberately *not* held here, because it is not
+/// a filter the user chose: `sorting` belongs to the tab you are on. The browse
+/// screen layers it on before handing the query to a grid, and it also calls
+/// `forScreen` — which fills in the device's own size for a resolution filter
+/// left on *Automatic*, the one choice the domain cannot answer for itself.
 ///
 /// The filters it *opens* on come from [browseDefaultsProvider] — the Wallhaven
 /// account's, or this device's saved snapshot, whichever the user picked in

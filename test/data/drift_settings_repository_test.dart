@@ -6,6 +6,8 @@ import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
+import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -225,6 +227,7 @@ void main() {
       expect(await db.settingValue('device.ratios'), '16x9');
       expect(await db.settingValue('device.order'), 'asc');
       expect(await db.settingValue('device.color'), '#0066cc');
+      expect(await db.settingValue('device.resolution'), 'auto');
     });
 
     test('never writes a device.purity row', () async {
@@ -259,6 +262,39 @@ void main() {
 
       expect((await settings.loadDeviceDefaults())?.ratios, isEmpty);
     });
+
+    test('round-trips each resolution filter', () async {
+      for (final ResolutionFilter filter in <ResolutionFilter>[
+        const AutomaticResolution(),
+        const AtLeastResolution(Resolution(1440, 2560)),
+        ExactResolutions(const <Resolution>[
+          Resolution(1920, 1080),
+          Resolution(2560, 1440),
+        ]),
+      ]) {
+        await settings.saveDeviceDefaults(
+          BrowseDefaults(resolution: filter),
+        );
+
+        expect((await settings.loadDeviceDefaults())?.resolution, filter);
+      }
+    });
+
+    test(
+      'a snapshot saved before the resolution filter reads as Automatic',
+      () async {
+        await settings.saveDeviceDefaults(_device);
+        // Exactly what an upgrading device's database looks like: every other
+        // row present, and no device.resolution at all. No migration — the
+        // settings table has taken every new setting this way since v1.
+        await db.deleteSettings(<String>['device.resolution']);
+
+        expect(
+          (await settings.loadDeviceDefaults())?.resolution,
+          const AutomaticResolution(),
+        );
+      },
+    );
 
     test('a corrupt or half-written snapshot reads as none', () async {
       await settings.saveDeviceDefaults(_device);

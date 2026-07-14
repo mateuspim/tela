@@ -59,6 +59,7 @@ class DriftSettingsRepository implements SettingsRepository {
   static const String _deviceRatiosKey = 'device.ratios';
   static const String _deviceOrderKey = 'device.order';
   static const String _deviceColorKey = 'device.color';
+  static const String _deviceResolutionKey = 'device.resolution';
 
   final TelaDatabase _db;
 
@@ -150,6 +151,10 @@ class DriftSettingsRepository implements SettingsRepository {
       storedRatios: ratios,
       storedOrder: order,
       storedColor: await _db.settingValue(_deviceColorKey),
+      // Absent on every snapshot saved before the resolution filter existed,
+      // and absent reads as Automatic — which is what those snapshots browsed
+      // on. No migration, as every setting since v1.
+      storedResolution: await _db.settingValue(_deviceResolutionKey),
     );
   }
 
@@ -159,6 +164,10 @@ class DriftSettingsRepository implements SettingsRepository {
     await _db.putSetting(_deviceTopRangeKey, defaults.topRange.apiValue);
     await _db.putSetting(_deviceRatiosKey, defaults.encodedRatios());
     await _db.putSetting(_deviceOrderKey, defaults.order.name);
+    await _db.putSetting(
+      _deviceResolutionKey,
+      defaults.encodedResolution(),
+    );
     // "Any colour" is the *absence* of the row, not a row saying nothing — an
     // upsert-only save would leave the last swatch behind and quietly re-apply
     // a filter the user just turned off.

@@ -11,6 +11,7 @@ import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -121,10 +122,12 @@ void main() {
     await _pumpBrowse(tester, api);
 
     // Without this the grid fills with images too small to look sharp once
-    // they're actually set as a wallpaper.
-    final Resolution? atLeast = api.receivedQueries.first.atLeast;
-    expect(atLeast, isNotNull);
-    expect(atLeast!.width, greaterThan(0));
+    // they're actually set as a wallpaper. `Automatic` is what says so, and the
+    // screen is what answers it — the domain has no idea how big the screen is.
+    final ResolutionFilter resolution = api.receivedQueries.first.resolution;
+    expect(resolution, isA<AtLeastResolution>());
+    final Resolution atLeast = (resolution as AtLeastResolution).minimum;
+    expect(atLeast.width, greaterThan(0));
     expect(atLeast.height, greaterThan(0));
   });
 
@@ -484,6 +487,67 @@ void main() {
     // shape. The last ratio chip *may* be turned off, unlike the last category.
     expect(SearchQueryFacts(api.receivedQueries.last).ratios, isNull);
   });
+
+  testWidgets('the resolution filter opens on Automatic, fitting the screen', (
+    WidgetTester tester,
+  ) async {
+    _phoneViewport(tester);
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await _openFilters(tester);
+    final Finder hint = find.text(
+      'Nothing smaller than this screen (1080×2400).',
+    );
+    await _revealInSheet(tester, hint);
+
+    // The filter that used to be imposed rather than chosen. Automatic still
+    // does exactly what the old hard-coded `atLeast` did, so a device that
+    // upgrades browses exactly as it did yesterday.
+    expect(hint, findsOneWidget);
+    final SearchQueryFacts opening = SearchQueryFacts(
+      api.receivedQueries.first,
+    );
+    expect(opening.atLeast, '1080x2400');
+    expect(opening.resolutions, isNull);
+  });
+
+  testWidgets('"Exactly" sends `resolutions` and never `atleast` with it', (
+    WidgetTester tester,
+  ) async {
+    _phoneViewport(tester);
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await _openFilters(tester);
+    await _tapInSheet(tester, find.text('Exactly'));
+    await _applyFilters(tester);
+
+    // The two params conflict on the real server — it honours `atleast` and
+    // silently ignores `resolutions` — so sending both would be a filter that
+    // appears ignored. Switching mode seeds with the screen, which is what
+    // Automatic was already asking for.
+    final SearchQueryFacts exact = SearchQueryFacts(api.receivedQueries.last);
+    expect(exact.resolutions, '1080x2400');
+    expect(exact.atLeast, isNull);
+  });
+
+  testWidgets('"At least" re-queries with the size that was picked', (
+    WidgetTester tester,
+  ) async {
+    _phoneViewport(tester);
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await _openFilters(tester);
+    await _tapInSheet(tester, find.text('At least'));
+    await _tapInSheet(tester, find.widgetWithText(FilterChip, '1440×2560'));
+    await _applyFilters(tester);
+
+    final SearchQueryFacts atLeast = SearchQueryFacts(api.receivedQueries.last);
+    expect(atLeast.atLeast, '1440x2560');
+    expect(atLeast.resolutions, isNull);
+  });
 }
 
 /// Types [term] into the search field and submits it, as the keyboard would.
@@ -552,6 +616,17 @@ void _phoneViewport(WidgetTester tester) {
 /// tree — the obvious `find.byType(Scrollable).first` drags the listing rather
 /// than the sheet.
 Future<void> _tapInSheet(WidgetTester tester, Finder target) async {
+  await _revealInSheet(tester, target);
+  await tester.tap(target);
+  await tester.pump();
+}
+
+/// Scrolls the filter sheet until [target] is genuinely on screen.
+///
+/// Needed to *assert* on a control below the fold as much as to tap one: the
+/// sheet is a [ListView], so a control down there is not built at all and a
+/// finder reports it missing rather than merely off-screen.
+Future<void> _revealInSheet(WidgetTester tester, Finder target) async {
   await tester.scrollUntilVisible(
     target,
     120,
@@ -566,8 +641,6 @@ Future<void> _tapInSheet(WidgetTester tester, Finder target) async {
   // stops as soon as the target is *built* — while it is still clipped. A tap
   // on a clipped widget silently misses. This is what puts it on screen.
   await tester.ensureVisible(target);
-  await tester.pump();
-  await tester.tap(target);
   await tester.pump();
 }
 
@@ -611,4 +684,11 @@ class SearchQueryFacts {
 
   /// The `ratios` param — comma-joined, absent when every shape is wanted.
   String? get ratios => _params['ratios'];
+
+  /// The `atleast` param — the minimum size, absent under an exact filter.
+  String? get atLeast => _params['atleast'];
+
+  /// The `resolutions` param — exact sizes, absent under an at-least filter.
+  /// Never present at the same time as [atLeast]; the server ignores it if so.
+  String? get resolutions => _params['resolutions'];
 }

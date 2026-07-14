@@ -1,6 +1,7 @@
 import 'package:meta/meta.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
+import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 
@@ -80,8 +81,12 @@ class ActiveBrowseDefaults {
 /// eventually applies, so there is no field.
 ///
 /// `sorting` is absent for a duller reason: it belongs to the tab you are on,
-/// not to the filters you chose. So is `atLeast`, which comes from the screen
-/// tela is actually running on.
+/// not to the filters you chose. The *resolution* filter is here, though it
+/// once was not: it used to be `atLeast`, imposed by the browse screen from the
+/// device's own screen and choosable by nobody. Now that it is a filter the
+/// user sets, a saved snapshot has to carry it — and an `AutomaticResolution`
+/// saved in one is still "fit the screen", so a snapshot stays portable between
+/// devices.
 ///
 /// ```dart
 /// final SearchQuery browse = defaults.applyTo(const SearchQuery());
@@ -95,6 +100,7 @@ class BrowseDefaults {
     this.categories = CategoryFilter.all,
     this.topRange = TopRange.oneMonth,
     this.ratios = const <RatioChoice>[ExactRatio(9, 16)],
+    this.resolution = const AutomaticResolution(),
     this.order = SortOrder.desc,
     this.color,
   });
@@ -109,6 +115,7 @@ class BrowseDefaults {
       categories: query.categories,
       topRange: query.topRange,
       ratios: query.ratios,
+      resolution: query.resolution,
       order: query.order,
       color: query.color,
     );
@@ -126,6 +133,7 @@ class BrowseDefaults {
     required String storedRatios,
     required String storedOrder,
     String? storedColor,
+    String? storedResolution,
   }) {
     final CategoryFilter? categories = CategoryFilter.tryFromApiBits(
       storedCategories,
@@ -142,6 +150,15 @@ class BrowseDefaults {
       // An empty stored list is "any shape", which is a real choice — not a
       // missing one — so it must not decay into tela's portrait default.
       ratios: RatioChoice.readAll(storedRatios),
+      // An *absent* row is what every snapshot saved before this filter existed
+      // has, and it reads as Automatic — which is exactly what those snapshots
+      // browsed on. An unreadable one costs the filter and reads the same way,
+      // rather than costing the snapshot: there is always somewhere safe to
+      // browse, and fitting the screen is it.
+      resolution: storedResolution == null
+          ? const AutomaticResolution()
+          : ResolutionFilter.tryParse(storedResolution) ??
+                const AutomaticResolution(),
       order: order,
       // One unreadable swatch costs the colour, not the snapshot: the filter is
       // still a filter without it, and "any colour" is a legitimate state.
@@ -160,6 +177,10 @@ class BrowseDefaults {
   /// Aspect ratios to accept, as a union. Empty means no ratio filter at all.
   final List<RatioChoice> ratios;
 
+  /// How the listing constrains image size. Automatic — fit this screen — for
+  /// every snapshot saved before the filter existed.
+  final ResolutionFilter resolution;
+
   /// Direction of the tab's sorting.
   final SortOrder order;
 
@@ -169,9 +190,12 @@ class BrowseDefaults {
   /// The stored form of [ratios]: a comma-joined list, empty for "any shape".
   String encodedRatios() => RatioChoice.encode(ratios) ?? '';
 
+  /// The stored form of [resolution], e.g. `auto` or `exact:1920x1080`.
+  String encodedResolution() => resolution.encode();
+
   /// Returns [query] with these defaults applied, and everything they do not
-  /// speak for — the purity, the term, the tab's sorting, the screen-derived
-  /// `atLeast` — left exactly as it was.
+  /// speak for — the purity, the term, the tab's sorting — left exactly as it
+  /// was.
   ///
   /// Goes through [SearchQuery.withColor] rather than `copyWith` because a
   /// snapshot saved with *no* colour has to be able to clear one: `copyWith`
@@ -183,6 +207,7 @@ class BrowseDefaults {
           categories: categories,
           topRange: topRange,
           ratios: ratios,
+          resolution: resolution,
           order: order,
         )
         .withColor(color);
@@ -199,6 +224,7 @@ class BrowseDefaults {
         other.categories.toApiBits() == categories.toApiBits() &&
         other.topRange == topRange &&
         other.encodedRatios() == encodedRatios() &&
+        other.resolution == resolution &&
         other.order == order &&
         other.color == color;
   }
@@ -209,6 +235,7 @@ class BrowseDefaults {
       categories.toApiBits(),
       topRange,
       encodedRatios(),
+      resolution,
       order,
       color,
     );

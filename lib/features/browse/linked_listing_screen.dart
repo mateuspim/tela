@@ -26,11 +26,8 @@ class LinkedListingScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final SearchQuery query = ref
         .watch(browseQueryProvider)
-        .copyWith(
-          term: link.term,
-          sorting: Sorting.dateAdded,
-          atLeast: screenResolution(context),
-        );
+        .copyWith(term: link.term, sorting: Sorting.dateAdded)
+        .forScreen(screenResolution(context));
 
     return Scaffold(
       appBar: AppBar(title: _title(context)),
