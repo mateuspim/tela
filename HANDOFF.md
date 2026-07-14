@@ -2,6 +2,29 @@
 
 Updated: 2026-07-14
 
+## The device pass: what a phone found that no test could
+
+The newest slice, and the one to read first. **Wave 2 finally ran on hardware,
+and it was worth every minute** — the device found four bugs, one of them a
+security hole, and not one of them was findable in a test suite that was green
+the whole time.
+
+- **The private library's lock opened itself.** Fumble the fingerprint five
+  times and the gate let anyone in, with no prompt. Fixed by making it fail
+  closed, and by teaching `AppLock` to tell a locked-out sensor apart from a
+  device that has no credentials — see the decisions below.
+- **Turning the lock *off* was ungated**, which made the gate decorative: the
+  switch that removes it sat one tap away on an open Settings screen. It now
+  raises the same prompt the library does.
+- **Downloads did not appear until the app was relaunched** — both the download
+  history and the private library. The files and the rows were always there; the
+  listings were caching an empty world from app start.
+- **A history row outlived its file** with no way to say so, and no way to
+  remove it. Both built: a badge, and a long-press.
+
+Everything in that list is fixed, tested, and re-verified on the tablet.
+**Wave 2's exit criterion is met**, with the exceptions in "Owed on the device".
+
 ## Browse defaults: a switch, not a heuristic
 
 The newest slice, and the one to read first. **Where browse takes its opening
@@ -44,12 +67,13 @@ of the Random tab**, so the shuffle seed carried by
 Wallhaven response. It is unit-tested; a lost seed would show up only as
 repeated images several pages in.
 
-**Wave 2 is code-complete.** Favorites are `0cf2781`, Material You is `c056369`,
-the private library is `a2e5da7` + `5f747a8`, the download history is `50485bd`,
-the colour filter with the shared status states is `f0c1e10`, and the account
-`/settings` sync is `9dd0d6a`; see "Wave 2" below. **Nothing in Wave 2 has run on
-hardware** — that list is "Owed on the device", and it is now the only thing
-between here and Wave 3.
+**Wave 2 is complete, and verified on hardware.** Favorites are `0cf2781`,
+Material You is `c056369`, the private library is `a2e5da7` + `5f747a8`, the
+download history is `50485bd`, the colour filter with the shared status states is
+`f0c1e10`, and the account `/settings` sync is `9dd0d6a`; see "Wave 2" below. The
+device pass of 2026-07-14 ran it on a real tablet and found four bugs, all fixed —
+read the top of this file first. What the tablet could not settle is in "Owed on
+the device", and none of it blocks Wave 3.
 
 The app supports the thin product loop:
 
@@ -243,6 +267,119 @@ re-verified on the phone:
   wiping the Keystore-backed API key and the Drift database. It presented as
   "the key doesn't save". Nothing was wrong with the key code. If a signing
   fingerprint ever changes again, look here first.
+- **The app-lock gate now fails closed, and this was a real fail-open.** Found on
+  hardware, 2026-07-14: fumble the fingerprint a few times and the private
+  library would **open to anyone, with no prompt at all**. The gate asked
+  `AppLock.isAvailable()` first and stepped aside when it said no — an escape
+  hatch meant for "this device has no biometric and no screen lock, so it can
+  never answer a prompt, and enforcing the lock would trap the owner outside
+  their own files". But `local_auth`'s `isDeviceSupported()` is
+  `isDeviceSecure() || canAuthenticateWithBiometrics()`, and it reports a
+  **temporarily locked-out sensor** exactly the same way it reports *no
+  credentials at all*. On a device whose only credential is a fingerprint (this
+  tablet: three prints enrolled, no PIN — which is also why the PIN fallback
+  never appeared, since `allowCredentials` is literally `isDeviceSecure()`), five
+  bad reads flipped `isAvailable()` to false and the door swung open. Every other
+  rule in this codebase fails safe — a corrupt lock setting reads as locked, a
+  corrupt purity reads as `nsfw` — and this one failed open.
+  `PrivateLibraryScreen._unlock` no longer consults `isAvailable()`: if the lock
+  is on, a passing prompt is the only way in.
+- **The escape hatch moved to the Settings switch, and it had to.** With the gate
+  failing closed, a device that has genuinely lost its credentials would leave
+  the owner's app-private files unreachable for good — they live nowhere else and
+  no other app can see them. `AppLockSwitch` therefore disables itself only in
+  the *on* direction: an unavailable lock that is already **on** stays turn-off-
+  able (with a subtitle saying why), while turning one *on* stays refused,
+  because a lock nothing can satisfy protects nothing. The two changes are one
+  design and must not be separated — failing closed without a reachable "off" is
+  a trap, and an "off" without failing closed is what shipped.
+- **Turning the app-lock *off* is now gated too, and the switch was the real
+  hole.** A gate on the library is worth nothing when the switch that removes it
+  sits one ungated tap away on an open Settings screen. Switching *off* now
+  raises the same prompt the library does; switching *on* asks for nothing, since
+  there is nothing to prove yet and demanding a fingerprint to *add* protection
+  only teaches people not to bother.
+- **`AppLock.authenticate` returns an `AppLockOutcome`, not a bool, and that is
+  the load-bearing part of both fixes.** A bool cannot tell "the sensor is locked
+  out for 30 seconds" apart from "this device has no credentials at all" — both
+  are `false` — and the whole family of bugs here lives in that gap. `passed`,
+  `refused`, `lockedOut`, `unavailable`. Only `passed` opens the library. Only
+  `passed` *or* `unavailable` may switch the lock off, and the exclusion of
+  `lockedOut` is the point: if a lockout opened the switch, then failing the
+  fingerprint five times would *be* the way past the lock — the original bug,
+  moved rather than fixed. `unavailable` is the escape hatch and is honoured in
+  exactly one place (the switch, off-ward), because app-private files live
+  nowhere else and a device that can never answer a prompt must not strand its
+  owner outside them for good.
+- **`AppLock.isAvailable()` is now only ever a reason to *withhold* the setting,
+  never a reason to open anything.** It is `isDeviceSupported()`, it flips false
+  during a lockout, and any code that reads it as "this device cannot ask" is one
+  step from reintroducing the fail-open. The port's docstring says so.
+- **Remaining limit:** the gated-off switch raises the prompt, so someone past
+  the *device's* lock screen still cannot remove tela's lock without a
+  fingerprint — but a device with no credentials at all (`unavailable`) can still
+  have the lock switched off by anyone holding it. That is the deliberate cost of
+  not stranding the owner, and on such a device the biometric gate could never
+  have been enforced anyway.
+- **Both "on-device" listings are invalidated when a download lands** — and this
+  was the "my download vanished" bug of 2026-07-14. `recentDownloadsProvider` and
+  `privateImagesProvider` are plain (non-autoDispose) futures: each resolves once
+  per process and then caches. Nothing dropped them after a download, so the file
+  was written and the row inserted while the download history and the private
+  library went on rendering the world as it looked when they were *first opened*.
+  It presented as "the download didn't save"; a relaunch made it appear, which is
+  what proved it a stale read rather than a lost write. The detail screen now
+  invalidates both after a successful download. It drops both rather than picking
+  by purity, because which one is stale is the wallpaper's business, not the
+  caller's.
+- **The two listings moved to `lib/app/library_listings.dart`.** A download is
+  *written* from one feature (detail) and *read* in two others (downloads,
+  private_library), and features may not import each other (CLAUDE.md) — the same
+  reason `accountDefaultsProvider` lives in `app/`. They meet at the composition
+  root instead.
+- **A history row can be removed, and it never deletes the file.** The history is
+  an index, not a folder: the file lives in the gallery or under the user's own
+  SAF tree, where Photos and every file manager can already delete it, and tela
+  reaching out from behind a tile that merely *looks* like a file is how someone
+  loses a wallpaper they meant to keep. This was left unbuilt for exactly that
+  reason, and the answer turned out to be **wording, not code** — the
+  confirmation says in plain words that the wallpaper stays where it was
+  downloaded, and the button says "Remove", never "Delete". A widget test pins
+  that sentence, so it cannot quietly be reworded into a lie.
+- **A history row whose file is gone is badged, and that is honesty rather than
+  decoration.** The history calls itself "wallpapers already on this device", and
+  for a row whose file was deleted from Photos that is simply false: the tile
+  still works, but it silently costs a full re-download and needs a network the
+  other rows do not. Those are two different actions and the grid was drawing
+  them identically. Now the tile dims, takes a cloud-download badge, and — since
+  a badge that exists only visually is not information — changes its semantics
+  label too.
+- **`ImageStore.canRead` opens the file rather than asking whether it exists.** A
+  MediaStore row can outlive its file and a SAF grant can be revoked while the
+  document is still listed, so the only honest test of "can tela read this" is to
+  read it. Every failure answers false rather than throwing: a wallpaper the user
+  deleted from Photos is an ordinary state of the world, not an error.
+- **The badge is derived from the listing, not folded into it**, and a failed
+  probe reads as *gone* rather than *fine*. Two deliberate asymmetries: a file
+  check that hangs must never keep the download history off the screen (the grid
+  renders from `recentDownloadsProvider`; the badges arrive when they arrive), and
+  a probe that fails should over-warn rather than under-warn — the worst an
+  incorrect badge does is promise a re-download that turns out to be unnecessary.
+- **Apply is not download, and the device made someone ask.** Setting a wallpaper
+  from a history row whose file is gone re-fetches from Wallhaven into a *cache
+  temp file*, streams it to `WallpaperManager`, and deletes it in a `finally`
+  (`MainActivity.kt`). It does **not** re-create the gallery file, which reads as
+  "where did my download go?" until you know that setting a wallpaper was never a
+  download. Confirmed on the device: nothing is left behind.
+- **Put a build on the device with `./tool/tela run`, never `./tool/tela
+  install`.** `flutter install` uninstalls the existing app before installing —
+  unconditionally, by design, not because of anything wrong — and that takes the
+  Drift database and the Keystore-backed API key with it. This is *not* the
+  signing-mismatch problem the `~/.android` volume fixes; it happens with a
+  perfectly matching signature, and the log line ("Uninstalling old version…") is
+  the only warning you get. It cost this device its accumulated database on
+  2026-07-14, along with the one hardware check that needed it (see "Owed").
+  `tool/tela`'s header says so now.
 - The API key is excluded from Android Auto Backup and device transfer
   (`res/xml/backup_rules.xml`, `res/xml/data_extraction_rules.xml`). The blob is
   encrypted with a Keystore key that no backup carries, so restoring it would
@@ -518,7 +655,35 @@ re-verified on the phone:
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 275 tests pass
+- `./tool/tela test`: 292 tests pass
+- **The app-lock, end to end, on hardware** (2026-07-14, Samsung SM-X730): the
+  gate raises a real BiometricPrompt (`BiometricService/PreAuthInfo: Package:
+  cc.pym.tela` in logcat), a dismissed prompt lists nothing, and the fail-open is
+  gone. `FLAG_SECURE` is machine-verified in both directions: `adb exec-out
+  screencap` of the private library returns a **black frame** (20 KB against a
+  normal 205 KB) and SurfaceFlinger tags every tela layer `secure`, while after
+  leaving, screencap is normal again and **zero** secure layers remain
+- The app-lock rules: the gate opens on `passed` and on nothing else (including
+  `unavailable`), the switch refuses to disable on `lockedOut` — the load-bearing
+  one — and allows it on `unavailable`, turning the lock *on* asks for nothing,
+  and the switch is withheld entirely when nothing could satisfy it
+- The stale-listing regression is pinned by a test that **reads the listing
+  before the download**, which is what poisoned the cache; it was confirmed to
+  fail against the old code before the fix was restored
+- Remove-from-history: the Drift adapter (forgets one row and leaves the others,
+  and forgetting a missing row is not an error) and the screen (the dialog, its
+  load-bearing "the wallpaper file stays" sentence, cancel keeping the row, and
+  confirm dropping only the one long-pressed while the grid refreshes without a
+  relaunch)
+- The missing-file badge: the native adapter (the call reaches Kotlin, an
+  unopenable file reads as gone, and a native error costs the badge rather than
+  the screen) and the screen (the badge and its *distinct semantics label* appear
+  only for the row whose file is gone, and no badge appears when every file is
+  there)
+- **Verified on the tablet:** downloads now appear in the history and the private
+  library without a relaunch; removing a row works and leaves the file alone; a
+  "set again" whose file was deleted from Photos quietly re-fetches from Wallhaven
+  and applies, leaving nothing behind (cache holds only `libCachedImageData`)
 - Three-tap browse → detail → Both widget flow: covered
 - Domain use case and all native target/error mappings: covered
 - `/w/{id}` is covered by a detail JSON fixture, mapper boundary tests, and a
@@ -639,6 +804,31 @@ re-verified on the phone:
     (nothing reads it) and clears itself the next time the key is saved or
     removed. If you ever see one in a database, that is what it is.
 
+- **The app-lock and `FLAG_SECURE` are verified on hardware** (2026-07-14, Samsung
+  SM-X730, debug build, on a database created fresh by that day's uninstall):
+  - opening the private library with the lock on raises a real BiometricPrompt —
+    logcat shows `BiometricService/PreAuthInfo: Package: cc.pym.tela` and the
+    Samsung fingerprint UI. `MainActivity` being a `FlutterFragmentActivity` is
+    what makes that work, and this is the first time it has been proven.
+  - `FLAG_SECURE` is genuinely held: `adb exec-out screencap` of the private
+    library returns a **black frame** (20 KB against a normal 205 KB), and
+    SurfaceFlinger tags every `cc.pym.tela` layer `secure`.
+  - and it is genuinely *released*: after leaving, screencap is normal again and
+    **zero** secure layers remain. A leaked flag would have disabled screenshots
+    app-wide, which is the failure this check exists for.
+  - a dismissed prompt does not list anything.
+  - and the device found the **fail-open** described above, which is fixed: the
+    gate no longer consults `isAvailable()`, and a locked-out sensor now leaves
+    the library shut instead of opening it.
+  - **Still owed:** re-confirming the fix by hand — fail the fingerprint ~5 times
+    until Android locks the sensor out, then reopen the library and check it
+    stays **locked** (before the fix it opened straight up). Also the `_locked()`
+    Retry screen: dismissing with the system Back key pops the whole route rather
+    than landing there, so use the prompt's own Cancel to reach it.
+  - **The device-PIN fallback cannot be tested on this tablet at all**: it has no
+    PIN, pattern, or password, and `local_auth` only offers the credential
+    fallback when `isDeviceSecure()` is true. Set a screen lock on the device (or
+    use one that has one) to exercise it.
 - Browse defaults: the model (capture from a query, apply back, the purity and
   the term never captured, a colour cleared that `copyWith` could not, an empty
   ratio list surviving as "any shape", every corrupt shape, element-wise
@@ -670,16 +860,44 @@ hardware — see below.
 
 ## Start of next session
 
-### 1. The device pass, and then Wave 3
+### 1. Wave 3: search & discovery
 
-Wave 2 is code-complete, so **the next session's real work is the hardware list
-below** — nothing in Wave 2 has ever run on a phone, and its exit criterion
-("favorites persist, your settings apply, the private library is locked, offline
-browsing works") is a claim about a device, not about a test suite.
+**Wave 2 is done, on hardware.** The device pass is behind us and it earned its
+keep — see the top of this file for what it found. What is left of it is the short
+list in "Owed on the device", none of which blocks anything.
 
-After that, Wave 3 is the roadmap's: crop/reposition before apply, daily
-auto-rotate (WorkManager), collections browser, share sheet, and the Omarchy
-sync that closes the desktop↔mobile loop. None of it blocks anything.
+**The next session's work is Wave 3, and PLAN.md §12 now spells it out.** It is
+mostly the filters Wave 2 *named* but did not finish ("color/resolution/ratio
+filters" — colour landed, the other two did not), plus the two ways *into* a
+listing that tela prints on screen and will not let you follow. Agreed with the
+user, 2026-07-14:
+
+1. **Resolution filter.** `atleast` is currently imposed by the browse screen
+   from the device's own screen and cannot be changed at all. It becomes
+   *Automatic* (still the default) / *At least* / *Exactly* — the last being the
+   `resolutions` param, which tela does not send today — over buckets grouped by
+   ratio plus a custom W×H. Retires `SearchQuery.atLeast`'s
+   `copyWith`-cannot-clear trap on the way past.
+2. **Ratio filter, expanded.** `RatioChoice`'s portrait/landscape/any becomes a
+   multi-select over Wallhaven's real vocabulary, with the device's own reduced
+   ratio offered first as the recommendation. Ratios are a **union** in the API,
+   unlike `colors` — so chips, not a radio.
+3. **Every sorting reachable.** Relevance, views, and favorites cannot be reached
+   at all today, because the tab *is* the sorting and there are four tabs. The tab
+   bar becomes scrollable and gains Views and Favorites; **Relevance appears only
+   when a search term is set** (it ranks against a term and means nothing without
+   one) and is selected on submit.
+4. **Tags and the uploader become links.** A tag chip opens that tag's listing
+   (`q=id:{tagId}` — Wallhaven's exact-tag operator, not a fuzzy `+name`), and the
+   uploader opens theirs (`q=@username`). Both **push a results screen**, so Back
+   returns to the wallpaper and the browse tabs are left alone. Everything needed
+   is already mapped: `WallpaperTag` carries its id, `WallpaperUploader` its
+   username. **There is no user-profile endpoint in the Wallhaven API** — a
+   "profile" can only be their uploads plus the avatar and group `/w/{id}` already
+   returns, and the screen should say what it is rather than imply a profile.
+
+PLAN's old Wave 3 (crop/reposition, daily auto-rotate, collections, share sheet,
+Omarchy sync) is now **Wave 4**.
 
 Three things were deliberately left out rather than forgotten:
 
@@ -688,10 +906,15 @@ Three things were deliberately left out rather than forgotten:
   again this session) — so a filter changed in tela stays in tela, and "Save as
   default" saves it *here*. That is the honest direction of the arrow, and worth
   saying out loud before someone reads "sync" as two-way.
-- The history has **no way to remove an entry**. "Remove from history" and
-  "delete the file" are two different actions, and offering the first next to a
-  tile that looks like a file is how someone deletes the wrong thing. Worth
-  designing, not worth guessing at.
+- ~~The history has **no way to remove an entry**.~~ **Built, 2026-07-14.**
+  Long-press a history tile → "Remove from history?". `DownloadHistory.forget`
+  drops the row and **does not touch the file** — the history is an index, not a
+  folder, and the file lives in the gallery or under the user's own SAF tree,
+  where Photos and every file manager can already delete it. The danger this
+  entry named is real and is answered in the *wording*, not the code: a history
+  tile looks exactly like a file, so the confirmation says in plain words that
+  the wallpaper stays where it was downloaded, and the button is "Remove", never
+  "Delete". A widget test pins that sentence.
 - **Only `color` got a `withColor`.** `SearchQuery.atLeast` and `seed` have the
   same `copyWith`-cannot-clear hole; neither is ever cleared today, so neither
   was given an escape hatch it does not need yet. Whoever needs to clear one
@@ -699,12 +922,17 @@ Three things were deliberately left out rather than forgotten:
 
 ### 2. Owed on the device
 
-**The account sync and the browse-defaults switch are done** (see Verification).
+**Most of Wave 2 is now verified on hardware** (see Verification) — the app-lock,
+`FLAG_SECURE`, the private library against real files, downloads in all the
+listings, remove-from-history, and "set again" including the re-fetch fallback.
+What follows is what the tablet could *not* settle.
 
 **The device is a Samsung SM-X730 — a tablet, not a phone.** Everything on this
 list works there, but two claims it cannot settle: whether the 29-swatch palette
 is usable one-handed, and how the launch grid reads on a small screen. Both are
-still owed on an actual phone.
+still owed on an actual phone. **It also has no screen lock**, which is why the
+PIN fallback is untestable on it — and, not coincidentally, why the app-lock
+fail-open bit there first.
 
 **One gap the hardware could not close**, and it is not tela's fault: this
 account's browse settings (`categories=111`, `toplist_range=1M`) happen to be
@@ -723,26 +951,43 @@ account are indistinguishable from the rows alone.
 Everything else in Wave 2 has still never run on hardware. In rough order of what
 would actually bite:
 
-- **The app-lock, end to end.** It has only ever met `FakeAppLock`. Turn it on in
-  Settings, leave the private library, come back, and confirm the prompt appears
-  and the PIN fallback works. `MainActivity` became a `FlutterFragmentActivity`
-  for this; it compiles, but the *prompt* is the thing a plain `FlutterActivity`
-  would have broken, and only a device shows that.
-- **`FLAG_SECURE`.** Open the private library and check the app switcher shows a
-  blank card, and that a screenshot is refused. Then leave it and confirm
-  screenshots work again everywhere else — a leaked flag would disable them app-wide.
-- **The private library against real files.** It has never listed a real
-  `filesDir/wallpapers`. Download an explicit wallpaper, confirm it appears there,
-  delete it, and confirm it is gone and still absent from Photos.
-- **"Set again", from each tier that can hold a file.** The applier has only ever
-  met a fake `Uri`. Download one wallpaper to Gallery and one to Files-not-gallery,
-  open the history, and set each again — the `content://` read is the new code
-  path, and a MediaStore URI and a SAF document URI fail differently when they
-  fail. Then delete one of the files from Photos and set it again anyway: it must
-  quietly re-fetch from Wallhaven rather than fail.
-- **The v2→v3 migration on the real database.** The test builds a v2 database by
-  hand, but the device holds the actual one. Confirm the download destinations,
-  the API key, and the existing favorites survive the first launch of this build.
+- ~~**The app-lock, end to end.**~~ **Done, and it found the fail-open** (see
+  Verification, and the decisions above). `MainActivity` being a
+  `FlutterFragmentActivity` is proven by a real prompt.
+- ~~**`FLAG_SECURE`.**~~ **Done**, and machine-verified in both directions — held
+  in the library, released on the way out. Only the *app-switcher card* was never
+  eyeballed; the screencap evidence makes it a formality.
+- ~~**The private library against real files.**~~ **Done.** Explicit downloads
+  landed in `filesDir/wallpapers`, listed, deleted cleanly, and never appeared in
+  Photos. (They did not list *until a relaunch* at first — that was the stale
+  listing, now fixed.)
+- ~~**"Set again", from the gallery tier, including after the file is gone.**~~
+  **Done.** A `content://` MediaStore read applies, and a file deleted from Photos
+  quietly re-fetches from Wallhaven and applies, leaving no temp file behind.
+  **Still owed: the SAF (`filesOutsideGallery`) tier**, which has never been used
+  on this device at all — no SAF tree has ever been granted. A MediaStore URI and
+  a SAF document URI fail differently when they fail, and only the first has been
+  seen.
+- **The device-PIN fallback, on a device that has a PIN.** This tablet has three
+  fingerprints enrolled and **no screen lock**, and `local_auth` only offers the
+  credential fallback when `isDeviceSecure()` is true — so the PIN path cannot be
+  exercised here at all. It is also *why* the fail-open bit: the sensor was the
+  device's only credential, so a lockout left nothing to ask with. Set a screen
+  lock (or use another device) to close this.
+- **The missing-file badge, on hardware.** Built and unit-tested, but the device's
+  history is empty now, so the badge has never been seen on a real row. Download
+  to Gallery, delete the file from Photos, reopen the history: the tile must dim
+  and take a cloud-download badge.
+- ~~**The v2→v3 migration on the real database.**~~ **Written off, and it cannot
+  come back on this device.** A `./tool/tela install` on 2026-07-14 uninstalled
+  the app and took the accumulated database and the API key with it (see the
+  decision above), so the device is now **v3-native**: it created a fresh v3
+  database on first launch and migrated nothing. The hand-built v1→v2→v3 tests
+  still pass, so the migration path is covered — what is given up is the
+  on-hardware confirmation against a database that had really been accumulating,
+  and there is no way to re-earn it short of rebuilding a v2 state by hand. A
+  device that upgrades from a shipped v2 build has therefore still never been
+  seen. **Re-paste the API key before anything else on this list.**
 - **Favorites persistence.** Favorite a wallpaper, kill the app, reopen it, and
   confirm it is still there and still renders in airplane mode.
 - **Material You.** Change the system wallpaper/accent and confirm tela's chrome

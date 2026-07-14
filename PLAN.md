@@ -225,9 +225,19 @@ Detail screen (preview + pinch-zoom + metadata), **apply wallpaper** (home/lock/
 Favorites (Drift), download history + "set again," **private-library screen with `FLAG_SECURE` + app-lock**, `/settings` sync from your Wallhaven account, color/resolution/ratio filters, error/empty/offline states, hero-transition polish, Material You (`dynamic_color`).
 *Exit:* app feels like *yours* — favorites persist, your settings apply, private library is locked, offline browsing of cached favorites works.
 
-**Wave 3 — Nice-to-haves**
+**Wave 3 — Search & discovery**
+The filters Wave 2 named but did not finish, plus the two ways *into* a listing that tela prints on screen and does not let you follow.
+
+- **Resolution filter.** Today `atleast` is imposed by the browse screen from the device screen and cannot be changed. It becomes a real filter: *Automatic* (the screen you are holding — still the default), *At least*, or *Exactly* (the `resolutions` param, which tela does not send at all yet), over buckets grouped by ratio plus a custom W×H. Retires `SearchQuery.atLeast`'s `copyWith`-cannot-clear trap.
+- **Ratio filter, expanded.** `RatioChoice`'s portrait / landscape / any becomes a multi-select over Wallhaven's real vocabulary — its `portrait` / `landscape` keywords and the specific ratios — with the device's own reduced ratio offered first as the recommendation. Ratios are a **union** in the API, unlike `colors`, so chips rather than a radio.
+- **Every sorting reachable.** Three of Wallhaven's seven (relevance, views, favorites) cannot be reached, because the tab *is* the sorting and there are four tabs. The tab bar becomes scrollable and gains Views and Favorites; **Relevance appears only when a search term is set**, and is selected on submit — it ranks against a term and means nothing without one.
+- **Tags and the uploader become links.** A tag chip opens that tag's listing (`q=id:{tagId}` — Wallhaven's exact-tag operator, not a fuzzy `+name`), and the uploader opens theirs (`q=@username`). Both push a results screen, so Back returns to the wallpaper and the browse tabs are left as they were. **There is no user-profile endpoint in the API**: a "profile" can only be their uploads plus the avatar and group `/w/{id}` already carries, and the screen should say what it is rather than imply a profile.
+
+*Exit:* the filter sheet answers everything wallhaven.cc's own filter bar does, and a wallpaper is a place you can navigate *from* — its tags and its uploader lead somewhere.
+
+**Wave 4 — Nice-to-haves**
 Crop/reposition editor before apply, daily auto-rotate (WorkManager), collections browser, share sheet, **Omarchy sync** (export favorites to an Aether-consumable format — closes the desktop↔mobile loop).
-*Exit:* opt-in extras; none block Wave 1/2.
+*Exit:* opt-in extras; none block Wave 1/2/3.
 
 ---
 
