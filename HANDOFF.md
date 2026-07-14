@@ -1,6 +1,6 @@
 # tela handoff
 
-Updated: 2026-07-13
+Updated: 2026-07-14
 
 ## Current milestone
 
@@ -34,6 +34,15 @@ the middle tier asks once for a persistent local Storage Access Framework tree,
 then writes to `tela/.nomedia` below it. The adapter rejects NSFW before a
 MediaStore write can happen.
 
+Download destinations are now a persisted setting rather than a constant.
+`StorageSettings` holds one tier for safe/sketchy content and one for explicit
+content; `DownloadWallpaper` reads it through the new `SettingsRepository` port
+whenever a download arrives without an explicit tier, so the long-press override
+is the only thing that can deviate from it. A settings screen off the browse app
+bar edits both, writing each change straight through — there is no save button to
+lose. Drift is now wired (its first table is the settings key/value store), which
+is also the database Wave 2's favorites will land in.
+
 ## Decisions made
 
 - `flutter_wallpaper_plus 1.1.1` was evaluated first, as originally locked in
@@ -52,6 +61,22 @@ MediaStore write can happen.
 - `WallpaperDetails` is deliberately separate from the browse `Wallpaper`.
   Its detail fields are non-nullable, so paged grids stay small and detail UI
   cannot turn every field into a null-state branch.
+- The NSFW non-indexing rule is now enforced in three places on purpose, each
+  closing a different door: `StorageSettings` refuses to *hold* an NSFW→Gallery
+  routing (so it cannot be saved), `StorageSettings.choicesFor` is what both the
+  settings screen and the one-download override sheet build their options from
+  (so it cannot be picked), and the Android adapter still rejects the write (so
+  a hand-edited database cannot smuggle it past either).
+- Settings persist as key/value rows (`storage.tier.sfw`, `storage.tier.nsfw`)
+  rather than a column per setting: a new setting should be a new row, not a
+  schema migration. An unreadable, unknown, or forbidden stored value falls back
+  to the default instead of throwing — a download must always have somewhere safe
+  to go.
+- The toolchain image now installs `libsqlite3-dev`. `flutter test` runs Drift on
+  the host VM, where `sqlite3_flutter_libs` (which ships the library on Android)
+  does not apply, and `dart:ffi` opens the unversioned `libsqlite3.so` that only
+  the dev package's symlink provides. Re-run `./tool/tela --build-image` if the
+  Drift tests fail to load the library.
 - The non-gallery tier must use a user-selected SAF directory. An automatic
   raw shared-storage path is not available to a scoped-storage app targeting
   Android 11+ without broader access, and a MediaStore row would violate the
@@ -62,22 +87,29 @@ MediaStore write can happen.
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 52 tests pass
+- `./tool/tela test`: 67 tests pass
 - Three-tap browse → detail → Both widget flow: covered
 - Domain use case and all native target/error mappings: covered
 - `/w/{id}` is covered by a detail JSON fixture, mapper boundary tests, and a
   detail widget metadata test
 - `./tool/tela build apk --debug`: passes
 - `./tool/tela build apk --release`: passes
-- Debug and release merged manifests inspected: `INTERNET` and
-  `SET_WALLPAPER`; no
-  `READ_EXTERNAL_STORAGE` or `READ_MEDIA_*`
+- Release merged manifest re-inspected after adding Drift: still only `INTERNET`
+  and `SET_WALLPAPER`; no `READ_EXTERNAL_STORAGE` or `READ_MEDIA_*`
 - Download routing has domain/use-case, method-channel, and detail-widget
   coverage; `./tool/tela build apk --debug` compiles the Android storage code
+- Storage settings covered at every layer: the domain model (defaults, sketchy
+  routing with sfw, both rejections of an indexed NSFW tier), the Drift adapter
+  (round-trip, upsert-not-append, unknown value, forbidden value), the use case
+  (settings default vs. override), and the settings screen (renders the saved
+  tier, persists on tap, withholds the gallery from NSFW)
+- `sqlite3_flutter_libs` compiles under the pinned AGP 9 toolchain, which is what
+  `flutter_wallpaper_plus` failed to do — both APKs build
 
 The Android 16 tablet was initially visible to Flutter, but its ADB USB
-transport disappeared before install (`flutter install` later listed only
-Linux). Physical Home/Lock/Both application remains smoke-test pending.
+transport disappeared before install, and it has not come back (`./tool/tela
+devices` lists only Linux). Physical Home/Lock/Both application and the
+three-tier download walkthrough remain smoke-test pending.
 
 ## Start of next session
 
@@ -86,10 +118,13 @@ Lock, and Both with one portrait and one large landscape wallpaper; then test
 all three download tiers. For Gallery, confirm it appears in Photos. For Files,
 pick a local shared-storage directory when Android's picker opens, then confirm
 the resulting `tela/.nomedia` directory is visible through USB/MTP but absent
-from Photos. For Private library, confirm no gallery entry is created. Record
-any OEM behavior here.
+from Photos. For Private library, confirm no gallery entry is created. Then
+change a destination in Settings, kill the app, reopen it, and confirm the choice
+survived — the Drift path has only ever run against an in-memory database, never
+a real file on a device. Record any OEM behavior here.
 
-Then continue Wave 1 with persisted per-purity storage settings (SFW and NSFW)
-and settings UI. The current defaults are SFW/sketchy → Gallery and NSFW →
-Private library; the long-press override is already functional. Keep browsing,
+Then continue Wave 1 with what is still missing from it: search + filters
+(categories, purity, sorting) and API-key entry in secure storage, which is what
+unlocks NSFW purity — and therefore what makes the NSFW half of the storage
+settings reachable in the product rather than only in tests. Keep browsing,
 detail, apply, and downloads working throughout.

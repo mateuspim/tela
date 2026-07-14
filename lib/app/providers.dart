@@ -1,12 +1,15 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/network/wallhaven_client.dart';
+import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/secrets/secure_secret_store.dart';
+import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/data/storage/method_channel_image_store.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
 import 'package:tela/domain/ports/image_store.dart';
 import 'package:tela/domain/ports/secret_store.dart';
+import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
@@ -44,6 +47,21 @@ final Provider<ImageStore> imageStoreProvider = Provider<ImageStore>(
   (Ref ref) => MethodChannelImageStore(),
 );
 
+/// tela's SQLite database, opened once and closed with the provider scope.
+final Provider<TelaDatabase> telaDatabaseProvider = Provider<TelaDatabase>((
+  Ref ref,
+) {
+  final TelaDatabase db = TelaDatabase.open();
+  ref.onDispose(db.close);
+  return db;
+});
+
+/// The settings port, bound to its Drift adapter.
+final Provider<SettingsRepository> settingsRepositoryProvider =
+    Provider<SettingsRepository>(
+      (Ref ref) => DriftSettingsRepository(ref.watch(telaDatabaseProvider)),
+    );
+
 /// Applies one selected wallpaper to an Android target.
 final Provider<ApplyWallpaper> applyWallpaperProvider =
     Provider<ApplyWallpaper>(
@@ -55,7 +73,10 @@ final Provider<ApplyWallpaper> applyWallpaperProvider =
 /// Downloads one wallpaper through the configured storage boundary.
 final Provider<DownloadWallpaper> downloadWallpaperProvider =
     Provider<DownloadWallpaper>(
-      (Ref ref) => DownloadWallpaper(imageStore: ref.watch(imageStoreProvider)),
+      (Ref ref) => DownloadWallpaper(
+        imageStore: ref.watch(imageStoreProvider),
+        settings: ref.watch(settingsRepositoryProvider),
+      ),
     );
 
 /// The search use case, the only thing the browse feature actually calls.

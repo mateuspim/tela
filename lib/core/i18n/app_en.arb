@@ -101,19 +101,34 @@
     "description": "Heading above the one-download storage destination choices."
   },
 
-  "detailStorageSharedGallery": "Gallery",
-  "@detailStorageSharedGallery": {
-    "description": "Downloads to the system-visible Pictures/tela gallery folder."
+  "storageSharedGallery": "Gallery",
+  "@storageSharedGallery": {
+    "description": "Storage tier: the system-visible Pictures/tela gallery folder."
   },
 
-  "detailStorageFilesOutsideGallery": "Files, not gallery",
-  "@detailStorageFilesOutsideGallery": {
-    "description": "Downloads to the USB/file-manager storage tier that is excluded from Photos."
+  "storageSharedGalleryDetail": "Visible in Photos and other gallery apps.",
+  "@storageSharedGalleryDetail": {
+    "description": "Explains what the gallery storage tier means for the user."
   },
 
-  "detailStorageAppPrivate": "Private library",
-  "@detailStorageAppPrivate": {
-    "description": "Downloads to tela's app-private storage tier."
+  "storageFilesOutsideGallery": "Files, not gallery",
+  "@storageFilesOutsideGallery": {
+    "description": "Storage tier: the USB/file-manager folder that is excluded from Photos."
+  },
+
+  "storageFilesOutsideGalleryDetail": "Reachable over USB and in file managers, hidden from Photos.",
+  "@storageFilesOutsideGalleryDetail": {
+    "description": "Explains the desktop-sync storage tier."
+  },
+
+  "storageAppPrivate": "Private library",
+  "@storageAppPrivate": {
+    "description": "Storage tier: tela's app-private storage."
+  },
+
+  "storageAppPrivateDetail": "Only tela can open these. Removed if you uninstall.",
+  "@storageAppPrivateDetail": {
+    "description": "Explains the app-private storage tier, including its uninstall caveat."
   },
 
   "detailDownloadSuccess": "Wallpaper downloaded.",
@@ -165,5 +180,35 @@
         "type": "String"
       }
     }
+  },
+
+  "settingsTitle": "Settings",
+  "@settingsTitle": {
+    "description": "Title of the settings screen."
+  },
+
+  "settingsOpen": "Open settings",
+  "@settingsOpen": {
+    "description": "Accessibility label for the settings button in the browse app bar."
+  },
+
+  "settingsDownloadsSection": "Downloads",
+  "@settingsDownloadsSection": {
+    "description": "Heading for the group of download-destination settings."
+  },
+
+  "settingsDownloadsSfw": "Safe and sketchy wallpapers",
+  "@settingsDownloadsSfw": {
+    "description": "Label for the destination used by every non-explicit wallpaper."
+  },
+
+  "settingsDownloadsNsfw": "Explicit wallpapers",
+  "@settingsDownloadsNsfw": {
+    "description": "Label for the destination used by NSFW wallpapers."
+  },
+
+  "settingsDownloadsNsfwNote": "Explicit wallpapers are never added to the gallery.",
+  "@settingsDownloadsNsfwNote": {
+    "description": "States the hard NSFW rule, so the missing Gallery option does not read as a bug."
   }
 }

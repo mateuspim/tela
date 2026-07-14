@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -98,10 +100,6 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     }
   }
 
-  Future<void> _downloadDefault() {
-    return _download(StorageTier.defaultFor(widget.wallpaper.purity));
-  }
-
   Future<void> _chooseDownloadTier() async {
     final StorageTier? tier = await showModalBottomSheet<StorageTier>(
       context: context,
@@ -111,6 +109,8 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     await _download(tier);
   }
 
+  /// Offers only the tiers this wallpaper's purity is allowed to land in, so a
+  /// one-off override cannot do what the settings screen forbids.
   Widget _downloadTierSheet(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return SafeArea(
@@ -118,38 +118,28 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           ListTile(title: Text(l10n.detailDownloadChooseTier)),
-          _downloadTierTile(
-            l10n.detailStorageSharedGallery,
-            Icons.photo_library_outlined,
-            StorageTier.sharedGallery,
-          ),
-          _downloadTierTile(
-            l10n.detailStorageFilesOutsideGallery,
-            Icons.folder_outlined,
-            StorageTier.filesOutsideGallery,
-          ),
-          _downloadTierTile(
-            l10n.detailStorageAppPrivate,
-            Icons.lock_outline,
-            StorageTier.appPrivate,
-          ),
+          for (final StorageTier tier in StorageSettings.choicesFor(
+            widget.wallpaper.purity,
+          ))
+            _downloadTierTile(l10n, tier),
         ],
       ),
     );
   }
 
-  Widget _downloadTierTile(String label, IconData icon, StorageTier tier) {
+  Widget _downloadTierTile(AppLocalizations l10n, StorageTier tier) {
     return ListTile(
-      leading: Icon(icon),
-      title: Text(label),
+      leading: Icon(storageTierIcon(tier)),
+      title: Text(storageTierLabel(l10n, tier)),
       onTap: () => Navigator.pop(context, tier),
     );
   }
 
-  Future<void> _download(StorageTier tier) async {
+  /// Downloads to [tier], or to the configured destination when it is null.
+  Future<void> _download([StorageTier? tier]) async {
     setState(() => _isDownloading = true);
     try {
-      await ref.read(downloadWallpaperProvider)(widget.wallpaper, tier);
+      await ref.read(downloadWallpaperProvider)(widget.wallpaper, tier: tier);
       if (mounted) {
         _showResult(AppLocalizations.of(context).detailDownloadSuccess);
       }
@@ -246,7 +236,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       button: true,
       label: l10n.detailDownload,
       child: InkWell(
-        onTap: _isDownloading ? null : _downloadDefault,
+        onTap: _isDownloading ? null : _download,
         onLongPress: _isDownloading ? null : _chooseDownloadTier,
         borderRadius: BorderRadius.circular(24),
         child: Padding(

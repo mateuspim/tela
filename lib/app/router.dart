@@ -3,10 +3,11 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/browse_screen.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
+import 'package:tela/features/settings/settings_screen.dart';
 
 /// The app's routes.
 ///
-/// Browse and detail are live. Search, favorites, and settings hang off this as
+/// Browse, detail, and settings are live. Search and favorites hang off this as
 /// later slices land; keeping the router separate from the app widget means
 /// adding them touches this file only.
 abstract final class TelaRouter {
@@ -28,6 +29,11 @@ abstract final class TelaRouter {
           builder: (_, GoRouterState state) => WallpaperDetailScreen(
             wallpaper: state.extra! as Wallpaper,
           ),
+        ),
+        GoRoute(
+          path: TelaRoutes.settingsPath,
+          name: TelaRoutes.settingsName,
+          builder: (_, _) => const SettingsScreen(),
         ),
       ],
     );

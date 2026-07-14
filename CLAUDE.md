@@ -164,4 +164,10 @@ dart format .            # format
 flutter test             # all tests
 flutter run              # dev (Android device/emulator)
 flutter build apk --release
+
+dart run build_runner build   # Drift codegen, after touching a @DriftDatabase/Table
 ```
+
+Drift's `*.g.dart` is **committed**, unlike the l10n output: `flutter build` regenerates
+l10n on its own, but never runs `build_runner`, so a fresh clone would not compile
+without it. Change a table → re-run codegen → commit the `.g.dart` with it.

@@ -36,6 +36,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libglu1-mesa \
         # usb + udev: adb talking to a physical device over the mounted USB bus.
         libusb-1.0-0 udev \
+        # libsqlite3: `flutter test` runs Drift on the host VM, where there is no
+        # sqlite3_flutter_libs to ship the native library the way there is on Android.
+        # -dev, not -0: dart:ffi opens the unversioned `libsqlite3.so`, and only the
+        # dev package ships that symlink.
+        libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # The base image already ships a user at uid 1000; evict it so `dev` can own

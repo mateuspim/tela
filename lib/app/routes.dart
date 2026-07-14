@@ -11,4 +11,10 @@ abstract final class TelaRoutes {
 
   /// Detail route name.
   static const String detailName = 'wallpaper-detail';
+
+  /// Settings path.
+  static const String settingsPath = '/settings';
+
+  /// Settings route name.
+  static const String settingsName = 'settings';
 }

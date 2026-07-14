@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
@@ -22,6 +24,7 @@ class BrowseScreen extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: Text(l10n.appTitle),
+          actions: <Widget>[_settingsButton(context, l10n)],
           bottom: TabBar(tabs: _tabs(l10n)),
         ),
         body: TabBarView(
@@ -31,6 +34,14 @@ class BrowseScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _settingsButton(BuildContext context, AppLocalizations l10n) {
+    return IconButton(
+      icon: const Icon(Icons.settings_outlined),
+      tooltip: l10n.settingsOpen,
+      onPressed: () => context.pushNamed(TelaRoutes.settingsName),
     );
   }
 
