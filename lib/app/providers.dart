@@ -14,6 +14,8 @@ import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
+import 'package:tela/domain/use_cases/forget_api_key.dart';
+import 'package:tela/domain/use_cases/save_api_key.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
 
 /// The composition root: every port is bound to its adapter exactly once, here.
@@ -87,3 +89,16 @@ final Provider<SearchWallpapers> searchWallpapersProvider =
         secrets: ref.watch(secretStoreProvider),
       ),
     );
+
+/// Stores an API key, after asking Wallhaven whether it works.
+final Provider<SaveApiKey> saveApiKeyProvider = Provider<SaveApiKey>(
+  (Ref ref) => SaveApiKey(
+    secrets: ref.watch(secretStoreProvider),
+    api: ref.watch(wallhavenApiProvider),
+  ),
+);
+
+/// Drops the stored API key, re-locking NSFW.
+final Provider<ForgetApiKey> forgetApiKeyProvider = Provider<ForgetApiKey>(
+  (Ref ref) => ForgetApiKey(secrets: ref.watch(secretStoreProvider)),
+);

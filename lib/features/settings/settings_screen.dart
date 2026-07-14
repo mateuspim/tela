@@ -7,6 +7,7 @@ import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/features/settings/api_key_section.dart';
 import 'package:tela/features/settings/storage_settings_controller.dart';
 
 /// Where downloads go, configured for safe and explicit content separately.
@@ -23,7 +24,7 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle)),
       body: settings.when(
-        data: (StorageSettings value) => _StorageSection(settings: value),
+        data: (StorageSettings value) => _SettingsList(settings: value),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stackTrace) =>
             Center(child: Text(l10n.errorUnexpected)),
@@ -32,9 +33,9 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
-/// The download-destination group: one tier picker per configurable purity.
-class _StorageSection extends StatelessWidget {
-  const _StorageSection({required this.settings});
+/// Every settings group, in screen order.
+class _SettingsList extends StatelessWidget {
+  const _SettingsList({required this.settings});
 
   final StorageSettings settings;
 
@@ -43,6 +44,9 @@ class _StorageSection extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return ListView(
       children: <Widget>[
+        _Header(title: l10n.settingsAccountSection),
+        const ApiKeySection(),
+        const Divider(),
         _Header(title: l10n.settingsDownloadsSection),
         _TierPicker(
           title: l10n.settingsDownloadsSfw,

@@ -26,6 +26,124 @@
     "description": "Browse tab showing a shuffled selection."
   },
 
+  "browseSearchHint": "Search wallpapers",
+  "@browseSearchHint": {
+    "description": "Placeholder in the browse search field."
+  },
+
+  "browseSearchClear": "Clear search",
+  "@browseSearchClear": {
+    "description": "Accessibility label for the button emptying the search field."
+  },
+
+  "browseFilters": "Filters",
+  "@browseFilters": {
+    "description": "Accessibility label for the button opening the filter sheet."
+  },
+
+  "filterCategories": "Categories",
+  "@filterCategories": {
+    "description": "Heading of the category chips in the filter sheet."
+  },
+
+  "filterPurity": "Purity",
+  "@filterPurity": {
+    "description": "Heading of the purity chips in the filter sheet."
+  },
+
+  "filterRatio": "Shape",
+  "@filterRatio": {
+    "description": "Heading of the aspect-ratio choice in the filter sheet."
+  },
+
+  "filterOrder": "Order",
+  "@filterOrder": {
+    "description": "Heading of the sort-direction choice in the filter sheet."
+  },
+
+  "filterTopRange": "Top list range",
+  "@filterTopRange": {
+    "description": "Heading of the toplist look-back window in the filter sheet."
+  },
+
+  "filterTopRangeHint": "Only affects the Top tab.",
+  "@filterTopRangeHint": {
+    "description": "Says the range is ignored by the other sortings, so it does not look broken."
+  },
+
+  "filterApply": "Show wallpapers",
+  "@filterApply": {
+    "description": "Applies the edited filters and closes the sheet."
+  },
+
+  "filterReset": "Reset",
+  "@filterReset": {
+    "description": "Restores the default filters."
+  },
+
+  "categoryGeneral": "General",
+  "@categoryGeneral": {
+    "description": "Wallhaven category: everything that is not anime or people."
+  },
+
+  "categoryAnime": "Anime",
+  "@categoryAnime": {
+    "description": "Wallhaven category: anime and illustrated art."
+  },
+
+  "categoryPeople": "People",
+  "@categoryPeople": {
+    "description": "Wallhaven category: photography of people."
+  },
+
+  "puritySfw": "Safe",
+  "@puritySfw": {
+    "description": "Purity: safe for work."
+  },
+
+  "puritySketchy": "Sketchy",
+  "@puritySketchy": {
+    "description": "Purity: suggestive but not explicit."
+  },
+
+  "purityNsfw": "Explicit",
+  "@purityNsfw": {
+    "description": "Purity: NSFW. Offered only when an API key is stored."
+  },
+
+  "ratioPortrait": "Portrait",
+  "@ratioPortrait": {
+    "description": "Aspect-ratio choice: phone-shaped wallpapers."
+  },
+
+  "ratioLandscape": "Landscape",
+  "@ratioLandscape": {
+    "description": "Aspect-ratio choice: desktop-shaped wallpapers."
+  },
+
+  "ratioAny": "Any",
+  "@ratioAny": {
+    "description": "Aspect-ratio choice: no ratio filter."
+  },
+
+  "orderDescending": "Descending",
+  "@orderDescending": {
+    "description": "Sort direction: highest or newest first."
+  },
+
+  "orderAscending": "Ascending",
+  "@orderAscending": {
+    "description": "Sort direction: lowest or oldest first."
+  },
+
+  "topRangeOneDay": "Last 24 hours",
+  "topRangeThreeDays": "Last 3 days",
+  "topRangeOneWeek": "Last week",
+  "topRangeOneMonth": "Last month",
+  "topRangeThreeMonths": "Last 3 months",
+  "topRangeSixMonths": "Last 6 months",
+  "topRangeOneYear": "Last year",
+
   "errorInvalidApiKey": "That Wallhaven API key was rejected.",
   "@errorInvalidApiKey": {
     "description": "Shown when Wallhaven answers 401."
@@ -190,6 +308,66 @@
   "settingsOpen": "Open settings",
   "@settingsOpen": {
     "description": "Accessibility label for the settings button in the browse app bar."
+  },
+
+  "actionSave": "Save",
+  "@actionSave": {
+    "description": "Confirms a dialog, storing what was entered."
+  },
+
+  "actionCancel": "Cancel",
+  "@actionCancel": {
+    "description": "Dismisses a dialog without changing anything."
+  },
+
+  "settingsAccountSection": "Wallhaven account",
+  "@settingsAccountSection": {
+    "description": "Heading for the group of Wallhaven-account settings."
+  },
+
+  "settingsApiKeyTitle": "API key",
+  "@settingsApiKeyTitle": {
+    "description": "Label of the API-key setting, and title of its entry dialog."
+  },
+
+  "settingsApiKeyPresent": "Saved. Explicit wallpapers are unlocked.",
+  "@settingsApiKeyPresent": {
+    "description": "Subtitle when a key is stored. Says a key exists, never what it is."
+  },
+
+  "settingsApiKeyAbsent": "Not set. Required for explicit wallpapers.",
+  "@settingsApiKeyAbsent": {
+    "description": "Subtitle when no key is stored."
+  },
+
+  "settingsApiKeyLabel": "Wallhaven API key",
+  "@settingsApiKeyLabel": {
+    "description": "Label of the obscured API-key text field."
+  },
+
+  "settingsApiKeyHelp": "Find it under Account settings on wallhaven.cc. tela encrypts it on this device and never shows it again.",
+  "@settingsApiKeyHelp": {
+    "description": "Explains where the key comes from and that it cannot be read back."
+  },
+
+  "settingsApiKeyRemove": "Remove API key",
+  "@settingsApiKeyRemove": {
+    "description": "Accessibility label for the button deleting the stored key."
+  },
+
+  "settingsApiKeySaved": "API key saved.",
+  "@settingsApiKeySaved": {
+    "description": "Shown when Wallhaven accepted the key."
+  },
+
+  "settingsApiKeyUnverified": "Key saved, but Wallhaven couldn't be reached to check it.",
+  "@settingsApiKeyUnverified": {
+    "description": "Shown when the key was stored but the verifying request failed for a reason other than rejection."
+  },
+
+  "settingsApiKeyRemoved": "API key removed.",
+  "@settingsApiKeyRemoved": {
+    "description": "Shown after the stored key is deleted."
   },
 
   "settingsDownloadsSection": "Downloads",
