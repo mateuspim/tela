@@ -90,8 +90,17 @@ class MainActivity : FlutterFragmentActivity() {
             "storeImage" -> handleStoreImage(call, result)
             "listPrivateImages" -> onStorageThread(result) { ImageStorage(this).listPrivate() }
             "deletePrivateImage" -> handleDeletePrivateImage(call, result)
+            "canReadImage" -> handleCanReadImage(call, result)
             else -> result.notImplemented()
         }
+    }
+
+    private fun handleCanReadImage(call: MethodCall, result: MethodChannel.Result) {
+        val location = call.argument<String>("location") ?: run {
+            result.success(mapOf("success" to true, "readable" to false))
+            return
+        }
+        onStorageThread(result) { ImageStorage(this).canRead(Uri.parse(location)) }
     }
 
     private fun handleStoreImage(call: MethodCall, result: MethodChannel.Result) {

@@ -136,6 +136,29 @@ class ImageStorage(private val context: Context) {
         return mapOf("success" to true)
     }
 
+    /**
+     * Whether the file at [location] can still be opened.
+     *
+     * Opens it rather than asking whether it exists: a MediaStore row can
+     * outlive its file, and a SAF grant can be revoked while the document is
+     * still listed. The only honest test of "can tela read this" is to read it.
+     *
+     * Every failure is false, never a throw — a wallpaper the user deleted from
+     * Photos is an ordinary state of the world, not an error.
+     */
+    fun canRead(location: Uri): Map<String, Any> {
+        val readable = try {
+            if (location.scheme == "file") {
+                File(location.path!!).canRead()
+            } else {
+                context.contentResolver.openInputStream(location)?.use { true } ?: false
+            }
+        } catch (_: Exception) {
+            false
+        }
+        return mapOf("success" to true, "readable" to readable)
+    }
+
     private fun privateDirectory(): File = File(context.filesDir, "wallpapers")
 
     /** Recovers the Wallhaven id from a file tela itself wrote, or null. */

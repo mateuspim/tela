@@ -192,6 +192,47 @@ void main() {
       );
     });
   });
+
+  group('canRead', () {
+    test('asks the native side about the location', () async {
+      final _FakeImageStoreChannel fake = _FakeImageStoreChannel(
+        response: <Object?, Object?>{'success': true, 'readable': true},
+      );
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: fake.call,
+      );
+
+      expect(await store.canRead(Uri.parse('content://media/images/42')), true);
+      expect(fake.receivedMethod, 'canReadImage');
+      expect(fake.receivedArguments, <String, String>{
+        'location': 'content://media/images/42',
+      });
+    });
+
+    test('a file that will not open reads as gone', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: <Object?, Object?>{'success': true, 'readable': false},
+        ).call,
+      );
+
+      expect(await store.canRead(Uri.parse('file:///gone.jpg')), false);
+    });
+
+    test('a native error costs the badge, not the screen', () async {
+      // The one caller draws a tile with this. A history row whose file is gone
+      // still sets its wallpaper by re-fetching, so a probe that blows up must
+      // never take the download history down with it — and "unreadable" is the
+      // safe guess anyway: at worst it warns about a file that is still there.
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          platformError: PlatformException(code: 'unavailable'),
+        ).call,
+      );
+
+      expect(await store.canRead(Uri.parse('file:///gone.jpg')), false);
+    });
+  });
 }
 
 Matcher _failureWith(ImageStoreProblem problem) {

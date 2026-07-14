@@ -31,4 +31,17 @@ abstract interface class ImageStore {
   ///
   /// Throws a safe `ImageStoreFailure` when there is nothing to delete.
   Future<void> deletePrivateImage(String id);
+
+  /// Whether the file at [location] can still be opened.
+  ///
+  /// A download tela wrote is not a download tela keeps: a gallery image can be
+  /// deleted from Photos and a document one from a file manager, and tela hears
+  /// about neither. The download history is what asks — it calls itself
+  /// "wallpapers already on this device", and a row whose file is gone makes
+  /// that a lie until the tile says otherwise.
+  ///
+  /// Answers false rather than throwing, for every reason a file might not
+  /// open: gone, revoked, unreadable. "I could not open it" is the only fact
+  /// the caller wants, and none of the ways to fail are worth distinguishing.
+  Future<bool> canRead(Uri location);
 }

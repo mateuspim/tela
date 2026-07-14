@@ -12,7 +12,13 @@ class FakeImageStore implements ImageStore {
     this.failure,
     this.storedImage,
     List<PrivateImage> privateLibrary = const <PrivateImage>[],
-  }) : _privateLibrary = List<PrivateImage>.of(privateLibrary);
+    Set<Uri> unreadable = const <Uri>{},
+  }) : _privateLibrary = List<PrivateImage>.of(privateLibrary),
+       _unreadable = Set<Uri>.of(unreadable);
+
+  /// Locations [canRead] answers false for — the files deleted behind tela's
+  /// back, from Photos or a file manager.
+  final Set<Uri> _unreadable;
 
   /// Failure thrown by every write when supplied.
   final ImageStoreFailure? failure;
@@ -69,4 +75,7 @@ class FakeImageStore implements ImageStore {
     if (toThrow != null) throw toThrow;
     _privateLibrary.removeWhere((PrivateImage image) => image.id == id);
   }
+
+  @override
+  Future<bool> canRead(Uri location) async => !_unreadable.contains(location);
 }

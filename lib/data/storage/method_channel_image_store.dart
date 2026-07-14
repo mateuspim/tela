@@ -78,6 +78,24 @@ class MethodChannelImageStore implements ImageStore {
     }
   }
 
+  /// Answers false for every way a file can fail to open, and never throws.
+  ///
+  /// The one caller draws a *tile* with this: a history row whose file is gone
+  /// still sets its wallpaper (by re-fetching), so a failure to answer must
+  /// cost the badge and not the screen. Unreadable is also the safe guess — the
+  /// worst it does is warn about a download that is actually still there.
+  @override
+  Future<bool> canRead(Uri location) async {
+    try {
+      final Object? raw = await _invokeMethod('canReadImage', <String, String>{
+        'location': location.toString(),
+      });
+      return raw is Map<Object?, Object?> && raw['readable'] == true;
+    } on PlatformException {
+      return false;
+    }
+  }
+
   static Future<Object?> _invokeNativeMethod(
     String method,
     Map<String, String> arguments,
