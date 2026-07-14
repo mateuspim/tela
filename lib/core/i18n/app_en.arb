@@ -300,6 +300,31 @@
     }
   },
 
+  "favoritesTitle": "Favorites",
+  "@favoritesTitle": {
+    "description": "Title of the favorites screen. These are local to this device, not the Wallhaven account's favorites."
+  },
+
+  "favoritesOpen": "Open favorites",
+  "@favoritesOpen": {
+    "description": "Accessibility label for the favorites button in the browse app bar."
+  },
+
+  "favoritesEmpty": "Nothing saved yet. Tap the heart on a wallpaper to keep it here — favorites work offline.",
+  "@favoritesEmpty": {
+    "description": "Shown when no wallpaper has been favorited."
+  },
+
+  "favoriteAdd": "Add to favorites",
+  "@favoriteAdd": {
+    "description": "Accessibility label for the heart when the wallpaper is not saved."
+  },
+
+  "favoriteRemove": "Remove from favorites",
+  "@favoriteRemove": {
+    "description": "Accessibility label for the heart when the wallpaper is already saved."
+  },
+
   "settingsTitle": "Settings",
   "@settingsTitle": {
     "description": "Title of the settings screen."

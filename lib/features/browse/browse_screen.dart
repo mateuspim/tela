@@ -34,6 +34,7 @@ class BrowseScreen extends ConsumerWidget {
           title: const BrowseSearchField(),
           actions: <Widget>[
             _filterButton(context, l10n),
+            _favoritesButton(context, l10n),
             _settingsButton(context, l10n),
           ],
           bottom: TabBar(tabs: _tabs(l10n)),
@@ -53,6 +54,14 @@ class BrowseScreen extends ConsumerWidget {
       icon: const Icon(Icons.tune),
       tooltip: l10n.browseFilters,
       onPressed: () => showFilterSheet(context),
+    );
+  }
+
+  Widget _favoritesButton(BuildContext context, AppLocalizations l10n) {
+    return IconButton(
+      icon: const Icon(Icons.favorite_border),
+      tooltip: l10n.favoritesOpen,
+      onPressed: () => context.pushNamed(TelaRoutes.favoritesName),
     );
   }
 

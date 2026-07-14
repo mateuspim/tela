@@ -17,4 +17,10 @@ abstract final class TelaRoutes {
 
   /// Settings route name.
   static const String settingsName = 'settings';
+
+  /// Favorites path.
+  static const String favoritesPath = '/favorites';
+
+  /// Favorites route name.
+  static const String favoritesName = 'favorites';
 }

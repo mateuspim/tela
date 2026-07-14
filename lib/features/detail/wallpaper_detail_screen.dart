@@ -16,6 +16,7 @@ import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/features/browse/wallpaper_failure_text.dart';
 import 'package:tela/features/detail/progressive_wallpaper_preview.dart';
 import 'package:tela/features/detail/wallpaper_metadata.dart';
+import 'package:tela/features/favorites/favorite_button.dart';
 
 /// Loads complete metadata independently of the grid's fast listing response.
 final FutureProviderFamily<WallpaperDetails, String> wallpaperDetailsProvider =
@@ -167,7 +168,10 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.wallpaper.resolution.toString()),
-        actions: <Widget>[_downloadButton(l10n)],
+        actions: <Widget>[
+          FavoriteButton(wallpaper: widget.wallpaper),
+          _downloadButton(l10n),
+        ],
       ),
       body: Column(
         children: <Widget>[

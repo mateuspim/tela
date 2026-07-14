@@ -14,6 +14,7 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 
+import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_image_store.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
@@ -104,6 +105,11 @@ Future<void> _pumpDetail(
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         settingsRepositoryProvider.overrideWithValue(
           FakeSettingsRepository(settings: settings),
+        ),
+        // The app bar now carries the favorites heart, so this screen reaches
+        // the database. Left unbound, it opens the real one and leaks a timer.
+        favoritesRepositoryProvider.overrideWithValue(
+          FakeFavoritesRepository(),
         ),
         if (imageStore != null)
           imageStoreProvider.overrideWithValue(imageStore),

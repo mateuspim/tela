@@ -7,6 +7,7 @@ import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -90,18 +91,6 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     _paging.refresh();
   }
 
-  /// Columns sized by available width, not hardcoded.
-  ///
-  /// Two columns is right on a phone and absurd on a tablet, where it yields
-  /// two ~1200px-wide tiles. Targets a tile around [_targetTileWidth] wide.
-  int _columnsFor(BuildContext context) {
-    final double width = MediaQuery.sizeOf(context).width;
-    return (width / _targetTileWidth).round().clamp(2, 6);
-  }
-
-  /// Logical width we aim each tile at, in dips.
-  static const double _targetTileWidth = 220;
-
   @override
   Widget build(BuildContext context) {
     return PagingListener<int, Wallpaper>(
@@ -121,7 +110,7 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
       child: PagedMasonryGridView<int, Wallpaper>.count(
         state: state,
         fetchNextPage: fetchNextPage,
-        crossAxisCount: _columnsFor(context),
+        crossAxisCount: wallpaperGridColumns(context),
         mainAxisSpacing: 8,
         crossAxisSpacing: 8,
         padding: const EdgeInsets.all(8),

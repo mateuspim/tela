@@ -2,11 +2,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/network/wallhaven_client.dart';
 import 'package:tela/data/db/tela_database.dart';
+import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/secrets/secure_secret_store.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/data/storage/method_channel_image_store.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
+import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/image_store.dart';
 import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
@@ -17,6 +19,7 @@ import 'package:tela/domain/use_cases/download_wallpaper.dart';
 import 'package:tela/domain/use_cases/forget_api_key.dart';
 import 'package:tela/domain/use_cases/save_api_key.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
+import 'package:tela/domain/use_cases/toggle_favorite.dart';
 
 /// The composition root: every port is bound to its adapter exactly once, here.
 ///
@@ -64,6 +67,12 @@ final Provider<SettingsRepository> settingsRepositoryProvider =
       (Ref ref) => DriftSettingsRepository(ref.watch(telaDatabaseProvider)),
     );
 
+/// The favorites port, bound to its Drift adapter.
+final Provider<FavoritesRepository> favoritesRepositoryProvider =
+    Provider<FavoritesRepository>(
+      (Ref ref) => DriftFavoritesRepository(ref.watch(telaDatabaseProvider)),
+    );
+
 /// Applies one selected wallpaper to an Android target.
 final Provider<ApplyWallpaper> applyWallpaperProvider =
     Provider<ApplyWallpaper>(
@@ -102,3 +111,10 @@ final Provider<SaveApiKey> saveApiKeyProvider = Provider<SaveApiKey>(
 final Provider<ForgetApiKey> forgetApiKeyProvider = Provider<ForgetApiKey>(
   (Ref ref) => ForgetApiKey(secrets: ref.watch(secretStoreProvider)),
 );
+
+/// Keeps or drops one wallpaper from the local favorites.
+final Provider<ToggleFavorite> toggleFavoriteProvider =
+    Provider<ToggleFavorite>(
+      (Ref ref) =>
+          ToggleFavorite(favorites: ref.watch(favoritesRepositoryProvider)),
+    );
