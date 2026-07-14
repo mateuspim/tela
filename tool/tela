@@ -12,6 +12,12 @@
 # second `test` run doesn't re-resolve the world. So does ~/.android, which is
 # not a cache: it holds the debug signing key, and a run that re-mints it forces
 # a clean reinstall that wipes the app's data.
+#
+# To put a build on a device, use `run`, NOT `install`. `flutter install`
+# uninstalls the existing app first, unconditionally — which takes the Drift
+# database and the Keystore-backed API key with it. That is not the signing
+# problem ~/.android fixes; it happens with a perfectly matching signature.
+# It cost us the device's accumulated database once (2026-07-14).
 set -euo pipefail
 
 IMAGE="tela-toolchain"
