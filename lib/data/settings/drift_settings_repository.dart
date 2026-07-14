@@ -19,6 +19,9 @@ class DriftSettingsRepository implements SettingsRepository {
   static const String _sfwKey = 'storage.tier.sfw';
   static const String _nsfwKey = 'storage.tier.nsfw';
 
+  /// A new setting is a new row, never a migration — see the v1 schema note.
+  static const String _privateLockKey = 'privacy.privateLibraryLock';
+
   final TelaDatabase _db;
 
   @override
@@ -34,6 +37,20 @@ class DriftSettingsRepository implements SettingsRepository {
   Future<void> saveStorageSettings(StorageSettings settings) async {
     await _db.putSetting(_sfwKey, settings.sfwTier.name);
     await _db.putSetting(_nsfwKey, settings.nsfwTier.name);
+  }
+
+  @override
+  Future<bool> isPrivateLibraryLocked() async {
+    final String? stored = await _db.settingValue(_privateLockKey);
+    // Absent means never asked for: the lock is opt-in. Anything else stored
+    // there is corrupt, and a corrupt lock setting reads as locked.
+    if (stored == null) return false;
+    return stored != 'false';
+  }
+
+  @override
+  Future<void> setPrivateLibraryLocked({required bool locked}) {
+    return _db.putSetting(_privateLockKey, locked.toString());
   }
 
   /// Reads one tier, treating an absent, unrecognised, or forbidden row as

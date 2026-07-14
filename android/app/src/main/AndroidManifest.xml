@@ -1,9 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Both are normal permissions: granted at install, no runtime prompt.
+    <!-- All three are normal permissions: granted at install, no runtime prompt.
          There is deliberately no storage permission here — minSdk 29 means every
-         supported device has scoped storage, so MediaStore writes need none. -->
+         supported device has scoped storage, so MediaStore writes need none.
+         USE_BIOMETRIC is the private library's optional app-lock; it lets tela
+         ask BiometricPrompt to verify the owner, and grants no access to any
+         biometric data itself. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.SET_WALLPAPER"/>
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 
     <!-- The API key is excluded from both backup paths: it is encrypted with a
          Keystore key that no backup carries, so a restored copy would be

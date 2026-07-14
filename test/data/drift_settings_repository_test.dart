@@ -61,5 +61,25 @@ void main() {
 
       expect(loaded.nsfwTier, StorageTier.appPrivate);
     });
+
+    test('leaves the private library unlocked until it is asked for', () async {
+      expect(await settings.isPrivateLibraryLocked(), isFalse);
+    });
+
+    test('round-trips the private library lock', () async {
+      await settings.setPrivateLibraryLocked(locked: true);
+      expect(await settings.isPrivateLibraryLocked(), isTrue);
+
+      await settings.setPrivateLibraryLocked(locked: false);
+      expect(await settings.isPrivateLibraryLocked(), isFalse);
+    });
+
+    test('reads a corrupt lock setting as locked', () async {
+      // Unlike the tier fallbacks, this one fails closed: "I can't tell whether
+      // this was locked" has only one safe reading.
+      await db.putSetting('privacy.privateLibraryLock', 'maybe');
+
+      expect(await settings.isPrivateLibraryLocked(), isTrue);
+    });
   });
 }

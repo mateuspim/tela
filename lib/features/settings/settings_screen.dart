@@ -10,6 +10,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/features/settings/api_key_section.dart';
+import 'package:tela/features/settings/app_lock_switch.dart';
 import 'package:tela/features/settings/storage_settings_controller.dart';
 
 /// Where downloads go, configured for safe and explicit content separately.
@@ -65,6 +66,7 @@ class _SettingsList extends StatelessWidget {
         const Divider(),
         _Header(title: l10n.settingsPrivacySection),
         const _PrivateLibraryTile(),
+        const AppLockSwitch(),
       ],
     );
   }

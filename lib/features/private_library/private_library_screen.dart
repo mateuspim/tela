@@ -8,6 +8,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/screen_guard.dart';
 import 'package:tela/features/private_library/private_library_providers.dart';
 
@@ -32,6 +33,12 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
   /// this screen goes away — there is no later chance to do it.
   late final ScreenGuard _screenGuard;
 
+  /// False until the lock has been satisfied. Nothing is listed before it.
+  bool _unlocked = false;
+
+  /// True while the lock is being resolved or the system prompt is up.
+  bool _checking = true;
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +46,7 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
     // Before the first frame: a thumbnail can be captured the moment the route
     // is on screen, so asking for the flag later is asking too late.
     unawaited(_screenGuard.setSecure(secure: true));
+    unawaited(_unlock());
   }
 
   @override
@@ -47,19 +55,81 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
     super.dispose();
   }
 
+  /// Resolves the lock before anything is listed.
+  ///
+  /// The gate lives in the screen rather than on the settings tile that opens
+  /// it, because a route can be reached more ways than one — gating the button
+  /// would leave a deep link to `/private` walking straight past it.
+  ///
+  /// A device with no biometric *and* no screen lock cannot be asked anything,
+  /// so the library opens: a setting that cannot be satisfied would otherwise
+  /// lock the owner out of their own files with no way back in.
+  Future<void> _unlock() async {
+    final bool locked = await ref
+        .read(settingsRepositoryProvider)
+        .isPrivateLibraryLocked();
+    final AppLock lock = ref.read(appLockProvider);
+    if (!locked || !await lock.isAvailable()) {
+      if (mounted) setState(() => _pass(unlocked: true));
+      return;
+    }
+    await _authenticate();
+  }
+
+  Future<void> _authenticate() async {
+    if (mounted) setState(() => _checking = true);
+    final bool passed = await ref
+        .read(appLockProvider)
+        .authenticate(
+          reason: AppLocalizations.of(context).privateLibraryUnlockReason,
+        );
+    if (mounted) setState(() => _pass(unlocked: passed));
+  }
+
+  void _pass({required bool unlocked}) {
+    _unlocked = unlocked;
+    _checking = false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final AsyncValue<List<PrivateImage>> images = ref.watch(
-      privateImagesProvider,
-    );
     return Scaffold(
       appBar: AppBar(title: Text(l10n.privateLibraryTitle)),
-      body: images.when(
-        data: (List<PrivateImage> stored) => _grid(context, l10n, stored),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stackTrace) =>
-            Center(child: Text(l10n.privateLibraryUnavailable)),
+      body: _body(context, l10n),
+    );
+  }
+
+  Widget _body(BuildContext context, AppLocalizations l10n) {
+    if (_checking) return const Center(child: CircularProgressIndicator());
+    if (!_unlocked) return _locked(l10n);
+    return ref
+        .watch(privateImagesProvider)
+        .when(
+          data: (List<PrivateImage> stored) => _grid(context, l10n, stored),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (Object error, StackTrace stackTrace) =>
+              Center(child: Text(l10n.privateLibraryUnavailable)),
+        );
+  }
+
+  /// What a failed or dismissed prompt leaves behind: a way to try again, and
+  /// nothing else. No count, no thumbnails, no hint of what is in there.
+  Widget _locked(AppLocalizations l10n) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Icon(Icons.lock_outline, size: 48),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(l10n.privateLibraryLocked, textAlign: TextAlign.center),
+          ),
+          FilledButton(
+            onPressed: _authenticate,
+            child: Text(l10n.privateLibraryUnlock),
+          ),
+        ],
       ),
     );
   }

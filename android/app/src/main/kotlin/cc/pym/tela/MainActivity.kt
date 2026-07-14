@@ -4,7 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.app.WallpaperManager
 import android.view.WindowManager
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -14,7 +14,12 @@ import java.net.URL
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-class MainActivity : FlutterActivity() {
+/**
+ * A FragmentActivity, not a plain FlutterActivity: local_auth's BiometricPrompt
+ * needs a FragmentManager, and a plain FlutterActivity fails at prompt time
+ * rather than at build time — so the app-lock would compile and then not work.
+ */
+class MainActivity : FlutterFragmentActivity() {
     private val wallpaperExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val imageStoreExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var pendingOutsideGalleryStore: PendingOutsideGalleryStore? = null

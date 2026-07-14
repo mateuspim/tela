@@ -468,5 +468,35 @@
   "privateLibraryDeleteFailure": "Couldn't delete this wallpaper.",
   "@privateLibraryDeleteFailure": {
     "description": "Safe fallback when an app-private file cannot be deleted."
+  },
+
+  "privateLibraryLocked": "The private library is locked.",
+  "@privateLibraryLocked": {
+    "description": "Shown when the app-lock has not been satisfied. Says nothing about what is inside."
+  },
+
+  "privateLibraryUnlock": "Unlock",
+  "@privateLibraryUnlock": {
+    "description": "Re-opens the biometric or PIN prompt after it was dismissed or failed."
+  },
+
+  "privateLibraryUnlockReason": "Unlock your private library",
+  "@privateLibraryUnlockReason": {
+    "description": "Shown by Android's own biometric dialog, so it must say which app is asking and why."
+  },
+
+  "settingsAppLockTitle": "Lock the private library",
+  "@settingsAppLockTitle": {
+    "description": "Label of the switch gating the private library behind a biometric or PIN."
+  },
+
+  "settingsAppLockDetail": "Ask for a fingerprint, face, or PIN before opening it.",
+  "@settingsAppLockDetail": {
+    "description": "Explains what the app-lock switch does."
+  },
+
+  "settingsAppLockUnavailable": "Needs a screen lock or fingerprint set up on this device.",
+  "@settingsAppLockUnavailable": {
+    "description": "Explains why the app-lock cannot be switched on, rather than showing a switch that would protect nothing."
   }
 }

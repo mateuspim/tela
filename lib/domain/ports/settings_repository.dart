@@ -13,4 +13,14 @@ abstract interface class SettingsRepository {
 
   /// Persists [settings] as the new storage routing.
   Future<void> saveStorageSettings(StorageSettings settings);
+
+  /// Whether the private library asks for a biometric or PIN before it opens.
+  ///
+  /// The lock is opt-in, so a setting that was never written answers `false`. A
+  /// setting that was written but cannot be *read* answers `true`: "I can't
+  /// tell whether this was locked" has only one safe reading. Never throws.
+  Future<bool> isPrivateLibraryLocked();
+
+  /// Turns the private library's lock on or off.
+  Future<void> setPrivateLibraryLocked({required bool locked});
 }

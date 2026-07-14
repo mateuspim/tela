@@ -10,8 +10,10 @@ import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
 
+import '../fakes/fake_app_lock.dart';
 import '../fakes/fake_image_store.dart';
 import '../fakes/fake_screen_guard.dart';
+import '../fakes/fake_settings_repository.dart';
 
 void main() {
   group('FLAG_SECURE', () {
@@ -44,6 +46,81 @@ void main() {
         reason: 'leaving it on would block screenshots of the whole app',
       );
       expect(guard.requests, <bool>[true, false]);
+    });
+  });
+
+  group('app-lock', () {
+    testWidgets('lists nothing until the lock is satisfied', (
+      WidgetTester tester,
+    ) async {
+      final FakeAppLock lock = FakeAppLock(passes: false);
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[_image('e7jvjd')]),
+        lock: lock,
+        locked: true,
+      );
+
+      expect(lock.prompts, 1);
+      expect(find.text('The private library is locked.'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Private wallpaper e7jvjd'),
+        findsNothing,
+        reason: 'a failed prompt must not leave the contents on screen',
+      );
+    });
+
+    testWidgets('opens once the prompt passes', (WidgetTester tester) async {
+      final FakeAppLock lock = FakeAppLock();
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[_image('e7jvjd')]),
+        lock: lock,
+        locked: true,
+      );
+
+      expect(lock.prompts, 1);
+      expect(find.bySemanticsLabel('Private wallpaper e7jvjd'), findsOneWidget);
+    });
+
+    testWidgets('a dismissed prompt can be retried', (
+      WidgetTester tester,
+    ) async {
+      final FakeAppLock lock = FakeAppLock(passes: false);
+      await _pump(tester, FakeImageStore(), lock: lock, locked: true);
+
+      await tester.tap(find.text('Unlock'));
+      await tester.pumpAndSettle();
+
+      expect(lock.prompts, 2);
+    });
+
+    testWidgets('does not prompt when the lock is off', (
+      WidgetTester tester,
+    ) async {
+      final FakeAppLock lock = FakeAppLock();
+      await _pump(tester, FakeImageStore(), lock: lock);
+
+      expect(lock.prompts, 0);
+      expect(find.textContaining('Nothing here'), findsOneWidget);
+    });
+
+    testWidgets('opens when the device cannot ask for anything', (
+      WidgetTester tester,
+    ) async {
+      // A phone with no biometric and no screen lock cannot answer the prompt.
+      // Enforcing the setting there would lock the owner out of their own files
+      // with no way back in, so the gate steps aside instead.
+      final FakeAppLock lock = FakeAppLock(available: false);
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[_image('e7jvjd')]),
+        lock: lock,
+        locked: true,
+      );
+
+      expect(lock.prompts, 0);
+      expect(find.bySemanticsLabel('Private wallpaper e7jvjd'), findsOneWidget);
     });
   });
 
@@ -113,12 +190,18 @@ Future<void> _pump(
   WidgetTester tester,
   FakeImageStore store, {
   FakeScreenGuard? guard,
+  FakeAppLock? lock,
+  bool locked = false,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
         imageStoreProvider.overrideWithValue(store),
         screenGuardProvider.overrideWithValue(guard ?? FakeScreenGuard()),
+        appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
+        settingsRepositoryProvider.overrideWithValue(
+          FakeSettingsRepository(privateLibraryLocked: locked),
+        ),
       ],
       child: const MaterialApp(
         localizationsDelegates: <LocalizationsDelegate<Object>>[

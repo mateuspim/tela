@@ -4,11 +4,13 @@ import 'package:tela/core/network/wallhaven_client.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/secrets/secure_secret_store.dart';
+import 'package:tela/data/security/local_auth_app_lock.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/data/storage/method_channel_image_store.dart';
 import 'package:tela/data/storage/method_channel_screen_guard.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
+import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/image_store.dart';
 import 'package:tela/domain/ports/screen_guard.dart';
@@ -57,6 +59,11 @@ final Provider<ImageStore> imageStoreProvider = Provider<ImageStore>(
 /// The screen-protection port, bound to Android's `FLAG_SECURE`.
 final Provider<ScreenGuard> screenGuardProvider = Provider<ScreenGuard>(
   (Ref ref) => MethodChannelScreenGuard(),
+);
+
+/// The app-lock port, bound to Android's BiometricPrompt.
+final Provider<AppLock> appLockProvider = Provider<AppLock>(
+  (Ref ref) => LocalAuthAppLock(),
 );
 
 /// tela's SQLite database, opened once and closed with the provider scope.
