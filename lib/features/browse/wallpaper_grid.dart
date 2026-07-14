@@ -44,6 +44,17 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     );
   }
 
+  /// Reloads from page 1 when the term or the filters change.
+  ///
+  /// The paging controller caches pages against the *old* query, so without
+  /// this a new filter would leave the previous listing on screen and only take
+  /// effect on the next scroll — which reads as the filter having been ignored.
+  @override
+  void didUpdateWidget(WallpaperGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.query != oldWidget.query) _retry();
+  }
+
   @override
   void dispose() {
     _paging.dispose();

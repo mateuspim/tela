@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 
 /// The textual and colour metadata returned only by `/w/{id}`.
@@ -34,8 +35,14 @@ class WallpaperMetadata extends StatelessWidget {
             _bytes(l10n, item.wallpaper.fileSizeBytes),
           ),
           _MetadataRow(l10n.detailFileType, item.fileType),
-          _MetadataRow(l10n.detailCategory, item.wallpaper.category.name),
-          _MetadataRow(l10n.detailPurity, item.wallpaper.purity.name),
+          _MetadataRow(
+            l10n.detailCategory,
+            categoryLabel(l10n, item.wallpaper.category),
+          ),
+          _MetadataRow(
+            l10n.detailPurity,
+            purityLabel(l10n, item.wallpaper.purity),
+          ),
           _MetadataRow(l10n.detailRatio, item.ratio),
           _MetadataRow(l10n.detailViews, _number(item.views)),
           _MetadataRow(l10n.detailFavorites, _number(item.favorites)),

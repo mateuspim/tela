@@ -1,3 +1,4 @@
+import 'package:meta/meta.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
@@ -89,6 +90,7 @@ enum TopRange {
 /// const SearchQuery(sorting: Sorting.toplist, topRange: TopRange.oneWeek)
 ///     .toQueryParameters();
 /// ```
+@immutable
 class SearchQuery {
   /// Creates a query. The defaults are the app's browse defaults: safe content,
   /// every category, newest first.
@@ -168,6 +170,51 @@ class SearchQuery {
       page: page ?? this.page,
       seed: seed ?? this.seed,
     );
+  }
+
+  /// Value equality, which is what makes a query usable as *state*.
+  ///
+  /// The browse grid reloads when its query changes, and every rebuild hands it
+  /// a freshly constructed one — so without this, identical filters would look
+  /// like a new listing and re-fetch on every frame. The set and list fields
+  /// need element-wise comparison; `==` on a `Set` is identity.
+  @override
+  bool operator ==(Object other) {
+    return other is SearchQuery &&
+        other.term == term &&
+        _sameElements(other.categories.categories, categories.categories) &&
+        _sameElements(other.purity.purities, purity.purities) &&
+        other.sorting == sorting &&
+        other.order == order &&
+        other.topRange == topRange &&
+        other.atLeast == atLeast &&
+        _sameElements(other.ratios, ratios) &&
+        other.page == page &&
+        other.seed == seed;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(
+      term,
+      Object.hashAllUnordered(categories.categories),
+      Object.hashAllUnordered(purity.purities),
+      sorting,
+      order,
+      topRange,
+      atLeast,
+      Object.hashAllUnordered(ratios),
+      page,
+      seed,
+    );
+  }
+
+  /// Set-like comparison: same members, order irrelevant.
+  ///
+  /// `ratios` is a list only because the API takes an ordered param; two
+  /// queries asking for the same ratios in a different order are one listing.
+  static bool _sameElements(Iterable<Object> a, Iterable<Object> b) {
+    return a.length == b.length && a.toSet().containsAll(b);
   }
 
   /// Encodes to Wallhaven's `/search` query params.

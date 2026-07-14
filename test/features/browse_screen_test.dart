@@ -34,12 +34,18 @@ Wallpaper _wallpaper(String id) => Wallpaper(
 );
 
 /// Boots the real BrowseScreen with the network replaced by [api].
-Future<void> _pumpBrowse(WidgetTester tester, FakeWallhavenApi api) async {
+Future<void> _pumpBrowse(
+  WidgetTester tester,
+  FakeWallhavenApi api, {
+  String? storedKey,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
         wallhavenApiProvider.overrideWithValue(api),
-        secretStoreProvider.overrideWithValue(FakeSecretStore()),
+        secretStoreProvider.overrideWithValue(
+          FakeSecretStore(storedKey: storedKey),
+        ),
       ],
       child: const MaterialApp(
         localizationsDelegates: <LocalizationsDelegate<Object>>[
@@ -124,6 +130,52 @@ void main() {
     expect(first.purity, '100');
   });
 
+  testWidgets('withholds the explicit filter until a key is stored', (
+    WidgetTester tester,
+  ) async {
+    await _pumpBrowse(tester, FakeWallhavenApi());
+
+    await _openFilters(tester);
+
+    // Wallhaven 401s an explicit listing with no key, so offering the chip
+    // would only produce an error.
+    expect(find.text('Safe'), findsOneWidget);
+    expect(find.text('Explicit'), findsNothing);
+  });
+
+  testWidgets('a stored key unlocks the explicit filter, and it searches', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api, storedKey: 'abc123');
+
+    await _openFilters(tester);
+    await tester.tap(find.text('Explicit'));
+    await tester.pump();
+    await tester.tap(find.text('Show wallpapers'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Safe stays on, so this is the sfw+nsfw mask, and the grid re-queried
+    // rather than sitting on its previous page.
+    final SearchQueryFacts applied = SearchQueryFacts(api.receivedQueries.last);
+    expect(applied.purity, '101');
+  });
+
+  testWidgets('searching a term re-queries with it', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await tester.enterText(find.byType(TextField), 'sunset');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(api.receivedQueries.last.term, 'sunset');
+  });
+
   testWidgets('shows a localized message and a retry when the API fails', (
     WidgetTester tester,
   ) async {
@@ -139,6 +191,13 @@ void main() {
     );
     expect(find.text('Retry'), findsOne);
   });
+}
+
+/// Opens the filter sheet from the browse app bar.
+Future<void> _openFilters(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Filters'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 /// Reads the wire-level facts of a query without reaching into the API adapter.

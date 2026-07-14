@@ -119,6 +119,43 @@ void main() {
     );
   });
 
+  group('SearchQuery equality', () {
+    test('two queries with the same filters are the same query', () {
+      const SearchQuery one = SearchQuery(
+        term: 'sunset',
+        purity: PurityFilter({Purity.sfw, Purity.nsfw}),
+        categories: CategoryFilter({Category.anime}),
+        atLeast: Resolution(1080, 2400),
+      );
+      const SearchQuery same = SearchQuery(
+        term: 'sunset',
+        purity: PurityFilter({Purity.nsfw, Purity.sfw}),
+        categories: CategoryFilter({Category.anime}),
+        atLeast: Resolution(1080, 2400),
+      );
+
+      // Set members in a different order are the same filter. Without this the
+      // browse grid would treat every rebuild as a new listing and re-fetch.
+      expect(one, same);
+      expect(one.hashCode, same.hashCode);
+    });
+
+    test('a changed filter is a different query', () {
+      const SearchQuery sfw = SearchQuery();
+      const SearchQuery nsfw = SearchQuery(
+        purity: PurityFilter({Purity.nsfw}),
+      );
+
+      expect(sfw, isNot(nsfw));
+      expect(const SearchQuery(term: 'cats'), isNot(const SearchQuery()));
+      expect(const SearchQuery().atPage(2), isNot(const SearchQuery()));
+      expect(
+        const SearchQuery(ratios: <String>['16x9']),
+        isNot(const SearchQuery()),
+      );
+    });
+  });
+
   group('Resolution', () {
     test("parses Wallhaven's WxH form", () {
       expect(Resolution.parse('1920x1080'), const Resolution(1920, 1080));
