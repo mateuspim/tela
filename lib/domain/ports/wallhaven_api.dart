@@ -1,5 +1,6 @@
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 
 /// The only way the app talks to Wallhaven.
@@ -19,4 +20,9 @@ abstract interface class WallhavenApi {
   /// [NetworkFailure] when Wallhaven is unreachable, and
   /// [UnexpectedResponseFailure] if the payload doesn't parse.
   Future<WallpaperPage> search(SearchQuery query);
+
+  /// Fetches complete metadata for a single Wallhaven wallpaper [id].
+  ///
+  /// Uses `GET /w/{id}` and throws the same safe failures as [search].
+  Future<WallpaperDetails> wallpaperDetails(String id);
 }

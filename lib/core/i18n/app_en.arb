@@ -99,5 +99,36 @@
         "type": "String"
       }
     }
+  },
+
+  "detailMetadataTitle": "Details",
+  "detailResolution": "Resolution",
+  "detailFileSize": "File size",
+  "detailFileSizeBytes": "{size} bytes",
+  "@detailFileSizeBytes": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "detailFileType": "File type",
+  "detailCategory": "Category",
+  "detailPurity": "Purity",
+  "detailRatio": "Ratio",
+  "detailViews": "Views",
+  "detailFavorites": "Favorites",
+  "detailUploader": "Uploader",
+  "detailSource": "Source",
+  "detailColors": "Colors",
+  "detailTags": "Tags",
+  "detailNotProvided": "Not provided",
+  "detailColorLabel": "Color {color}",
+  "@detailColorLabel": {
+    "placeholders": {
+      "color": {
+        "type": "String"
+      }
+    }
   }
 }

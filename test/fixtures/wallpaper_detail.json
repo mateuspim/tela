@@ -1,0 +1,51 @@
+{
+  "data": {
+    "id": "e7jvjd",
+    "url": "https://wallhaven.cc/w/e7jvjd",
+    "short_url": "https://whvn.cc/e7jvjd",
+    "views": 4523,
+    "favorites": 128,
+    "source": "https://example.com/original-art",
+    "purity": "sfw",
+    "category": "general",
+    "dimension_x": 3840,
+    "dimension_y": 2160,
+    "resolution": "3840x2160",
+    "ratio": "1.78",
+    "file_size": 1048576,
+    "file_type": "image/jpeg",
+    "created_at": "2024-03-11 09:12:31",
+    "colors": ["#660000", "#000000", "#424153"],
+    "path": "https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg",
+    "thumbs": {
+      "large": "https://th.wallhaven.cc/lg/e7/e7jvjd.jpg",
+      "original": "https://th.wallhaven.cc/orig/e7/e7jvjd.jpg",
+      "small": "https://th.wallhaven.cc/small/e7/e7jvjd.jpg"
+    },
+    "tags": [
+      {
+        "id": 101,
+        "name": "landscape",
+        "alias": "landscape",
+        "category_id": 1,
+        "category": "general",
+        "purity": "sfw",
+        "created_at": "2012-01-01 00:00:00"
+      },
+      {
+        "id": 202,
+        "name": "sunset",
+        "alias": "sunset",
+        "category_id": 1,
+        "category": "general",
+        "purity": "sfw",
+        "created_at": "2012-01-01 00:00:00"
+      }
+    ],
+    "uploader": {
+      "username": "tela-fixture",
+      "group": "User",
+      "avatar": "https://th.wallhaven.cc/avatars/tela-fixture.jpg"
+    }
+  }
+}

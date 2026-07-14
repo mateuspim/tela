@@ -3,6 +3,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 
 /// Maps Wallhaven's JSON to domain models.
@@ -33,6 +34,26 @@ abstract final class WallhavenMapper {
       currentPage: _readInt(meta, 'current_page', fallback: 1),
       lastPage: _readInt(meta, 'last_page', fallback: 1),
       seed: meta['seed'] as String?,
+    );
+  }
+
+  /// Maps a `/w/{id}` response body to non-nullable wallpaper metadata.
+  static WallpaperDetails toDetails(Map<String, dynamic> body) {
+    final Object? data = body['data'];
+    if (data is! Map<String, dynamic>) {
+      throw UnexpectedResponseFailure(
+        'expected "data" to be a wallpaper object, got ${data.runtimeType}',
+      );
+    }
+    return WallpaperDetails(
+      wallpaper: _toWallpaper(data),
+      ratio: _readString(data, 'ratio'),
+      fileType: _readString(data, 'file_type'),
+      tags: _readTags(data),
+      uploader: _readUploader(data),
+      source: _readOptionalString(data, 'source'),
+      views: _readInt(data, 'views', fallback: 0),
+      favorites: _readInt(data, 'favorites', fallback: 0),
     );
   }
 
@@ -80,12 +101,49 @@ abstract final class WallhavenMapper {
     return colors.whereType<String>().toList();
   }
 
+  static List<WallpaperTag> _readTags(Map<String, dynamic> raw) {
+    final Object? tags = raw['tags'];
+    if (tags is! List) return const <WallpaperTag>[];
+    return tags.map(_toTag).toList();
+  }
+
+  static WallpaperTag _toTag(Object? raw) {
+    if (raw is! Map<String, dynamic>) {
+      throw UnexpectedResponseFailure(
+        'expected a tag object, got ${raw.runtimeType}',
+      );
+    }
+    return WallpaperTag(
+      id: _readInt(raw, 'id', fallback: -1),
+      name: _readString(raw, 'name'),
+    );
+  }
+
+  static WallpaperUploader _readUploader(Map<String, dynamic> raw) {
+    final Object? uploader = raw['uploader'];
+    if (uploader is! Map<String, dynamic>) {
+      throw const UnexpectedResponseFailure(
+        'wallpaper is missing its "uploader" object',
+      );
+    }
+    return WallpaperUploader(
+      username: _readString(uploader, 'username'),
+      group: _readOptionalString(uploader, 'group'),
+      avatarUrl: _readOptionalString(uploader, 'avatar'),
+    );
+  }
+
   static String _readString(Map<String, dynamic> raw, String key) {
     final Object? value = raw[key];
     if (value is String && value.isNotEmpty) return value;
     throw UnexpectedResponseFailure(
       '"$key" must be a non-empty string, got "${value ?? 'null'}"',
     );
+  }
+
+  static String _readOptionalString(Map<String, dynamic> raw, String key) {
+    final Object? value = raw[key];
+    return value is String ? value : '';
   }
 
   static int _readInt(

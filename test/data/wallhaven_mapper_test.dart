@@ -8,6 +8,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 
 Map<String, dynamic> _fixture(String name) {
@@ -16,6 +17,63 @@ Map<String, dynamic> _fixture(String name) {
 }
 
 void main() {
+  group('WallhavenMapper.toDetails', () {
+    test(
+      'maps a captured /w/{id} response to non-nullable detail metadata',
+      () {
+        final WallpaperDetails details = WallhavenMapper.toDetails(
+          _fixture('wallpaper_detail.json'),
+        );
+
+        expect(details.wallpaper.id, 'e7jvjd');
+        expect(
+          details.wallpaper.fullImageUrl,
+          endsWith('wallhaven-e7jvjd.jpg'),
+        );
+        expect(details.ratio, '1.78');
+        expect(details.fileType, 'image/jpeg');
+        expect(details.wallpaper.fileSizeBytes, 1048576);
+        expect(details.wallpaper.category, Category.general);
+        expect(details.wallpaper.purity, Purity.sfw);
+        expect(details.wallpaper.colors, <String>[
+          '#660000',
+          '#000000',
+          '#424153',
+        ]);
+        expect(details.tags.map((WallpaperTag tag) => tag.name), <String>[
+          'landscape',
+          'sunset',
+        ]);
+        expect(details.uploader.username, 'tela-fixture');
+        expect(details.source, 'https://example.com/original-art');
+        expect(details.views, 4523);
+        expect(details.favorites, 128);
+      },
+    );
+
+    test('rejects a detail response without its required uploader', () {
+      expect(
+        () => WallhavenMapper.toDetails(<String, dynamic>{
+          'data': <String, dynamic>{
+            'id': 'x',
+            'path': 'https://example.com/x.jpg',
+            'resolution': '1x1',
+            'purity': 'sfw',
+            'category': 'general',
+            'thumbs': <String, dynamic>{
+              'small': 'https://example.com/s.jpg',
+              'large': 'https://example.com/l.jpg',
+              'original': 'https://example.com/o.jpg',
+            },
+            'ratio': '1',
+            'file_type': 'image/jpeg',
+          },
+        }),
+        throwsA(isA<UnexpectedResponseFailure>()),
+      );
+    });
+  });
+
   group('WallhavenMapper.toPage', () {
     test('maps a captured /search response', () {
       final WallpaperPage page = WallhavenMapper.toPage(

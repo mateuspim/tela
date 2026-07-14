@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:tela/data/wallhaven/wallhaven_mapper.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
 
@@ -30,11 +31,29 @@ class DioWallhavenApi implements WallhavenApi {
     }
   }
 
+  @override
+  Future<WallpaperDetails> wallpaperDetails(String id) async {
+    try {
+      final Response<Map<String, dynamic>> response = await _dio
+          .get<Map<String, dynamic>>('/w/$id');
+      return _mapDetailBody(response.data);
+    } on DioException catch (error) {
+      throw _toFailure(error);
+    }
+  }
+
   WallpaperPage _mapBody(Map<String, dynamic>? body) {
     if (body == null) {
       throw const UnexpectedResponseFailure('Wallhaven returned an empty body');
     }
     return WallhavenMapper.toPage(body);
+  }
+
+  WallpaperDetails _mapDetailBody(Map<String, dynamic>? body) {
+    if (body == null) {
+      throw const UnexpectedResponseFailure('Wallhaven returned an empty body');
+    }
+    return WallhavenMapper.toDetails(body);
   }
 
   /// Translates transport-level noise into the four things the UI can act on.

@@ -1,13 +1,29 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
+import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
+import 'package:tela/domain/ports/wallhaven_api.dart';
+import 'package:tela/features/browse/wallpaper_failure_text.dart';
+import 'package:tela/features/detail/progressive_wallpaper_preview.dart';
+import 'package:tela/features/detail/wallpaper_metadata.dart';
 
-/// Full-screen preview and the shortest path to applying a wallpaper.
+/// Loads complete metadata independently of the grid's fast listing response.
+final FutureProviderFamily<WallpaperDetails, String> wallpaperDetailsProvider =
+    FutureProvider.autoDispose.family<WallpaperDetails, String>((
+      Ref ref,
+      String id,
+    ) {
+      final WallhavenApi api = ref.watch(wallhavenApiProvider);
+      return api.wallpaperDetails(id);
+    });
+
+/// Full-screen preview, metadata, and the shortest path to wallpaper apply.
 class WallpaperDetailScreen extends ConsumerStatefulWidget {
   /// Creates the detail screen for a grid [wallpaper].
   const WallpaperDetailScreen({required this.wallpaper, super.key});
@@ -85,71 +101,72 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  int _previewCacheWidth(BuildContext context) {
-    final double physicalWidth =
-        MediaQuery.sizeOf(context).width *
-        MediaQuery.devicePixelRatioOf(context);
-    return (physicalWidth * 2).round().clamp(
-      1,
-      widget.wallpaper.resolution.width,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final AsyncValue<WallpaperDetails> details = ref.watch(
+      wallpaperDetailsProvider(widget.wallpaper.id),
+    );
     return Scaffold(
       appBar: AppBar(title: Text(widget.wallpaper.resolution.toString())),
       body: Column(
         children: <Widget>[
-          Expanded(child: _preview(context, l10n)),
-          SafeArea(
-            top: false,
-            minimum: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _isApplying ? null : _chooseTarget,
-                icon: _isApplying
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.wallpaper_outlined),
-                label: Text(l10n.detailSetWallpaper),
-              ),
+          Expanded(
+            child: ListView(
+              children: <Widget>[
+                SizedBox(
+                  height: MediaQuery.sizeOf(context).height * .52,
+                  child: ProgressiveWallpaperPreview(
+                    wallpaper: widget.wallpaper,
+                  ),
+                ),
+                _metadata(details, l10n),
+              ],
             ),
           ),
+          _applyButton(l10n),
         ],
       ),
     );
   }
 
-  Widget _preview(BuildContext context, AppLocalizations l10n) {
-    return Semantics(
-      image: true,
-      label: l10n.detailPreviewLabel(widget.wallpaper.id),
-      child: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          return InteractiveViewer(
-            maxScale: 4,
-            child: SizedBox(
-              width: constraints.maxWidth,
-              height: constraints.maxHeight,
-              child: CachedNetworkImage(
-                imageUrl: widget.wallpaper.fullImageUrl,
-                fit: BoxFit.contain,
-                memCacheWidth: _previewCacheWidth(context),
-                placeholder: (_, _) => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-                errorWidget: (_, _, _) => const Center(
-                  child: Icon(Icons.broken_image_outlined),
-                ),
-              ),
-            ),
-          );
-        },
+  Widget _metadata(
+    AsyncValue<WallpaperDetails> details,
+    AppLocalizations l10n,
+  ) {
+    return details.when(
+      data: (WallpaperDetails value) => WallpaperMetadata(details: value),
+      loading: () => const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (Object error, StackTrace stackTrace) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          error is WallhavenFailure
+              ? localizedFailure(l10n, error)
+              : l10n.errorUnexpected,
+        ),
+      ),
+    );
+  }
+
+  Widget _applyButton(AppLocalizations l10n) {
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.all(16),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: _isApplying ? null : _chooseTarget,
+          icon: _isApplying
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.wallpaper_outlined),
+          label: Text(l10n.detailSetWallpaper),
+        ),
       ),
     );
   }
