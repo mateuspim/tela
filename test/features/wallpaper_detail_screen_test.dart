@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/category.dart';
@@ -88,6 +89,61 @@ void main() {
     expect(find.text('Gallery'), findsNothing);
     expect(find.text('Files, not gallery'), findsOneWidget);
     expect(find.text('Private library'), findsOneWidget);
+  });
+
+  testWidgets('a download refreshes the listings that exist to show it', (
+    WidgetTester tester,
+  ) async {
+    // Regression, found on hardware 2026-07-14. Both listings are plain (not
+    // autoDispose) futures, so each resolves once per process and then caches.
+    // Nothing dropped them when a download landed, so the file was written, the
+    // row was inserted — and the download history and the private library went
+    // on rendering the world as it looked when they were first opened. It read
+    // as "the download didn't save"; only a relaunch showed it. Reading the
+    // listing *before* the download is what reproduces it: that is the read
+    // that used to poison the cache.
+    final FakeDownloadHistory history = FakeDownloadHistory();
+    final WallpaperDetails details = _details();
+    final ProviderContainer container = ProviderContainer(
+      overrides: <Override>[
+        wallhavenApiProvider.overrideWithValue(
+          FakeWallhavenApi(details: details),
+        ),
+        secretStoreProvider.overrideWithValue(FakeSecretStore()),
+        settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+        favoritesRepositoryProvider.overrideWithValue(
+          FakeFavoritesRepository(),
+        ),
+        downloadHistoryProvider.overrideWithValue(history),
+        imageStoreProvider.overrideWithValue(FakeImageStore()),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(await container.read(recentDownloadsProvider.future), isEmpty);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: const <LocalizationsDelegate<Object>>[
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: WallpaperDetailScreen(wallpaper: details.wallpaper),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.bySemanticsLabel('Download'));
+    await tester.pumpAndSettle();
+
+    expect(history.recorded, hasLength(1));
+    expect(await container.read(recentDownloadsProvider.future), hasLength(1));
   });
 }
 

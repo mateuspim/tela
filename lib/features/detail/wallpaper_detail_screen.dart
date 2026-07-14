@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
+import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
@@ -100,10 +101,22 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   }
 
   /// Downloads to [tier], or to the configured destination when it is null.
+  ///
+  /// Invalidates both listings the download may have just changed. They are
+  /// plain (non-autoDispose) futures, so each resolves once per process and
+  /// then caches — without this a download lands on disk and in the database
+  /// while the screens that exist to show it keep rendering the world as it
+  /// looked when they were first opened. It presented as "the download did not
+  /// save", and only a relaunch made it appear (found on hardware, 2026-07-14).
+  /// Which of the two is stale depends on the wallpaper's purity, so both are
+  /// dropped rather than the caller guessing.
   Future<void> _download([StorageTier? tier]) async {
     setState(() => _isDownloading = true);
     try {
       await ref.read(downloadWallpaperProvider)(widget.wallpaper, tier: tier);
+      ref
+        ..invalidate(recentDownloadsProvider)
+        ..invalidate(privateImagesProvider);
       if (mounted) {
         _showResult(AppLocalizations.of(context).detailDownloadSuccess);
       }
