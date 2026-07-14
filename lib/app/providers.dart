@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/network/wallhaven_client.dart';
 import 'package:tela/data/secrets/secure_secret_store.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
+import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
 import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
+import 'package:tela/domain/ports/wallpaper_applier.dart';
+import 'package:tela/domain/use_cases/apply_wallpaper.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
 
 /// The composition root: every port is bound to its adapter exactly once, here.
@@ -26,6 +29,20 @@ final Provider<Dio> wallhavenDioProvider = Provider<Dio>(
 final Provider<WallhavenApi> wallhavenApiProvider = Provider<WallhavenApi>(
   (Ref ref) => DioWallhavenApi(ref.watch(wallhavenDioProvider)),
 );
+
+/// The Android wallpaper port, bound to the native method-channel adapter.
+final Provider<WallpaperApplier> wallpaperApplierProvider =
+    Provider<WallpaperApplier>(
+      (Ref ref) => MethodChannelWallpaperApplier(),
+    );
+
+/// Applies one selected wallpaper to an Android target.
+final Provider<ApplyWallpaper> applyWallpaperProvider =
+    Provider<ApplyWallpaper>(
+      (Ref ref) => ApplyWallpaper(
+        applier: ref.watch(wallpaperApplierProvider),
+      ),
+    );
 
 /// The search use case, the only thing the browse feature actually calls.
 final Provider<SearchWallpapers> searchWallpapersProvider =

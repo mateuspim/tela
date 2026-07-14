@@ -54,5 +54,50 @@
   "browseEmpty": "No wallpapers match these filters.",
   "@browseEmpty": {
     "description": "Shown when a search returns zero results."
+  },
+
+  "detailSetWallpaper": "Set wallpaper",
+  "@detailSetWallpaper": {
+    "description": "Primary action on the wallpaper detail screen."
+  },
+
+  "detailTargetTitle": "Set wallpaper on",
+  "@detailTargetTitle": {
+    "description": "Heading above the Android wallpaper target choices."
+  },
+
+  "detailTargetHome": "Home screen",
+  "@detailTargetHome": {
+    "description": "Apply the wallpaper only behind launcher icons."
+  },
+
+  "detailTargetLock": "Lock screen",
+  "@detailTargetLock": {
+    "description": "Apply the wallpaper only to the lock screen."
+  },
+
+  "detailTargetBoth": "Home and lock screens",
+  "@detailTargetBoth": {
+    "description": "Apply the wallpaper to both Android surfaces."
+  },
+
+  "detailApplySuccess": "Wallpaper set.",
+  "@detailApplySuccess": {
+    "description": "Confirmation shown after Android applies a wallpaper."
+  },
+
+  "detailApplyFailure": "Couldn't set this wallpaper.",
+  "@detailApplyFailure": {
+    "description": "Safe fallback when Android cannot apply a wallpaper."
+  },
+
+  "detailPreviewLabel": "Wallpaper {wallpaperId}",
+  "@detailPreviewLabel": {
+    "description": "Accessibility label for the full-screen preview.",
+    "placeholders": {
+      "wallpaperId": {
+        "type": "String"
+      }
+    }
   }
 }

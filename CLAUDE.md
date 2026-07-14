@@ -23,7 +23,7 @@ Roadmap, scope, and architecture rationale live in `PLAN.md`. This file is the
 | Pagination | infinite_scroll_pagination |
 | Local DB | Drift (typed SQL) |
 | Secrets | flutter_secure_storage |
-| Set wallpaper | flutter_wallpaper_plus, behind our `WallpaperApplier` interface |
+| Set wallpaper | Native Android method channel, behind our `WallpaperApplier` interface |
 | Dynamic color | dynamic_color (Material You / Monet, Wave 2) |
 
 ## Architecture
@@ -98,11 +98,12 @@ Each feature owns its widgets + Riverpod providers. Cross-feature logic goes to
 
 - Inject through constructor/parameter (wired by Riverpod providers). No global
   singletons, no reaching through imports for state.
-- **Wrap every third-party lib behind a thin project-owned interface** in
-  `domain` (the port); the package lives only in its `data`/`core` adapter.
-  Non-negotiable for: `WallhavenApi` (Dio), `WallpaperApplier` (plugin +
-  platform-channel fallback), `ImageStore` (three-tier), `SecretStore`
-  (flutter_secure_storage). Swapping a package must touch one adapter, not features.
+- **Wrap every third-party lib and platform API behind a thin project-owned
+  interface** in `domain` (the port); the dependency lives only in its
+  `data`/`core` adapter. Non-negotiable for: `WallhavenApi` (Dio),
+  `WallpaperApplier` (Android method channel), `ImageStore` (three-tier),
+  `SecretStore` (flutter_secure_storage). Swapping an implementation must touch
+  one adapter, not features.
 - Those four wrap a third-party package. `FavoritesRepository` and
   `SettingsRepository` are ports too, but pure-domain ones with no package behind
   them (Drift is an implementation detail of their adapters). Same rule, no

@@ -1,24 +1,33 @@
 import 'package:go_router/go_router.dart';
+import 'package:tela/app/routes.dart';
+import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/browse_screen.dart';
+import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 
 /// The app's routes.
 ///
-/// One route for now (Wave 0). Detail, search, favorites and settings hang off
-/// this as Wave 1 lands; keeping the router separate from the app widget means
+/// Browse and detail are live. Search, favorites, and settings hang off this as
+/// later slices land; keeping the router separate from the app widget means
 /// adding them touches this file only.
 abstract final class TelaRouter {
-  /// Path of the browse grid, the app's home.
-  static const String browsePath = '/';
-
   /// Builds the router.
   static GoRouter create() {
     return GoRouter(
-      initialLocation: browsePath,
+      initialLocation: TelaRoutes.browsePath,
       routes: <RouteBase>[
         GoRoute(
-          path: browsePath,
-          name: 'browse',
+          path: TelaRoutes.browsePath,
+          name: TelaRoutes.browseName,
           builder: (_, _) => const BrowseScreen(),
+        ),
+        GoRoute(
+          path: TelaRoutes.detailPath,
+          name: TelaRoutes.detailName,
+          redirect: (_, GoRouterState state) =>
+              state.extra is Wallpaper ? null : TelaRoutes.browsePath,
+          builder: (_, GoRouterState state) => WallpaperDetailScreen(
+            wallpaper: state.extra! as Wallpaper,
+          ),
         ),
       ],
     );

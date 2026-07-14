@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
@@ -112,7 +116,10 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
         padding: const EdgeInsets.all(8),
         builderDelegate: PagedChildBuilderDelegate<Wallpaper>(
           itemBuilder: (BuildContext context, Wallpaper wallpaper, int index) =>
-              WallpaperTile(wallpaper: wallpaper),
+              WallpaperTile(
+                wallpaper: wallpaper,
+                onTap: () => _openDetail(context, wallpaper),
+              ),
           firstPageErrorIndicatorBuilder: (BuildContext context) =>
               _error(context, l10n, state.error),
           newPageErrorIndicatorBuilder: (BuildContext context) =>
@@ -141,6 +148,16 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
             child: Text(l10n.actionRetry),
           ),
         ],
+      ),
+    );
+  }
+
+  void _openDetail(BuildContext context, Wallpaper wallpaper) {
+    unawaited(
+      context.pushNamed(
+        TelaRoutes.detailName,
+        pathParameters: <String, String>{'wallpaperId': wallpaper.id},
+        extra: wallpaper,
       ),
     );
   }

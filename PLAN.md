@@ -73,7 +73,7 @@ Flutter wins **velocity** (you know it → more real polish passes), **motion** 
 | Pagination | **infinite_scroll_pagination** | infinite grid |
 | Local DB | **Drift** | typed SQL; fits your SQLite comfort (cesta/pauta) |
 | Secrets | **flutter_secure_storage** | API key at rest |
-| Set wallpaper | **flutter_wallpaper_plus** | behind our `WallpaperApplier` port; platform-channel fallback |
+| Set wallpaper | **Native Android method channel** | direct `WallpaperManager`, behind our `WallpaperApplier` port |
 
 ### 5.3 Platform targets
 - `minSdk 29` (Android 10). Chosen over 26 so scoped storage is *always* available: below API 29 both `sharedGallery` and `filesOutsideGallery` need `WRITE_EXTERNAL_STORAGE` and a runtime grant, which would mean a second legacy write path inside the one adapter that enforces the NSFW non-indexing rule. One path, no permission prompt, ~90% device reach.
@@ -201,9 +201,12 @@ No personal data leaves the device; no server. The only secret is the API key �
 ## 11. Setting the wallpaper (the crux)
 
 `data/wallpaper/` implements `WallpaperApplier`:
-- Download full-res `path`, decode **downsampled to display bounds** (avoid OOM on 6K images).
-- Apply via `flutter_wallpaper_plus` with home / lock / both.
-- **Platform-channel fallback:** a ~30-line Kotlin method channel calling `WallpaperManager` directly, behind the same interface, for OEMs where the plugin misbehaves.
+- Download full-res `path` into app-private cache and stream it to Android's
+  wallpaper service, keeping the bitmap out of Dart's heap.
+- Apply home / lock / both through a Kotlin method channel calling
+  `WallpaperManager` directly, behind the domain interface.
+- Write home and lock sequentially for `both`, which is more reliable on
+  restrictive OEMs than a combined flag.
 - Known Android reality: on some restrictive ROMs the apply can briefly recreate the host activity (a flicker) — mitigate with the plugin's sequential home/lock write; document per-device quirks with issue refs.
 
 ---
@@ -248,7 +251,7 @@ Crop/reposition editor before apply, daily auto-rotate (WorkManager), collection
 |---|---|
 | 45/min rate limit | cache thumbs; throttle + backoff on JSON |
 | OOM on 6K images | downsample on decode, cap to display size |
-| OEM apply quirks / flicker | plugin sequential write + platform-channel fallback; test on your device early |
+| OEM apply quirks / flicker | native sequential home/lock writes; test on your device early |
 | NSFW leakage | non-indexing enforced in storage adapter; `FLAG_SECURE`; app-lock |
 | Wallhaven API changes w/o notice (ToS says so) | isolate in `data/`, fixture-tested mappers, fail soft |
 | Material You not byte-identical to native | acceptable; `dynamic_color` covers the palette loop |
