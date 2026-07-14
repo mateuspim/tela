@@ -108,7 +108,7 @@ class MainActivity : FlutterActivity() {
 
     private fun saveOutsideGalleryTree(tree: Uri, returnedFlags: Int): Boolean {
         if (tree.authority != EXTERNAL_STORAGE_PROVIDER) return false
-        val grantedFlags = returnedFlags and DIRECTORY_ACCESS_FLAGS
+        val grantedFlags = returnedFlags and PERSISTED_DIRECTORY_ACCESS_FLAGS
         return try {
             contentResolver.takePersistableUriPermission(tree, grantedFlags)
             getSharedPreferences(PREFERENCES, MODE_PRIVATE)
@@ -218,6 +218,8 @@ class MainActivity : FlutterActivity() {
                 Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
                 Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
                 Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
+        const val PERSISTED_DIRECTORY_ACCESS_FLAGS =
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
         const val NETWORK_TIMEOUT_MS = 30_000
         const val BETWEEN_TARGETS_DELAY_MS = 500L
     }

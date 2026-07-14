@@ -21,6 +21,9 @@ data class ImageStoreRequest(
 /** Android-only persistence boundary for tela's three image storage tiers. */
 class ImageStorage(private val context: Context) {
     fun store(request: ImageStoreRequest, outsideGalleryTree: String?): Map<String, Any> {
+        if (request.purity !in SUPPORTED_PURITIES || request.tier !in SUPPORTED_TIERS) {
+            return failure("unavailable")
+        }
         if (request.purity == "nsfw" && request.tier == "sharedGallery") {
             return failure("restricted")
         }
@@ -199,5 +202,7 @@ class ImageStorage(private val context: Context) {
         const val EXTERNAL_STORAGE_PROVIDER = "com.android.externalstorage.documents"
         const val NETWORK_TIMEOUT_MS = 30_000
         val VALID_ID = Regex("[A-Za-z0-9_-]{1,64}")
+        val SUPPORTED_PURITIES = setOf("sfw", "sketchy", "nsfw")
+        val SUPPORTED_TIERS = setOf("sharedGallery", "filesOutsideGallery", "appPrivate")
     }
 }
