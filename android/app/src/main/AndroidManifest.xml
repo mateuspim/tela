@@ -5,10 +5,15 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.SET_WALLPAPER"/>
 
+    <!-- The API key is excluded from both backup paths: it is encrypted with a
+         Keystore key that no backup carries, so a restored copy would be
+         undecryptable. See res/xml/backup_rules.xml. -->
     <application
         android:label="tela"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backup and device-transfer rules for Android 12+ (dataExtractionRules).
+
+     Same reasoning as backup_rules.xml, which is the pre-Android-12 half of
+     this: the encrypted API key is worthless without the Keystore key, and the
+     Keystore crosses neither a cloud backup nor a device transfer. Excluded
+     from both, so a restored tela asks for the key rather than holding one it
+     cannot read. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+    </device-transfer>
+</data-extraction-rules>

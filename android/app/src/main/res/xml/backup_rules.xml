@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auto Backup rules for Android 11 and below (android:fullBackupContent).
+
+     The Wallhaven API key is encrypted with a key that lives in the Android
+     Keystore, and the Keystore is never backed up. Backing up the encrypted
+     blob alone would restore a secret that nothing on the new device can
+     decrypt — which surfaces as a corrupt key, not a missing one. Leave it
+     behind instead: an absent key is a state the app already handles (it asks
+     for one), and re-pasting it is a five-second job.
+
+     Everything else — the Drift database, the download destinations — backs up
+     normally. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+</full-backup-content>

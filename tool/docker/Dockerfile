@@ -79,10 +79,17 @@ RUN chown -R dev:dev "${FLUTTER_ROOT}" "${ANDROID_SDK_ROOT}"
 USER dev
 WORKDIR /app
 
-# These two are bind targets for named volumes. A named volume inherits owner
+# These three are bind targets for named volumes. A named volume inherits owner
 # and content from the image path it covers — but only if that path exists.
 # Without this, Docker creates them root-owned and Gradle cannot write its lock.
-RUN mkdir -p /home/dev/.gradle /home/dev/.pub-cache
+#
+# .android holds the debug signing keystore. It has to outlive the container:
+# Gradle mints a fresh debug.keystore whenever it finds none, a differently
+# signed APK cannot update an installed one (INSTALL_FAILED_UPDATE_INCOMPATIBLE),
+# and `flutter run` resolves that by uninstalling first — silently wiping app
+# data, which is to say the Keystore-backed API key and the Drift database, on
+# every single run.
+RUN mkdir -p /home/dev/.gradle /home/dev/.pub-cache /home/dev/.android
 
 # Flutter shells out to git against its own checkout; a bind-mounted repo owned
 # by a different uid makes git refuse the directory outright.

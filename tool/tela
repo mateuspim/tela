@@ -9,7 +9,9 @@
 #   ./tool/tela --build-image    # (re)build the toolchain image
 #
 # Caches (pub, gradle) live in named volumes, so they survive `--rm` and a
-# second `test` run doesn't re-resolve the world.
+# second `test` run doesn't re-resolve the world. So does ~/.android, which is
+# not a cache: it holds the debug signing key, and a run that re-mints it forces
+# a clean reinstall that wipes the app's data.
 set -euo pipefail
 
 IMAGE="tela-toolchain"
@@ -42,6 +44,10 @@ DOCKER_ARGS=(
   -v "$REPO_ROOT:/app"
   -v "tela-pub-cache:/home/dev/.pub-cache"
   -v "tela-gradle:/home/dev/.gradle"
+  # The debug signing key. Without it every run signs the APK with a new key,
+  # Android refuses the update, and `flutter run` uninstalls the app to get out
+  # of it — taking the stored API key and the database with it.
+  -v "tela-android:/home/dev/.android"
   -w /app
 )
 
