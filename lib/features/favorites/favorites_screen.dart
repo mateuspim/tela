@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
+import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
@@ -30,8 +31,10 @@ class FavoritesScreen extends ConsumerWidget {
       body: favorites.when(
         data: (List<Wallpaper> saved) => _grid(context, l10n, saved),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stackTrace) =>
-            Center(child: Text(l10n.errorUnexpected)),
+        error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
+          icon: Icons.error_outline,
+          message: l10n.errorUnexpected,
+        ),
       ),
     );
   }
@@ -42,11 +45,9 @@ class FavoritesScreen extends ConsumerWidget {
     List<Wallpaper> saved,
   ) {
     if (saved.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(l10n.favoritesEmpty, textAlign: TextAlign.center),
-        ),
+      return WallpaperStatusView(
+        icon: Icons.favorite_border,
+        message: l10n.favoritesEmpty,
       );
     }
     return MasonryGridView.count(

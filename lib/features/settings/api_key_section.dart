@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/wallpaper_failure_text.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/use_cases/save_api_key.dart';
-import 'package:tela/features/browse/wallpaper_failure_text.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
 import 'package:tela/features/settings/api_key_dialog.dart';
 

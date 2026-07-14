@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
+import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/ports/app_lock.dart';
@@ -108,29 +109,21 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
         .when(
           data: (List<PrivateImage> stored) => _grid(context, l10n, stored),
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (Object error, StackTrace stackTrace) =>
-              Center(child: Text(l10n.privateLibraryUnavailable)),
+          error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
+            icon: Icons.error_outline,
+            message: l10n.privateLibraryUnavailable,
+          ),
         );
   }
 
   /// What a failed or dismissed prompt leaves behind: a way to try again, and
   /// nothing else. No count, no thumbnails, no hint of what is in there.
   Widget _locked(AppLocalizations l10n) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const Icon(Icons.lock_outline, size: 48),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(l10n.privateLibraryLocked, textAlign: TextAlign.center),
-          ),
-          FilledButton(
-            onPressed: _authenticate,
-            child: Text(l10n.privateLibraryUnlock),
-          ),
-        ],
-      ),
+    return WallpaperStatusView(
+      icon: Icons.lock_outline,
+      message: l10n.privateLibraryLocked,
+      actionLabel: l10n.privateLibraryUnlock,
+      onAction: _authenticate,
     );
   }
 
@@ -140,11 +133,9 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
     List<PrivateImage> stored,
   ) {
     if (stored.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(l10n.privateLibraryEmpty, textAlign: TextAlign.center),
-        ),
+      return WallpaperStatusView(
+        icon: Icons.lock_open_outlined,
+        message: l10n.privateLibraryEmpty,
       );
     }
     // Square tiles, not the masonry the other grids use: masonry packs by each

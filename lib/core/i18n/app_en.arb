@@ -56,6 +56,16 @@
     "description": "Heading of the aspect-ratio choice in the filter sheet."
   },
 
+  "filterColor": "Color",
+  "@filterColor": {
+    "description": "Heading of the dominant-colour palette in the filter sheet."
+  },
+
+  "filterColorAny": "Any color",
+  "@filterColorAny": {
+    "description": "Clears the colour filter. Selected when no colour is chosen, so the row is never empty-looking."
+  },
+
   "filterOrder": "Order",
   "@filterOrder": {
     "description": "Heading of the sort-direction choice in the filter sheet."
@@ -291,8 +301,10 @@
   "detailColors": "Colors",
   "detailTags": "Tags",
   "detailNotProvided": "Not provided",
-  "detailColorLabel": "Color {color}",
-  "@detailColorLabel": {
+
+  "colorSwatchLabel": "Color {color}",
+  "@colorSwatchLabel": {
+    "description": "Accessibility label for one colour swatch, on the detail screen and in the filter sheet. Reads out the hex, which is the only name these colours have.",
     "placeholders": {
       "color": {
         "type": "String"

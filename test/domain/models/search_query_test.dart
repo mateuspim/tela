@@ -3,6 +3,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/wallpaper_color.dart';
 
 void main() {
   group('PurityFilter.toApiBits', () {
@@ -117,6 +118,23 @@ void main() {
         expect(params['seed'], 'abc123');
       },
     );
+
+    test('sends no colour at all when none is chosen', () {
+      // Not an empty `colors=`, which Wallhaven reads as a filter that matches
+      // nothing rather than as the absence of one.
+      expect(
+        const SearchQuery().toQueryParameters().containsKey('colors'),
+        isFalse,
+      );
+    });
+
+    test('sends a chosen colour without its leading hash', () {
+      final Map<String, String> params = const SearchQuery()
+          .withColor(WallpaperColor('#0066cc'))
+          .toQueryParameters();
+
+      expect(params['colors'], '0066cc');
+    });
   });
 
   group('SearchQuery equality', () {
@@ -153,6 +171,61 @@ void main() {
         const SearchQuery(ratios: <String>['16x9']),
         isNot(const SearchQuery()),
       );
+      expect(
+        const SearchQuery().withColor(WallpaperColor('#0066cc')),
+        isNot(const SearchQuery()),
+      );
+    });
+
+    test('two queries filtered by the same colour are the same query', () {
+      final SearchQuery one = const SearchQuery().withColor(
+        WallpaperColor('#0066cc'),
+      );
+      final SearchQuery same = const SearchQuery().withColor(
+        WallpaperColor('#0066cc'),
+      );
+
+      expect(one, same);
+      expect(one.hashCode, same.hashCode);
+    });
+  });
+
+  group('SearchQuery.withColor', () {
+    test('clears the colour, which copyWith structurally cannot', () {
+      // copyWith fills an omitted argument from `this`, so it reads a null
+      // colour as "leave it alone". Deselecting the swatch needs a call that
+      // can mean "no colour" — without this the filter would be unremovable.
+      final SearchQuery filtered = const SearchQuery().withColor(
+        WallpaperColor('#0066cc'),
+      );
+
+      expect(filtered.copyWith().color, WallpaperColor('#0066cc'));
+      expect(filtered.withColor(null).color, isNull);
+      expect(
+        filtered.withColor(null).toQueryParameters().containsKey('colors'),
+        isFalse,
+      );
+    });
+
+    test('leaves every other filter alone', () {
+      const SearchQuery query = SearchQuery(
+        term: 'sunset',
+        sorting: Sorting.toplist,
+        purity: PurityFilter({Purity.sketchy}),
+        categories: CategoryFilter({Category.anime}),
+        atLeast: Resolution(1080, 2400),
+        ratios: <String>['16x9'],
+        page: 3,
+        seed: 'abc123',
+      );
+
+      final SearchQuery colored = query.withColor(WallpaperColor('#ea4c88'));
+
+      expect(colored.withColor(null), query);
+      expect(colored.term, 'sunset');
+      expect(colored.sorting, Sorting.toplist);
+      expect(colored.page, 3);
+      expect(colored.seed, 'abc123');
     });
   });
 

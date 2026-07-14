@@ -2,6 +2,7 @@ import 'package:meta/meta.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/wallpaper_color.dart';
 
 /// How Wallhaven orders results. The browse tabs are just three of these.
 enum Sorting {
@@ -103,6 +104,7 @@ class SearchQuery {
     this.topRange = TopRange.oneMonth,
     this.atLeast,
     this.ratios = const <String>['9x16'],
+    this.color,
     this.page = 1,
     this.seed,
   });
@@ -134,6 +136,10 @@ class SearchQuery {
   /// Aspect ratios, e.g. `9x16`. Portrait-first, because this is a phone.
   final List<String> ratios;
 
+  /// Dominant colour to match, from Wallhaven's fixed palette. Null means "any
+  /// colour", which is not the same request as any particular one.
+  final WallpaperColor? color;
+
   /// 1-based page number.
   final int page;
 
@@ -145,7 +151,32 @@ class SearchQuery {
   /// callers can't accidentally mutate the rest of the query while scrolling.
   SearchQuery atPage(int page) => copyWith(page: page);
 
+  /// Returns a copy filtered by [color], or by no colour when it is null.
+  ///
+  /// Not a [copyWith] parameter, and that is the whole point: `copyWith` fills
+  /// an omitted argument from `this`, so it cannot tell "leave the colour
+  /// alone" apart from "clear the colour" — both arrive as null. Deselecting
+  /// the swatch needs a call that means only the second thing.
+  SearchQuery withColor(WallpaperColor? color) {
+    return SearchQuery(
+      term: term,
+      categories: categories,
+      purity: purity,
+      sorting: sorting,
+      order: order,
+      topRange: topRange,
+      atLeast: atLeast,
+      ratios: ratios,
+      color: color,
+      page: page,
+      seed: seed,
+    );
+  }
+
   /// Returns a copy with the given fields replaced.
+  ///
+  /// An omitted field keeps its current value, so this cannot *clear* a
+  /// nullable one — see [withColor].
   SearchQuery copyWith({
     String? term,
     CategoryFilter? categories,
@@ -155,6 +186,7 @@ class SearchQuery {
     TopRange? topRange,
     Resolution? atLeast,
     List<String>? ratios,
+    WallpaperColor? color,
     int? page,
     String? seed,
   }) {
@@ -167,6 +199,7 @@ class SearchQuery {
       topRange: topRange ?? this.topRange,
       atLeast: atLeast ?? this.atLeast,
       ratios: ratios ?? this.ratios,
+      color: color ?? this.color,
       page: page ?? this.page,
       seed: seed ?? this.seed,
     );
@@ -189,6 +222,7 @@ class SearchQuery {
         other.topRange == topRange &&
         other.atLeast == atLeast &&
         _sameElements(other.ratios, ratios) &&
+        other.color == color &&
         other.page == page &&
         other.seed == seed;
   }
@@ -204,6 +238,7 @@ class SearchQuery {
       topRange,
       atLeast,
       Object.hashAllUnordered(ratios),
+      color,
       page,
       seed,
     );
@@ -231,6 +266,7 @@ class SearchQuery {
       if (sorting.usesTopRange) 'topRange': topRange.apiValue,
       if (atLeast != null) 'atleast': atLeast!.toApiValue(),
       if (ratios.isNotEmpty) 'ratios': ratios.join(','),
+      if (color != null) 'colors': color!.toApiValue(),
       'page': '$page',
       'seed': ?seed,
     };

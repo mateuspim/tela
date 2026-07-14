@@ -13,6 +13,7 @@ import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/browse_screen.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
@@ -190,6 +191,87 @@ void main() {
       findsOne,
     );
     expect(find.text('Retry'), findsOne);
+    // The offline icon, not the generic error one: a dead network is the one
+    // failure the user can actually do something about.
+    expect(find.byIcon(Icons.cloud_off_outlined), findsOne);
+  });
+
+  testWidgets('browses every colour until a swatch is picked', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = FakeWallhavenApi();
+
+    await _pumpBrowse(tester, api);
+
+    // No `colors` at all, rather than an empty one — Wallhaven reads an empty
+    // filter as matching nothing.
+    expect(SearchQueryFacts(api.receivedQueries.first).colors, isNull);
+  });
+
+  testWidgets('picking a colour re-queries the grid with it', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await _openFilters(tester);
+    await _tapSwatch(tester, WallpaperColor('#0066cc'));
+    await tester.tap(find.text('Show wallpapers'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Sent bare, and the grid actually re-fetched rather than leaving the old
+    // page up under a filter that appears ignored.
+    expect(SearchQueryFacts(api.receivedQueries.last).colors, '0066cc');
+  });
+
+  testWidgets('tapping the chosen colour again clears the filter', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await _openFilters(tester);
+    await _tapSwatch(tester, WallpaperColor('#0066cc'));
+    await _tapSwatch(tester, WallpaperColor('#0066cc'));
+    await tester.tap(find.text('Show wallpapers'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The colour must be removable, which is the whole reason SearchQuery has
+    // withColor: copyWith cannot express "back to none".
+    expect(SearchQueryFacts(api.receivedQueries.last).colors, isNull);
+  });
+
+  testWidgets('"Any color" clears a chosen colour', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await _openFilters(tester);
+    await _tapSwatch(tester, WallpaperColor('#ea4c88'));
+    await tester.tap(find.text('Any color'));
+    await tester.pump();
+    await tester.tap(find.text('Show wallpapers'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(SearchQueryFacts(api.receivedQueries.last).colors, isNull);
+  });
+
+  testWidgets('the apply button stays reachable under the colour palette', (
+    WidgetTester tester,
+  ) async {
+    await _pumpBrowse(tester, FakeWallhavenApi());
+
+    await _openFilters(tester);
+
+    // The palette is 29 swatches tall. With the actions inside the scroll view
+    // it pushed "Show wallpapers" off the bottom of the sheet — an apply button
+    // you have to go looking for is one that doesn't get pressed.
+    expect(find.text('Show wallpapers'), findsOne);
+    expect(tester.getSize(find.text('Show wallpapers')).height, greaterThan(0));
   });
 }
 
@@ -198,6 +280,18 @@ Future<void> _openFilters(WidgetTester tester) async {
   await tester.tap(find.byTooltip('Filters'));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
+}
+
+/// Taps one palette swatch, found the way a screen reader would reach it.
+///
+/// The swatches have no text — the hex in their semantics label is the only
+/// name they have, which is exactly why they carry one.
+Future<void> _tapSwatch(WidgetTester tester, WallpaperColor color) async {
+  await tester.tap(
+    find.bySemanticsLabel('Color ${color.hex}'),
+    warnIfMissed: false,
+  );
+  await tester.pump();
 }
 
 /// Reads the wire-level facts of a query without reaching into the API adapter.
@@ -212,4 +306,7 @@ class SearchQueryFacts {
 
   /// The `purity` bit mask.
   String? get purity => _params['purity'];
+
+  /// The `colors` param — bare hex, no leading `#`, absent when unfiltered.
+  String? get colors => _params['colors'];
 }

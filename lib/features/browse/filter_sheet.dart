@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/wallpaper_swatch.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/features/browse/browse_filter_text.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
@@ -39,21 +41,44 @@ class FilterSheet extends ConsumerStatefulWidget {
 class _FilterSheetState extends ConsumerState<FilterSheet> {
   late SearchQuery _draft = ref.read(browseQueryProvider);
 
+  /// Filters scroll; the actions do not.
+  ///
+  /// The colour palette is 29 swatches tall, and with the buttons in the scroll
+  /// view it pushed "Show wallpapers" off the bottom of the sheet — an apply
+  /// button you have to go looking for is an apply button that doesn't get
+  /// pressed. [Flexible] lets the list shrink to its content on a short sheet
+  /// and scroll on a full one, with the actions pinned under it either way.
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return SafeArea(
-      child: ListView(
-        shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          _FilterGroup(title: l10n.filterCategories, child: _categories(l10n)),
-          _FilterGroup(title: l10n.filterPurity, child: _purities(l10n)),
-          _FilterGroup(title: l10n.filterRatio, child: _ratios(l10n)),
-          _FilterGroup(title: l10n.filterOrder, child: _order(l10n)),
-          _FilterGroup(title: l10n.filterTopRange, child: _topRange(l10n)),
-          const SizedBox(height: 8),
-          _actions(l10n),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              children: <Widget>[
+                _FilterGroup(
+                  title: l10n.filterCategories,
+                  child: _categories(l10n),
+                ),
+                _FilterGroup(title: l10n.filterPurity, child: _purities(l10n)),
+                _FilterGroup(title: l10n.filterRatio, child: _ratios(l10n)),
+                _FilterGroup(title: l10n.filterColor, child: _colors(l10n)),
+                _FilterGroup(title: l10n.filterOrder, child: _order(l10n)),
+                _FilterGroup(
+                  title: l10n.filterTopRange,
+                  child: _topRange(l10n),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: _actions(l10n),
+          ),
         ],
       ),
     );
@@ -102,6 +127,32 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
       ],
       selected: <RatioChoice>{RatioChoice.of(_draft)},
       onSelectionChanged: _chooseRatio,
+    );
+  }
+
+  /// Wallhaven matches one colour at a time, so these are a radio, not chips:
+  /// picking a second colour replaces the first rather than adding to it.
+  ///
+  /// "Any color" leads, and is selected whenever no swatch is — the row never
+  /// reads as "no colour chosen yet" when it means "every colour".
+  Widget _colors(AppLocalizations l10n) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[
+        FilterChip(
+          label: Text(l10n.filterColorAny),
+          selected: _draft.color == null,
+          onSelected: (bool _) => _chooseColor(null),
+        ),
+        for (final WallpaperColor color in WallpaperColor.palette)
+          WallpaperSwatch(
+            color: color,
+            selected: _draft.color == color,
+            onTap: () => _chooseColor(color),
+          ),
+      ],
     );
   }
 
@@ -163,6 +214,15 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
 
   void _chooseRatio(Set<RatioChoice> chosen) {
     setState(() => _draft = _draft.copyWith(ratios: chosen.single.ratios));
+  }
+
+  /// Selects [color], or clears the filter when it is null or already selected.
+  ///
+  /// Tapping the chosen swatch again is how you take it off without hunting for
+  /// the "Any color" chip.
+  void _chooseColor(WallpaperColor? color) {
+    final WallpaperColor? next = color == _draft.color ? null : color;
+    setState(() => _draft = _draft.withColor(next));
   }
 
   void _chooseTopRange(TopRange? range) {

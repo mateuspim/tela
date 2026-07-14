@@ -18,9 +18,9 @@ Wallhaven response. It is unit-tested; a lost seed would show up only as
 repeated images several pages in.
 
 **Wave 2 is now in progress.** Favorites are `0cf2781`, Material You is
-`c056369`, the private library is `a2e5da7` + `5f747a8`, and the download
-history is `50485bd`; see "Wave 2 so far" below. Two slices remain: account
-`/settings` sync, and the colour filter with the shared empty/offline states.
+`c056369`, the private library is `a2e5da7` + `5f747a8`, the download history is
+`50485bd`, and the colour filter with the shared status states is `HEAD`; see
+"Wave 2 so far" below. **One slice remains: account `/settings` sync.**
 
 The app supports the thin product loop:
 
@@ -95,6 +95,14 @@ the file the download already left on the device** — no second fetch, and it
 works with no network. `WallpaperApplier` therefore takes a `Uri` source rather
 than a URL, and Kotlin reads a local `file://` or `content://` through the
 `ContentResolver` when the scheme is not http(s).
+
+**Colour filter + shared status states** (`HEAD`). The filter sheet now carries
+Wallhaven's 29-swatch palette, and every grid in the app draws its empty and
+failed states through one `WallpaperStatusView` instead of four hand-rolled
+centred `Text`s. Browse, favorites, the download history, and the private
+library now say "nothing here" the same way, and a failure picks its icon from
+what actually failed — the offline cloud for a dead network, not a generic
+error triangle.
 
 ## Decisions made
 
@@ -290,12 +298,52 @@ than a URL, and Kotlin reads a local `file://` or `content://` through the
   `ListView`, and the new history tile pushed the explicit-purity picker below a
   phone-sized test fold, where it is never built — which failed as "the setting
   disappeared" rather than "scroll down".
+- **The colour filter is one colour, not a set**, unlike categories and purity.
+  Wallhaven's `colors` param matches a single palette entry; a comma-separated
+  list is not a union, it is a request that matches nothing. So the swatches are
+  a radio, and picking a second colour replaces the first.
+- **The palette is a fixed list of 29, not a free hex field.** Wallhaven matches
+  against its own buckets, so an arbitrary `#123456` returns zero results —
+  which would read as a broken filter rather than an unsupported one. Wallhaven
+  quantizes every wallpaper's own colours down to the same 29, so a colour seen
+  on a detail screen is always one the filter can search for.
+- **`SearchQuery.withColor` exists because `copyWith` structurally cannot clear
+  a nullable field.** `copyWith` fills an omitted argument from `this`, so it
+  reads `color: null` as "leave it alone" and not as "no colour" — the two are
+  indistinguishable at the call site. Without a separate method the colour
+  filter would have been *unremovable*. The same hole is still open for
+  `atLeast` and `seed`; neither is ever cleared today, so neither has been given
+  the same treatment yet. It is a trap for whoever needs to clear one first.
+- **`WallpaperColor` has a throwing constructor *and* a fail-soft `readAll`**,
+  and the split is on purpose. The filter path passes palette constants, where a
+  bad value is a programmer error and should throw. The display path passes
+  whatever Wallhaven put in a wallpaper's JSON, where one unreadable swatch must
+  cost that swatch and not the detail screen it sits on. The detail screen's old
+  `int.parse('FF${hex.substring(1)}')` would have thrown on a malformed colour
+  and taken the whole metadata panel with it; routing it through `readAll`
+  fixed that on the way past.
+- **The filter sheet's actions are now pinned below a scrolling list**, not the
+  last row of it. The palette is tall enough that "Show wallpapers" fell off the
+  bottom of the sheet — an apply button you have to go looking for is one that
+  doesn't get pressed. A widget test holds the button on screen so the next
+  filter group cannot quietly push it off again.
+- `wallpaper_failure_text.dart` **moved from `features/browse` to `core/ui`**.
+  Three features now report the same Wallhaven failures, and `core` may not
+  import a feature. The icon-per-failure switch lives next to it in
+  `WallpaperStatusView`; both are exhaustive over the sealed failure type, so a
+  new failure is a compile error rather than a blank screen with a generic
+  triangle.
+- The status view's *empty* states take an explicit icon from each screen rather
+  than deriving one, because "empty" means something different on each: browse
+  found nothing, favorites has never been used, the history is genuinely empty
+  by design for explicit downloads. Only the *failure* states derive their icon,
+  because there the failure itself is the fact worth reading.
 
 ## Verification
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 159 tests pass
+- `./tool/tela test`: 187 tests pass
 - Three-tap browse → detail → Both widget flow: covered
 - Domain use case and all native target/error mappings: covered
 - `/w/{id}` is covered by a detail JSON fixture, mapper boundary tests, and a
@@ -362,28 +410,48 @@ than a URL, and Kotlin reads a local `file://` or `content://` through the
 - `./tool/tela build apk --debug` and `--release`: pass, and the release merged
   manifest still shows only `INTERNET`, `SET_WALLPAPER`, `USE_BIOMETRIC`,
   `USE_FINGERPRINT` — reading back a download needs no permission
+- Colour filter: the domain model (both Wallhaven dialects, case normalization,
+  four rejected shapes, the ArgumentError naming the value *and* `#rrggbb`, RGB
+  without alpha, `readAll` dropping one bad colour instead of the list, and the
+  palette being 29 unique encodable colours that contain the fixture's own),
+  `SearchQuery` (no `colors` param when unfiltered, a bare hex when filtered,
+  equality, and `withColor` clearing what `copyWith` cannot while leaving every
+  other field alone), and the browse screen end to end — a swatch re-queries with
+  `colors`, tapping it again clears it, "Any color" clears it, and the apply
+  button stays on screen under the palette
+- The shared status view: icon and message render, no button when there is no
+  action, the action fires, each failure gets its own icon and sentence, and
+  neither a raw non-Wallhaven error nor a developer-facing failure message ever
+  reaches the screen
 
 The Random tab's deep paging is the one Wave 1 behaviour never exercised on
 hardware — see below.
 
 ## Start of next session
 
-### 1. Wave 2, continued
+### 1. Wave 2, last slice
 
-Two slices remain:
+**Account `/settings` sync** is all that is left of Wave 2. `GET /settings` on
+`WallhavenApi`, pulling the account's default purity/categories/resolutions. This
+is also the endpoint that would give the API key a first-class validity check, if
+the NSFW probe used by `SaveApiKey` ever proves too blunt.
 
-**Account `/settings` sync.** `GET /settings` on `WallhavenApi`, pulling the
-account's default purity/categories/resolutions. This is also the endpoint that
-would give the API key a first-class validity check, if the NSFW probe used by
-`SaveApiKey` ever proves too blunt.
+The open design question is **when it syncs, and what wins**. tela already has
+browse defaults and a persisted `SearchQuery`; pulling the account's defaults on
+top of a filter the user set by hand would silently undo their choice. Landing
+this as "fetch once when a key is saved, and only seed the *defaults*" is
+probably right, but it is a decision, not an implementation detail.
 
-**Colour filter + shared empty/error/offline states** across the grids. The
-lightest slice.
+Two things were deliberately left out rather than forgotten:
 
-The history has **no way to remove an entry**, deliberately left out rather than
-forgotten: "remove from history" and "delete the file" are two different actions,
-and offering the first next to a tile that looks like a file is how someone
-deletes the wrong thing. Worth designing, not worth guessing at.
+- The history has **no way to remove an entry**. "Remove from history" and
+  "delete the file" are two different actions, and offering the first next to a
+  tile that looks like a file is how someone deletes the wrong thing. Worth
+  designing, not worth guessing at.
+- **Only `color` got a `withColor`.** `SearchQuery.atLeast` and `seed` have the
+  same `copyWith`-cannot-clear hole; neither is ever cleared today, so neither
+  was given an escape hatch it does not need yet. Whoever needs to clear one
+  first will find the trap — see the decision above.
 
 ### 2. Owed on the device
 
@@ -414,6 +482,12 @@ bite:
   confirm it is still there and still renders in airplane mode.
 - **Material You.** Change the system wallpaper/accent and confirm tela's chrome
   follows.
+- **The colour filter against real Wallhaven.** It has only ever met
+  `FakeWallhavenApi`, so the `colors=0066cc` param has never been answered by the
+  real server. Pick a swatch, confirm the grid actually comes back blue, and
+  confirm an unpopular colour returns the empty state rather than an error. Also
+  check the palette is usable one-handed on a real phone — 29 swatches is a lot
+  of sheet, and the pinned apply button is the thing that makes it survivable.
 - **Random-tab deep paging** — still owed from Wave 1. The shuffle seed carries
   through `SearchWallpapers.nextPageAfter`, unit-tested but never against a real
   multi-page Wallhaven response; a lost seed shows up only as repeated images

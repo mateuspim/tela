@@ -8,11 +8,10 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
+import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
-import 'package:tela/features/browse/wallpaper_failure_text.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
 /// An infinite, masonry-packed grid of wallpapers for one [query].
@@ -121,34 +120,24 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
                 onTap: () => _openDetail(context, wallpaper),
               ),
           firstPageErrorIndicatorBuilder: (BuildContext context) =>
-              _error(context, l10n, state.error),
+              _failure(l10n, state.error),
           newPageErrorIndicatorBuilder: (BuildContext context) =>
-              _error(context, l10n, state.error),
+              _failure(l10n, state.error),
           noItemsFoundIndicatorBuilder: (BuildContext context) =>
-              Center(child: Text(l10n.browseEmpty)),
+              WallpaperStatusView(
+                icon: Icons.search_off,
+                message: l10n.browseEmpty,
+              ),
         ),
       ),
     );
   }
 
-  Widget _error(BuildContext context, AppLocalizations l10n, Object? error) {
-    final String message = error is WallhavenFailure
-        ? localizedFailure(l10n, error)
-        : l10n.errorUnexpected;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(message, textAlign: TextAlign.center),
-          ),
-          FilledButton.tonal(
-            onPressed: _retry,
-            child: Text(l10n.actionRetry),
-          ),
-        ],
-      ),
+  Widget _failure(AppLocalizations l10n, Object? error) {
+    return WallpaperStatusView.failure(
+      l10n: l10n,
+      error: error,
+      onRetry: _retry,
     );
   }
 

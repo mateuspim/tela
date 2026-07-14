@@ -4,6 +4,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
+import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
@@ -39,8 +40,10 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
       body: downloads.when(
         data: (List<DownloadRecord> recent) => _grid(context, l10n, recent),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stackTrace) =>
-            Center(child: Text(l10n.errorUnexpected)),
+        error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
+          icon: Icons.error_outline,
+          message: l10n.errorUnexpected,
+        ),
       ),
     );
   }
@@ -51,11 +54,9 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
     List<DownloadRecord> recent,
   ) {
     if (recent.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(l10n.downloadHistoryEmpty, textAlign: TextAlign.center),
-        ),
+      return WallpaperStatusView(
+        icon: Icons.download_outlined,
+        message: l10n.downloadHistoryEmpty,
       );
     }
     return MasonryGridView.count(

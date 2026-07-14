@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/wallpaper_swatch.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
+import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 
 /// The textual and colour metadata returned only by `/w/{id}`.
@@ -96,6 +98,10 @@ class _MetadataRow extends StatelessWidget {
 }
 
 /// Dominant palette chips, with labels for non-visual access.
+///
+/// A colour Wallhaven sends in a shape we don't recognise is dropped rather
+/// than painted: it costs that one swatch, where parsing it eagerly would take
+/// the whole metadata panel down with it.
 class _Colors extends StatelessWidget {
   const _Colors({required this.colors});
 
@@ -104,37 +110,17 @@ class _Colors extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    if (colors.isEmpty) {
+    final List<WallpaperColor> readable = WallpaperColor.readAll(colors);
+    if (readable.isEmpty) {
       return Text(l10n.detailNotProvided);
     }
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: colors.map((String hex) => _ColorChip(hex: hex)).toList(),
-    );
-  }
-}
-
-/// A single dominant colour in the detail palette.
-class _ColorChip extends StatelessWidget {
-  const _ColorChip({required this.hex});
-
-  final String hex;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color color = Color(int.parse('FF${hex.substring(1)}', radix: 16));
-    return Semantics(
-      label: AppLocalizations.of(context).detailColorLabel(hex),
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: color,
-          border: Border.all(color: Theme.of(context).colorScheme.outline),
-          borderRadius: BorderRadius.circular(18),
-        ),
-      ),
+      children: <Widget>[
+        for (final WallpaperColor color in readable)
+          WallpaperSwatch(color: color),
+      ],
     );
   }
 }
