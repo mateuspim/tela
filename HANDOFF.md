@@ -17,8 +17,10 @@ of the Random tab**, so the shuffle seed carried by
 Wallhaven response. It is unit-tested; a lost seed would show up only as
 repeated images several pages in.
 
-**Wave 2 is now in progress.** Favorites are `0cf2781` and Material You is
-`c056369`; see "Wave 2 so far" below.
+**Wave 2 is now in progress.** Favorites are `0cf2781`, Material You is
+`c056369`, and the private library is `a2e5da7` + `5f747a8`; see "Wave 2 so far"
+below. Three slices remain: download history, account `/settings` sync, and the
+colour filter with the shared empty/offline states.
 
 The app supports the thin product loop:
 
@@ -79,6 +81,12 @@ landed in so the heart renders from the answer rather than re-reading the store.
 
 **Material You** (`c056369`). `DynamicColorBuilder` feeds the device palette to
 `TelaTheme`, which harmonizes it. The seed stays a live path, not a placeholder.
+
+**Private library** (`a2e5da7`, and its app-lock in `5f747a8`). The `appPrivate`
+tier had been written to since Wave 1 with no way to read it back, so explicit
+downloads were write-only — uninstalling was the only way to get a file out. It
+is now listable and deletable, behind `FLAG_SECURE` and an optional biometric/PIN
+gate. Reached from Settings, not the browse app bar.
 
 ## Decisions made
 
@@ -196,20 +204,57 @@ landed in so the heart renders from the answer rather than re-reading the store.
   code — Monet is Android 12+ and tela's minSdk is 29.
 - `dynamic_color` compiles under the pinned AGP 9 toolchain, which is precisely
   what `flutter_wallpaper_plus` could not do. Both APKs still build.
+- **Only the app-private tier is listable, and that asymmetry is the design.**
+  The other two tiers land where the system gallery or a file manager already
+  shows the result; app-private files are visible to nothing but tela. `ImageStore`
+  therefore grew `privateImages()` and `deletePrivateImage()` and *not* a general
+  "list any tier" method.
+- The app-lock gate lives **inside** `PrivateLibraryScreen`, not on the Settings
+  tile that opens it. A route can be reached more than one way, and gating the
+  button would leave a deep link to `/private` walking straight past it.
+- **The lock deliberately declines to lock anyone out, in two places.** A device
+  with no biometric *and* no screen lock cannot answer a prompt, so the gate
+  steps aside and the switch hides itself — a setting that cannot be satisfied
+  would trap the owner outside their own files. And `biometricOnly` stays false,
+  so a fingerprint that stops reading is never the only key.
+- A corrupt *lock* setting reads as **locked**, unlike the storage-tier fallbacks
+  that read as the safe default. "I can't tell whether this was locked" has only
+  one safe reading. (Absent still means unlocked: the lock is opt-in.)
+- `FLAG_SECURE` is taken in `initState` and released in `dispose`, and the
+  `ScreenGuard` is held in a field because **Riverpod forbids `ref.read` in
+  `dispose`** — there is no second chance to release it. Left on, it would
+  silently block screenshots of the whole app.
+- The native delete matches the id against `VALID_ID` *before* building any path.
+  The id arrives over a method channel, and `../../databases/tela` is how a
+  listing feature turns into an arbitrary-file delete.
+- Private-library tiles are **square, not masonry**. Masonry packs by aspect
+  ratio; a file on disk has no known ratio until it is decoded, and a browse tile
+  only gets its shape from Wallhaven's metadata, which these do not have. (A
+  zero-height tile is also dropped from the semantics tree, which is how the
+  first version failed its own accessibility test.)
+- **`MainActivity` is now a `FlutterFragmentActivity`.** `local_auth`'s
+  BiometricPrompt needs a `FragmentManager`, and a plain `FlutterActivity` fails
+  at *prompt* time rather than at build time — the app-lock would have compiled
+  and simply not worked.
+- The manifest now carries `USE_BIOMETRIC` (declared) and `USE_FINGERPRINT`
+  (**merged in by `local_auth_android`**, not by us — worth knowing before the
+  next permission audit reads it as a regression). Both are normal, install-time
+  permissions. There is still **no storage or media permission**.
 
 ## Verification
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 123 tests pass
+- `./tool/tela test`: 143 tests pass
 - Three-tap browse → detail → Both widget flow: covered
 - Domain use case and all native target/error mappings: covered
 - `/w/{id}` is covered by a detail JSON fixture, mapper boundary tests, and a
   detail widget metadata test
 - `./tool/tela build apk --debug`: passes
 - `./tool/tela build apk --release`: passes
-- Release merged manifest re-inspected after adding Drift: still only `INTERNET`
-  and `SET_WALLPAPER`; no `READ_EXTERNAL_STORAGE` or `READ_MEDIA_*`
+- Release merged manifest re-inspected after the private library: `INTERNET`,
+  `SET_WALLPAPER`, `USE_BIOMETRIC`, `USE_FINGERPRINT`. Still no
+  `READ_EXTERNAL_STORAGE` and no `READ_MEDIA_*`
 - Download routing has domain/use-case, method-channel, and detail-widget
   coverage; `./tool/tela build apk --debug` compiles the Android storage code
 - Storage settings covered at every layer: the domain model (defaults, sketchy
@@ -240,6 +285,17 @@ landed in so the heart renders from the answer rather than re-reading the store.
   emptying, and the grid rendering with no API bound at all)
 - The v1→v2 migration is tested against a hand-built v1 database: the settings
   survive and the favorites table appears
+- Private library: the method-channel adapter (listing mapped to domain images,
+  an empty tier listing nothing rather than failing, a mangled row skipped rather
+  than emptying the library, listing and delete failures mapped to safe failures),
+  and the screen — `FLAG_SECURE` held while it is open and released when it is
+  left, the empty state, a tile per image, and a long-press deleting only after
+  it is confirmed
+- The app-lock gate: nothing is listed until the prompt passes, a failed prompt
+  leaves only a retry, a dismissed prompt can be retried, no prompt is raised when
+  the lock is off, and the gate steps aside on a device that cannot ask. The Drift
+  adapter covers the opt-in default, the round trip, and the corrupt-reads-locked
+  rule
 - Material You: the device palette is used, a missing one falls back to the
   seed, a wrong-brightness one is refused, and the chrome stays untinted
 - `./tool/tela build apk --debug`: passes with `dynamic_color` and the new schema
@@ -251,34 +307,45 @@ hardware — see below.
 
 ### 1. Wave 2, continued
 
-Three slices remain, in the order they unblock each other:
-
-**Private library** (`FLAG_SECURE` + app-lock). The `appPrivate` tier has been
-written to since Wave 1 but there is still no way to *see* what is in it, so
-NSFW downloads are currently write-only. This needs a new port method to list
-stored images (`ImageStore` can write but not enumerate), `FLAG_SECURE` on the
-screen so it cannot be screenshotted or thumbnailed in the app switcher, and an
-optional biometric/PIN gate. It is the largest remaining slice and the one that
-closes CLAUDE.md's NSFW rules.
+Three slices remain:
 
 **Download history + "set again."** Persist downloads in Drift (the database is
-already open and now has two tables), so a wallpaper that is already on the
-device can be re-applied without re-fetching it.
+open and now at v2), so a wallpaper already on the device can be re-applied
+without re-fetching it. Pure Dart, no new native surface — the smallest of the
+three.
 
 **Account `/settings` sync.** `GET /settings` on `WallhavenApi`, pulling the
 account's default purity/categories/resolutions. This is also the endpoint that
 would give the API key a first-class validity check, if the NSFW probe used by
 `SaveApiKey` ever proves too blunt.
 
-Then: the colour filter, and consistent error/empty/offline states across the
-grids.
+**Colour filter + shared empty/error/offline states** across the grids. The
+lightest slice.
 
-### 2. Still owed on the device
+### 2. Owed on the device
 
-Deep-scroll the **Random** tab. The shuffle seed carries through
-`SearchWallpapers.nextPageAfter`, which is unit-tested but has never paged a
-real Wallhaven response; a lost seed shows up only as repeated images several
-pages in. Everything else in Wave 1 passed on hardware.
+Nothing in Wave 2 has run on hardware yet. In rough order of what would actually
+bite:
 
-Worth a look once the private library lands: confirm on-device that an explicit
-download is reachable *in tela* and still absent from Photos.
+- **The app-lock, end to end.** It has only ever met `FakeAppLock`. Turn it on in
+  Settings, leave the private library, come back, and confirm the prompt appears
+  and the PIN fallback works. `MainActivity` became a `FlutterFragmentActivity`
+  for this; it compiles, but the *prompt* is the thing a plain `FlutterActivity`
+  would have broken, and only a device shows that.
+- **`FLAG_SECURE`.** Open the private library and check the app switcher shows a
+  blank card, and that a screenshot is refused. Then leave it and confirm
+  screenshots work again everywhere else — a leaked flag would disable them app-wide.
+- **The private library against real files.** It has never listed a real
+  `filesDir/wallpapers`. Download an explicit wallpaper, confirm it appears there,
+  delete it, and confirm it is gone and still absent from Photos.
+- **The v1→v2 migration on the real database.** The test builds a v1 database by
+  hand, but the device holds the actual one. Confirm the download destinations and
+  the API key survive the first launch of this build.
+- **Favorites persistence.** Favorite a wallpaper, kill the app, reopen it, and
+  confirm it is still there and still renders in airplane mode.
+- **Material You.** Change the system wallpaper/accent and confirm tela's chrome
+  follows.
+- **Random-tab deep paging** — still owed from Wave 1. The shuffle seed carries
+  through `SearchWallpapers.nextPageAfter`, unit-tested but never against a real
+  multi-page Wallhaven response; a lost seed shows up only as repeated images
+  several pages in.
