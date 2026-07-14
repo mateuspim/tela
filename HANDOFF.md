@@ -2,9 +2,33 @@
 
 Updated: 2026-07-14
 
+## Tags and the uploader lead somewhere (Wave 3, slice 4)
+
+The newest slice, and the one to read first. **A wallpaper is now a place you can
+navigate *from*.** Its tags and its uploader were printed on the detail screen
+from Wave 1 onward and led nowhere; a tag chip now opens that tag's listing and
+the uploader opens theirs. This is the fourth of Wave 3's four slices, taken
+first because it is the only one that is entirely self-contained.
+
+`WallpaperLink` is the model — a sealed `TagLink` / `UploaderLink` that carries
+only *what was followed*, never a query — and `LinkedListingScreen` is what shows
+it. The link supplies the term (`id:{tagId}`, `@username`) and the sorting;
+everything else is inherited from the listing the user is already browsing, so
+their filters still apply and the grid is still fitted to the device's screen.
+
+**It has run on hardware against real Wallhaven, and the exactness is proven, not
+assumed**: following the *Wamiqa Gabbi* tag returned exactly **one** wallpaper —
+the one it was followed from — which is what `id:{n}` is supposed to do and what
+a fuzzy `+name` would not have done. The device also found the one thing wrong
+with it (a link sitting below its own label), which is fixed.
+
+**There is still no tag filter you can type into**, and this slice is the first
+thing in tela that builds a Wallhaven operator *for* the user. See "What the
+search box already does" below — the answer surprises people.
+
 ## The device pass: what a phone found that no test could
 
-The newest slice, and the one to read first. **Wave 2 finally ran on hardware,
+**Wave 2 finally ran on hardware,
 and it was worth every minute** — the device found four bugs, one of them a
 security hole, and not one of them was findable in a test suite that was green
 the whole time.
@@ -27,7 +51,7 @@ Everything in that list is fixed, tested, and re-verified on the tablet.
 
 ## Browse defaults: a switch, not a heuristic
 
-The newest slice, and the one to read first. **Where browse takes its opening
+**Where browse takes its opening
 filters from is now the user's choice**, in Settings: the Wallhaven account, or a
 snapshot saved from this device's filter sheet ("Save as default", next to
 Reset). It replaces the invisible rule that used to answer the question — the
@@ -651,11 +675,55 @@ re-verified on the phone:
   purity is ever read back from Wallhaven or from disk, so the parse would be
   dead code, and dead code is where a purity gets applied by accident.)
 
+- **A tag chip searches `id:{tagId}`, never `+{name}`.** Wallhaven's `id:` is the
+  *exact*-tag operator; `+name` is a fuzzy text match that would quietly return
+  wallpapers carrying a **different** tag whose name merely reads the same. The
+  device settled that this is not theoretical: the *Wamiqa Gabbi* tag comes back
+  with exactly one wallpaper, and a fuzzy match could not have.
+- **A `WallpaperLink` is not a query, and that separation is what keeps the
+  features apart.** It names only what was followed; the screen showing it is what
+  layers on the filters and the resolution. So the *detail* screen never has to
+  know what browse's live query is — it pushes a route with a link in it — and
+  `features/detail` still imports nothing from `features/browse` (CLAUDE.md).
+- **`LinkedListingScreen` lives in `features/browse/`, and it belongs there.** It
+  *is* a listing: it reuses `WallpaperGrid` and reads `browseQueryProvider`, and a
+  new feature holding it would have had to import both sideways. Detail reaches it
+  by route **name** only, so the dependency runs feature → router → feature, which
+  is the same shape as every other screen in the app.
+- **A followed listing inherits the filters you are browsing under.** Only the
+  term and the sorting are the link's. Categories, purity, colour and shape carry
+  over — which is what wallhaven.cc itself does when you click a tag, and it is
+  also the only reading that does not silently *widen* a filter someone set. The
+  cost is real and known: there is no filter sheet on the pushed screen, so a
+  listing emptied by an inherited colour filter can only be widened by going back.
+  Wave 3's remaining slices are where that sheet grows; this is the moment to
+  reconsider if it bites.
+- **Purity inherits too, and that is not a hole in the NSFW rules.** The rule is
+  that browse *opens* on safe — a phone is the device you unlock on a train — and
+  a relaunch or Reset still returns to it. A listing followed mid-session from a
+  wallpaper you are already looking at is inside that session, so switching it
+  back to safe underneath the user would be the same bug as an adopted default
+  doing it (see the `_adopt` decision above).
+- **The uploader's screen says "Uploads by this user", and never implies a
+  profile.** Wallhaven's API has **no user endpoint** — their uploads, their
+  avatar, and their group are all it can ever know — so a screen headed with a
+  username and nothing else would be promising something that does not exist. The
+  subtitle is load-bearing wording, like the history's "the wallpaper file stays".
+- **The uploader is a `TextButton` and the tags are `ActionChip`s, not tapped
+  `Text`.** Both carry button semantics and a real touch target; a link only a
+  sighted user with a steady thumb can find is not a link. The button's target is
+  taller than a line of text, which is what made the uploader sit visibly *below*
+  its own label on the device — so the linked metadata row centres where the plain
+  rows top-align.
+- **`screenResolution` moved to `core/ui`.** Browse and every listing pushed from
+  it must answer "how big is this screen" identically, and it was about to become
+  a second copy of the same six lines.
+
 ## Verification
 
 - `./tool/tela dart format .`: clean
 - `./tool/tela analyze`: clean
-- `./tool/tela test`: 292 tests pass
+- `./tool/tela test`: 304 tests pass
 - **The app-lock, end to end, on hardware** (2026-07-14, Samsung SM-X730): the
   gate raises a real BiometricPrompt (`BiometricService/PreAuthInfo: Package:
   cc.pym.tela` in logcat), a dismissed prompt lists nothing, and the fail-open is
@@ -855,6 +923,29 @@ re-verified on the phone:
     the two rows render "Last month · Portrait" and "Last 24 hours · Any"
   - switching away from the device keeps its snapshot on disk
 
+- Following a link: the model (`id:{n}` and `@user`, and each link equal only to
+  another link to the same thing), the listing screen (a tag searches its id, an
+  uploader searches their name, the screen says which kind it is, newest first,
+  fitted to the screen it opened on, and — the load-bearing one — the browsing
+  filters carrying over into it), and the whole path through the **real router**
+  in `test/features/follow_wallpaper_links_test.dart`: a tag chip and the uploader
+  each open their listing, Back returns to the wallpaper, and the browse query is
+  still termless underneath
+- **Following a link is verified on hardware** (2026-07-14, Samsung SM-X730,
+  debug build, installed as an update with `adb install -r` so the database and
+  the key survived):
+  - the *Wamiqa Gabbi* tag returns **exactly one** wallpaper — the one it was
+    followed from. That is the proof `id:{tagId}` reaches Wallhaven *and* matches
+    exactly; a fuzzy `+name` would have returned a pile of loosely related
+    actresses, and no fixture could tell the two apart
+  - `@ranvijay` returns that uploader's uploads and stops, so the uploader
+    operator is bounded and real
+  - Back walks listing → wallpaper → browse with the tabs, the scroll position and
+    the search field untouched — the listing really is pushed, not applied
+  - no Flutter errors in logcat
+  - and the device found the misaligned uploader link, which is fixed and
+    re-confirmed on it
+
 The Random tab's deep paging is the one Wave 1 behaviour never exercised on
 hardware — see below.
 
@@ -887,17 +978,28 @@ user, 2026-07-14:
    bar becomes scrollable and gains Views and Favorites; **Relevance appears only
    when a search term is set** (it ranks against a term and means nothing without
    one) and is selected on submit.
-4. **Tags and the uploader become links.** A tag chip opens that tag's listing
-   (`q=id:{tagId}` — Wallhaven's exact-tag operator, not a fuzzy `+name`), and the
-   uploader opens theirs (`q=@username`). Both **push a results screen**, so Back
-   returns to the wallpaper and the browse tabs are left alone. Everything needed
-   is already mapped: `WallpaperTag` carries its id, `WallpaperUploader` its
-   username. **There is no user-profile endpoint in the Wallhaven API** — a
-   "profile" can only be their uploads plus the avatar and group `/w/{id}` already
-   returns, and the screen should say what it is rather than imply a profile.
+4. ~~**Tags and the uploader become links.**~~ **Built and verified on hardware,
+   2026-07-14** — read the top of this file. Slices 1–3 are what is left of
+   Wave 3.
 
 PLAN's old Wave 3 (crop/reposition, daily auto-rotate, collections, share sheet,
 Omarchy sync) is now **Wave 4**.
+
+### What the search box already does, and does not tell anyone
+
+Asked and answered on 2026-07-14, and worth writing down because the answer is
+not what the screen suggests. **There is no tag filter you can type into.** The
+filter sheet is chips and dropdowns end to end — categories, purity, ratio,
+colour, order, toplist range — and has no text input at all.
+
+But the search field passes its string to Wallhaven's `q` **completely
+untouched**, so every operator Wallhaven has already works if you happen to know
+it and type it by hand: `+tag`, `-tag`, `id:123`, `@username`, `like:{id}`,
+`type:png`. Nothing in the app says so, and nothing builds one for you — **except
+the new tag chips, which are the first thing in tela that constructs an operator
+(`id:{tagId}`) on the user's behalf.** So a proper `+tag` / `-tag` filter is a
+feature tela can already *express* and does not *offer*; the machinery is now
+there for whoever wants to build the UI. It is not one of Wave 3's four slices.
 
 Three things were deliberately left out rather than forgotten:
 

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
-import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/core/ui/screen_resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/browse/browse_search_field.dart';
@@ -25,7 +25,7 @@ class BrowseScreen extends ConsumerWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final SearchQuery base = ref
         .watch(browseQueryProvider)
-        .copyWith(atLeast: _screenSize(context));
+        .copyWith(atLeast: screenResolution(context));
 
     return DefaultTabController(
       length: _sortings.length,
@@ -70,19 +70,6 @@ class BrowseScreen extends ConsumerWidget {
       icon: const Icon(Icons.settings_outlined),
       tooltip: l10n.settingsOpen,
       onPressed: () => context.pushNamed(TelaRoutes.settingsName),
-    );
-  }
-
-  /// Asks Wallhaven for images at least as large as this screen.
-  ///
-  /// Without it the grid fills with 1280x720 images that look soft the moment
-  /// they're set as a wallpaper on a 1440p phone.
-  Resolution _screenSize(BuildContext context) {
-    final Size size = MediaQuery.sizeOf(context);
-    final double ratio = MediaQuery.devicePixelRatioOf(context);
-    return Resolution(
-      (size.width * ratio).round(),
-      (size.height * ratio).round(),
     );
   }
 

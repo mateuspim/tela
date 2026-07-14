@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
@@ -14,6 +18,7 @@ import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
+import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/features/detail/progressive_wallpaper_preview.dart';
@@ -129,6 +134,15 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     }
   }
 
+  /// Pushes the listing behind a tag or an uploader, rather than replacing this
+  /// one, so Back returns to the wallpaper the link was printed on and the
+  /// browse tabs are left exactly as the user had them.
+  void _follow(WallpaperLink link) {
+    unawaited(
+      context.pushNamed(TelaRoutes.linkedListingName, extra: link),
+    );
+  }
+
   void _showResult(String message) {
     ScaffoldMessenger.of(
       context,
@@ -175,7 +189,8 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     AppLocalizations l10n,
   ) {
     return details.when(
-      data: (WallpaperDetails value) => WallpaperMetadata(details: value),
+      data: (WallpaperDetails value) =>
+          WallpaperMetadata(details: value, onFollow: _follow),
       loading: () => const Padding(
         padding: EdgeInsets.all(24),
         child: Center(child: CircularProgressIndicator()),

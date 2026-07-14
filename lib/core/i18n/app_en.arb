@@ -194,6 +194,16 @@
     "description": "Shown when a search returns zero results."
   },
 
+  "listingTagged": "Wallpapers with this tag",
+  "@listingTagged": {
+    "description": "Says what a listing followed from a tag chip is, under the tag's own name."
+  },
+
+  "listingUploads": "Uploads by this user",
+  "@listingUploads": {
+    "description": "Says what a listing followed from the uploader is. Deliberately 'uploads' and not 'profile': Wallhaven's API has no user endpoint, so their uploads are all tela can show."
+  },
+
   "detailSetWallpaper": "Set wallpaper",
   "@detailSetWallpaper": {
     "description": "Primary action on the wallpaper detail screen."

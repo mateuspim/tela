@@ -30,6 +30,12 @@ abstract final class TelaRoutes {
   /// Private library route name.
   static const String privateLibraryName = 'private-library';
 
+  /// Path of a listing followed from a wallpaper — a tag's, or an uploader's.
+  static const String linkedListingPath = '/listing';
+
+  /// Linked-listing route name.
+  static const String linkedListingName = 'linked-listing';
+
   /// Download history path.
   static const String downloadHistoryPath = '/downloads';
 
