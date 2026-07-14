@@ -4,8 +4,12 @@ Updated: 2026-07-14
 
 ## Current milestone
 
-Wave 0 is complete at `209101c`. Wave 1's apply core loop is committed as
-`bcba151`, and its detail metadata slice is committed as `36ec9f9`.
+Wave 0 is complete at `209101c`. Wave 1 is landing slice by slice: the apply core
+loop is `bcba151`, detail metadata is `36ec9f9`, three-tier downloads are
+`28fa0b1` + `568e1ef`, and persisted per-purity storage settings are `1d8e4de`.
+
+**Still missing from Wave 1: API-key entry, and search + filters.** Both are
+planned in "Start of next session" below.
 
 The app now supports the thin product loop:
 
@@ -113,6 +117,8 @@ three-tier download walkthrough remain smoke-test pending.
 
 ## Start of next session
 
+### 1. Smoke-test on the device (blocked all last session)
+
 Reconnect the Android 16 device and install the debug APK. Smoke-test Home,
 Lock, and Both with one portrait and one large landscape wallpaper; then test
 all three download tiers. For Gallery, confirm it appears in Photos. For Files,
@@ -123,8 +129,46 @@ change a destination in Settings, kill the app, reopen it, and confirm the choic
 survived — the Drift path has only ever run against an in-memory database, never
 a real file on a device. Record any OEM behavior here.
 
-Then continue Wave 1 with what is still missing from it: search + filters
-(categories, purity, sorting) and API-key entry in secure storage, which is what
-unlocks NSFW purity — and therefore what makes the NSFW half of the storage
-settings reachable in the product rather than only in tests. Keep browsing,
-detail, apply, and downloads working throughout.
+### 2. API-key entry (next code slice)
+
+This is the smaller of the two remaining Wave 1 gaps, and it comes first because
+it is what makes the NSFW half of the storage settings — and the NSFW purity
+filter below — reachable in the product rather than only in tests.
+
+Everything below the UI already exists and needs no changes: `SecretStore`
+(port + Keystore adapter, with `writeApiKey` already rejecting an empty string),
+`ApiKeyInterceptor` (the key's only path into a request, header-only), and
+`SearchWallpapers._guardNsfwRequiresKey`, which refuses an NSFW query with no
+stored key *before* spending one of the 45 req/min on a guaranteed 401.
+
+What is missing is only the way to enter one:
+
+- A `SaveApiKey` use case that **trims** before storing. Not cosmetic: a key
+  pasted from Wallhaven's account page usually carries trailing whitespace, and
+  an untrimmed key 401s in a way the user reads as "my correct key was rejected".
+  A `ForgetApiKey` use case alongside it, for the remove path.
+- An API-key section on the settings screen: present/absent state (never the key
+  itself — it is never rendered, logged, or put in a snackbar), an obscured-entry
+  dialog, and a remove action.
+- Deciding whether to verify the key on save. Wallhaven has no cheap "is this key
+  valid" endpoint; `GET /settings` (the Wave 2 account-sync endpoint) is the
+  honest one, and adding it to `WallhavenApi` now is arguably pulling Wave 2
+  forward. The cheap alternative is to store it unverified and let the existing
+  401 → "That Wallhaven API key was rejected." mapping do the work on first NSFW
+  browse. **Undecided — pick deliberately, don't drift into it.**
+
+### 3. Search + filters (the last Wave 1 gap)
+
+`SearchQuery` is already the complete, single source of truth for a listing —
+term, `CategoryFilter`, `PurityFilter`, `Sorting`, `SortOrder`, `TopRange`,
+`atLeast`, `ratios`, `page`, `seed` — and `toQueryParameters` already encodes all
+of it. The browse tabs are already just four `Sorting` values over one query. So
+this slice is UI plus one provider, not new domain: a search field and a filter
+sheet that produce a `SearchQuery`, and a grid that watches it.
+
+Two things to get right: the NSFW checkbox in the purity filter must be offered
+only when a key is stored (`SecretStore.hasApiKey`), and paging a `random`
+sorting must keep going through `SearchWallpapers.nextPageAfter` so the shuffle
+seed carries — building the next query by hand is a silent duplicate-images bug.
+
+Keep browsing, detail, apply, and downloads working throughout.
