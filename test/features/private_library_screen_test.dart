@@ -105,13 +105,17 @@ void main() {
       expect(find.textContaining('Nothing here'), findsOneWidget);
     });
 
-    testWidgets('opens when the device cannot ask for anything', (
+    testWidgets('stays shut when the device cannot ask for anything', (
       WidgetTester tester,
     ) async {
-      // A phone with no biometric and no screen lock cannot answer the prompt.
-      // Enforcing the setting there would lock the owner out of their own files
-      // with no way back in, so the gate steps aside instead.
-      final FakeAppLock lock = FakeAppLock(available: false);
+      // Regression, found on hardware 2026-07-14. This used to open the library
+      // outright: an unavailable lock was read as "this device has no
+      // credentials at all", and the gate stepped aside rather than trap the
+      // owner outside their own files. But `isAvailable` reports a *locked-out
+      // sensor* the same way — so on a device whose only credential is a
+      // fingerprint, five bad reads opened the private library to anyone.
+      // The gate now fails closed, and the way back in is the Settings switch.
+      final FakeAppLock lock = FakeAppLock(available: false, passes: false);
       await _pump(
         tester,
         FakeImageStore(privateLibrary: <PrivateImage>[_image('e7jvjd')]),
@@ -119,8 +123,8 @@ void main() {
         locked: true,
       );
 
-      expect(lock.prompts, 0);
-      expect(find.bySemanticsLabel('Private wallpaper e7jvjd'), findsOneWidget);
+      expect(find.bySemanticsLabel('Private wallpaper e7jvjd'), findsNothing);
+      expect(find.textContaining('locked'), findsWidgets);
     });
   });
 

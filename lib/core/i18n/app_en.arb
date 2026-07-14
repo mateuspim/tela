@@ -492,6 +492,36 @@
     "description": "Shown when no download has been recorded. Explicit downloads are never recorded, so it stays empty for those by design."
   },
 
+  "downloadHistoryFileGone": "File deleted. Setting this will download it again.",
+  "@downloadHistoryFileGone": {
+    "description": "Tooltip on a history tile whose downloaded file is no longer on the device. The tile still works; it just costs a re-download and needs a network, which the other rows do not."
+  },
+
+  "downloadHistoryRedownload": "Download {wallpaperId} again and set it",
+  "@downloadHistoryRedownload": {
+    "description": "Accessibility label for a history tile whose file is gone. Deliberately different from downloadHistorySetAgain: the badge is visual, and a screen reader must hear the same distinction.",
+    "placeholders": {
+      "wallpaperId": {
+        "type": "String"
+      }
+    }
+  },
+
+  "downloadHistoryForgetTitle": "Remove from history?",
+  "@downloadHistoryForgetTitle": {
+    "description": "Title of the confirmation for forgetting one download-history row."
+  },
+
+  "downloadHistoryForgetBody": "This only removes it from the list. The wallpaper file stays where it was downloaded — delete it in your gallery or file manager if you want it gone.",
+  "@downloadHistoryForgetBody": {
+    "description": "The load-bearing string of the feature. A history tile looks exactly like a file, so the confirmation must say in plain words that the file is not being deleted — otherwise 'remove' reads as 'delete my wallpaper'."
+  },
+
+  "downloadHistoryForget": "Remove",
+  "@downloadHistoryForget": {
+    "description": "Confirms forgetting a download-history row. Deliberately not 'Delete', which would name the wrong object."
+  },
+
   "downloadHistorySetAgain": "Set wallpaper {wallpaperId} again",
   "@downloadHistorySetAgain": {
     "description": "Accessibility label for one tile in the download history. Tapping it re-applies the downloaded file.",
@@ -585,5 +615,15 @@
   "settingsAppLockUnavailable": "Needs a screen lock or fingerprint set up on this device.",
   "@settingsAppLockUnavailable": {
     "description": "Explains why the app-lock cannot be switched on, rather than showing a switch that would protect nothing."
+  },
+
+  "settingsAppLockDisableReason": "Confirm it's you to unlock the private library",
+  "@settingsAppLockDisableReason": {
+    "description": "Shown by the system prompt when switching the app-lock off. Turning the lock off opens the library, so it asks for the same proof the library does — otherwise the gate is one ungated tap away from being removed."
+  },
+
+  "settingsAppLockLockedOut": "Too many attempts. Wait a moment, then try again.",
+  "@settingsAppLockLockedOut": {
+    "description": "Shown when the app-lock cannot be switched off because the sensor is locked out. Deliberately refused rather than waved through: a lockout is the lock working, and letting it through would make five failed fingerprints the way past it."
   }
 }

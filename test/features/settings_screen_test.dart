@@ -12,8 +12,10 @@ import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/features/settings/settings_screen.dart';
 
+import '../fakes/fake_app_lock.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
@@ -267,6 +269,128 @@ void main() {
     expect(settings.accountSaved, _account);
     expect(find.textContaining('Anime'), findsOneWidget);
   });
+
+  group('app-lock switch', () {
+    testWidgets('turning the lock off asks for proof first', (
+      WidgetTester tester,
+    ) async {
+      // The gate on the library is worth nothing if the switch that removes it
+      // is one ungated tap away on an open screen.
+      final FakeSettingsRepository settings = FakeSettingsRepository(
+        privateLibraryLocked: true,
+      );
+      final FakeAppLock lock = FakeAppLock();
+      await _pumpSettings(tester, settings, lock: lock);
+
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+
+      expect(lock.prompts, 1);
+      expect(settings.lockSaved, isFalse);
+    });
+
+    testWidgets('a refused prompt leaves the lock on', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository(
+        privateLibraryLocked: true,
+      );
+      await _pumpSettings(
+        tester,
+        settings,
+        lock: FakeAppLock(passes: false),
+      );
+
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+
+      expect(settings.lockSaved, isTrue);
+    });
+
+    testWidgets('a locked-out sensor cannot switch the lock off', (
+      WidgetTester tester,
+    ) async {
+      // The load-bearing one. A lockout is the lock *working* — five bad reads
+      // is what a stranger's finger looks like. If it opened this switch, then
+      // failing the fingerprint five times would itself be the way past the
+      // lock, which is the hardware bug of 2026-07-14 moved rather than fixed.
+      final FakeSettingsRepository settings = FakeSettingsRepository(
+        privateLibraryLocked: true,
+      );
+      await _pumpSettings(
+        tester,
+        settings,
+        lock: FakeAppLock(
+          available: false,
+          outcome: AppLockOutcome.lockedOut,
+        ),
+      );
+
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+
+      expect(settings.lockSaved, isTrue);
+      expect(find.textContaining('Too many attempts'), findsOneWidget);
+    });
+
+    testWidgets('a device that cannot ask may still switch the lock off', (
+      WidgetTester tester,
+    ) async {
+      // The escape hatch, and the only outcome besides a pass that opens this
+      // switch: app-private files live nowhere else, so a device that can never
+      // answer a prompt must not strand its owner outside them for good.
+      final FakeSettingsRepository settings = FakeSettingsRepository(
+        privateLibraryLocked: true,
+      );
+      await _pumpSettings(
+        tester,
+        settings,
+        lock: FakeAppLock(
+          available: false,
+          outcome: AppLockOutcome.unavailable,
+        ),
+      );
+
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+
+      expect(settings.lockSaved, isFalse);
+    });
+
+    testWidgets('turning the lock on asks for nothing', (
+      WidgetTester tester,
+    ) async {
+      // There is nothing to prove yet, and demanding a fingerprint to *add*
+      // protection only teaches people not to bother.
+      final FakeSettingsRepository settings = FakeSettingsRepository();
+      final FakeAppLock lock = FakeAppLock();
+      await _pumpSettings(tester, settings, lock: lock);
+
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+
+      expect(lock.prompts, 0);
+      expect(settings.lockSaved, isTrue);
+    });
+
+    testWidgets('is not offered at all when nothing could satisfy it', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository();
+      await _pumpSettings(
+        tester,
+        settings,
+        lock: FakeAppLock(available: false),
+      );
+
+      expect(find.byType(SwitchListTile), findsNothing);
+      expect(
+        find.textContaining('Needs a screen lock or fingerprint'),
+        findsOneWidget,
+      );
+      expect(settings.lockSaved, isFalse);
+    });
+  });
 }
 
 /// The source the browse-defaults radio currently has selected.
@@ -321,6 +445,7 @@ Future<void> _pumpSettings(
   FakeSettingsRepository settings, {
   FakeSecretStore? secrets,
   FakeWallhavenApi? api,
+  FakeAppLock? lock,
 }) async {
   // Settings is a scrolling list, and it keeps growing — a download-history
   // tile, and now the browse-defaults switch. On a phone-sized test viewport
@@ -337,6 +462,7 @@ Future<void> _pumpSettings(
         settingsRepositoryProvider.overrideWithValue(settings),
         secretStoreProvider.overrideWithValue(secrets ?? FakeSecretStore()),
         wallhavenApiProvider.overrideWithValue(api ?? FakeWallhavenApi()),
+        appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
       ],
       child: const MaterialApp(
         localizationsDelegates: <LocalizationsDelegate<Object>>[

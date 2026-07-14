@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
@@ -11,7 +12,6 @@ import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/screen_guard.dart';
-import 'package:tela/features/private_library/private_library_providers.dart';
 
 /// The app-private tier, which nothing but tela can open.
 ///
@@ -62,29 +62,43 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
   /// it, because a route can be reached more ways than one — gating the button
   /// would leave a deep link to `/private` walking straight past it.
   ///
-  /// A device with no biometric *and* no screen lock cannot be asked anything,
-  /// so the library opens: a setting that cannot be satisfied would otherwise
-  /// lock the owner out of their own files with no way back in.
+  /// **It fails closed.** If the lock is on, the only way past is a prompt that
+  /// passes; anything else lands on [_locked]. It used to step aside when
+  /// `AppLock.isAvailable()` said no, to avoid trapping the owner outside their
+  /// own files on a device that cannot ask anything — but `isAvailable` cannot
+  /// tell "this device has no credentials" apart from "the sensor is locked out
+  /// for the next 30 seconds", and it reports both as false. On a device whose
+  /// only credential is a fingerprint, that turned five bad reads into an open
+  /// door: found on hardware, 2026-07-14. The owner's way back in is the
+  /// Settings switch, which stays operable precisely for this (`AppLockSwitch`)
+  /// — a lock you can turn off is not a trap, but a lock that opens itself is
+  /// not a lock.
   Future<void> _unlock() async {
     final bool locked = await ref
         .read(settingsRepositoryProvider)
         .isPrivateLibraryLocked();
-    final AppLock lock = ref.read(appLockProvider);
-    if (!locked || !await lock.isAvailable()) {
+    if (!locked) {
       if (mounted) setState(() => _pass(unlocked: true));
       return;
     }
     await _authenticate();
   }
 
+  /// Only [AppLockOutcome.passed] opens the library — including over
+  /// [AppLockOutcome.unavailable], which is the whole point. A device that
+  /// cannot ask is not a device that has proven anything; the owner's way back
+  /// in is to switch the lock off in Settings, which is the one place that
+  /// outcome is honoured.
   Future<void> _authenticate() async {
     if (mounted) setState(() => _checking = true);
-    final bool passed = await ref
+    final AppLockOutcome outcome = await ref
         .read(appLockProvider)
         .authenticate(
           reason: AppLocalizations.of(context).privateLibraryUnlockReason,
         );
-    if (mounted) setState(() => _pass(unlocked: passed));
+    if (mounted) {
+      setState(() => _pass(unlocked: outcome == AppLockOutcome.passed));
+    }
   }
 
   void _pass({required bool unlocked}) {

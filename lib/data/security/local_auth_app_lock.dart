@@ -25,19 +25,33 @@ class LocalAuthAppLock implements AppLock {
   }
 
   @override
-  Future<bool> authenticate({required String reason}) async {
+  Future<AppLockOutcome> authenticate({required String reason}) async {
     try {
       // `biometricOnly` stays at its default of false on purpose: a fingerprint
       // that stops reading must not lock someone out of their own files, so the
-      // device PIN is always an acceptable answer.
-      return await _auth.authenticate(
+      // device PIN is always an acceptable answer — on a device that has one.
+      final bool passed = await _auth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(stickyAuth: true),
       );
-    } on PlatformException {
-      // No hardware, no enrolled credential, too many attempts — all of it
-      // means "not proven", never "let them in".
-      return false;
+      return passed ? AppLockOutcome.passed : AppLockOutcome.refused;
+    } on PlatformException catch (error) {
+      return _outcomeOf(error.code);
     }
+  }
+
+  /// Maps `local_auth`'s error codes to what the rule actually turns on.
+  ///
+  /// The split that matters is lockout versus no-credentials: a lockout is the
+  /// lock doing its job and must keep the library shut, while an unaskable
+  /// device is the only case allowed to stand in for a pass (and only to switch
+  /// the lock off). Anything unrecognised is [AppLockOutcome.refused] — the
+  /// safe reading, since an unknown error is not proof of anything.
+  AppLockOutcome _outcomeOf(String code) {
+    return switch (code) {
+      'LockedOut' || 'PermanentlyLockedOut' => AppLockOutcome.lockedOut,
+      'NotAvailable' || 'NotEnrolled' => AppLockOutcome.unavailable,
+      _ => AppLockOutcome.refused,
+    };
   }
 }
