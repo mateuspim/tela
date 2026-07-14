@@ -27,4 +27,16 @@ abstract interface class DownloadHistory {
     required StorageTier tier,
     required Uri location,
   });
+
+  /// Forgets the row for [id]. **Does not touch the downloaded file.**
+  ///
+  /// The history is an index, not a folder, and this is the only honest thing
+  /// "remove" can mean here: the file lives in the gallery or under the user's
+  /// own SAF tree, where Photos and every file manager can already delete it,
+  /// and tela deleting it from behind a tile that merely *looks* like a file is
+  /// how someone loses a wallpaper they meant to keep. The UI says so in the
+  /// words of the confirmation, not just in this docstring.
+  ///
+  /// A no-op for an id that is not recorded — forgetting twice is not an error.
+  Future<void> forget(String id);
 }

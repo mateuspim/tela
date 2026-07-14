@@ -8,13 +8,22 @@ import 'package:tela/domain/models/wallpaper.dart';
 /// and landscape thumbs without letterboxing either.
 class WallpaperTile extends StatelessWidget {
   /// Creates a tile for [wallpaper].
-  const WallpaperTile({required this.wallpaper, this.onTap, super.key});
+  const WallpaperTile({
+    required this.wallpaper,
+    this.onTap,
+    this.onLongPress,
+    super.key,
+  });
 
   /// The wallpaper to show.
   final Wallpaper wallpaper;
 
   /// Called when the tile is tapped. Null renders a non-interactive tile.
   final VoidCallback? onTap;
+
+  /// Called on a long press. Null in the browse grid, where a tile has no
+  /// second action; the download history uses it to forget a row.
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +35,7 @@ class WallpaperTile extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         child: InkWell(
           onTap: onTap,
+          onLongPress: onLongPress,
           child: _thumbnail(context),
         ),
       ),

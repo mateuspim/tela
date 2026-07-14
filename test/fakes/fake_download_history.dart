@@ -24,6 +24,11 @@ class FakeDownloadHistory implements DownloadHistory {
   Future<List<DownloadRecord>> downloads() async => _recorded.reversed.toList();
 
   @override
+  Future<void> forget(String id) async {
+    _recorded.removeWhere((DownloadRecord d) => d.wallpaper.id == id);
+  }
+
+  @override
   Future<void> record({
     required Wallpaper wallpaper,
     required StorageTier tier,

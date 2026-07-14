@@ -53,6 +53,11 @@ class DriftDownloadHistory implements DownloadHistory {
     await _db.putDownload(_toRow(wallpaper, tier, location));
   }
 
+  /// Drops the row and nothing else — the downloaded file is not tela's to
+  /// delete from here. See [DownloadHistory.forget].
+  @override
+  Future<void> forget(String id) => _db.deleteDownload(id);
+
   DownloadedWallpapersCompanion _toRow(
     Wallpaper wallpaper,
     StorageTier tier,

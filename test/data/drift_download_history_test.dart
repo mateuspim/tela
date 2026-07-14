@@ -116,6 +116,26 @@ void main() {
 
       expect((await history.downloads()).single.wallpaper.colors, isEmpty);
     });
+
+    test('forgets one row and leaves the others alone', () async {
+      await _record(history, _wallpaper('e7jvjd'));
+      await _record(history, _wallpaper('7j1mzo'));
+
+      await history.forget('e7jvjd');
+
+      expect(
+        (await history.downloads()).map((DownloadRecord d) => d.wallpaper.id),
+        <String>['7j1mzo'],
+      );
+    });
+
+    test('forgetting a row that is not there is not an error', () async {
+      await _record(history, _wallpaper('e7jvjd'));
+
+      await history.forget('nothere');
+
+      expect(await history.downloads(), hasLength(1));
+    });
   });
 }
 

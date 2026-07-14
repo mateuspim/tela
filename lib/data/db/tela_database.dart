@@ -152,6 +152,14 @@ class TelaDatabase extends _$TelaDatabase {
     return into(downloadedWallpapers).insertOnConflictUpdate(row);
   }
 
+  /// Drops the download row for [id]. The file it points at is not touched.
+  Future<void> deleteDownload(String id) {
+    final DeleteStatement<$DownloadedWallpapersTable, DownloadRow> statement =
+        delete(downloadedWallpapers)
+          ..where(($DownloadedWallpapersTable row) => row.id.equals(id));
+    return statement.go();
+  }
+
   /// Every favorite, most recently saved first.
   Future<List<FavoriteRow>> favoriteRows() {
     final SimpleSelectStatement<$FavoriteWallpapersTable, FavoriteRow> query =
