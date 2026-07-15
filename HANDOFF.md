@@ -2,6 +2,256 @@
 
 Updated: 2026-07-15
 
+## START HERE — immersive image viewing and the next UI/UX pass
+
+This is the next agent's task. Start from clean `master`; its implementation
+baseline is `2d2a153`, which already contains sharing and the adaptive
+gallery-first shell. **Do not work in the master worktree.** Create a dedicated
+worktree before editing:
+
+```bash
+git worktree add .worktrees/image-viewer-ux -b image-viewer-ux master
+```
+
+The objective is to make every gallery image enjoyable at its real aspect ratio
+in portrait and landscape, then give Download History and the private/NSFW
+library the same first-class fullscreen viewing experience as Browse. This is
+an image-viewing and gallery-polish slice, not a rewrite of tela's domain,
+storage, or privacy model.
+
+### What the real tablet exposed
+
+The current UI was exercised on a Samsung SM-X730 at 1600x2560, Android 16, in
+both landscape and portrait. Browse, filters, adaptive navigation, detail,
+sharing, and fullscreen all worked without a crash or RenderFlex overflow. The
+remaining problems are visual and interaction problems that widget tests did
+not reveal:
+
+1. `ProgressiveWallpaperPreview` paints `thumbLargeUrl` beneath
+   `fullImageUrl`. Those files do not always have the same crop. On the tablet,
+   a portrait source was correctly contained in the centre while a different,
+   wider thumbnail crop remained visible down both sides. The same mismatch was
+   visible in portrait, landscape, and the so-called fullscreen view. A loading
+   preview must never show two contradictory compositions of the same image.
+2. Fullscreen is not actually immersive. Android's status/navigation areas stay
+   visible, chrome is always present, there is no tap-to-toggle chrome, and the
+   zoom experience has no obvious double-tap/reset path.
+3. Download History skips viewing entirely: tapping a tile immediately opens
+   the target sheet to set it again.
+4. The private/NSFW library has no tap action at all. Its images can be deleted
+   by long press, but cannot be inspected fullscreen or set again from the
+   library.
+5. Private tiles are square and `BoxFit.cover` because `PrivateImage` does not
+   carry dimensions. This crops every non-square file in the one gallery where
+   recognising an image before acting on it matters most.
+
+### Product result
+
+The finished experience should feel like an image viewer first and an app
+second:
+
+- A tap from any image shelf leads to a large, honest preview; no source pixels
+  are cropped by default.
+- Portrait images use the available height, landscape images use the available
+  width, and orientation changes recompute the fit without losing the selected
+  image.
+- The canvas is calm and intentional (black is acceptable). Never use a second,
+  differently cropped version as accidental side fill. If a backdrop is kept,
+  it must be an explicit treatment of the same source and must not compete with
+  the contained image.
+- Fullscreen goes edge-to-edge, hides system/app chrome, restores it on exit,
+  and supports pinch/pan, double-tap zoom/reset, tap-to-toggle controls, an
+  obvious close/back control, and screen-reader equivalents for every gesture.
+- Gallery viewers can move to the previous/next item without returning to the
+  grid. This must not be gesture-only: provide visible Previous and Next
+  controls, swipe navigation, keyboard/D-pad arrows where available, and an
+  accessible position such as “5 of 24”. Disable the relevant arrow at a true
+  boundary. Horizontal paging must not steal a gesture while the current image
+  is zoomed.
+- Returning from a viewer restores the same gallery and scroll position.
+- Animations are short and spatially coherent, and become instant when
+  `disableAnimations` is true. A restrained Hero transition is welcome, but
+  duplicate IDs across shelves must not create duplicate Hero tags.
+
+### One shared viewer, three kinds of image
+
+Build one reusable viewer/viewport in `core/ui` and keep feature actions outside
+it. Do not create separate zoom implementations for Detail, History, and the
+private library.
+
+The shared viewport must accept an honest aspect ratio, an accessible label,
+and an image source without knowing whether the surrounding screen will share,
+delete, download, or set it. It should handle loading, decode failure, zoom,
+chrome visibility, orientation changes, and reduced motion. Keep files below
+500 lines and split controls, viewport, and gallery paging if needed.
+
+Every shelf must open a **gallery session**, not a disconnected single-image
+route. The session carries the ordered images, selected index, gallery identity,
+and an optional way to request more results. Browse and linked listings should
+append the next API page as the viewer approaches the end; Favorites, History,
+and Private use their complete local lists. At minimum, every already-loaded
+image must be reachable back and forth without returning to the grid. Do not
+couple the reusable viewer to `PagingController`; expose a small project-owned
+session/controller seam instead.
+
+Navigation behaviour is load-bearing:
+
+- tapping a tile opens that exact item, not index zero;
+- Next/Previous, horizontal swipe, and arrow-key/D-pad input all update the same
+  selected index and semantics announcement;
+- zoom resets to fitted scale when the selected image changes, while an
+  orientation change keeps the selected image and recomputes its fit;
+- swiping left/right pans a zoomed image first; page navigation becomes active
+  again only at fitted scale (or through the explicit Previous/Next controls);
+- prefetch only the immediate neighbour in each direction;
+- exiting fullscreen leaves Detail on the newly selected wallpaper, and Back
+  to the shelf restores the grid near that tile;
+- deleting the current private item selects the next item, then the previous at
+  the end, and closes to the empty state when none remain.
+
+Source behaviour differs:
+
+- **Browse/Favorites/linked listings:** keep the existing detail route and its
+  metadata/actions, but refactor its preview and fullscreen mode onto the shared
+  viewport. Use an aspect-ratio-preserving thumbnail for progressive loading —
+  `thumbOriginalUrl` is already used by `WallpaperTile` for this reason — or
+  constrain both layers to exactly the source aspect ratio. Fade only between
+  geometrically identical images.
+- **Download History:** show the saved local file first so the viewer works
+  offline. `DownloadRecord.location` can be `file:`, MediaStore `content:`, or a
+  SAF document URI; do not assume `FileImage` can read all three. If Flutter
+  needs a materialised cache file, put that platform work behind a
+  project-owned port/adapter and clean temporary previews. Never log a URI or
+  path. If the file is missing, clearly show that the network source is being
+  used and preserve the existing re-download/apply fallback.
+- **Private/NSFW library:** treat every `PrivateImage` as sensitive even if the
+  original purity is unavailable. The fullscreen route must independently hold
+  `FLAG_SECURE`; do not rely only on the grid remaining mounted behind it. It
+  must also respect the app-lock gate, never expose a path in logs/semantics,
+  never offer image or link sharing, and never place a preview in shared cache
+  or MediaStore.
+
+The current `DownloadWallpaper._remember` already excludes explicit downloads
+from ungated Download History; keep that invariant and add a regression test if
+the viewer changes listing code.
+
+### Screen-specific interaction contracts
+
+**Wallpaper Detail**
+
+- Preserve favorite, share, download, metadata, uploader/tag navigation, and
+  the fixed **Set wallpaper** action.
+- Compact portrait remains preview-first; expanded landscape remains a useful
+  preview/information split. Rebalance the preview pane if necessary, but do not
+  make metadata compete with the image.
+- Entering fullscreen must use the exact image and current progressive state,
+  not visibly restart from a mismatched placeholder.
+- Browse, Favorites, and linked-listing launches must give fullscreen access to
+  their gallery session. Moving to another wallpaper updates the Detail image,
+  metadata, favorite/share/download actions, and Set action to that wallpaper;
+  no action may remain bound to the item that originally opened the route.
+
+**Download History**
+
+- Tap opens the fullscreen/local viewer instead of immediately choosing a
+  target.
+- Previous/Next moves through the history order (newest first), and the Set,
+  missing-file, and forget actions always follow the image currently shown.
+- The viewer's primary action is **Set wallpaper**; only then show Home / Lock /
+  Both and reuse `ApplyDownload` so missing-file fallback stays intact.
+- Keep “missing locally” obvious in both grid and viewer.
+- Keep “remove from history” distinct from deleting the downloaded file. Move
+  it into a discoverable viewer overflow/action as well as retaining any useful
+  long-press shortcut.
+- Use the record's real `Wallpaper.resolution` for masonry/preview geometry.
+
+**Private/NSFW library**
+
+- Tap opens a secure fullscreen gallery at that image; swiping visits the other
+  private images without dropping `FLAG_SECURE` or re-running authentication.
+  Visible Previous/Next buttons must work with TalkBack and physical
+  keyboard/D-pad input; sensitive item names or paths must not appear in the
+  position announcement.
+- Add a primary **Set wallpaper** flow backed by a small pure-Dart use case that
+  sends the private file URI through the existing `WallpaperApplier` port.
+- Delete is explicit, confirmed, and returns to the nearest remaining image or
+  the empty state. Sharing is absent by design.
+- Extend the native private-file listing to return pixel width/height using a
+  bounds-only decode, then add those dimensions to `PrivateImage`. Use them for
+  aspect-ratio tiles instead of square crops. Corrupt/unreadable files still
+  render a safe broken-image state and must not crash the gallery.
+- The secure window must remain active through grid, viewer, target sheet, and
+  deletion confirmation, and release only after leaving the private flow.
+
+### Gallery and screen polish
+
+Apply the same image-first quality bar to Browse, Favorites, History, and the
+private library:
+
+- consistent 12dp grid rhythm and 16dp corners;
+- responsive column counts without comically narrow tiles;
+- edge padding that respects safe areas and navigation mode;
+- useful headers/empty/error/loading states that do not dominate the gallery;
+- no important action available only through an undiscoverable long press;
+- 48dp targets, dynamic type without clipping, meaningful semantics, visible
+  focus, and adequate contrast over images;
+- prefetch only immediate viewer neighbours and cap decode sizes to the display;
+  do not decode a whole gallery of 6K originals or keep unbounded image bytes.
+
+Do not add decorative controls merely to fill tablet space. The image remains
+the interface and **Set wallpaper** remains the one primary action.
+
+### Suggested delivery order
+
+1. Write regression tests for the mismatched progressive layers and extract the
+   shared aspect-ratio-correct viewport.
+2. Make Detail fullscreen truly immersive and verify portrait/landscape,
+   reduced motion, back, zoom, and chrome restoration.
+3. Add the local History viewer and move target selection behind its Set action.
+4. Add private image dimensions plus the secure private viewer and apply use
+   case.
+5. Add gallery paging/transitions and finish consistent shelf polish.
+6. Run the full automated and real-device matrix before merging.
+
+### Acceptance matrix
+
+Automated coverage must include:
+
+- 390x844 compact portrait, 844x390 compact landscape, and at least one
+  >=840dp expanded landscape surface;
+- portrait, landscape, square, and extreme-aspect images using contain geometry
+  with no contradictory placeholder visible after the source loads;
+- pinch/double-tap/reset and app/system chrome restoration (factor controller
+  logic into testable code where raw gestures would be brittle);
+- History tap -> viewer -> Set -> target, missing-file state, local-first source,
+  forget confirmation, and back/scroll restoration;
+- gallery sessions open at the tapped index; Previous/Next buttons, swipe, and
+  arrow keys stay in sync; boundary controls disable correctly; approaching a
+  Browse/linked-listing boundary requests the next page once; actions and
+  metadata follow the selected item rather than the initially tapped item;
+- private lock pass/fail, `FLAG_SECURE` acquired before content and retained for
+  every child surface, no share action, set flow, delete flow, corrupt file, and
+  dimension mapping;
+- screen-reader labels, 48dp targets, large text, and reduced motion;
+- existing share policy: explicit wallpapers remain link-only on Detail and
+  private files have no share action at all.
+
+Before handoff/merge, run:
+
+```bash
+./tool/tela gen-l10n
+dart format .
+./tool/tela analyze
+./tool/tela test
+./tool/tela build apk --debug
+```
+
+Then install the exact commit on the SM-X730 and repeat Browse, Detail,
+History, and private-library flows in portrait and landscape. Inspect logcat for
+Flutter exceptions/overflows, confirm system chrome and `FLAG_SECURE` restore
+correctly, and do not claim the private screenshot path was visually captured —
+`FLAG_SECURE` must make that impossible.
+
 ## Sharing a wallpaper, and the one thing that never leaves (Wave 4, first slice)
 
 The newest work, and the one to read first. **Wave 4 has begun, and its first
