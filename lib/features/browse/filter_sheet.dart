@@ -11,9 +11,11 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/search_tag.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/browse/resolution_filter_field.dart';
+import 'package:tela/features/browse/tag_filter_field.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
 
 /// Opens the filter sheet over the browse grid.
@@ -70,6 +72,7 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
                   child: _categories(l10n),
                 ),
                 _FilterGroup(title: l10n.filterPurity, child: _purities(l10n)),
+                _FilterGroup(title: l10n.filterTags, child: _tags()),
                 _FilterGroup(title: l10n.filterRatio, child: _ratios(l10n)),
                 _FilterGroup(
                   title: l10n.filterResolution,
@@ -156,6 +159,17 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
             onSelected: (bool _) => _toggleRatio(choice),
           ),
       ],
+    );
+  }
+
+  /// The only filter tela builds a Wallhaven operator *for* the user, rather
+  /// than picking from a fixed vocabulary: a typed name becomes `+name` /
+  /// `-name`, folded into `q` beside whatever is in the search box.
+  Widget _tags() {
+    return TagFilterField(
+      value: _draft.tags,
+      onChanged: (List<SearchTag> tags) =>
+          setState(() => _draft = _draft.copyWith(tags: tags)),
     );
   }
 

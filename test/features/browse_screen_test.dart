@@ -189,6 +189,34 @@ void main() {
     expect(api.receivedQueries.last.term, 'sunset');
   });
 
+  testWidgets('a tag added in the sheet is folded into the grid query', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = FakeWallhavenApi();
+    await _pumpBrowse(tester, api);
+
+    await tester.enterText(find.byType(TextField), 'sunset');
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await _openFilters(tester);
+    final Finder tagField = find.byWidgetPredicate(
+      (Widget widget) =>
+          widget is TextField && widget.decoration?.hintText == 'Add a tag',
+    );
+    await tester.enterText(tagField, 'nature');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    await tester.tap(find.text('Show wallpapers'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The tag rides in `q` beside the term the user typed, not in place of it —
+    // this is the first filter tela builds a Wallhaven operator for.
+    expect(SearchQueryFacts(api.receivedQueries.last).q, 'sunset +nature');
+  });
+
   testWidgets('most viewed and most favorited are reachable listings', (
     WidgetTester tester,
   ) async {
@@ -678,6 +706,9 @@ class SearchQueryFacts {
 
   /// The `purity` bit mask.
   String? get purity => _params['purity'];
+
+  /// The `q` param — the free-text term with the sheet's tags folded in.
+  String? get q => _params['q'];
 
   /// The `colors` param — bare hex, no leading `#`, absent when unfiltered.
   String? get colors => _params['colors'];

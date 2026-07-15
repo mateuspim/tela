@@ -5,6 +5,7 @@ import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/search_tag.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 
 void main() {
@@ -138,6 +139,43 @@ void main() {
       },
     );
 
+    test('folds the tags into q, after the free-text term', () {
+      final Map<String, String> params = const SearchQuery(
+        term: 'sunset',
+        tags: <SearchTag>[
+          SearchTag('nature'),
+          SearchTag('people', TagSense.exclude),
+        ],
+      ).toQueryParameters();
+
+      expect(params['q'], 'sunset +nature -people');
+    });
+
+    test('sends a tag-only q with no free-text term', () {
+      // A leading + is a query Wallhaven accepts; the tag alone is still a
+      // search, not a browse.
+      final Map<String, String> params = const SearchQuery(
+        tags: <SearchTag>[SearchTag('nature')],
+      ).toQueryParameters();
+
+      expect(params['q'], '+nature');
+    });
+
+    test('leaves a hand-typed operator in the term untouched by the tags', () {
+      // The whole point of composing beside the term rather than parsing it:
+      // `like:123` reaches q verbatim, with the tag simply appended.
+      final Map<String, String> params = const SearchQuery(
+        term: 'like:123',
+        tags: <SearchTag>[SearchTag('nature')],
+      ).toQueryParameters();
+
+      expect(params['q'], 'like:123 +nature');
+    });
+
+    test('sends no q at all for a browse with no term and no tags', () {
+      expect(const SearchQuery().toQueryParameters().containsKey('q'), isFalse);
+    });
+
     test('sends no colour at all when none is chosen', () {
       // Not an empty `colors=`, which Wallhaven reads as a filter that matches
       // nothing rather than as the absence of one.
@@ -194,6 +232,24 @@ void main() {
         const SearchQuery().withColor(WallpaperColor('#0066cc')),
         isNot(const SearchQuery()),
       );
+      expect(
+        const SearchQuery(tags: <SearchTag>[SearchTag('nature')]),
+        isNot(const SearchQuery()),
+      );
+    });
+
+    test('the same tags in a different order are the same listing', () {
+      const SearchQuery one = SearchQuery(
+        tags: <SearchTag>[SearchTag('nature'), SearchTag('sky')],
+      );
+      const SearchQuery same = SearchQuery(
+        tags: <SearchTag>[SearchTag('sky'), SearchTag('nature')],
+      );
+
+      // `+a +b` and `+b +a` are one Wallhaven request, so the grid must not
+      // treat reordering them as a new listing and re-fetch.
+      expect(one, same);
+      expect(one.hashCode, same.hashCode);
     });
 
     test('two queries filtered by the same colour are the same query', () {
@@ -234,6 +290,7 @@ void main() {
         categories: CategoryFilter({Category.anime}),
         resolution: AtLeastResolution(Resolution(1080, 2400)),
         ratios: <RatioChoice>[ExactRatio(16, 9)],
+        tags: <SearchTag>[SearchTag('nature')],
         page: 3,
         seed: 'abc123',
       );
@@ -243,6 +300,7 @@ void main() {
       expect(colored.withColor(null), query);
       expect(colored.term, 'sunset');
       expect(colored.sorting, Sorting.toplist);
+      expect(colored.tags, query.tags);
       expect(colored.page, 3);
       expect(colored.seed, 'abc123');
     });

@@ -192,6 +192,46 @@
     "description": "Explains that the ratio chips are a union, unlike the colour swatches which are a radio."
   },
 
+  "filterTags": "Tags",
+  "@filterTags": {
+    "description": "Heading of the tag include/exclude filter in the filter sheet."
+  },
+
+  "filterTagsHint": "Show or hide wallpapers by tag. Names match loosely; tap a tag to switch it between show and hide.",
+  "@filterTagsHint": {
+    "description": "Explains that the tag filter matches names fuzzily (Wallhaven's +tag/-tag) and that tapping a chip flips its sense."
+  },
+
+  "filterTagFieldHint": "Add a tag",
+  "@filterTagFieldHint": {
+    "description": "Placeholder in the text field where a tag name is typed."
+  },
+
+  "filterTagAdd": "Add tag",
+  "@filterTagAdd": {
+    "description": "Accessibility label for the button that adds the typed tag to the filter."
+  },
+
+  "filterTagInclude": "Must include",
+  "@filterTagInclude": {
+    "description": "The include sense of a tag: results must carry it. Labels the sense toggle and included chips."
+  },
+
+  "filterTagExclude": "Must exclude",
+  "@filterTagExclude": {
+    "description": "The exclude sense of a tag: results must not carry it. Labels the sense toggle and excluded chips."
+  },
+
+  "filterTagRemove": "Remove {name}",
+  "@filterTagRemove": {
+    "description": "Accessibility label for the delete affordance on a tag chip.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+
   "filterResolution": "Size",
   "@filterResolution": {
     "description": "Heading of the resolution filter in the filter sheet."

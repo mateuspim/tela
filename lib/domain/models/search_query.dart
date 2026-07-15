@@ -4,6 +4,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
+import 'package:tela/domain/models/search_tag.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 
 /// How Wallhaven orders results. The browse tabs are just three of these.
@@ -117,6 +118,7 @@ class SearchQuery {
     this.topRange = TopRange.oneMonth,
     this.resolution = const AutomaticResolution(),
     this.ratios = const <RatioChoice>[ExactRatio(9, 16)],
+    this.tags = const <SearchTag>[],
     this.color,
     this.page = 1,
     this.seed,
@@ -124,6 +126,10 @@ class SearchQuery {
 
   /// Free-text search, including Wallhaven's operators (`+tag`, `-tag`,
   /// `like:{id}`). Empty means "browse", not "search for nothing".
+  ///
+  /// Reaches `q` verbatim: the filter sheet's [tags] are composed *beside* it,
+  /// never parsed out of it, so a power user's hand-typed operators are left
+  /// exactly as they were.
   final String term;
 
   /// Which content buckets to include.
@@ -151,6 +157,11 @@ class SearchQuery {
   /// Empty means no ratio filter at all. Portrait-first, because this is a
   /// phone.
   final List<RatioChoice> ratios;
+
+  /// Tags to demand or forbid, built by the filter sheet and folded into `q`
+  /// beside [term]. Empty means no tag filter. Order is irrelevant — `+a +b` is
+  /// the same listing as `+b +a` — so this compares set-like, as [ratios] do.
+  final List<SearchTag> tags;
 
   /// Dominant colour to match, from Wallhaven's fixed palette. Null means "any
   /// colour", which is not the same request as any particular one.
@@ -199,6 +210,7 @@ class SearchQuery {
       topRange: topRange,
       resolution: resolution,
       ratios: ratios,
+      tags: tags,
       color: color,
       page: page,
       seed: seed,
@@ -218,6 +230,7 @@ class SearchQuery {
     TopRange? topRange,
     ResolutionFilter? resolution,
     List<RatioChoice>? ratios,
+    List<SearchTag>? tags,
     WallpaperColor? color,
     int? page,
     String? seed,
@@ -231,6 +244,7 @@ class SearchQuery {
       topRange: topRange ?? this.topRange,
       resolution: resolution ?? this.resolution,
       ratios: ratios ?? this.ratios,
+      tags: tags ?? this.tags,
       color: color ?? this.color,
       page: page ?? this.page,
       seed: seed ?? this.seed,
@@ -254,6 +268,7 @@ class SearchQuery {
         other.topRange == topRange &&
         other.resolution == resolution &&
         _sameElements(other.ratios, ratios) &&
+        _sameElements(other.tags, tags) &&
         other.color == color &&
         other.page == page &&
         other.seed == seed;
@@ -270,6 +285,7 @@ class SearchQuery {
       topRange,
       resolution,
       Object.hashAllUnordered(ratios),
+      Object.hashAllUnordered(tags),
       color,
       page,
       seed,
@@ -284,13 +300,29 @@ class SearchQuery {
     return a.length == b.length && a.toSet().containsAll(b);
   }
 
+  /// The `q` value: the free-text [term] with the [tags] tokens folded in after
+  /// it, or null when there is nothing to search.
+  ///
+  /// Null rather than `''` on purpose — the same distinction [color] and
+  /// [ratios] draw: an *absent* `q` is a browse, where an empty `q=` is a
+  /// search for the empty string. `sunset` plus a `+nature` tag reads
+  /// `sunset +nature`; the tag alone reads `+nature`, which Wallhaven accepts
+  /// as a leading sign.
+  String? get _query {
+    final List<String> parts = <String>[
+      if (term.isNotEmpty) term,
+      for (final SearchTag tag in tags) tag.token,
+    ];
+    return parts.isEmpty ? null : parts.join(' ');
+  }
+
   /// Encodes to Wallhaven's `/search` query params.
   ///
   /// Note what is absent: the API key. It travels only in the `X-API-Key`
   /// header (CLAUDE.md, hard rule) so it can never leak into a logged URL.
   Map<String, String> toQueryParameters() {
     return <String, String>{
-      if (term.isNotEmpty) 'q': term,
+      'q': ?_query,
       'categories': categories.toApiBits(),
       'purity': purity.toApiBits(),
       'sorting': sorting.apiValue,
