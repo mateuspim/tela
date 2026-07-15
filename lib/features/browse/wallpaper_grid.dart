@@ -110,9 +110,9 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
         state: state,
         fetchNextPage: fetchNextPage,
         crossAxisCount: wallpaperGridColumns(context),
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
-        padding: const EdgeInsets.all(8),
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        padding: const EdgeInsets.all(12),
         builderDelegate: PagedChildBuilderDelegate<Wallpaper>(
           itemBuilder: (BuildContext context, Wallpaper wallpaper, int index) =>
               WallpaperTile(

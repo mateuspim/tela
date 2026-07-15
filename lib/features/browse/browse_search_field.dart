@@ -32,7 +32,7 @@ class _BrowseSearchFieldState extends ConsumerState<BrowseSearchField> {
       controller: _entry,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        border: InputBorder.none,
+        prefixIcon: const Icon(Icons.search),
         hintText: l10n.browseSearchHint,
         suffixIcon: _entry.text.isEmpty ? null : _clearButton(l10n),
       ),

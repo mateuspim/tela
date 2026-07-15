@@ -158,9 +158,9 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
     // has none to get.
     return GridView.count(
       crossAxisCount: wallpaperGridColumns(context),
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      padding: const EdgeInsets.all(8),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      padding: const EdgeInsets.all(12),
       children: <Widget>[
         for (final PrivateImage image in stored)
           _PrivateTile(image: image, onDelete: () => _confirmDelete(image)),
@@ -223,7 +223,7 @@ class _PrivateTile extends StatelessWidget {
       label: l10n.privateLibraryImageLabel(image.id),
       child: Material(
         clipBehavior: Clip.antiAlias,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         child: InkWell(
           onLongPress: onDelete,

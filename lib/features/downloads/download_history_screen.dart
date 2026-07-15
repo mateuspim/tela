@@ -61,9 +61,9 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
     }
     return MasonryGridView.count(
       crossAxisCount: wallpaperGridColumns(context),
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      padding: const EdgeInsets.all(8),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      padding: const EdgeInsets.all(12),
       itemCount: recent.length,
       itemBuilder: (BuildContext context, int index) =>
           _tile(l10n, recent[index]),

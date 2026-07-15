@@ -31,7 +31,7 @@ class WallpaperTile extends StatelessWidget {
       aspectRatio: wallpaper.resolution.width / wallpaper.resolution.height,
       child: Material(
         clipBehavior: Clip.antiAlias,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         child: InkWell(
           onTap: onTap,

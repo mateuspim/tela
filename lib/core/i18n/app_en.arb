@@ -6,6 +6,11 @@
     "description": "The app name. Lowercase on purpose — it is the brand."
   },
 
+  "navigationBrowse": "Browse",
+  "@navigationBrowse": {
+    "description": "Label for the primary destination containing search and wallpaper listings."
+  },
+
   "browseTabLatest": "Latest",
   "@browseTabLatest": {
     "description": "Browse tab showing the newest uploads."

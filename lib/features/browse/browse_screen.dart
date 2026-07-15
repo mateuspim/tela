@@ -1,8 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/browse_filter_text.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
@@ -71,11 +69,12 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: 72,
+        titleSpacing: 16,
         title: const BrowseSearchField(),
         actions: <Widget>[
           _filterButton(context, l10n),
-          _favoritesButton(context, l10n),
-          _settingsButton(context, l10n),
+          const SizedBox(width: 8),
         ],
         bottom: _tabBar(l10n, tabs, sortings),
       ),
@@ -106,6 +105,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
       controller: tabs,
       isScrollable: true,
       tabAlignment: TabAlignment.start,
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       tabs: <Widget>[
         for (final Sorting sorting in sortings)
           Tab(text: sortingLabel(l10n, sorting)),
@@ -162,26 +162,10 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
   }
 
   Widget _filterButton(BuildContext context, AppLocalizations l10n) {
-    return IconButton(
+    return IconButton.filledTonal(
       icon: const Icon(Icons.tune),
       tooltip: l10n.browseFilters,
       onPressed: () => showFilterSheet(context),
-    );
-  }
-
-  Widget _favoritesButton(BuildContext context, AppLocalizations l10n) {
-    return IconButton(
-      icon: const Icon(Icons.favorite_border),
-      tooltip: l10n.favoritesOpen,
-      onPressed: () => context.pushNamed(TelaRoutes.favoritesName),
-    );
-  }
-
-  Widget _settingsButton(BuildContext context, AppLocalizations l10n) {
-    return IconButton(
-      icon: const Icon(Icons.settings_outlined),
-      tooltip: l10n.settingsOpen,
-      onPressed: () => context.pushNamed(TelaRoutes.settingsName),
     );
   }
 }

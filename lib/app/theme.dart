@@ -14,7 +14,7 @@ abstract final class TelaTheme {
   /// Not dead code and not a placeholder: Monet is Android 12+, tela's minSdk
   /// is 29, and `dynamic_color` also yields nothing on a device whose OEM
   /// dropped the API. Roughly a tenth of supported devices land here.
-  static const Color _seed = Color(0xFF6B7A8F);
+  static const Color _seed = Color(0xFF7772E5);
 
   /// Light theme, from [device] when Android supplied a palette.
   ///
@@ -43,13 +43,90 @@ abstract final class TelaTheme {
         ? device!.harmonized()
         : ColorScheme.fromSeed(seedColor: _seed, brightness: brightness);
     return ThemeData(
+      useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: scheme.surface,
+      dividerTheme: DividerThemeData(
+        color: scheme.outlineVariant.withValues(alpha: .55),
+        space: 1,
+      ),
+      cardTheme: CardThemeData(
+        color: scheme.surfaceContainerLow,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: scheme.outlineVariant.withValues(alpha: .45),
+          ),
+        ),
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: scheme.surfaceContainerHighest,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 14,
+        ),
+        border: _inputBorder(),
+        enabledBorder: _inputBorder(),
+        focusedBorder: _inputBorder(color: scheme.primary),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: scheme.surfaceContainer,
+        indicatorColor: scheme.secondaryContainer,
+        height: 72,
+        elevation: 0,
+      ),
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: scheme.surfaceContainerLow,
+        indicatorColor: scheme.secondaryContainer,
+        minWidth: 88,
+        minExtendedWidth: 88,
+        useIndicator: true,
+      ),
+      tabBarTheme: TabBarThemeData(
+        dividerColor: Colors.transparent,
+        indicator: ShapeDecoration(
+          color: scheme.secondaryContainer,
+          shape: const StadiumBorder(),
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
+        labelColor: scheme.onSecondaryContainer,
+        unselectedLabelColor: scheme.onSurfaceVariant,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 18),
+        overlayColor: WidgetStatePropertyAll<Color>(
+          scheme.primary.withValues(alpha: .08),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(64, 52),
+          shape: const StadiumBorder(),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: scheme.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+      ),
+    );
+  }
+
+  static OutlineInputBorder _inputBorder({Color color = Colors.transparent}) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(28),
+      borderSide: BorderSide(color: color),
     );
   }
 

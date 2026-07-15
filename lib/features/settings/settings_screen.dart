@@ -26,7 +26,13 @@ class SettingsScreen extends ConsumerWidget {
       storageSettingsProvider,
     );
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.settingsTitle)),
+      appBar: AppBar(
+        toolbarHeight: 72,
+        title: Text(
+          l10n.settingsTitle,
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+      ),
       body: settings.when(
         data: (StorageSettings value) => _SettingsList(settings: value),
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -46,15 +52,87 @@ class _SettingsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    return ListView(
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) =>
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1120),
+                child: constraints.maxWidth >= _twoColumnWidth
+                    ? _wideGroups(l10n)
+                    : _compactGroups(l10n),
+              ),
+            ),
+          ),
+    );
+  }
+
+  static const double _twoColumnWidth = 900;
+
+  Widget _compactGroups(AppLocalizations l10n) {
+    return Column(
       children: <Widget>[
-        _Header(title: l10n.settingsAccountSection),
-        const ApiKeySection(),
-        const Divider(),
-        _Header(title: l10n.settingsBrowseDefaultsSection),
-        const BrowseDefaultsSection(),
-        const Divider(),
-        _Header(title: l10n.settingsDownloadsSection),
+        _accountGroup(l10n),
+        const SizedBox(height: 16),
+        _browseGroup(l10n),
+        const SizedBox(height: 16),
+        _downloadsGroup(l10n),
+        const SizedBox(height: 16),
+        _privacyGroup(l10n),
+      ],
+    );
+  }
+
+  Widget _wideGroups(AppLocalizations l10n) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            children: <Widget>[
+              _accountGroup(l10n),
+              const SizedBox(height: 16),
+              _browseGroup(l10n),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            children: <Widget>[
+              _downloadsGroup(l10n),
+              const SizedBox(height: 16),
+              _privacyGroup(l10n),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _accountGroup(AppLocalizations l10n) {
+    return _SettingsGroup(
+      icon: Icons.key_outlined,
+      title: l10n.settingsAccountSection,
+      children: const <Widget>[ApiKeySection()],
+    );
+  }
+
+  Widget _browseGroup(AppLocalizations l10n) {
+    return _SettingsGroup(
+      icon: Icons.tune,
+      title: l10n.settingsBrowseDefaultsSection,
+      children: const <Widget>[BrowseDefaultsSection()],
+    );
+  }
+
+  Widget _downloadsGroup(AppLocalizations l10n) {
+    return _SettingsGroup(
+      icon: Icons.download_outlined,
+      title: l10n.settingsDownloadsSection,
+      children: <Widget>[
         const _DownloadHistoryTile(),
         const Divider(),
         _TierPicker(
@@ -69,10 +147,18 @@ class _SettingsList extends StatelessWidget {
           selected: settings.nsfwTier,
           note: l10n.settingsDownloadsNsfwNote,
         ),
-        const Divider(),
-        _Header(title: l10n.settingsPrivacySection),
-        const _PrivateLibraryTile(),
-        const AppLockSwitch(),
+      ],
+    );
+  }
+
+  Widget _privacyGroup(AppLocalizations l10n) {
+    return _SettingsGroup(
+      icon: Icons.shield_outlined,
+      title: l10n.settingsPrivacySection,
+      children: const <Widget>[
+        _PrivateLibraryTile(),
+        Divider(),
+        AppLockSwitch(),
       ],
     );
   }
@@ -119,21 +205,40 @@ class _PrivateLibraryTile extends StatelessWidget {
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.title});
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({
+    required this.icon,
+    required this.title,
+    required this.children,
+  });
 
+  final IconData icon;
   final String title;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-      child: Text(
-        title,
-        style: theme.textTheme.titleSmall?.copyWith(
-          color: theme.colorScheme.primary,
-        ),
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            child: Row(
+              children: <Widget>[
+                Icon(icon, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(title, style: theme.textTheme.titleLarge),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
+          ...children,
+        ],
       ),
     );
   }

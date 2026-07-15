@@ -21,6 +21,18 @@ import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
 
 void main() {
+  testWidgets('groups related settings into four scannable sections', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSettings(tester, FakeSettingsRepository());
+
+    expect(find.byType(Card), findsNWidgets(4));
+    expect(find.text('Wallhaven account'), findsWidgets);
+    expect(find.text('Browse defaults'), findsOneWidget);
+    expect(find.text('Downloads'), findsOneWidget);
+    expect(find.text('Privacy'), findsOneWidget);
+  });
+
   testWidgets('shows the saved destination for each purity', (
     WidgetTester tester,
   ) async {

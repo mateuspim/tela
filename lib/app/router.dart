@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/routes.dart';
+import 'package:tela/app/tela_shell.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/features/browse/browse_screen.dart';
@@ -20,10 +21,38 @@ abstract final class TelaRouter {
     return GoRouter(
       initialLocation: TelaRoutes.browsePath,
       routes: <RouteBase>[
-        GoRoute(
-          path: TelaRoutes.browsePath,
-          name: TelaRoutes.browseName,
-          builder: (_, _) => const BrowseScreen(),
+        StatefulShellRoute.indexedStack(
+          builder: (_, _, StatefulNavigationShell navigationShell) =>
+              TelaShell(navigationShell: navigationShell),
+          branches: <StatefulShellBranch>[
+            StatefulShellBranch(
+              routes: <RouteBase>[
+                GoRoute(
+                  path: TelaRoutes.browsePath,
+                  name: TelaRoutes.browseName,
+                  builder: (_, _) => const BrowseScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: <RouteBase>[
+                GoRoute(
+                  path: TelaRoutes.favoritesPath,
+                  name: TelaRoutes.favoritesName,
+                  builder: (_, _) => const FavoritesScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: <RouteBase>[
+                GoRoute(
+                  path: TelaRoutes.settingsPath,
+                  name: TelaRoutes.settingsName,
+                  builder: (_, _) => const SettingsScreen(),
+                ),
+              ],
+            ),
+          ],
         ),
         GoRoute(
           path: TelaRoutes.detailPath,
@@ -42,16 +71,6 @@ abstract final class TelaRouter {
           builder: (_, GoRouterState state) => LinkedListingScreen(
             link: state.extra! as WallpaperLink,
           ),
-        ),
-        GoRoute(
-          path: TelaRoutes.settingsPath,
-          name: TelaRoutes.settingsName,
-          builder: (_, _) => const SettingsScreen(),
-        ),
-        GoRoute(
-          path: TelaRoutes.favoritesPath,
-          name: TelaRoutes.favoritesName,
-          builder: (_, _) => const FavoritesScreen(),
         ),
         GoRoute(
           path: TelaRoutes.privateLibraryPath,

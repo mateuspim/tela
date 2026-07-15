@@ -27,7 +27,13 @@ class FavoritesScreen extends ConsumerWidget {
     final AsyncValue<List<Wallpaper>> favorites = ref.watch(favoritesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.favoritesTitle)),
+      appBar: AppBar(
+        toolbarHeight: 72,
+        title: Text(
+          l10n.favoritesTitle,
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+      ),
       body: favorites.when(
         data: (List<Wallpaper> saved) => _grid(context, l10n, saved),
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -52,9 +58,9 @@ class FavoritesScreen extends ConsumerWidget {
     }
     return MasonryGridView.count(
       crossAxisCount: wallpaperGridColumns(context),
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      padding: const EdgeInsets.all(8),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      padding: const EdgeInsets.all(12),
       itemCount: saved.length,
       itemBuilder: (BuildContext context, int index) => WallpaperTile(
         wallpaper: saved[index],
