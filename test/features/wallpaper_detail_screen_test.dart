@@ -19,6 +19,7 @@ import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import '../fakes/fake_download_history.dart';
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_image_store.dart';
+import '../fakes/fake_immersive_system_ui.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
@@ -61,22 +62,48 @@ void main() {
     },
   );
 
-  testWidgets('offers a distraction-free preview and a clear way back', (
+  testWidgets('offers an immersive preview and a clear 48dp close control', (
     WidgetTester tester,
   ) async {
-    await _pumpDetail(tester, _details());
+    final FakeImmersiveSystemUi systemUi = FakeImmersiveSystemUi();
+    await _pumpDetail(tester, _details(), immersiveSystemUi: systemUi);
 
     await tester.tap(find.byTooltip('View wallpaper full screen'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.byType(AppBar), findsNothing);
     expect(find.text('Set wallpaper'), findsNothing);
-    expect(find.byTooltip('Exit full-screen preview'), findsOneWidget);
+    expect(find.text('Close'), findsOneWidget);
+    final Size closeTarget = tester.getSize(
+      find.byKey(const Key('immersive-viewer-close')),
+    );
+    expect(closeTarget.width, greaterThanOrEqualTo(48));
+    expect(closeTarget.height, greaterThanOrEqualTo(48));
+    expect(systemUi.enterCalls, 1);
 
-    await tester.tap(find.byTooltip('Exit full-screen preview'));
-    await tester.pump();
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
 
     expect(find.text('Set wallpaper'), findsOneWidget);
+    expect(systemUi.restoreCalls, 1);
+  });
+
+  testWidgets('Back exits fullscreen before leaving Detail', (
+    WidgetTester tester,
+  ) async {
+    final FakeImmersiveSystemUi systemUi = FakeImmersiveSystemUi();
+    await _pumpDetail(tester, _details(), immersiveSystemUi: systemUi);
+
+    await tester.tap(find.byTooltip('View wallpaper full screen'));
+    await tester.pumpAndSettle();
+    expect(find.text('Set wallpaper'), findsNothing);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Set wallpaper'), findsOneWidget);
+    expect(find.byType(WallpaperDetailScreen), findsOneWidget);
+    expect(systemUi.restoreCalls, 1);
   });
 
   testWidgets('uses preview and information panes on a wide screen', (
@@ -274,6 +301,7 @@ Future<void> _pumpDetail(
   FakeImageStore? imageStore,
   StorageSettings? settings,
   FakeWallpaperSharer? sharer,
+  FakeImmersiveSystemUi? immersiveSystemUi,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -307,7 +335,10 @@ Future<void> _pumpDetail(
           GlobalCupertinoLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: WallpaperDetailScreen(wallpaper: details.wallpaper),
+        home: WallpaperDetailScreen(
+          wallpaper: details.wallpaper,
+          immersiveSystemUi: immersiveSystemUi ?? FakeImmersiveSystemUi(),
+        ),
       ),
     ),
   );

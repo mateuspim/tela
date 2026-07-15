@@ -35,11 +35,15 @@ class GalleryViewport extends StatelessWidget {
     required this.semanticsLabel,
     required this.source,
     this.transformationController,
+    this.onInteractionStart,
+    this.onTap,
+    this.onDoubleTapDown,
+    this.onDoubleTap,
     this.backgroundColor = Colors.black,
     this.maxScale = 4,
     super.key,
-  })  : assert(aspectRatio > 0, 'aspectRatio must be positive'),
-        assert(maxScale >= 1, 'maxScale must include the fitted scale');
+  }) : assert(aspectRatio > 0, 'aspectRatio must be positive'),
+       assert(maxScale >= 1, 'maxScale must include the fitted scale');
 
   /// The uncropped source width divided by its height.
   final double aspectRatio;
@@ -52,6 +56,19 @@ class GalleryViewport extends StatelessWidget {
 
   /// Optional zoom controller, exposed for viewer chrome and reset controls.
   final TransformationController? transformationController;
+
+  /// Called when a pinch or pan begins, allowing viewer chrome to stop an
+  /// in-flight programmatic zoom transition.
+  final GestureScaleStartCallback? onInteractionStart;
+
+  /// Called for a single tap on the image canvas.
+  final GestureTapCallback? onTap;
+
+  /// Records the focal point used by [onDoubleTap].
+  final GestureTapDownCallback? onDoubleTapDown;
+
+  /// Called for a double tap on the image canvas.
+  final GestureTapCallback? onDoubleTap;
 
   /// The calm canvas shown around an image that does not fill both axes.
   final Color backgroundColor;
@@ -80,18 +97,28 @@ class GalleryViewport extends StatelessWidget {
               logicalSize: imageSize,
               devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
             );
+            final Widget canvas = SizedBox.fromSize(
+              size: viewportSize,
+              child: Center(
+                child: SizedBox.fromSize(
+                  key: imageFrameKey,
+                  size: imageSize,
+                  child: source.build(context, request),
+                ),
+              ),
+            );
             return InteractiveViewer(
               transformationController: transformationController,
+              onInteractionStart: onInteractionStart,
+              minScale: 1,
               maxScale: maxScale,
-              child: SizedBox.fromSize(
-                size: viewportSize,
-                child: Center(
-                  child: SizedBox.fromSize(
-                    key: imageFrameKey,
-                    size: imageSize,
-                    child: source.build(context, request),
-                  ),
-                ),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                excludeFromSemantics: true,
+                onTap: onTap,
+                onDoubleTapDown: onDoubleTapDown,
+                onDoubleTap: onDoubleTap,
+                child: canvas,
               ),
             );
           },

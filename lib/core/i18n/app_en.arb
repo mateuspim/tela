@@ -559,6 +559,31 @@
     "description": "Tooltip for returning from the distraction-free wallpaper preview."
   },
 
+  "galleryClose": "Close",
+  "@galleryClose": {
+    "description": "Visible action that closes an immersive gallery viewer."
+  },
+
+  "galleryZoomIn": "Zoom in",
+  "@galleryZoomIn": {
+    "description": "Visible and accessible action that zooms an immersive image."
+  },
+
+  "galleryResetZoom": "Reset zoom",
+  "@galleryResetZoom": {
+    "description": "Visible and accessible action that returns an image to fitted scale."
+  },
+
+  "galleryShowControls": "Show viewer controls",
+  "@galleryShowControls": {
+    "description": "Accessibility action for showing hidden immersive viewer chrome."
+  },
+
+  "galleryHideControls": "Hide viewer controls",
+  "@galleryHideControls": {
+    "description": "Accessibility action for hiding immersive viewer chrome."
+  },
+
   "detailMetadataTitle": "Details",
   "detailResolution": "Resolution",
   "detailFileSize": "File size",

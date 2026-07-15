@@ -8,6 +8,8 @@ import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/immersive_gallery_viewer.dart';
+import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
 import 'package:tela/core/ui/wallpaper_share_sheet.dart';
@@ -42,10 +44,17 @@ final FutureProviderFamily<WallpaperDetails, String> wallpaperDetailsProvider =
 /// Full-screen preview, metadata, and the shortest path to wallpaper apply.
 class WallpaperDetailScreen extends ConsumerStatefulWidget {
   /// Creates the detail screen for a grid [wallpaper].
-  const WallpaperDetailScreen({required this.wallpaper, super.key});
+  const WallpaperDetailScreen({
+    required this.wallpaper,
+    this.immersiveSystemUi = const FlutterImmersiveSystemUi(),
+    super.key,
+  });
 
   /// The selected wallpaper, including its full-resolution URL.
   final Wallpaper wallpaper;
+
+  /// The Android system-chrome seam used by the immersive preview.
+  final ImmersiveSystemUi immersiveSystemUi;
 
   @override
   ConsumerState<WallpaperDetailScreen> createState() =>
@@ -56,7 +65,6 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   bool _isApplying = false;
   bool _isDownloading = false;
   bool _isSharing = false;
-  bool _isPreviewFullscreen = false;
 
   Future<void> _chooseTarget() async {
     final WallpaperTarget? target = await chooseWallpaperTarget(context);
@@ -188,7 +196,6 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     final AsyncValue<WallpaperDetails> details = ref.watch(
       wallpaperDetailsProvider(widget.wallpaper.id),
     );
-    if (_isPreviewFullscreen) return _fullscreenPreview(l10n);
     final bool expanded = MediaQuery.sizeOf(context).width >= _expandedWidth;
     return Scaffold(
       appBar: AppBar(
@@ -293,35 +300,50 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
   }
 
-  Widget _fullscreenPreview(AppLocalizations l10n) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            ProgressiveWallpaperPreview(wallpaper: widget.wallpaper),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: IconButton.filled(
-                onPressed: _exitFullscreen,
-                tooltip: l10n.detailExitFullscreen,
-                icon: const Icon(Icons.close_fullscreen),
-              ),
-            ),
-          ],
-        ),
-      ),
+  void _enterFullscreen() {
+    final bool disableAnimations = MediaQuery.disableAnimationsOf(context);
+    unawaited(
+      Navigator.of(context).push<void>(_fullscreenRoute(disableAnimations)),
     );
   }
 
-  void _enterFullscreen() {
-    setState(() => _isPreviewFullscreen = true);
+  PageRoute<void> _fullscreenRoute(bool disableAnimations) {
+    final Duration duration = disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+    return PageRouteBuilder<void>(
+      transitionDuration: duration,
+      reverseTransitionDuration: duration,
+      pageBuilder:
+          (
+            BuildContext context,
+            Animation<double> animation,
+            Animation<double> secondaryAnimation,
+          ) => _fullscreenSurface(context),
+      transitionsBuilder: _fadeFullscreenRoute,
+    );
   }
 
-  void _exitFullscreen() {
-    setState(() => _isPreviewFullscreen = false);
+  Widget _fullscreenSurface(BuildContext routeContext) {
+    final AppLocalizations l10n = AppLocalizations.of(routeContext);
+    return ImmersiveGalleryViewer(
+      aspectRatio:
+          widget.wallpaper.resolution.width /
+          widget.wallpaper.resolution.height,
+      semanticsLabel: l10n.detailPreviewLabel(widget.wallpaper.id),
+      source: ProgressiveWallpaperPreview.sourceFor(widget.wallpaper),
+      systemUi: widget.immersiveSystemUi,
+      onClose: () async => Navigator.of(routeContext).pop(),
+    );
+  }
+
+  Widget _fadeFullscreenRoute(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return FadeTransition(opacity: animation, child: child);
   }
 
   Widget _expandedActions(AppLocalizations l10n) {

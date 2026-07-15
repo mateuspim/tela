@@ -2,7 +2,7 @@
 
 Updated: 2026-07-15
 
-## CURRENT CHECKPOINT — image viewer UX slice 1 complete
+## CURRENT CHECKPOINT — image viewer UX slice 2 complete
 
 The staged implementation is now underway on branch `image-viewer-ux` in the
 existing `.worktrees/image-viewer-ux` worktree. **Continue there; do not create
@@ -10,24 +10,30 @@ another worktree and do not work in `master`.** The broader product contract
 below remains authoritative, but only take the next bounded slice described
 here.
 
-Slice 1 established the shared, honest image viewport:
+Slice 1 established the shared, honest image viewport. Slice 2 now turns
+Detail's single-wallpaper fullscreen preview into a reusable immersive surface:
 
-- `core/ui/gallery_viewport.dart` owns contain geometry, the black canvas,
-  image semantics, display-sized decode requests, and the shared
-  `InteractiveViewer` seam.
-- `core/ui/progressive_network_gallery_source.dart` owns progressive network
-  loading. Its preview and final layers occupy the exact same contained frame,
-  the final layer fades only when animations are enabled, a failed final image
-  leaves the thumbnail fallback visible, and a failed thumbnail has a safe
-  broken-image state.
-- `ProgressiveWallpaperPreview` is now only the Wallhaven adapter. It uses
-  `thumbOriginalUrl`, never the differently cropped `thumbLargeUrl`, and Detail
-  uses the shared viewport in both its normal and current fullscreen surfaces.
-- Regression coverage pins landscape, portrait, square, extreme portrait,
-  orientation changes, identical progressive geometry, bounded decode sizes,
-  reduced motion, failure fallback, and semantics.
+- `core/ui/immersive_gallery_viewer.dart` owns the edge-to-edge surface,
+  transient tap-toggle chrome, double-tap and visible zoom/reset paths, 48dp
+  Close control, Back interception, and reduced-motion transitions. It still
+  delegates all pixels and contain geometry to `GalleryViewport`.
+- `core/ui/gallery_zoom_controller.dart` exposes fitted/zoomed state around a
+  `TransformationController`; pinch and pan update the same state used by the
+  visible reset action. Fitted scale is clamped to 1.
+- `core/ui/immersive_system_ui.dart` is the project-owned seam for entering
+  `immersiveSticky` and restoring tela's normal `edgeToEdge` mode. Restoration
+  happens before Close/Back completes and again safely on disposal, with a fake
+  used by widget tests instead of a device channel.
+- Detail opens the immersive viewer as its own route. Back therefore restores
+  normal system chrome and returns to the same Detail wallpaper before Detail
+  itself can leave. The route fade, chrome opacity, progressive image fade, and
+  zoom animation all become instant when animations are disabled.
+- Focused coverage pins controller state, double tap, visible zoom/reset,
+  pinch/pan, chrome toggling, Back, reduced motion, semantics, 48dp targets,
+  orientation contain geometry, and system-chrome restoration through Close,
+  Back, and disposal.
 
-Verification completed for this slice:
+Slice 1 verification was:
 
 ```bash
 ./tool/tela analyze
@@ -36,30 +42,48 @@ Verification completed for this slice:
 
 Both pass; the full suite currently has 404 tests.
 
-### NEXT SLICE ONLY — immersive Detail fullscreen and zoom controls
+Slice 2 verification:
 
-Turn Detail's current in-widget fullscreen branch into a reusable immersive
-viewer surface in `core/ui`, still for the current single wallpaper. Do not add
-universal gallery sessions, Browse pagination, History, or Private viewing in
-this slice; those remain subsequent checkpoints.
+```bash
+./tool/tela dart format <touched Dart files>
+./tool/tela analyze
+./tool/tela test test/core/gallery_zoom_controller_test.dart \
+  test/core/immersive_gallery_viewer_test.dart \
+  test/core/gallery_viewport_test.dart \
+  test/features/wallpaper_detail_screen_test.dart
+./tool/tela test
+```
+
+All pass; the full suite now has 416 tests.
+
+### NEXT SLICE ONLY — already-loaded public gallery sessions
+
+Add reusable gallery-session navigation for the wallpapers already loaded in
+Browse, Favorites, and linked listings. Do not add next-page loading yet. Do
+not touch Download History or the private viewer in this slice.
 
 The next slice must:
 
-1. Factor testable fitted/zoomed state around `TransformationController` and
-   connect it to `GalleryViewport` without duplicating image rendering.
-2. Enter Android immersive fullscreen, hide app and system chrome, and restore
-   the app's normal system-UI mode on every exit path, including Back and
-   disposal.
-3. Add tap-to-toggle controls, an obvious 48dp Close control, pinch/pan, and an
-   accessible double-tap zoom/reset path. Provide a visible reset affordance or
-   equivalent screen-reader action; gestures cannot be the only route.
-4. Keep the same selected wallpaper and recompute contain geometry after an
-   orientation change. Back must leave fullscreen first, not pop Detail.
-5. Make chrome and zoom transitions instant when `disableAnimations` is true.
-6. Add focused tests for zoom/reset state, double tap, chrome toggling, Back,
-   reduced motion, semantics/targets, and system-chrome restoration. Mock the
-   platform channel or put system UI behind a small project-owned seam so tests
-   do not depend on a device.
+1. Introduce a small project-owned session/controller seam carrying an ordered
+   wallpaper list, selected index, and stable gallery identity. Keep it
+   independent of `PagingController`, Riverpod, and Wallhaven transport.
+2. Open Browse, Favorites, and linked-listing Detail on the exact tapped item
+   with every item already loaded by that shelf reachable in both directions.
+3. Add visible 48dp Previous/Next controls, horizontal swipe, keyboard/D-pad
+   arrows, boundary-disabled states, and an accessible “x of y” announcement.
+   No navigation path may be gesture-only.
+4. Reset zoom when selection changes. While zoomed, horizontal input must pan
+   the current image rather than change pages; explicit Previous/Next controls
+   may still change selection and then reset zoom.
+5. Keep Detail metadata, favorite/share/download/Set actions bound to the
+   selected wallpaper after navigation. Exiting fullscreen must leave Detail
+   showing that selected wallpaper, while Back to the shelf preserves its
+   existing route and scroll state.
+6. Prefetch only the immediate already-loaded neighbours. Expose—but do not
+   connect—an optional request-more seam for the later Browse pagination slice.
+7. Add focused pure/controller and widget tests for exact starting index,
+   boundaries, all input modes, zoom gating/reset, selected action binding,
+   position semantics, neighbour prefetch, and shelf return state.
 
 End that slice with format, analyze, the full test suite, a dedicated commit,
 and another concise checkpoint update here.
