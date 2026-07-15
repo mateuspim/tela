@@ -40,6 +40,21 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Exposes a single cached image to the app the user shares to, through a
+             one-shot read grant. exported=false + grantUriPermissions means no
+             other app can reach tela's files except the exact URI it is handed.
+             Only non-explicit wallpapers are ever written here — the domain
+             refuses to share an explicit image file (ShareWallpaper.image). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -10,8 +10,6 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -23,6 +21,7 @@ import java.util.concurrent.Executors
 class MainActivity : FlutterFragmentActivity() {
     private val wallpaperExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val imageStoreExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val shareExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var pendingOutsideGalleryStore: PendingOutsideGalleryStore? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -39,6 +38,10 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             SCREEN_CHANNEL,
         ).setMethodCallHandler(::handleScreenCall)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SHARE_CHANNEL,
+        ).setMethodCallHandler(::handleShareCall)
     }
 
     /**
@@ -65,7 +68,52 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onDestroy() {
         wallpaperExecutor.shutdown()
         imageStoreExecutor.shutdown()
+        shareExecutor.shutdown()
         super.onDestroy()
+    }
+
+    /**
+     * Shares a wallpaper out through Android's chooser.
+     *
+     * A link resolves on the UI thread — it launches an intent and nothing more.
+     * An image must first be downloaded, so it runs on [shareExecutor] and hops
+     * back to launch the chooser, which Android requires on the UI thread.
+     */
+    private fun handleShareCall(call: MethodCall, result: MethodChannel.Result) {
+        when (call.method) {
+            "shareLink" -> handleShareLink(call, result)
+            "shareImage" -> handleShareImage(call, result)
+            else -> result.notImplemented()
+        }
+    }
+
+    private fun handleShareLink(call: MethodCall, result: MethodChannel.Result) {
+        val page = call.argument<String>("page") ?: run {
+            result.success(failure("noTarget"))
+            return
+        }
+        result.success(WallpaperSharing(this).shareLink(page))
+    }
+
+    private fun handleShareImage(call: MethodCall, result: MethodChannel.Result) {
+        val source = call.argument<String>("source")
+        val fileName = call.argument<String>("fileName")
+        if (source == null || fileName == null) {
+            result.success(failure("downloadFailed"))
+            return
+        }
+        shareExecutor.execute {
+            val sharing = WallpaperSharing(this)
+            val file = sharing.downloadToShareCache(source, fileName)
+            runOnUiThread {
+                val response = if (file == null) {
+                    failure("downloadFailed")
+                } else {
+                    sharing.shareImageFile(file)
+                }
+                result.success(response)
+            }
+        }
     }
 
     private fun handleWallpaperCall(call: MethodCall, result: MethodChannel.Result) {
@@ -229,14 +277,13 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun downloadToCache(imageUrl: String): File {
-        val connection = URL(imageUrl).openConnection() as HttpURLConnection
+        val cachedImage = File.createTempFile("tela-wallpaper-", ".image", cacheDir)
         try {
-            connection.connectTimeout = NETWORK_TIMEOUT_MS
-            connection.readTimeout = NETWORK_TIMEOUT_MS
-            connection.instanceFollowRedirects = true
-            return connection.inputStream.use(::copyToCache)
-        } finally {
-            connection.disconnect()
+            Downloads.fetch(imageUrl, cachedImage)
+            return cachedImage
+        } catch (error: Exception) {
+            cachedImage.delete()
+            throw error
         }
     }
 
@@ -304,6 +351,7 @@ class MainActivity : FlutterFragmentActivity() {
         const val WALLPAPER_CHANNEL = "cc.pym.tela/wallpaper"
         const val IMAGE_STORE_CHANNEL = "cc.pym.tela/images"
         const val SCREEN_CHANNEL = "cc.pym.tela/screen"
+        const val SHARE_CHANNEL = "cc.pym.tela/share"
         const val OUTSIDE_GALLERY_DIRECTORY_REQUEST = 401
         const val PREFERENCES = "tela.storage"
         const val OUTSIDE_GALLERY_TREE = "outsideGalleryTree"
@@ -315,7 +363,6 @@ class MainActivity : FlutterFragmentActivity() {
                 Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
         const val PERSISTED_DIRECTORY_ACCESS_FLAGS =
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-        const val NETWORK_TIMEOUT_MS = 30_000
         const val BETWEEN_TARGETS_DELAY_MS = 500L
     }
 }

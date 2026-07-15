@@ -21,6 +21,7 @@ import '../fakes/fake_image_store.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_sharer.dart';
 
 void main() {
   testWidgets('renders detail-only Wallhaven metadata after the preview', (
@@ -91,6 +92,52 @@ void main() {
     expect(find.text('Private library'), findsOneWidget);
   });
 
+  testWidgets('the share menu offers the link and the image for safe content', (
+    WidgetTester tester,
+  ) async {
+    final WallpaperDetails details = _details();
+    await _pumpDetail(tester, details);
+
+    await tester.tap(find.byTooltip('Share'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Share wallpaper'), findsOneWidget);
+    expect(find.text('Link'), findsOneWidget);
+    expect(find.text('Image'), findsOneWidget);
+  });
+
+  testWidgets('the share menu withholds the image for an explicit wallpaper', (
+    WidgetTester tester,
+  ) async {
+    // The NSFW invariant reaches the share sheet too: an explicit image file
+    // may never leave the device, so only the public link is offered.
+    final WallpaperDetails details = _details(purity: Purity.nsfw);
+    await _pumpDetail(tester, details);
+
+    await tester.tap(find.byTooltip('Share'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Link'), findsOneWidget);
+    expect(find.text('Image'), findsNothing);
+  });
+
+  testWidgets('sharing the link routes the wallpaper to the sharer port', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallpaperSharer sharer = FakeWallpaperSharer();
+    final WallpaperDetails details = _details();
+    await _pumpDetail(tester, details, sharer: sharer);
+
+    await tester.tap(find.byTooltip('Share'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Link'));
+    await tester.pumpAndSettle();
+
+    expect(sharer.sharedLinks, <Uri>[
+      Uri.parse('https://wallhaven.cc/w/${details.wallpaper.id}'),
+    ]);
+  });
+
   testWidgets('a download refreshes the listings that exist to show it', (
     WidgetTester tester,
   ) async {
@@ -152,6 +199,7 @@ Future<void> _pumpDetail(
   WallpaperDetails details, {
   FakeImageStore? imageStore,
   StorageSettings? settings,
+  FakeWallpaperSharer? sharer,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -170,6 +218,10 @@ Future<void> _pumpDetail(
         ),
         // Downloading records where the file landed — the same database again.
         downloadHistoryProvider.overrideWithValue(FakeDownloadHistory()),
+        // The share button would otherwise reach the real method channel.
+        wallpaperSharerProvider.overrideWithValue(
+          sharer ?? FakeWallpaperSharer(),
+        ),
         if (imageStore != null)
           imageStoreProvider.overrideWithValue(imageStore),
       ],

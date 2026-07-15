@@ -1,6 +1,46 @@
 # tela handoff
 
-Updated: 2026-07-14
+Updated: 2026-07-15
+
+## Sharing a wallpaper, and the one thing that never leaves (Wave 4, first slice)
+
+The newest work, and the one to read first. **Wave 4 has begun, and its first
+slice is the share sheet** — a wallpaper's detail screen can now hand it to
+another app. It is built, tested, and **verified on the tablet** (2026-07-15,
+Samsung SM-X730, Android 16): the chooser opens, a link lands in the receiving
+app as `https://wallhaven.cc/w/{id}`, and the image path fetches the full file
+and hands it off through a `FileProvider` grant.
+
+**The load-bearing decision is that a wallpaper shares two different things, and
+they obey different rules.** A *link* is the public Wallhaven page and may be
+shared for any purity — it reveals nothing tela is holding. The *image file* is
+the actual bitmap leaving the device, so it is refused for explicit wallpapers,
+exactly the way `StorageSettings.choicesFor` refuses the gallery tier. The rule
+lives in `shareOptionsFor(purity)` and is enforced twice: the menu never shows
+the Image tile for an explicit wallpaper, and `ShareWallpaper.image` throws if
+called anyway. A widget test pins the tile's absence, and the tablet confirmed
+it — an explicit wallpaper's share menu is link-only. This is the same
+fail-toward-safe posture as every other NSFW rule here: the private library's
+`FLAG_SECURE`, the never-index storage adapter, the corrupt purity that reads as
+`nsfw`.
+
+The seam is the usual one: a `WallpaperSharer` port, a `ShareWallpaper` use case,
+and a `MethodChannelWallpaperSharer` on a new `cc.pym.tela/share` channel. Kotlin
+`WallpaperSharing` fires `ACTION_SEND` — plain text for a link, and for an image
+a `FileProvider` content URI with a one-shot read grant, out of a cache folder
+emptied before each share so only the wallpaper being shared right now is ever
+exposed. The applier's HTTP download moved to a shared `Downloads.kt` so the two
+paths do not carry two copies of it; the apply path is otherwise untouched and
+still passes its tests. The manifest grew a `FileProvider` and a `file_paths.xml`
+scoped to that one cache subfolder — the only storage-shaped addition, and it
+grants nothing beyond a single handed-out URI.
+
+**What the device could not settle** is the same shape as everywhere else: the
+happy path is deliberately silent (the share code logs no URLs or paths, per the
+logging rule), so what was watched for was a crash — a `FileProvider`
+misconfiguration throws "Failed to find configured root" — and none came. The
+`filesOutsideGallery`-style edge cases do not apply; a share always fetches fresh
+from Wallhaven rather than reading a stored file.
 
 ## The two filters, and what the real server actually said (Wave 3, slices 1–2)
 
@@ -156,6 +196,11 @@ persists, switching sources moves the live grid, and the snapshot survives a
 restart.
 
 ## Current milestone
+
+**Wave 4 has started, with the share sheet built and verified on hardware**
+(`share_wallpaper.dart`, `wallpaper_sharing.dart`, and the detail-screen button;
+see the top of this file). It is the first of Wave 4's opt-in extras — the rest
+(crop/reposition, daily auto-rotate, collections, Omarchy sync) are still open.
 
 **Wave 3 is code-complete**, and its four slices are: the tag/uploader links
 (`984b546`), every sorting reachable (`eb2af8a`), the ratio filter (`7f41d13`) and

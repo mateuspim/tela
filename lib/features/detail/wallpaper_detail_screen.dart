@@ -10,8 +10,10 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
+import 'package:tela/core/ui/wallpaper_share_sheet.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/share_option.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
@@ -19,8 +21,10 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
+import 'package:tela/domain/models/wallpaper_share_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
+import 'package:tela/domain/use_cases/share_wallpaper.dart';
 import 'package:tela/features/detail/progressive_wallpaper_preview.dart';
 import 'package:tela/features/detail/wallpaper_metadata.dart';
 import 'package:tela/features/favorites/favorite_button.dart';
@@ -51,6 +55,7 @@ class WallpaperDetailScreen extends ConsumerStatefulWidget {
 class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   bool _isApplying = false;
   bool _isDownloading = false;
+  bool _isSharing = false;
 
   Future<void> _chooseTarget() async {
     final WallpaperTarget? target = await chooseWallpaperTarget(context);
@@ -134,6 +139,33 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     }
   }
 
+  /// Offers only the share options this wallpaper's purity allows, so an
+  /// explicit wallpaper is never given the chance to send its image file — the
+  /// menu and the use case enforce the same rule (see [shareOptionsFor]).
+  Future<void> _chooseShare() async {
+    final ShareOption? option = await chooseShareOption(
+      context,
+      shareOptionsFor(widget.wallpaper.purity),
+    );
+    if (option == null || !mounted) return;
+    await _share(option);
+  }
+
+  Future<void> _share(ShareOption option) async {
+    setState(() => _isSharing = true);
+    try {
+      final ShareWallpaper share = ref.read(shareWallpaperProvider);
+      await switch (option) {
+        ShareOption.link => share.link(widget.wallpaper),
+        ShareOption.image => share.image(widget.wallpaper),
+      };
+    } on WallpaperShareFailure {
+      if (mounted) _showResult(AppLocalizations.of(context).detailShareFailure);
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
+    }
+  }
+
   /// Pushes the listing behind a tag or an uploader, rather than replacing this
   /// one, so Back returns to the wallpaper the link was printed on and the
   /// browse tabs are left exactly as the user had them.
@@ -160,6 +192,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
         title: Text(widget.wallpaper.resolution.toString()),
         actions: <Widget>[
           FavoriteButton(wallpaper: widget.wallpaper),
+          _shareButton(l10n),
           _downloadButton(l10n),
         ],
       ),
@@ -223,6 +256,19 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
           label: Text(l10n.detailSetWallpaper),
         ),
       ),
+    );
+  }
+
+  Widget _shareButton(AppLocalizations l10n) {
+    return IconButton(
+      onPressed: _isSharing ? null : _chooseShare,
+      tooltip: l10n.detailShare,
+      icon: _isSharing
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.share_outlined),
     );
   }
 

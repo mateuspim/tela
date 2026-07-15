@@ -235,8 +235,9 @@ The filters Wave 2 named but did not finish, plus the two ways *into* a listing 
 
 *Exit:* the filter sheet answers everything wallhaven.cc's own filter bar does, and a wallpaper is a place you can navigate *from* — its tags and its uploader lead somewhere. **The first half is now true in code and not yet on a device**: the ratio and resolution filters have only ever met `FakeWallhavenApi`, so tela has never actually *sent* a `ratios=9x20` or a `resolutions=` to the real server. Wallhaven's side of that contract is proven (see the handoff); tela's is not.
 
-**Wave 4 — Nice-to-haves**
-Crop/reposition editor before apply, daily auto-rotate (WorkManager), collections browser, share sheet, **Omarchy sync** (export favorites to an Aether-consumable format — closes the desktop↔mobile loop).
+**Wave 4 — Nice-to-haves** — *share sheet built and verified on hardware*
+Crop/reposition editor before apply, daily auto-rotate (WorkManager), collections browser, ~~share sheet~~ **built**, **Omarchy sync** (export favorites to an Aether-consumable format — closes the desktop↔mobile loop).
+- ~~**Share sheet.**~~ **Built and verified on hardware** (2026-07-15). A wallpaper's detail screen shares its public Wallhaven link (any purity) or the image file itself. The image is **refused for explicit content** — the bitmap must not leave the device — the same rule as `StorageSettings.choicesFor`, enforced in `shareOptionsFor` and again in `ShareWallpaper.image`. Native `ACTION_SEND` behind a `WallpaperSharer` port, with a `FileProvider` one-shot grant for the image.
 *Exit:* opt-in extras; none block Wave 1/2/3.
 
 ---

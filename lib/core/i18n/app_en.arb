@@ -459,6 +459,41 @@
     "description": "Safe fallback when the image cannot be stored."
   },
 
+  "detailShare": "Share",
+  "@detailShare": {
+    "description": "Tooltip on the app-bar button that shares the current wallpaper."
+  },
+
+  "detailShareTitle": "Share wallpaper",
+  "@detailShareTitle": {
+    "description": "Heading above the choice of what to share — a link or the image."
+  },
+
+  "detailShareLink": "Link",
+  "@detailShareLink": {
+    "description": "Share option: the wallpaper's public Wallhaven page URL."
+  },
+
+  "detailShareLinkDetail": "The Wallhaven page for this wallpaper.",
+  "@detailShareLinkDetail": {
+    "description": "Explains what sharing the link sends."
+  },
+
+  "detailShareImage": "Image",
+  "@detailShareImage": {
+    "description": "Share option: the full-resolution image file itself."
+  },
+
+  "detailShareImageDetail": "The picture file itself.",
+  "@detailShareImageDetail": {
+    "description": "Explains what sharing the image sends."
+  },
+
+  "detailShareFailure": "Couldn't share this wallpaper.",
+  "@detailShareFailure": {
+    "description": "Safe fallback when the wallpaper cannot be shared."
+  },
+
   "detailPreviewLabel": "Wallpaper {wallpaperId}",
   "@detailPreviewLabel": {
     "description": "Accessibility label for the full-screen preview.",

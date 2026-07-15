@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The one folder the share FileProvider may expose: a subdirectory of the
+     app's cache. WallpaperSharing empties it before each share, so it only ever
+     holds the single image being shared right now. -->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>

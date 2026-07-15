@@ -11,6 +11,7 @@ import 'package:tela/data/storage/method_channel_image_store.dart';
 import 'package:tela/data/storage/method_channel_screen_guard.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
+import 'package:tela/data/wallpaper/method_channel_wallpaper_sharer.dart';
 import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
@@ -20,6 +21,7 @@ import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
+import 'package:tela/domain/ports/wallpaper_sharer.dart';
 import 'package:tela/domain/use_cases/apply_download.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
@@ -28,6 +30,7 @@ import 'package:tela/domain/use_cases/load_account_defaults.dart';
 import 'package:tela/domain/use_cases/resolve_browse_defaults.dart';
 import 'package:tela/domain/use_cases/save_api_key.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
+import 'package:tela/domain/use_cases/share_wallpaper.dart';
 import 'package:tela/domain/use_cases/sync_account_defaults.dart';
 import 'package:tela/domain/use_cases/toggle_favorite.dart';
 
@@ -55,6 +58,12 @@ final Provider<WallhavenApi> wallhavenApiProvider = Provider<WallhavenApi>(
 final Provider<WallpaperApplier> wallpaperApplierProvider =
     Provider<WallpaperApplier>(
       (Ref ref) => MethodChannelWallpaperApplier(),
+    );
+
+/// The share port, bound to the native Android share-sheet adapter.
+final Provider<WallpaperSharer> wallpaperSharerProvider =
+    Provider<WallpaperSharer>(
+      (Ref ref) => MethodChannelWallpaperSharer(),
     );
 
 /// The three-tier image-storage port, bound to Android's scoped-storage API.
@@ -121,6 +130,12 @@ final Provider<DownloadWallpaper> downloadWallpaperProvider =
 final Provider<ApplyDownload> applyDownloadProvider = Provider<ApplyDownload>(
   (Ref ref) => ApplyDownload(applier: ref.watch(wallpaperApplierProvider)),
 );
+
+/// Shares one wallpaper out — its Wallhaven link, or the image file itself.
+final Provider<ShareWallpaper> shareWallpaperProvider =
+    Provider<ShareWallpaper>(
+      (Ref ref) => ShareWallpaper(sharer: ref.watch(wallpaperSharerProvider)),
+    );
 
 /// The search use case, the only thing the browse feature actually calls.
 final Provider<SearchWallpapers> searchWallpapersProvider =
