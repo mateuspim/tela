@@ -59,9 +59,8 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
       _onTerm,
     );
 
-    final SearchQuery base = ref
-        .watch(browseQueryProvider)
-        .forScreen(screenResolution(context));
+    final SearchQuery query = ref.watch(browseQueryProvider);
+    final SearchQuery base = query.forScreen(screenResolution(context));
     final List<Sorting> sortings = offerableSortings(
       hasTerm: base.term.isNotEmpty,
     );
@@ -73,7 +72,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
         titleSpacing: 16,
         title: const BrowseSearchField(),
         actions: <Widget>[
-          _filterButton(context, l10n),
+          _filterButton(context, l10n, activeBrowseFilterCount(query)),
           const SizedBox(width: 8),
         ],
         bottom: _tabBar(l10n, tabs, sortings),
@@ -161,10 +160,22 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
     _selected = _sortings[tabs.index];
   }
 
-  Widget _filterButton(BuildContext context, AppLocalizations l10n) {
+  Widget _filterButton(
+    BuildContext context,
+    AppLocalizations l10n,
+    int activeFilters,
+  ) {
     return IconButton.filledTonal(
-      icon: const Icon(Icons.tune),
-      tooltip: l10n.browseFilters,
+      icon: ExcludeSemantics(
+        child: Badge(
+          isLabelVisible: activeFilters > 0,
+          label: Text('$activeFilters'),
+          child: const Icon(Icons.tune),
+        ),
+      ),
+      tooltip: activeFilters == 0
+          ? l10n.browseFilters
+          : l10n.browseFiltersActive(activeFilters),
       onPressed: () => showFilterSheet(context),
     );
   }

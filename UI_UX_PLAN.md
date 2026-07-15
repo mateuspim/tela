@@ -4,6 +4,15 @@ The Stitch screens are the visual reference, not a second product spec. tela's
 working product model stays intact: search belongs to Browse, explicit content
 stays discreet, and the core loop remains browse → preview → set.
 
+## Current status
+
+The adaptive shell, Browse and filter redesign, Favorites/local-library polish,
+card-based responsive Settings, and compact/expanded Detail layouts are built.
+Detail includes download, favorite, share, full-screen preview, and the fixed
+Set wallpaper action. Automated phone-width and expanded-width coverage is in
+place; the final visual judgment still belongs on real phone and tablet
+hardware.
+
 ## Product principles
 
 1. **The wallpaper is the interface.** Chrome stays quiet, grids stay dense,
@@ -69,4 +78,3 @@ stays discreet, and the core loop remains browse → preview → set.
   wallpaper grid.
 - **Expanded (≥ 840dp):** navigation rail, increased grid columns, and optional
   two-pane detail/settings layouts.
-

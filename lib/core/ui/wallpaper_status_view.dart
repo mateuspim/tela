@@ -70,7 +70,15 @@ class WallpaperStatusView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(icon, size: 48, color: theme.colorScheme.outline),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHigh,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 36, color: theme.colorScheme.primary),
+            ),
             const SizedBox(height: 16),
             Text(
               message,

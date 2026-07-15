@@ -61,6 +61,46 @@
     "description": "Accessibility label for the button opening the filter sheet."
   },
 
+  "browseFiltersActive": "Filters, {count} active",
+  "@browseFiltersActive": {
+    "description": "Accessibility label for the filter button when filters differ from tela's opening query.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "filterActiveCount": "{count, plural, =0{No active filters} =1{1 active filter} other{{count} active filters}}",
+  "@filterActiveCount": {
+    "description": "Summary beneath the filter-sheet heading.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "filterContentGroup": "Content",
+  "@filterContentGroup": {
+    "description": "Filter-card heading for categories, purity, and tags."
+  },
+
+  "filterFitGroup": "Screen fit",
+  "@filterFitGroup": {
+    "description": "Filter-card heading for shape and resolution."
+  },
+
+  "filterAppearanceGroup": "Appearance",
+  "@filterAppearanceGroup": {
+    "description": "Filter-card heading for color."
+  },
+
+  "filterResultsGroup": "Result order",
+  "@filterResultsGroup": {
+    "description": "Filter-card heading for direction and top-list range."
+  },
+
   "filterCategories": "Categories",
   "@filterCategories": {
     "description": "Heading of the category chips in the filter sheet."
@@ -509,6 +549,16 @@
     }
   },
 
+  "detailEnterFullscreen": "View wallpaper full screen",
+  "@detailEnterFullscreen": {
+    "description": "Tooltip for entering the distraction-free wallpaper preview."
+  },
+
+  "detailExitFullscreen": "Exit full-screen preview",
+  "@detailExitFullscreen": {
+    "description": "Tooltip for returning from the distraction-free wallpaper preview."
+  },
+
   "detailMetadataTitle": "Details",
   "detailResolution": "Resolution",
   "detailFileSize": "File size",
@@ -592,9 +642,19 @@
     "description": "Heading for the group of Wallhaven-account settings."
   },
 
+  "settingsAccountDescription": "Connect your key to unlock explicit content and account defaults.",
+  "@settingsAccountDescription": {
+    "description": "Explanation under the Wallhaven-account settings heading."
+  },
+
   "settingsBrowseDefaultsSection": "Browse defaults",
   "@settingsBrowseDefaultsSection": {
     "description": "Heading for the choice of where browse takes its filters from."
+  },
+
+  "settingsBrowseDefaultsDescription": "Choose where tela gets the filters it opens with.",
+  "@settingsBrowseDefaultsDescription": {
+    "description": "Explanation under the browse-defaults settings heading."
   },
 
   "browseDefaultsAccount": "Wallhaven account",
@@ -682,6 +742,11 @@
     "description": "Heading for the group of download-destination settings."
   },
 
+  "settingsDownloadsDescription": "Review saved wallpapers and choose where new downloads go.",
+  "@settingsDownloadsDescription": {
+    "description": "Explanation under the download settings heading."
+  },
+
   "settingsDownloadsSfw": "Safe and sketchy wallpapers",
   "@settingsDownloadsSfw": {
     "description": "Label for the destination used by every non-explicit wallpaper."
@@ -755,6 +820,11 @@
   "settingsPrivacySection": "Privacy",
   "@settingsPrivacySection": {
     "description": "Heading for the group of privacy settings."
+  },
+
+  "settingsPrivacyDescription": "Keep private wallpapers behind tela and your device lock.",
+  "@settingsPrivacyDescription": {
+    "description": "Explanation under the privacy settings heading."
   },
 
   "privateLibraryTitle": "Private library",

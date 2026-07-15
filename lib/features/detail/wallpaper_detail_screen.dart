@@ -56,6 +56,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   bool _isApplying = false;
   bool _isDownloading = false;
   bool _isSharing = false;
+  bool _isPreviewFullscreen = false;
 
   Future<void> _chooseTarget() async {
     final WallpaperTarget? target = await chooseWallpaperTarget(context);
@@ -187,31 +188,151 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     final AsyncValue<WallpaperDetails> details = ref.watch(
       wallpaperDetailsProvider(widget.wallpaper.id),
     );
+    if (_isPreviewFullscreen) return _fullscreenPreview(l10n);
+    final bool expanded = MediaQuery.sizeOf(context).width >= _expandedWidth;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.wallpaper.resolution.toString()),
-        actions: <Widget>[
-          FavoriteButton(wallpaper: widget.wallpaper),
-          _shareButton(l10n),
-          _downloadButton(l10n),
-        ],
+        actions: expanded ? null : _compactActions(l10n),
       ),
-      body: Column(
-        children: <Widget>[
-          Expanded(
-            child: ListView(
+      body: expanded
+          ? _expandedBody(details, l10n)
+          : _compactBody(details, l10n),
+    );
+  }
+
+  static const double _expandedWidth = 840;
+
+  List<Widget> _compactActions(AppLocalizations l10n) {
+    return <Widget>[
+      FavoriteButton(wallpaper: widget.wallpaper),
+      _shareButton(l10n),
+      _downloadButton(l10n),
+    ];
+  }
+
+  Widget _compactBody(
+    AsyncValue<WallpaperDetails> details,
+    AppLocalizations l10n,
+  ) {
+    final double previewHeight = (MediaQuery.sizeOf(context).height * .58)
+        .clamp(320, 560);
+    return Column(
+      children: <Widget>[
+        Expanded(
+          child: ListView(
+            children: <Widget>[
+              SizedBox(height: previewHeight, child: _preview()),
+              _metadata(details, l10n),
+            ],
+          ),
+        ),
+        _applyButton(l10n),
+      ],
+    );
+  }
+
+  Widget _expandedBody(
+    AsyncValue<WallpaperDetails> details,
+    AppLocalizations l10n,
+  ) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: ColoredBox(
+                key: const Key('detail-preview-pane'),
+                color: Colors.black,
+                child: _preview(),
+              ),
+            ),
+          ),
+        ),
+        SizedBox(
+          key: const Key('detail-information-pane'),
+          width: 440,
+          child: ColoredBox(
+            color: colors.surfaceContainerLow,
+            child: Column(
               children: <Widget>[
-                SizedBox(
-                  height: MediaQuery.sizeOf(context).height * .52,
-                  child: ProgressiveWallpaperPreview(
-                    wallpaper: widget.wallpaper,
+                _expandedActions(l10n),
+                const Divider(),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: _metadata(details, l10n),
                   ),
                 ),
-                _metadata(details, l10n),
+                _applyButton(l10n),
               ],
             ),
           ),
-          _applyButton(l10n),
+        ),
+      ],
+    );
+  }
+
+  Widget _preview() {
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        ProgressiveWallpaperPreview(wallpaper: widget.wallpaper),
+        Positioned(
+          top: 12,
+          right: 12,
+          child: IconButton.filledTonal(
+            onPressed: _enterFullscreen,
+            tooltip: AppLocalizations.of(context).detailEnterFullscreen,
+            icon: const Icon(Icons.fullscreen),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _fullscreenPreview(AppLocalizations l10n) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            ProgressiveWallpaperPreview(wallpaper: widget.wallpaper),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: IconButton.filled(
+                onPressed: _exitFullscreen,
+                tooltip: l10n.detailExitFullscreen,
+                icon: const Icon(Icons.close_fullscreen),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _enterFullscreen() {
+    setState(() => _isPreviewFullscreen = true);
+  }
+
+  void _exitFullscreen() {
+    setState(() => _isPreviewFullscreen = false);
+  }
+
+  Widget _expandedActions(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Row(
+        children: <Widget>[
+          FavoriteButton(wallpaper: widget.wallpaper),
+          const Spacer(),
+          _shareButton(l10n),
+          _downloadButton(l10n),
         ],
       ),
     );

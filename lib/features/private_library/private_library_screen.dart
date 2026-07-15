@@ -110,7 +110,13 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.privateLibraryTitle)),
+      appBar: AppBar(
+        toolbarHeight: 72,
+        title: Text(
+          l10n.privateLibraryTitle,
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+      ),
       body: _body(context, l10n),
     );
   }

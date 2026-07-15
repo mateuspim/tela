@@ -50,7 +50,22 @@ class TelaShell extends StatelessWidget {
             labelType: NavigationRailLabelType.all,
             leading: Padding(
               padding: const EdgeInsets.only(bottom: 24),
-              child: Text(l10n.appTitle.substring(0, 1)),
+              child: Container(
+                width: 48,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  l10n.appTitle.substring(0, 1),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ),
             destinations: _railDestinations(context),
             onDestinationSelected: _openDestination,

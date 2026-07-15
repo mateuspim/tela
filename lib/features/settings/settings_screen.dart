@@ -116,6 +116,7 @@ class _SettingsList extends StatelessWidget {
     return _SettingsGroup(
       icon: Icons.key_outlined,
       title: l10n.settingsAccountSection,
+      description: l10n.settingsAccountDescription,
       children: const <Widget>[ApiKeySection()],
     );
   }
@@ -124,6 +125,7 @@ class _SettingsList extends StatelessWidget {
     return _SettingsGroup(
       icon: Icons.tune,
       title: l10n.settingsBrowseDefaultsSection,
+      description: l10n.settingsBrowseDefaultsDescription,
       children: const <Widget>[BrowseDefaultsSection()],
     );
   }
@@ -132,6 +134,7 @@ class _SettingsList extends StatelessWidget {
     return _SettingsGroup(
       icon: Icons.download_outlined,
       title: l10n.settingsDownloadsSection,
+      description: l10n.settingsDownloadsDescription,
       children: <Widget>[
         const _DownloadHistoryTile(),
         const Divider(),
@@ -155,6 +158,7 @@ class _SettingsList extends StatelessWidget {
     return _SettingsGroup(
       icon: Icons.shield_outlined,
       title: l10n.settingsPrivacySection,
+      description: l10n.settingsPrivacyDescription,
       children: const <Widget>[
         _PrivateLibraryTile(),
         Divider(),
@@ -209,11 +213,13 @@ class _SettingsGroup extends StatelessWidget {
   const _SettingsGroup({
     required this.icon,
     required this.title,
+    required this.description,
     required this.children,
   });
 
   final IconData icon;
   final String title;
+  final String description;
   final List<Widget> children;
 
   @override
@@ -231,7 +237,19 @@ class _SettingsGroup extends StatelessWidget {
                 Icon(icon, color: theme.colorScheme.primary),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(title, style: theme.textTheme.titleLarge),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(title, style: theme.textTheme.titleLarge),
+                      const SizedBox(height: 2),
+                      Text(
+                        description,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

@@ -24,6 +24,43 @@ import '../fakes/fake_wallhaven_api.dart';
 import '../fakes/fake_wallpaper_sharer.dart';
 
 void main() {
+  testWidgets('offers a distraction-free preview and a clear way back', (
+    WidgetTester tester,
+  ) async {
+    await _pumpDetail(tester, _details());
+
+    await tester.tap(find.byTooltip('View wallpaper full screen'));
+    await tester.pump();
+
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.text('Set wallpaper'), findsNothing);
+    expect(find.byTooltip('Exit full-screen preview'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Exit full-screen preview'));
+    await tester.pump();
+
+    expect(find.text('Set wallpaper'), findsOneWidget);
+  });
+
+  testWidgets('uses preview and information panes on a wide screen', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpDetail(tester, _details());
+
+    final Offset preview = tester.getTopLeft(
+      find.byKey(const Key('detail-preview-pane')),
+    );
+    final Offset information = tester.getTopLeft(
+      find.byKey(const Key('detail-information-pane')),
+    );
+    expect(preview.dx, lessThan(information.dx));
+  });
+
   testWidgets('renders detail-only Wallhaven metadata after the preview', (
     WidgetTester tester,
   ) async {

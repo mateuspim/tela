@@ -38,24 +38,13 @@ class WallpaperMetadata extends StatelessWidget {
             l10n.detailMetadataTitle,
             style: Theme.of(context).textTheme.titleLarge,
           ),
-          const SizedBox(height: 8),
-          _MetadataRow(
-            l10n.detailResolution,
-            item.wallpaper.resolution.toString(),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) =>
+                _summaryGrid(context, l10n, item, constraints.maxWidth),
           ),
-          _MetadataRow(
-            l10n.detailFileSize,
-            _bytes(l10n, item.wallpaper.fileSizeBytes),
-          ),
+          const SizedBox(height: 16),
           _MetadataRow(l10n.detailFileType, item.fileType),
-          _MetadataRow(
-            l10n.detailCategory,
-            categoryLabel(l10n, item.wallpaper.category),
-          ),
-          _MetadataRow(
-            l10n.detailPurity,
-            purityLabel(l10n, item.wallpaper.purity),
-          ),
           _MetadataRow(l10n.detailRatio, item.ratio),
           _MetadataRow(l10n.detailViews, _number(item.views)),
           _MetadataRow(l10n.detailFavorites, _number(item.favorites)),
@@ -86,10 +75,85 @@ class WallpaperMetadata extends StatelessWidget {
     );
   }
 
+  Widget _summaryGrid(
+    BuildContext context,
+    AppLocalizations l10n,
+    WallpaperDetails item,
+    double width,
+  ) {
+    final double tileWidth = (width - 12) / 2;
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: <Widget>[
+        _MetadataTile(
+          width: tileWidth,
+          label: l10n.detailResolution,
+          value: item.wallpaper.resolution.toString(),
+        ),
+        _MetadataTile(
+          width: tileWidth,
+          label: l10n.detailFileSize,
+          value: _bytes(l10n, item.wallpaper.fileSizeBytes),
+        ),
+        _MetadataTile(
+          width: tileWidth,
+          label: l10n.detailCategory,
+          value: categoryLabel(l10n, item.wallpaper.category),
+        ),
+        _MetadataTile(
+          width: tileWidth,
+          label: l10n.detailPurity,
+          value: purityLabel(l10n, item.wallpaper.purity),
+        ),
+      ],
+    );
+  }
+
   String _bytes(AppLocalizations l10n, int bytes) =>
       l10n.detailFileSizeBytes(_number(bytes));
 
   String _number(int value) => NumberFormat.decimalPattern().format(value);
+}
+
+/// A glanceable fact at the top of the metadata panel.
+class _MetadataTile extends StatelessWidget {
+  const _MetadataTile({
+    required this.width,
+    required this.label,
+    required this.value,
+  });
+
+  final double width;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Container(
+      width: width,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
+          SelectableText(value, style: theme.textTheme.titleSmall),
+        ],
+      ),
+    );
+  }
 }
 
 /// One two-column metadata value, aligned with the rest of the detail screen.

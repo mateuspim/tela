@@ -31,8 +31,10 @@ Future<void> showFilterSheet(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
-    builder: (BuildContext context) => const FilterSheet(),
+    builder: (BuildContext context) => const FractionallySizedBox(
+      heightFactor: .94,
+      child: FilterSheet(),
+    ),
   );
 }
 
@@ -60,39 +62,102 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return SafeArea(
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Flexible(
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          _sheetHeading(l10n),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
+                children: <Widget>[
+                  _contentCard(l10n),
+                  const SizedBox(height: 12),
+                  _fitCard(l10n),
+                  const SizedBox(height: 12),
+                  _appearanceCard(l10n),
+                  const SizedBox(height: 12),
+                  _resultsCard(l10n),
+                ],
+              ),
+            ),
+          ),
+          _actionBar(l10n),
+        ],
+      ),
+    );
+  }
+
+  Widget _sheetHeading(AppLocalizations l10n) {
+    final ThemeData theme = Theme.of(context);
+    final int count = activeBrowseFilterCount(_draft);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                _FilterGroup(
-                  title: l10n.filterCategories,
-                  child: _categories(l10n),
-                ),
-                _FilterGroup(title: l10n.filterPurity, child: _purities(l10n)),
-                _FilterGroup(title: l10n.filterTags, child: _tags()),
-                _FilterGroup(title: l10n.filterRatio, child: _ratios(l10n)),
-                _FilterGroup(
-                  title: l10n.filterResolution,
-                  child: _resolution(),
-                ),
-                _FilterGroup(title: l10n.filterColor, child: _colors(l10n)),
-                _FilterGroup(title: l10n.filterOrder, child: _order(l10n)),
-                _FilterGroup(
-                  title: l10n.filterTopRange,
-                  child: _topRange(l10n),
+                Text(l10n.browseFilters, style: theme.textTheme.headlineSmall),
+                Text(
+                  l10n.filterActiveCount(count),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: _actions(l10n),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close),
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
           ),
         ],
       ),
+    );
+  }
+
+  Widget _contentCard(AppLocalizations l10n) {
+    return _FilterCard(
+      icon: Icons.collections_outlined,
+      title: l10n.filterContentGroup,
+      children: <Widget>[
+        _FilterGroup(title: l10n.filterCategories, child: _categories(l10n)),
+        _FilterGroup(title: l10n.filterPurity, child: _purities(l10n)),
+        _FilterGroup(title: l10n.filterTags, child: _tags()),
+      ],
+    );
+  }
+
+  Widget _fitCard(AppLocalizations l10n) {
+    return _FilterCard(
+      icon: Icons.fit_screen_outlined,
+      title: l10n.filterFitGroup,
+      children: <Widget>[
+        _FilterGroup(title: l10n.filterRatio, child: _ratios(l10n)),
+        _FilterGroup(title: l10n.filterResolution, child: _resolution()),
+      ],
+    );
+  }
+
+  Widget _appearanceCard(AppLocalizations l10n) {
+    return _FilterCard(
+      icon: Icons.palette_outlined,
+      title: l10n.filterAppearanceGroup,
+      children: <Widget>[
+        _FilterGroup(title: l10n.filterColor, child: _colors(l10n)),
+      ],
+    );
+  }
+
+  Widget _resultsCard(AppLocalizations l10n) {
+    return _FilterCard(
+      icon: Icons.sort,
+      title: l10n.filterResultsGroup,
+      children: <Widget>[
+        _FilterGroup(title: l10n.filterOrder, child: _order(l10n)),
+        _FilterGroup(title: l10n.filterTopRange, child: _topRange(l10n)),
+      ],
     );
   }
 
@@ -241,23 +306,40 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
     );
   }
 
-  /// A [Wrap], not a [Row]: three buttons overflow a narrow phone, and an apply
-  /// button that has fallen off the edge is one that does not get pressed (the
-  /// same failure the pinned action bar was added to fix).
-  Widget _actions(AppLocalizations l10n) {
-    return Wrap(
-      alignment: WrapAlignment.end,
-      spacing: 8,
-      runSpacing: 8,
-      children: <Widget>[
-        TextButton.icon(
-          onPressed: _saveAsDefault,
-          icon: const Icon(Icons.push_pin_outlined),
-          label: Text(l10n.filterSaveAsDefault),
+  Widget _actionBar(AppLocalizations l10n) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainer,
+        border: Border(top: BorderSide(color: colors.outlineVariant)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Column(
+          children: <Widget>[
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              runSpacing: 4,
+              children: <Widget>[
+                TextButton(onPressed: _reset, child: Text(l10n.filterReset)),
+                TextButton.icon(
+                  onPressed: _saveAsDefault,
+                  icon: const Icon(Icons.push_pin_outlined),
+                  label: Text(l10n.filterSaveAsDefault),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _apply,
+                child: Text(l10n.filterApply),
+              ),
+            ),
+          ],
         ),
-        TextButton(onPressed: _reset, child: Text(l10n.filterReset)),
-        FilledButton(onPressed: _apply, child: Text(l10n.filterApply)),
-      ],
+      ),
     );
   }
 
@@ -334,7 +416,7 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
   }
 }
 
-/// A titled row of controls.
+/// One group inside a filter card.
 class _FilterGroup extends StatelessWidget {
   const _FilterGroup({required this.title, required this.child});
 
@@ -345,12 +427,12 @@ class _FilterGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Padding(
-            padding: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.only(top: 4, bottom: 8),
             child: Text(
               title,
               style: theme.textTheme.titleSmall?.copyWith(
@@ -359,6 +441,44 @@ class _FilterGroup extends StatelessWidget {
             ),
           ),
           child,
+        ],
+      ),
+    );
+  }
+}
+
+/// A related set of filters, separated from the next concern by tonal depth.
+class _FilterCard extends StatelessWidget {
+  const _FilterCard({
+    required this.icon,
+    required this.title,
+    required this.children,
+  });
+
+  final IconData icon;
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: <Widget>[
+                Icon(icon, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Text(title, style: theme.textTheme.titleMedium),
+              ],
+            ),
+          ),
+          const Divider(),
+          ...children,
         ],
       ),
     );

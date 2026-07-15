@@ -126,3 +126,26 @@ String topRangeLabel(AppLocalizations l10n, TopRange range) {
     TopRange.oneYear => l10n.topRangeOneYear,
   };
 }
+
+/// How many filter groups differ from tela's opening browse query.
+///
+/// Search terms and sorting tabs are deliberately absent: both are already
+/// visible in Browse. This count exists for the filter button, where it answers
+/// the otherwise invisible question "did I leave something narrowed?".
+int activeBrowseFilterCount(SearchQuery query) {
+  const SearchQuery baseline = SearchQuery();
+  return <bool>[
+    query.categories.toApiBits() != baseline.categories.toApiBits(),
+    query.purity.toApiBits() != baseline.purity.toApiBits(),
+    !_sameFilterMembers(query.ratios, baseline.ratios),
+    query.resolution != baseline.resolution,
+    query.tags.isNotEmpty,
+    query.color != null,
+    query.order != baseline.order,
+    query.topRange != baseline.topRange,
+  ].where((bool active) => active).length;
+}
+
+bool _sameFilterMembers(Iterable<Object> a, Iterable<Object> b) {
+  return a.length == b.length && a.toSet().containsAll(b);
+}

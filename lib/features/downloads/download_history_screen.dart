@@ -36,7 +36,13 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
       recentDownloadsProvider,
     );
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.downloadHistoryTitle)),
+      appBar: AppBar(
+        toolbarHeight: 72,
+        title: Text(
+          l10n.downloadHistoryTitle,
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+      ),
       body: downloads.when(
         data: (List<DownloadRecord> recent) => _grid(context, l10n, recent),
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -85,6 +91,7 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
     final bool isMissing = missing.contains(download.wallpaper.id);
     return Semantics(
       button: true,
+      excludeSemantics: true,
       label: isMissing
           ? l10n.downloadHistoryRedownload(download.wallpaper.id)
           : l10n.downloadHistorySetAgain(download.wallpaper.id),

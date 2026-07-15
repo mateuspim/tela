@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 
 /// One wallpaper in the browse grid.
@@ -27,16 +28,21 @@ class WallpaperTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: wallpaper.resolution.width / wallpaper.resolution.height,
-      child: Material(
-        clipBehavior: Clip.antiAlias,
-        borderRadius: BorderRadius.circular(16),
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: InkWell(
-          onTap: onTap,
-          onLongPress: onLongPress,
-          child: _thumbnail(context),
+    return Semantics(
+      image: true,
+      button: onTap != null,
+      label: AppLocalizations.of(context).detailPreviewLabel(wallpaper.id),
+      child: AspectRatio(
+        aspectRatio: wallpaper.resolution.width / wallpaper.resolution.height,
+        child: Material(
+          clipBehavior: Clip.antiAlias,
+          borderRadius: BorderRadius.circular(16),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: InkWell(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            child: _thumbnail(context),
+          ),
         ),
       ),
     );
@@ -53,7 +59,9 @@ class WallpaperTile extends StatelessWidget {
       imageUrl: wallpaper.thumbOriginalUrl,
       fit: BoxFit.cover,
       memCacheWidth: (_tileWidthDip * devicePixelRatio).round(),
-      fadeInDuration: const Duration(milliseconds: 150),
+      fadeInDuration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 150),
       placeholder: (BuildContext context, String url) =>
           const SizedBox.expand(),
       errorWidget: (BuildContext context, String url, Object error) =>

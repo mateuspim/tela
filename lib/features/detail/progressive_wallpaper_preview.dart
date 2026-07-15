@@ -44,7 +44,9 @@ class ProgressiveWallpaperPreview extends StatelessWidget {
       imageUrl: imageUrl,
       fit: BoxFit.contain,
       memCacheWidth: _cacheWidth(context),
-      fadeInDuration: const Duration(milliseconds: 180),
+      fadeInDuration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
       placeholder: (_, _) => const SizedBox.expand(),
       errorWidget: (_, _, _) => const SizedBox.expand(),
     );
