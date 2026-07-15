@@ -10,6 +10,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
@@ -102,12 +103,13 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     // listing decodes its bounds; a corrupt file with none falls back square.
     return MasonryGridView.count(
       crossAxisCount: wallpaperGridColumns(context),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      padding: const EdgeInsets.all(12),
+      mainAxisSpacing: wallpaperGridSpacing,
+      crossAxisSpacing: wallpaperGridSpacing,
+      padding: wallpaperGridPadding(context),
       itemCount: stored.length,
       itemBuilder: (BuildContext context, int index) => _PrivateTile(
         image: stored[index],
+        position: index,
         onTap: () => _open(context, stored, index),
         onDelete: () => _confirmDelete(stored[index]),
       ),
@@ -187,11 +189,13 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
 class _PrivateTile extends StatelessWidget {
   const _PrivateTile({
     required this.image,
+    required this.position,
     required this.onTap,
     required this.onDelete,
   });
 
   final PrivateImage image;
+  final int position;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
@@ -205,7 +209,7 @@ class _PrivateTile extends StatelessWidget {
       label: l10n.privateLibraryImageLabel(image.id),
       child: Material(
         clipBehavior: Clip.antiAlias,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(wallpaperTileRadius),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         child: InkWell(
           onTap: onTap,
@@ -220,15 +224,19 @@ class _PrivateTile extends StatelessWidget {
     );
   }
 
-  /// Decodes at roughly tile width, not at the source's 6K.
+  /// Decodes at roughly tile width, not at the source's 6K. The decoded
+  /// thumbnail flies into the secure viewer under a shelf-scoped Hero tag.
   Widget _thumbnail(BuildContext context) {
     final double devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-    return Image.file(
-      File.fromUri(image.location),
-      fit: BoxFit.cover,
-      cacheWidth: (_tileWidthDip * devicePixelRatio).round(),
-      errorBuilder: (BuildContext context, Object error, StackTrace? trace) =>
-          const Center(child: Icon(Icons.broken_image_outlined)),
+    return Hero(
+      tag: shelfHeroTag('private-library', image.id, position),
+      child: Image.file(
+        File.fromUri(image.location),
+        fit: BoxFit.cover,
+        cacheWidth: (_tileWidthDip * devicePixelRatio).round(),
+        errorBuilder: (BuildContext context, Object error, StackTrace? trace) =>
+            const Center(child: Icon(Icons.broken_image_outlined)),
+      ),
     );
   }
 

@@ -25,6 +25,7 @@ class ImmersiveGalleryViewer extends StatefulWidget {
     this.primaryAction,
     this.actions = const <Widget>[],
     this.statusOverlay,
+    this.heroTag,
     super.key,
   }) : assert(aspectRatio > 0, 'aspectRatio must be positive'),
        assert(itemCount > 0, 'itemCount must be positive'),
@@ -73,6 +74,10 @@ class ImmersiveGalleryViewer extends StatefulWidget {
   /// it for the "not on this device" badge so a missing file stays obvious even
   /// while the controls are hidden.
   final Widget? statusOverlay;
+
+  /// Optional shared-element tag flying the shelf tile into the shown image.
+  /// Scope it by shelf identity (see `shelfHeroTag`); null leaves it heroless.
+  final Object? heroTag;
 
   @override
   State<ImmersiveGalleryViewer> createState() => _ImmersiveGalleryViewerState();
@@ -229,6 +234,7 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
           aspectRatio: widget.aspectRatio,
           semanticsLabel: widget.semanticsLabel,
           source: widget.source,
+          heroTag: widget.heroTag,
           transformationController: _zoomController.transformationController,
           onInteractionStart: _stopProgrammaticZoom,
           onTap: _toggleChrome,

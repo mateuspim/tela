@@ -2,13 +2,100 @@
 
 Updated: 2026-07-15
 
-## CURRENT CHECKPOINT — image viewer UX slice 6 complete
+## CURRENT CHECKPOINT — image viewer UX slice 7 complete
 
-The staged implementation is now underway on branch `image-viewer-ux` in the
-existing `.worktrees/image-viewer-ux` worktree. **Continue there; do not create
-another worktree and do not work in `master`.** The broader product contract
-below remains authoritative, but only take the next bounded slice described
-here.
+The staged implementation continues on branch `image-viewer-ux` in the existing
+`.worktrees/image-viewer-ux` worktree. **Continue there; do not create another
+worktree and do not work in `master`.** Slice 7 was the **last implementation
+slice**: what remains is step 6, the full automated + real-device matrix. The
+broader product contract below stays authoritative.
+
+Slice 7 is the consistency-and-motion pass that ties every gallery together —
+no new surfaces, no new zoom or viewer implementation, and the domain, storage,
+and privacy model untouched (delivery-order step 5):
+
+- **One shelf geometry.** `wallpaper_grid_columns.dart` now owns the whole
+  rhythm: `wallpaperGridSpacing` (12), `wallpaperTileRadius` (16), the existing
+  responsive `wallpaperGridColumns` (2 on a phone → 6 on a tablet, never
+  comically narrow), and a new `wallpaperGridPadding` that adds the un-consumed
+  `MediaQuery.padding` to the 12dp inset on the sides and bottom — so a
+  landscape notch or a full-screen gesture bar never clips the last row, while a
+  bottom nav bar or rail that already reserved the space reads back as zero and
+  is not double-counted. The top is left to each shelf's app bar. Browse (paged)
+  and Favorites, History, and Private (all `MasonryGridView`) now draw from this
+  one source, so they read as the same system. No important action hides behind
+  a long press only: History's "remove from history" is in the viewer overflow
+  and Private's delete is a viewer button; the long press is a shortcut, not the
+  sole path.
+- **Tile-to-viewer Hero.** A restrained shared-element flight now carries a
+  tile's already-decoded thumbnail into the viewer it opens: `GalleryViewport`
+  gained an optional `heroTag` that wraps *only* the contained image frame (not
+  the zoom viewport or the calm backdrop), with a `flightShuttleBuilder` that
+  flies the grid tile's thumbnail in both directions so the flight is never a
+  blank box while the viewer's own image still decodes. `ImmersiveGalleryViewer`
+  and `ProgressiveWallpaperPreview` forward the tag; `WallpaperTile` and the
+  private tile wrap their thumbnails in the matching `Hero`.
+- **Tags scoped so nothing collides**, in `core/ui/shelf_hero_tag.dart`:
+  `shelfHeroTag(identity, id, position)`. The identity separates shelves — go
+  _router keeps Browse and Favorites both mounted in the shell's `IndexedStack`,
+  so one id kept-and-browsed would otherwise share a tag — and the position
+  separates repeats *within* one shelf, because Wallhaven's `random` sort can
+  return the same wallpaper on two pages and the grid renders both. (That second
+  case is exactly what the full suite caught mid-slice: an id-only tag threw
+  "multiple heroes share the same tag" on a real paged grid.) The viewer passes
+  its own `selectedIndex` as the position, so the tag matches back to the exact
+  tile — and simply does not fly, rather than flying to the wrong image, if a
+  deduplicated append has since shifted it.
+- **Reduce-motion-aware transitions.** `core/ui/gallery_route_transitions.dart`
+  holds `galleryTransitionDuration` (220ms, or `Duration.zero` when
+  `MediaQuery.disableAnimations` is set) and a `fadeGalleryPage` go_router page.
+  Detail, the linked listing, and the History and Private viewers all push
+  through it, so their fade — and the Hero flight it paces — collapses to an
+  instant cut under reduce motion. Detail's own fullscreen `PageRouteBuilder`
+  now reuses the same duration helper. Returning from any viewer still restores
+  the grid and its scroll position (the viewers are pushed over the shelf).
+- **Decode budget audited, not changed.** Every tile already caps its decode:
+  `WallpaperTile` decodes `thumbOriginalUrl` (never the full 6K image) at
+  `~200·dpr`, and the private tile decodes its file at the same cap; the viewer
+  clamps as before, and `GallerySessionController` still prefetches only the
+  immediate neighbour. A test pins the tile to the thumbnail URL and a bounded
+  `memCacheWidth`.
+
+The close-button `PopScope`/`_allowPop` interaction flagged by slice 6 was left
+alone: the fade transition wraps the *route*, not the viewer's own exit path, so
+it did not surface and needed no fix. No l10n strings were added (the pass adds
+no user-facing copy), so `gen-l10n` was not run.
+
+Slice 7 verification (all green; full suite now 487 tests):
+
+```bash
+./tool/tela dart format <touched Dart files>   # touched files only, not the tree
+./tool/tela analyze
+./tool/tela test test/core/shelf_hero_tag_test.dart \
+  test/core/gallery_route_transitions_test.dart \
+  test/features/gallery_shelf_polish_test.dart \
+  test/features/gallery_paging_bridge_test.dart \
+  test/features/gallery_session_launch_test.dart
+./tool/tela test
+```
+
+New/covered tests: shared grid geometry at 390x844, 844x390, and a 1280x800
+expanded surface (column counts 2/4/6, a 12dp inset that grows by the system
+safe area, and a full shelf packing without a RenderFlex overflow at each);
+reduce motion collapsing the transition duration to zero and a Hero navigation
+settling in a single frame; the same id on two shelves rendering two distinct
+Hero tags and flying without a collision; one id repeated at two positions on a
+shelf staying distinct (the real paged-grid regression); scroll restoration on
+return from a viewer; and the tile decode budget. Named fakes reused:
+`FakeFavoritesRepository`, `FakeWallhavenApi`.
+
+One note for the next agent: the Hero flight, the reduce-motion cut, and the
+safe-area padding have not run on a device — they are proven in the widget
+tests, but a tablet pass (step 6) should confirm the flight reads well against
+real thumbnails and that the last grid row clears the gesture bar in landscape.
+This joins the device confirmations already owed from slices 5 and 6 (below).
+
+### PRIOR SLICE — slice 6 (secure private viewer)
 
 Slice 6 gives the private/NSFW library the same first-class fullscreen viewing
 as Browse and History, the image dimensions its tiles never had, and a
@@ -243,46 +330,34 @@ Slice 3 verification:
 
 All pass; the full suite now has 426 tests.
 
-### NEXT SLICE ONLY — gallery paging/transitions + shelf polish (step 5)
+### NEXT SLICE ONLY — the device matrix (step 6)
 
-The viewers are all built (Detail, History, Private). Step 5 is the last
-implementation slice before the device matrix: finish the **shelf polish** and
-the **transitions** that tie every gallery together, without re-opening the
-domain, storage, or privacy model. Reuse the shared `GalleryViewport`,
-`ImmersiveGalleryViewer`, and `GallerySessionController` — this is a
-consistency-and-motion pass, not new surfaces.
+Steps 1–5 are **done** (see the slice-7 checkpoint at the top of this file). The
+only work left before merge is step 6: the full automated + real-device matrix,
+run against the exact commit on the Samsung SM-X730 in **both** portrait and
+landscape, over Browse, Detail, History, and the private library. Nothing more
+should be implemented — this is a confirmation pass.
 
-1. **Consistent shelf polish.** Apply one quality bar across Browse, Favorites,
-   History, and Private (see "Gallery and screen polish" below): a 12dp grid
-   rhythm and 16dp corners everywhere, responsive column counts that never go
-   comically narrow, edge padding that respects safe areas and the navigation
-   mode, and headers/empty/error/loading states that do not dominate the
-   gallery. History and Private already use `MasonryGridView`; make sure Browse
-   and Favorites read as the same system. No important action should be reachable
-   only through an undiscoverable long press.
-2. **Transitions.** Short, spatially coherent animations that become instant when
-   `MediaQuery.disableAnimationsOf` is true. A restrained Hero from tile to
-   viewer is welcome — but duplicate ids across shelves must not create duplicate
-   Hero tags (History and Private can hold the same Wallhaven id as Browse), so
-   scope the tag by shelf identity. Returning must still restore the grid and its
-   scroll position.
-3. **Decode budget.** Confirm every grid caps decode to the display and prefetch
-   stays to the immediate viewer neighbour only — do not decode a gallery of 6K
-   originals or keep unbounded bytes. The viewer already clamps; audit the tiles.
+Before installing, run the pre-handoff gate from the "Acceptance matrix" below:
+`./tool/tela gen-l10n`, `dart format .`, `./tool/tela analyze`, `./tool/tela
+test`, `./tool/tela build apk --debug`.
 
-Add focused tests for: the shared grid geometry at 390x844, 844x390, and a
->=840dp surface; reduced-motion collapsing transitions to instant; Hero tags
-staying unique when the same id appears on two shelves; and scroll restoration
-on return. Keep the image the interface and **Set wallpaper** the one primary
-action — do not add decorative controls to fill tablet space.
+Device confirmations still owed, carried forward and now joined by slice 7's:
 
-End that slice with format, analyze, the full test suite, a dedicated commit,
-and another concise checkpoint update here. Then step 6 is the full automated +
-real-device matrix (Browse, Detail, History, Private, in portrait and
-landscape), including the device confirmations still owed from slices 5 and 6:
-the native `materializeImage`/`releasePreview` copy for a `content:`/SAF History
-preview, and the `BitmapFactory` bounds decode plus the `FLAG_SECURE`
-grid↔viewer round trip for Private.
+- **Slice 7:** the tile→viewer **Hero flight** reads well against real
+  thumbnails; the **reduce-motion** cut is genuinely instant on device; the
+  safe-area **grid padding** clears the gesture bar on the last row in landscape.
+  All three are proven only in widget tests.
+- **Slice 6 (Private):** the native `BitmapFactory` **bounds decode** returns a
+  real private file's pixel dimensions, and `FLAG_SECURE` survives the
+  grid↔viewer round trip (and the viewer's inherited close-button path — the
+  delete-to-empty exit is proven, the button-close is not). Do **not** claim the
+  private screenshot path was captured — `FLAG_SECURE` must make that impossible.
+- **Slice 5 (History):** the native `materializeImage`/`releasePreview` copy
+  decodes an actual `content:`/SAF preview.
+
+Inspect logcat for Flutter exceptions/overflows; confirm system chrome and
+`FLAG_SECURE` restore correctly on every exit.
 
 ## START HERE — immersive image viewing and the next UI/UX pass
 

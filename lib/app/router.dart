@@ -1,6 +1,8 @@
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/tela_shell.dart';
+import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/private_image.dart';
@@ -67,13 +69,16 @@ abstract final class TelaRouter {
                   state.extra is GallerySessionController<Wallpaper>
               ? null
               : TelaRoutes.browsePath,
-          builder: (_, GoRouterState state) {
+          pageBuilder: (BuildContext context, GoRouterState state) {
             final Object extra = state.extra!;
-            return WallpaperDetailScreen(
-              wallpaper: extra is Wallpaper ? extra : null,
-              gallerySession: extra is GallerySessionController<Wallpaper>
-                  ? extra
-                  : null,
+            return fadeGalleryPage<void>(
+              context: context,
+              child: WallpaperDetailScreen(
+                wallpaper: extra is Wallpaper ? extra : null,
+                gallerySession: extra is GallerySessionController<Wallpaper>
+                    ? extra
+                    : null,
+              ),
             );
           },
         ),
@@ -82,9 +87,11 @@ abstract final class TelaRouter {
           name: TelaRoutes.linkedListingName,
           redirect: (_, GoRouterState state) =>
               state.extra is WallpaperLink ? null : TelaRoutes.browsePath,
-          builder: (_, GoRouterState state) => LinkedListingScreen(
-            link: state.extra! as WallpaperLink,
-          ),
+          pageBuilder: (BuildContext context, GoRouterState state) =>
+              fadeGalleryPage<void>(
+                context: context,
+                child: LinkedListingScreen(link: state.extra! as WallpaperLink),
+              ),
         ),
         GoRoute(
           path: TelaRoutes.privateLibraryPath,
@@ -98,9 +105,14 @@ abstract final class TelaRouter {
               state.extra is GallerySessionController<PrivateImage>
               ? null
               : TelaRoutes.privateLibraryPath,
-          builder: (_, GoRouterState state) => PrivateImmersiveSession(
-            session: state.extra! as GallerySessionController<PrivateImage>,
-          ),
+          pageBuilder: (BuildContext context, GoRouterState state) =>
+              fadeGalleryPage<void>(
+                context: context,
+                child: PrivateImmersiveSession(
+                  session:
+                      state.extra! as GallerySessionController<PrivateImage>,
+                ),
+              ),
         ),
         GoRoute(
           path: TelaRoutes.downloadHistoryPath,
@@ -114,9 +126,14 @@ abstract final class TelaRouter {
               state.extra is GallerySessionController<DownloadRecord>
               ? null
               : TelaRoutes.downloadHistoryPath,
-          builder: (_, GoRouterState state) => DownloadImmersiveSession(
-            session: state.extra! as GallerySessionController<DownloadRecord>,
-          ),
+          pageBuilder: (BuildContext context, GoRouterState state) =>
+              fadeGalleryPage<void>(
+                context: context,
+                child: DownloadImmersiveSession(
+                  session:
+                      state.extra! as GallerySessionController<DownloadRecord>,
+                ),
+              ),
         ),
       ],
     );

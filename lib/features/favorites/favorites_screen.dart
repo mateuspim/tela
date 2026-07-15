@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -60,12 +61,13 @@ class FavoritesScreen extends ConsumerWidget {
     }
     return MasonryGridView.count(
       crossAxisCount: wallpaperGridColumns(context),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      padding: const EdgeInsets.all(12),
+      mainAxisSpacing: wallpaperGridSpacing,
+      crossAxisSpacing: wallpaperGridSpacing,
+      padding: wallpaperGridPadding(context),
       itemCount: saved.length,
       itemBuilder: (BuildContext context, int index) => WallpaperTile(
         wallpaper: saved[index],
+        heroTag: shelfHeroTag('favorites', saved[index].id, index),
         onTap: () => _openDetail(context, saved, index),
       ),
     );

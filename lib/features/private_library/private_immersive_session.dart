@@ -9,6 +9,7 @@ import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
 import 'package:tela/core/ui/immersive_gallery_viewer.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
+import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
@@ -113,6 +114,11 @@ class _PrivateImmersiveSessionState
         onNext: session.canSelectNext ? session.selectNext : null,
         zoomController: _zoomController,
         systemUi: widget.systemUi,
+        heroTag: shelfHeroTag(
+          session.identity,
+          image.id,
+          session.selectedIndex,
+        ),
         primaryAction: _setButton(l10n),
         actions: <Widget>[_deleteButton(l10n)],
         onClose: () async => Navigator.of(context).maybePop(),

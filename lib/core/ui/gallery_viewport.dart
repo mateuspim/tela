@@ -39,6 +39,7 @@ class GalleryViewport extends StatelessWidget {
     this.onTap,
     this.onDoubleTapDown,
     this.onDoubleTap,
+    this.heroTag,
     this.backgroundColor = Colors.black,
     this.maxScale = 4,
     super.key,
@@ -70,6 +71,12 @@ class GalleryViewport extends StatelessWidget {
   /// Called for a double tap on the image canvas.
   final GestureTapCallback? onDoubleTap;
 
+  /// Optional shared-element tag flying the originating shelf tile into this
+  /// contained image. Only the image frame flies — never the zoom viewport or
+  /// the calm backdrop — so the flight stays spatially coherent. Null leaves
+  /// the viewport heroless, as when it is reached without a tile.
+  final Object? heroTag;
+
   /// The calm canvas shown around an image that does not fill both axes.
   final Color backgroundColor;
 
@@ -100,10 +107,12 @@ class GalleryViewport extends StatelessWidget {
             final Widget canvas = SizedBox.fromSize(
               size: viewportSize,
               child: Center(
-                child: SizedBox.fromSize(
-                  key: imageFrameKey,
-                  size: imageSize,
-                  child: source.build(context, request),
+                child: _framedImage(
+                  SizedBox.fromSize(
+                    key: imageFrameKey,
+                    size: imageSize,
+                    child: source.build(context, request),
+                  ),
                 ),
               ),
             );
@@ -125,6 +134,32 @@ class GalleryViewport extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Wraps the contained image in a [Hero] when a shelf supplied [heroTag].
+  Widget _framedImage(Widget frame) {
+    final Object? tag = heroTag;
+    if (tag == null) return frame;
+    return Hero(
+      tag: tag,
+      flightShuttleBuilder: _flyTileThumbnail,
+      child: frame,
+    );
+  }
+
+  /// Flies the grid tile's already-decoded thumbnail, in both directions, so
+  /// the flight is never a blank box while this viewport's image still decodes.
+  Widget _flyTileThumbnail(
+    BuildContext flightContext,
+    Animation<double> animation,
+    HeroFlightDirection direction,
+    BuildContext fromHeroContext,
+    BuildContext toHeroContext,
+  ) {
+    final BuildContext tileContext = direction == HeroFlightDirection.push
+        ? fromHeroContext
+        : toHeroContext;
+    return (tileContext.widget as Hero).child;
   }
 }
 

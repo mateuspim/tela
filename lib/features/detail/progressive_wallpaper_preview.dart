@@ -7,10 +7,17 @@ import 'package:tela/domain/models/wallpaper.dart';
 /// Adapts a Wallhaven wallpaper to tela's shared, uncropped gallery viewport.
 class ProgressiveWallpaperPreview extends StatelessWidget {
   /// Creates a progressive preview for [wallpaper].
-  const ProgressiveWallpaperPreview({required this.wallpaper, super.key});
+  const ProgressiveWallpaperPreview({
+    required this.wallpaper,
+    this.heroTag,
+    super.key,
+  });
 
   /// Image URLs and dimensions used for the preview.
   final Wallpaper wallpaper;
+
+  /// Optional shared-element tag flying the shelf tile into this preview.
+  final Object? heroTag;
 
   /// Creates the one progressive source shared by normal and immersive Detail.
   static GalleryImageSource sourceFor(Wallpaper wallpaper) {
@@ -33,6 +40,7 @@ class ProgressiveWallpaperPreview extends StatelessWidget {
       aspectRatio: wallpaper.resolution.width / wallpaper.resolution.height,
       semanticsLabel: l10n.detailPreviewLabel(wallpaper.id),
       source: sourceFor(wallpaper),
+      heroTag: heroTag,
     );
   }
 }

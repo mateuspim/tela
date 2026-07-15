@@ -8,8 +8,10 @@ import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
+import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
 import 'package:tela/core/ui/wallpaper_share_sheet.dart';
@@ -323,7 +325,14 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        ProgressiveWallpaperPreview(wallpaper: _wallpaper),
+        ProgressiveWallpaperPreview(
+          wallpaper: _wallpaper,
+          heroTag: shelfHeroTag(
+            _gallery.identity,
+            _wallpaper.id,
+            _gallery.selectedIndex,
+          ),
+        ),
         Positioned(
           top: 12,
           right: 12,
@@ -338,16 +347,11 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   }
 
   void _enterFullscreen() {
-    final bool disableAnimations = MediaQuery.disableAnimationsOf(context);
-    unawaited(
-      Navigator.of(context).push<void>(_fullscreenRoute(disableAnimations)),
-    );
+    unawaited(Navigator.of(context).push<void>(_fullscreenRoute(context)));
   }
 
-  PageRoute<void> _fullscreenRoute(bool disableAnimations) {
-    final Duration duration = disableAnimations
-        ? Duration.zero
-        : const Duration(milliseconds: 180);
+  PageRoute<void> _fullscreenRoute(BuildContext context) {
+    final Duration duration = galleryTransitionDuration(context);
     return PageRouteBuilder<void>(
       transitionDuration: duration,
       reverseTransitionDuration: duration,

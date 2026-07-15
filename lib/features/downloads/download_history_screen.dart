@@ -9,6 +9,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/download_record.dart';
@@ -64,9 +65,9 @@ class DownloadHistoryScreen extends ConsumerWidget {
     }
     return MasonryGridView.count(
       crossAxisCount: wallpaperGridColumns(context),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      padding: const EdgeInsets.all(12),
+      mainAxisSpacing: wallpaperGridSpacing,
+      crossAxisSpacing: wallpaperGridSpacing,
+      padding: wallpaperGridPadding(context),
       itemCount: recent.length,
       itemBuilder: (BuildContext context, int index) =>
           _tile(context, ref, l10n, recent, index),
@@ -105,6 +106,11 @@ class DownloadHistoryScreen extends ConsumerWidget {
             opacity: isMissing ? 0.55 : 1,
             child: WallpaperTile(
               wallpaper: download.wallpaper,
+              heroTag: shelfHeroTag(
+                'download-history',
+                download.wallpaper.id,
+                index,
+              ),
               onTap: () => _open(context, recent, index),
               onLongPress: () => _confirmForget(context, ref, download),
             ),

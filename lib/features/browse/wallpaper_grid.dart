@@ -8,6 +8,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/search_query.dart';
@@ -117,19 +118,24 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
   ) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final List<Wallpaper> loaded = state.items ?? const <Wallpaper>[];
+    final String identity = wallpaperListingIdentity(
+      widget.galleryIdentity,
+      widget.query,
+    );
     return RefreshIndicator(
       onRefresh: () async => _retry(),
       child: PagedMasonryGridView<int, Wallpaper>.count(
         state: state,
         fetchNextPage: fetchNextPage,
         crossAxisCount: wallpaperGridColumns(context),
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        padding: const EdgeInsets.all(12),
+        mainAxisSpacing: wallpaperGridSpacing,
+        crossAxisSpacing: wallpaperGridSpacing,
+        padding: wallpaperGridPadding(context),
         builderDelegate: PagedChildBuilderDelegate<Wallpaper>(
           itemBuilder: (BuildContext context, Wallpaper wallpaper, int index) =>
               WallpaperTile(
                 wallpaper: wallpaper,
+                heroTag: shelfHeroTag(identity, wallpaper.id, index),
                 onTap: () => _openDetail(context, loaded, index),
               ),
           firstPageErrorIndicatorBuilder: (BuildContext context) =>
