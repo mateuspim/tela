@@ -30,6 +30,12 @@ abstract final class TelaRoutes {
   /// Private library route name.
   static const String privateLibraryName = 'private-library';
 
+  /// Path of the secure, local-only viewer over the private library.
+  static const String privateViewerPath = '/private/view';
+
+  /// Private-library viewer route name.
+  static const String privateViewerName = 'private-viewer';
+
   /// Path of a listing followed from a wallpaper — a tag's, or an uploader's.
   static const String linkedListingPath = '/listing';
 
@@ -47,4 +53,10 @@ abstract final class TelaRoutes {
 
   /// Blocked-tags management route name.
   static const String blockedTagsName = 'blocked-tags';
+
+  /// Path of the immersive, local-first viewer over the download history.
+  static const String downloadViewerPath = '/downloads/view';
+
+  /// Download-history viewer route name.
+  static const String downloadViewerName = 'download-viewer';
 }

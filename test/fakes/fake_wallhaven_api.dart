@@ -16,7 +16,9 @@ class FakeWallhavenApi implements WallhavenApi {
   FakeWallhavenApi({
     this.page,
     this.pageFor,
+    this.pagesByNumber = const <int, WallpaperPage>{},
     this.details,
+    this.detailsById = const <String, WallpaperDetails>{},
     this.account,
     this.failure,
   });
@@ -30,8 +32,15 @@ class FakeWallhavenApi implements WallhavenApi {
   /// blocked mid-test. Takes precedence over [page] when both are set.
   final WallpaperPage Function(SearchQuery query)? pageFor;
 
+  /// Per-page-number responses, so pagination tests can serve a distinct page 2
+  /// and assert on the query the grid built to reach it.
+  final Map<int, WallpaperPage> pagesByNumber;
+
   /// The detail response returned for every wallpaper id.
   final WallpaperDetails? details;
+
+  /// Optional per-id responses for gallery-selection tests.
+  final Map<String, WallpaperDetails> detailsById;
 
   /// The account settings `GET /settings` answers with. Defaults to tela's own
   /// defaults, which is a *different* account from every test that sets this —
@@ -45,6 +54,9 @@ class FakeWallhavenApi implements WallhavenApi {
   /// Every query passed to [search], oldest first.
   final List<SearchQuery> receivedQueries = <SearchQuery>[];
 
+  /// Wallpaper ids requested for complete metadata, oldest first.
+  final List<String> receivedDetailIds = <String>[];
+
   /// How many times [accountSettings] was called — the key check is one
   /// request, and it must stay one.
   int accountSettingsCalls = 0;
@@ -56,7 +68,8 @@ class FakeWallhavenApi implements WallhavenApi {
     if (toThrow != null) throw toThrow;
     final WallpaperPage Function(SearchQuery query)? answerWith = pageFor;
     if (answerWith != null) return answerWith(query);
-    return page ??
+    return pagesByNumber[query.page] ??
+        page ??
         const WallpaperPage(
           wallpapers: <Wallpaper>[],
           currentPage: 1,
@@ -66,9 +79,10 @@ class FakeWallhavenApi implements WallhavenApi {
 
   @override
   Future<WallpaperDetails> wallpaperDetails(String id) async {
+    receivedDetailIds.add(id);
     final WallhavenFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
-    final WallpaperDetails? result = details;
+    final WallpaperDetails? result = detailsById[id] ?? details;
     if (result == null) {
       throw const UnexpectedResponseFailure('Fake has no detail response');
     }

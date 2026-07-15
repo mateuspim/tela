@@ -2,6 +2,363 @@
 
 Updated: 2026-07-15
 
+## CURRENT CHECKPOINT — image viewer UX slice 7 complete
+
+The staged implementation continues on branch `image-viewer-ux` in the existing
+`.worktrees/image-viewer-ux` worktree. **Continue there; do not create another
+worktree and do not work in `master`.** Slice 7 was the **last implementation
+slice**: what remains is step 6, the full automated + real-device matrix. The
+broader product contract below stays authoritative.
+
+Slice 7 is the consistency-and-motion pass that ties every gallery together —
+no new surfaces, no new zoom or viewer implementation, and the domain, storage,
+and privacy model untouched (delivery-order step 5):
+
+- **One shelf geometry.** `wallpaper_grid_columns.dart` now owns the whole
+  rhythm: `wallpaperGridSpacing` (12), `wallpaperTileRadius` (16), the existing
+  responsive `wallpaperGridColumns` (2 on a phone → 6 on a tablet, never
+  comically narrow), and a new `wallpaperGridPadding` that adds the un-consumed
+  `MediaQuery.padding` to the 12dp inset on the sides and bottom — so a
+  landscape notch or a full-screen gesture bar never clips the last row, while a
+  bottom nav bar or rail that already reserved the space reads back as zero and
+  is not double-counted. The top is left to each shelf's app bar. Browse (paged)
+  and Favorites, History, and Private (all `MasonryGridView`) now draw from this
+  one source, so they read as the same system. No important action hides behind
+  a long press only: History's "remove from history" is in the viewer overflow
+  and Private's delete is a viewer button; the long press is a shortcut, not the
+  sole path.
+- **Tile-to-viewer Hero.** A restrained shared-element flight now carries a
+  tile's already-decoded thumbnail into the viewer it opens: `GalleryViewport`
+  gained an optional `heroTag` that wraps *only* the contained image frame (not
+  the zoom viewport or the calm backdrop), with a `flightShuttleBuilder` that
+  flies the grid tile's thumbnail in both directions so the flight is never a
+  blank box while the viewer's own image still decodes. `ImmersiveGalleryViewer`
+  and `ProgressiveWallpaperPreview` forward the tag; `WallpaperTile` and the
+  private tile wrap their thumbnails in the matching `Hero`.
+- **Tags scoped so nothing collides**, in `core/ui/shelf_hero_tag.dart`:
+  `shelfHeroTag(identity, id, position)`. The identity separates shelves — go
+  _router keeps Browse and Favorites both mounted in the shell's `IndexedStack`,
+  so one id kept-and-browsed would otherwise share a tag — and the position
+  separates repeats *within* one shelf, because Wallhaven's `random` sort can
+  return the same wallpaper on two pages and the grid renders both. (That second
+  case is exactly what the full suite caught mid-slice: an id-only tag threw
+  "multiple heroes share the same tag" on a real paged grid.) The viewer passes
+  its own `selectedIndex` as the position, so the tag matches back to the exact
+  tile — and simply does not fly, rather than flying to the wrong image, if a
+  deduplicated append has since shifted it.
+- **Reduce-motion-aware transitions.** `core/ui/gallery_route_transitions.dart`
+  holds `galleryTransitionDuration` (220ms, or `Duration.zero` when
+  `MediaQuery.disableAnimations` is set) and a `fadeGalleryPage` go_router page.
+  Detail, the linked listing, and the History and Private viewers all push
+  through it, so their fade — and the Hero flight it paces — collapses to an
+  instant cut under reduce motion. Detail's own fullscreen `PageRouteBuilder`
+  now reuses the same duration helper. Returning from any viewer still restores
+  the grid and its scroll position (the viewers are pushed over the shelf).
+- **Decode budget audited, not changed.** Every tile already caps its decode:
+  `WallpaperTile` decodes `thumbOriginalUrl` (never the full 6K image) at
+  `~200·dpr`, and the private tile decodes its file at the same cap; the viewer
+  clamps as before, and `GallerySessionController` still prefetches only the
+  immediate neighbour. A test pins the tile to the thumbnail URL and a bounded
+  `memCacheWidth`.
+
+The close-button `PopScope`/`_allowPop` interaction flagged by slice 6 was left
+alone: the fade transition wraps the *route*, not the viewer's own exit path, so
+it did not surface and needed no fix. No l10n strings were added (the pass adds
+no user-facing copy), so `gen-l10n` was not run.
+
+Slice 7 verification (all green; full suite now 487 tests):
+
+```bash
+./tool/tela dart format <touched Dart files>   # touched files only, not the tree
+./tool/tela analyze
+./tool/tela test test/core/shelf_hero_tag_test.dart \
+  test/core/gallery_route_transitions_test.dart \
+  test/features/gallery_shelf_polish_test.dart \
+  test/features/gallery_paging_bridge_test.dart \
+  test/features/gallery_session_launch_test.dart
+./tool/tela test
+```
+
+New/covered tests: shared grid geometry at 390x844, 844x390, and a 1280x800
+expanded surface (column counts 2/4/6, a 12dp inset that grows by the system
+safe area, and a full shelf packing without a RenderFlex overflow at each);
+reduce motion collapsing the transition duration to zero and a Hero navigation
+settling in a single frame; the same id on two shelves rendering two distinct
+Hero tags and flying without a collision; one id repeated at two positions on a
+shelf staying distinct (the real paged-grid regression); scroll restoration on
+return from a viewer; and the tile decode budget. Named fakes reused:
+`FakeFavoritesRepository`, `FakeWallhavenApi`.
+
+One note for the next agent: the Hero flight, the reduce-motion cut, and the
+safe-area padding have not run on a device — they are proven in the widget
+tests, but a tablet pass (step 6) should confirm the flight reads well against
+real thumbnails and that the last grid row clears the gesture bar in landscape.
+This joins the device confirmations already owed from slices 5 and 6 (below).
+
+### PRIOR SLICE — slice 6 (secure private viewer)
+
+Slice 6 gives the private/NSFW library the same first-class fullscreen viewing
+as Browse and History, the image dimensions its tiles never had, and a
+Set-from-private flow (delivery-order step 4):
+
+- **Dimensions.** The native listing (`ImageStorage.listPrivate`) now runs a
+  bounds-only decode (`BitmapFactory.Options.inJustDecodeBounds`) per file and
+  returns pixel `width`/`height`; a corrupt file reads back as `-1`.
+  `MethodChannelImageStore` maps those to `PrivateImage.width/height` as `int?`
+  (null for absent or non-positive), and `PrivateImage.aspectRatio` is null when
+  either is unknown. The grid is now `MasonryGridView` with each tile shaped to
+  its `aspectRatio`, falling back to a square for a corrupt file; the viewer uses
+  the same ratio, or a square canvas for an unknown one.
+- **Secure viewer.** `features/private_library/private_immersive_session.dart`
+  wraps the shared `ImmersiveGalleryViewer` over one local
+  `GallerySessionController<PrivateImage>` (complete list, **no** `requestMore`).
+  It holds `FLAG_SECURE` and satisfies the app-lock **independently** of the
+  grid via a new `PrivateSecureAccess` mixin (`private_secure_access.dart`) that
+  both the grid and the viewer mix in — so neither leans on the other, and the
+  gate is per-entry (not per-swipe). The `ScreenGuard` adapter is now
+  **reference-counted**: the grid and viewer both acquire, and the window clears
+  only after the last release, so the viewer popping never strips protection
+  from the grid still behind it. `FakeScreenGuard` folds the same balance.
+- **Source.** `PrivateGallerySource` resolves the plain `file:` location through
+  the existing `LocalPreviewCache` (non-temporary — the user's own file is never
+  released) with **no** network fallback; an unreadable or corrupt file renders a
+  safe broken-image state. No path is ever placed in shared cache or logged.
+- **Set + delete.** A pure-Dart `ApplyPrivateImage` use case
+  (`applyPrivateImageProvider`) sends the private URI through `WallpaperApplier`
+  — the viewer's primary action, Home/Lock/Both behind it. There is **no** share
+  action, by design. Delete is explicit and confirmed;
+  `GallerySessionController.removeSelected()` advances to the next image (the one
+  that slid into the index), then the previous at the end, and returns false when
+  empty so the viewer pops to the grid's empty state. The secure window stays up
+  through grid, viewer, target sheet, and delete confirmation.
+- Position/semantics announcements never carry a file name or path (the position
+  is the `galleryPosition` "x of y"; the image label is the path-free
+  `privateLibraryImageLabel`). No new l10n strings were needed — Set, delete, and
+  the target sheet all reuse existing keys, so `gen-l10n` was not run.
+
+Slice 6 verification (all green; full suite now 470 tests):
+
+```bash
+./tool/tela dart format <touched Dart files>
+./tool/tela analyze
+./tool/tela test test/domain/models/private_image_test.dart \
+  test/data/method_channel_image_store_test.dart \
+  test/data/method_channel_screen_guard_test.dart \
+  test/domain/use_cases/apply_private_image_test.dart \
+  test/core/gallery_session_controller_test.dart \
+  test/features/private_immersive_session_test.dart
+./tool/tela test
+```
+
+New/covered tests: dimension mapping including a corrupt file (native `-1` →
+null dims, safe state); reference-counted screen guard (only the window's edges
+cross the channel); `ApplyPrivateImage` reaches the applier with the private URI
+and never falls back; `removeSelected` next/previous/empty; app-lock pass/fail
+gating the viewer and not re-running on swipe; `FLAG_SECURE` acquired before
+content and held across viewer → target sheet → delete confirmation, released on
+dispose; no share action; Set → target → applier; delete next-then-previous-then
+-empty; the position announcement carrying no path; corrupt file safe state.
+Named fakes: `FakeWallpaperApplier`, `FakeScreenGuard`, `FakeAppLock`,
+`FakeLocalPreviewCache`, `FakeImageStore`.
+
+One note for the next agent: the native `BitmapFactory` bounds decode has not
+run on a device — the Dart mapping is proven through the channel fake, and the
+`file:`-scheme `LocalPreviewCache` path is exercised (private files take no
+native round-trip), but a device pass should confirm a real private file decodes
+its bounds and that `FLAG_SECURE` survives the grid↔viewer round trip. Also note
+the shared viewer's close **button** relies on `ImmersiveGalleryViewer`'s
+`PopScope`/`_allowPop`, which does not pop on the first synchronous `maybePop`;
+the private viewer's own delete-to-empty exit uses an unconditional
+`Navigator.pop()` to sidestep that, but the button-close path is inherited from
+History and unverified on hardware.
+
+### PRIOR SLICE — slice 5 (History viewer)
+
+Slice 5 gives Download History the same first-class fullscreen viewing as
+Browse and moves target selection behind a Set action (delivery-order step 3):
+
+- A History tile now opens the shared immersive surface at that exact record,
+  over the whole history (newest first) as one local `GallerySessionController`
+  snapshot. `features/downloads/download_immersive_session.dart` is the new
+  feature wrapper around `ImmersiveGalleryViewer` (no new zoom impl); it passes
+  **no** `requestMore`, so `canRequestMore` is false and it never pages — the
+  same complete-local-snapshot isolation Favorites holds.
+- Local-first, so the viewer works offline. A new `LocalPreviewCache` port
+  (`domain/ports/local_preview_cache.dart`) + `LocalPreview` model materialise a
+  download's location — `file:`, MediaStore `content:`, or a SAF document URI —
+  into a decodable file. `DownloadGallerySource` shows that file first and falls
+  back to `ProgressiveWallpaperPreview`'s network source on a null result or a
+  decode error, releasing any throwaway copy when the selection moves or the
+  widget disposes. The adapter `MethodChannelLocalPreviewCache` resolves a
+  `file:` path directly in Dart and copies a `content:`/SAF one through native
+  `materializeImage`/`releasePreview` on `cc.pym.tela/images`; the Kotlin side
+  copies into a `cacheDir/previews` folder and confines every release to it. No
+  URI or path is ever logged.
+- The viewer's primary action is **Set wallpaper** → target sheet →
+  `ApplyDownload`, so the missing-file → Wallhaven fallback stays intact. An
+  overflow action carries "Remove from history" with the exact pinned wording,
+  and the grid's long-press still forgets. Set, the missing badge, and forget
+  all follow the item currently shown, never the tile that opened the viewer.
+- `ImmersiveGalleryViewer` gained three generic slots — `primaryAction`,
+  `actions`, `statusOverlay` — so feature actions stay *outside* the shared
+  surface. History puts Set in `primaryAction`, its overflow in `actions`
+  (both fade with the transient chrome), and the persistent "not on this
+  device" badge in `statusOverlay`. The missing badge is derived from
+  `missingDownloadsProvider`, agreeing with the grid.
+- Aspect ratio and masonry geometry use the record's real `Wallpaper.resolution`.
+  Previous/Next, swipe, and arrow keys move through the history order; returning
+  restores the grid and its scroll position (the viewer is pushed over the
+  history route).
+
+Slice 5 verification (all green; full suite now 446 tests):
+
+```bash
+./tool/tela gen-l10n   # three new strings: gallery-more-actions, viewer-missing, forget-menu
+./tool/tela dart format <touched Dart files>
+./tool/tela analyze
+./tool/tela test test/data/method_channel_local_preview_cache_test.dart \
+  test/features/download_immersive_session_test.dart \
+  test/features/download_history_screen_test.dart
+./tool/tela test
+```
+
+New/covered tests: adapter resolves all three URI schemes and releases only
+temporary copies; viewer shows local-first, falls back to Wallhaven with the
+badge when the file is gone, Set → target → `ApplyDownload`, overflow forget
+keeps the pinned "the file stays" sentence, Set/forget follow the shown item
+across Next, temporary previews are released; the screen opens the viewer at the
+tapped record (not index zero) and restores the grid + scroll on return.
+`FakeLocalPreviewCache` is the named fake modelling the three schemes.
+
+One note for the next agent: the private-library viewer is step 4 and was
+deliberately **not** touched here. The native `materializeImage`/`releasePreview`
+Kotlin was written but has not run on a device — the Dart side is proven through
+the fake; a device pass should confirm a `content:`/SAF preview actually decodes.
+
+### PRIOR SLICE — slice 4 (public viewer paging)
+
+Slice 4 connects the public viewer to Wallhaven pagination:
+
+- `GallerySessionController` now owns a one-in-flight-at-a-time request-more
+  guard, appends deduplicated by an optional `itemKey`, updates position and
+  enables Next the instant items arrive, prefetches only the immediate new
+  neighbour, records a failed request (`hasRequestFailed`) rather than throwing,
+  and auto-asks for more when the selection nears the loaded end (including a
+  shelf opened on its last tile, deferred one microtask so wiring completes). It
+  still imports no Riverpod, paging package, or transport.
+- `features/browse/gallery_paging_bridge.dart` is the small adapter: it drives
+  the grid's *own* `PagingController.fetchNextPage` and appends the new tail to
+  the open session. Going through the grid's fetch path is what preserves the
+  live query and the `random` shuffle seed; `fetchNextPage` returns void, so the
+  bridge observes completion through the controller's loading flag. A failed
+  page rethrows the paging error so the session marks it for retry.
+- `WallpaperGrid` builds a `GalleryPagingBridge` and hands each session a
+  `requestMore` closure bound to that session, plus an `itemKey` of the
+  wallpaper id. Favorites (a plain `MasonryGridView`, no `WallpaperGrid`) passes
+  no `requestMore`, so `canRequestMore` is false and it never pages — the
+  complete-local-snapshot invariant holds structurally, not by convention.
+- `WallpaperImmersiveSession` now resets zoom only when the *selected index*
+  changes, so an appended page rebuilds Next/position without flinging the
+  current image back to fitted scale.
+- The non-blocking retry path is `session.requestMore()` itself: it leaves the
+  selected image, loaded boundary, chrome, and fullscreen untouched, clears the
+  in-flight guard on completion, and the near-end auto-trigger retries as the
+  user keeps navigating. No new viewer chrome was added for it.
+
+Slice 4 verification (all green; full suite now 434 tests):
+
+```bash
+./tool/tela dart format <touched Dart files>
+./tool/tela analyze
+./tool/tela test test/core/gallery_session_controller_test.dart \
+  test/features/gallery_paging_bridge_test.dart \
+  test/features/gallery_session_launch_test.dart
+./tool/tela test
+```
+
+New/covered tests: near-end triggering (on select and on a last-tile mount),
+one in-flight request at a time, append ordering + id dedup, query/seed
+preservation through the grid's fetch path, failure-then-retry, Favorites
+isolation (`canRequestMore` false, never pages), position + Next after append,
+and the existing selected-item/scroll-restoration-across-viewer-exit coverage.
+
+One test-shape note for the next agent: a widget test that taps a tile and
+expects only page 1 loaded is unreliable — `PagedMasonryGridView` eagerly
+fetches page 2 to fill the viewport. Test the bridge's append/dedup directly
+against a hand-driven `PagingController` (see
+`gallery_paging_bridge_test.dart`), and assert seed/query preservation via the
+page-2 request the grid records.
+
+### PRIOR SLICES
+
+Slices 1 and 2 established the honest shared viewport and reusable immersive
+surface. Slice 3 adds already-loaded public gallery sessions:
+
+- `core/ui/gallery_session_controller.dart` owns stable shelf identity,
+  ordered loaded items, selected index, boundaries, immediate-neighbour
+  prefetch, append, and an optional request-more callback without importing
+  Riverpod, `PagingController`, or Wallhaven transport.
+- Browse, Favorites, and linked listings create a session from the exact shelf
+  snapshot and tapped index. Query-backed and linked shelves have distinct,
+  deterministic identities; Favorites uses `favorites`. Returning keeps the
+  existing route and scroll state.
+- Immersive chrome now has visible 48dp Previous/Next controls with true
+  boundary-disabled states and a live accessible “x of y” position. Horizontal
+  swipe and keyboard/D-pad arrows share selection behavior.
+- Raw pointer observation detects fitted swipes without competing with
+  `InteractiveViewer`. While zoomed, touch input pans and horizontal keys pan
+  by a bounded step; explicit Previous/Next still selects and resets zoom.
+- Detail, metadata loading, favorite/share/download/Set actions, and the normal
+  preview all follow the session selection. Closing fullscreen leaves Detail
+  on that selected wallpaper.
+- Immediate loaded neighbours warm their aspect-correct preview and full image.
+  No next page is requested in this slice.
+
+Slice 3 verification:
+
+```bash
+./tool/tela dart format <touched Dart files>
+./tool/tela analyze
+./tool/tela test test/core/gallery_session_controller_test.dart \
+  test/core/gallery_zoom_controller_test.dart \
+  test/core/immersive_gallery_viewer_test.dart \
+  test/core/gallery_viewport_test.dart \
+  test/features/gallery_session_launch_test.dart \
+  test/features/wallpaper_detail_screen_test.dart
+./tool/tela test
+```
+
+All pass; the full suite now has 426 tests.
+
+### NEXT SLICE ONLY — the device matrix (step 6)
+
+Steps 1–5 are **done** (see the slice-7 checkpoint at the top of this file). The
+only work left before merge is step 6: the full automated + real-device matrix,
+run against the exact commit on the Samsung SM-X730 in **both** portrait and
+landscape, over Browse, Detail, History, and the private library. Nothing more
+should be implemented — this is a confirmation pass.
+
+Before installing, run the pre-handoff gate from the "Acceptance matrix" below:
+`./tool/tela gen-l10n`, `dart format .`, `./tool/tela analyze`, `./tool/tela
+test`, `./tool/tela build apk --debug`.
+
+Device confirmations still owed, carried forward and now joined by slice 7's:
+
+- **Slice 7:** the tile→viewer **Hero flight** reads well against real
+  thumbnails; the **reduce-motion** cut is genuinely instant on device; the
+  safe-area **grid padding** clears the gesture bar on the last row in landscape.
+  All three are proven only in widget tests.
+- **Slice 6 (Private):** the native `BitmapFactory` **bounds decode** returns a
+  real private file's pixel dimensions, and `FLAG_SECURE` survives the
+  grid↔viewer round trip (and the viewer's inherited close-button path — the
+  delete-to-empty exit is proven, the button-close is not). Do **not** claim the
+  private screenshot path was captured — `FLAG_SECURE` must make that impossible.
+- **Slice 5 (History):** the native `materializeImage`/`releasePreview` copy
+  decodes an actual `content:`/SAF preview.
+
+Inspect logcat for Flutter exceptions/overflows; confirm system chrome and
+`FLAG_SECURE` restore correctly on every exit.
+
 ## START HERE — immersive image viewing and the next UI/UX pass
 
 This is the next agent's task. Start from clean `master`; its implementation

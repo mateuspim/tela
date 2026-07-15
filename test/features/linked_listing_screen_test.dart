@@ -18,6 +18,7 @@ import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/browse/linked_listing_screen.dart';
+import 'package:tela/features/browse/wallpaper_grid.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
 import '../fakes/fake_secret_store.dart';
@@ -40,6 +41,10 @@ void main() {
     expect(find.text('nature'), findsOneWidget);
     expect(find.text('Wallpapers with this tag'), findsOneWidget);
     expect(find.byType(WallpaperTile), findsOneWidget);
+    expect(
+      tester.widget<WallpaperGrid>(find.byType(WallpaperGrid)).galleryIdentity,
+      'linked:tag:37',
+    );
   });
 
   testWidgets('an uploader listing is their uploads, and never a profile', (

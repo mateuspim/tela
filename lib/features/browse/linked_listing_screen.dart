@@ -31,7 +31,7 @@ class LinkedListingScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: _title(context)),
-      body: WallpaperGrid(query: query),
+      body: WallpaperGrid(query: query, galleryIdentity: _galleryIdentity),
     );
   }
 
@@ -55,6 +55,11 @@ class LinkedListingScreen extends ConsumerWidget {
   String get _name => switch (link) {
     TagLink(:final WallpaperTag tag) => tag.name,
     UploaderLink(:final String username) => '@$username',
+  };
+
+  String get _galleryIdentity => switch (link) {
+    TagLink(:final WallpaperTag tag) => 'linked:tag:${tag.id}',
+    UploaderLink(:final String username) => 'linked:uploader:$username',
   };
 
   String _kind(AppLocalizations l10n) => switch (link) {

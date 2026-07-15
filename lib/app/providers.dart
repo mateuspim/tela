@@ -8,6 +8,7 @@ import 'package:tela/data/secrets/secure_secret_store.dart';
 import 'package:tela/data/security/local_auth_app_lock.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/data/storage/method_channel_image_store.dart';
+import 'package:tela/data/storage/method_channel_local_preview_cache.dart';
 import 'package:tela/data/storage/method_channel_screen_guard.dart';
 import 'package:tela/data/tag_blocklist/drift_tag_blocklist_repository.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
@@ -17,6 +18,7 @@ import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/image_store.dart';
+import 'package:tela/domain/ports/local_preview_cache.dart';
 import 'package:tela/domain/ports/screen_guard.dart';
 import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
@@ -25,6 +27,7 @@ import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
 import 'package:tela/domain/ports/wallpaper_sharer.dart';
 import 'package:tela/domain/use_cases/apply_download.dart';
+import 'package:tela/domain/use_cases/apply_private_image.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
 import 'package:tela/domain/use_cases/forget_api_key.dart';
@@ -72,6 +75,13 @@ final Provider<WallpaperSharer> wallpaperSharerProvider =
 final Provider<ImageStore> imageStoreProvider = Provider<ImageStore>(
   (Ref ref) => MethodChannelImageStore(),
 );
+
+/// The local-preview port, bound to native materialisation of a download's
+/// `content:`/SAF location into a decodable cache file.
+final Provider<LocalPreviewCache> localPreviewCacheProvider =
+    Provider<LocalPreviewCache>(
+      (Ref ref) => MethodChannelLocalPreviewCache(),
+    );
 
 /// The screen-protection port, bound to Android's `FLAG_SECURE`.
 final Provider<ScreenGuard> screenGuardProvider = Provider<ScreenGuard>(
@@ -138,6 +148,13 @@ final Provider<DownloadWallpaper> downloadWallpaperProvider =
 final Provider<ApplyDownload> applyDownloadProvider = Provider<ApplyDownload>(
   (Ref ref) => ApplyDownload(applier: ref.watch(wallpaperApplierProvider)),
 );
+
+/// Sets an app-private wallpaper, from the file only tela can open.
+final Provider<ApplyPrivateImage> applyPrivateImageProvider =
+    Provider<ApplyPrivateImage>(
+      (Ref ref) =>
+          ApplyPrivateImage(applier: ref.watch(wallpaperApplierProvider)),
+    );
 
 /// Shares one wallpaper out — its Wallhaven link, or the image file itself.
 final Provider<ShareWallpaper> shareWallpaperProvider =

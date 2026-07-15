@@ -4,21 +4,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Riverpod 3 keeps `Override` out of the default export surface.
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
-import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/downloads/download_history_screen.dart';
 
 import '../fakes/fake_download_history.dart';
 import '../fakes/fake_image_store.dart';
-import '../fakes/fake_wallpaper_applier.dart';
 
 void main() {
   group('DownloadHistoryScreen', () {
@@ -50,26 +51,38 @@ void main() {
       );
     });
 
-    testWidgets('sets a download again from the file, not from Wallhaven', (
+    testWidgets('a tap opens the viewer at the exact tapped record', (
       WidgetTester tester,
     ) async {
-      final FakeWallpaperApplier applier = FakeWallpaperApplier();
+      // Newest first: index 0 is 'newer', index 1 is 'older'. Tapping the
+      // second tile must open on it, not on index zero, and hand the viewer the
+      // whole local history as one complete snapshot.
+      GallerySessionController<DownloadRecord>? opened;
       await _pump(
         tester,
-        FakeDownloadHistory(initial: <DownloadRecord>[_download('e7jvjd')]),
-        applier: applier,
+        FakeDownloadHistory(
+          initial: <DownloadRecord>[_download('older'), _download('newer')],
+        ),
+        onOpen: (GallerySessionController<DownloadRecord> session) =>
+            opened = session,
       );
 
-      await tester.tap(find.byType(WallpaperTile));
-      await tester.pumpAndSettle();
-      expect(find.text('Set wallpaper on'), findsOneWidget);
-
-      await tester.tap(find.text('Home and lock screens'));
+      await tester.tap(find.byType(WallpaperTile).at(1));
       await tester.pumpAndSettle();
 
-      expect(applier.receivedSources, <Uri>[_locationOf('e7jvjd')]);
-      expect(applier.receivedTarget, WallpaperTarget.both);
-      expect(find.text('Wallpaper set.'), findsOneWidget);
+      expect(opened, isNotNull);
+      expect(opened!.identity, 'download-history');
+      expect(opened!.selectedIndex, 1);
+      expect(opened!.selectedItem.wallpaper.id, 'older');
+      expect(
+        opened!.items.map((DownloadRecord d) => d.wallpaper.id),
+        <String>['newer', 'older'],
+      );
+      expect(
+        opened!.canRequestMore,
+        isFalse,
+        reason: 'History is a complete local snapshot and never pages',
+      );
     });
 
     testWidgets('a long press offers to forget the row, and says the file '
@@ -124,13 +137,65 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
       await tester.pumpAndSettle();
 
-      // Only the one long-pressed is forgotten, and the grid refreshes without
-      // a relaunch — the stale-listing bug of 2026-07-14 applies here too.
+      // Only the one long-pressed (newest, '7j1mzo') is forgotten; 'e7jvjd'
+      // remains. The grid refreshes without a relaunch — the stale-listing bug
+      // of 2026-07-14 applies here too.
       expect(
         history.recorded.map((DownloadRecord d) => d.wallpaper.id),
         <String>['e7jvjd'],
       );
       expect(find.byType(WallpaperTile), findsOneWidget);
+    });
+
+    testWidgets('returns to the same scrolled grid after the viewer', (
+      WidgetTester tester,
+    ) async {
+      final List<DownloadRecord> many = List<DownloadRecord>.generate(
+        30,
+        (int index) => _download('item-$index'),
+      );
+      GallerySessionController<DownloadRecord>? opened;
+      await _pump(
+        tester,
+        FakeDownloadHistory(initial: many),
+        onOpen: (GallerySessionController<DownloadRecord> session) =>
+            opened = session,
+      );
+
+      final ScrollableState scrollable = tester.state<ScrollableState>(
+        find.byType(Scrollable),
+      );
+      await tester.drag(find.byType(Scrollable), const Offset(0, -700));
+      await tester.pumpAndSettle();
+      final double before = scrollable.position.pixels;
+
+      // Tiles are tall, so tap the visible band of a partially-visible one,
+      // below the app bar and above the bottom edge.
+      final Element visible = find.byType(WallpaperTile).evaluate().firstWhere((
+        Element element,
+      ) {
+        final RenderBox box = element.renderObject! as RenderBox;
+        final double y = box.localToGlobal(Offset.zero).dy;
+        return y < 560 && y + box.size.height > 100;
+      });
+      final RenderBox box = visible.renderObject! as RenderBox;
+      final Offset topLeft = box.localToGlobal(Offset.zero);
+      final double top = topLeft.dy < 100 ? 100 : topLeft.dy;
+      final double bottom = topLeft.dy + box.size.height;
+      final double clampedBottom = bottom > 560 ? 560 : bottom;
+      await tester.tapAt(
+        Offset(topLeft.dx + box.size.width / 2, (top + clampedBottom) / 2),
+      );
+      await tester.pumpAndSettle();
+
+      // The viewer opened, over the same scroll position it was tapped from.
+      expect(opened, isNotNull);
+
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DownloadHistoryScreen), findsOneWidget);
+      expect(scrollable.position.pixels, before);
     });
   });
 
@@ -147,9 +212,7 @@ void main() {
         FakeDownloadHistory(
           initial: <DownloadRecord>[_download('e7jvjd'), _download('7j1mzo')],
         ),
-        imageStore: FakeImageStore(
-          unreadable: <Uri>{_locationOf('7j1mzo')},
-        ),
+        imageStore: FakeImageStore(unreadable: <Uri>{_locationOf('7j1mzo')}),
       );
 
       expect(find.byIcon(Icons.cloud_download_outlined), findsOneWidget);
@@ -163,55 +226,48 @@ void main() {
         findsOneWidget,
       );
     });
-
-    testWidgets('still sets, and no tile is badged when every file is there', (
-      WidgetTester tester,
-    ) async {
-      final FakeWallpaperApplier applier = FakeWallpaperApplier();
-      await _pump(
-        tester,
-        FakeDownloadHistory(initial: <DownloadRecord>[_download('e7jvjd')]),
-        applier: applier,
-      );
-
-      expect(find.byIcon(Icons.cloud_download_outlined), findsNothing);
-
-      await tester.tap(find.byType(WallpaperTile));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Home and lock screens'));
-      await tester.pumpAndSettle();
-
-      expect(applier.receivedSources, <Uri>[_locationOf('e7jvjd')]);
-    });
   });
 }
 
-/// Boots the real screen over [history], with no API bound at all: the history
-/// is an offline shelf, and needing Wallhaven to draw it would defeat it.
+/// Boots the real screen over [history], behind a router so a tap can open the
+/// viewer. History is an offline shelf, so no Wallhaven API is bound at all.
 Future<void> _pump(
   WidgetTester tester,
   FakeDownloadHistory history, {
-  FakeWallpaperApplier? applier,
   FakeImageStore? imageStore,
+  ValueChanged<GallerySessionController<DownloadRecord>>? onOpen,
 }) async {
+  final GoRouter router = GoRouter(
+    routes: <RouteBase>[
+      GoRoute(path: '/', builder: (_, _) => const DownloadHistoryScreen()),
+      GoRoute(
+        path: TelaRoutes.downloadViewerPath,
+        name: TelaRoutes.downloadViewerName,
+        builder: (_, GoRouterState state) {
+          final GallerySessionController<DownloadRecord> session =
+              state.extra! as GallerySessionController<DownloadRecord>;
+          onOpen?.call(session);
+          return Scaffold(body: Text(session.selectedItem.wallpaper.id));
+        },
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
         downloadHistoryProvider.overrideWithValue(history),
-        wallpaperApplierProvider.overrideWithValue(
-          applier ?? FakeWallpaperApplier(),
-        ),
         // The grid probes each row's file to badge the ones that are gone.
         imageStoreProvider.overrideWithValue(imageStore ?? FakeImageStore()),
       ],
-      child: const MaterialApp(
-        localizationsDelegates: <LocalizationsDelegate<Object>>[
+      child: MaterialApp.router(
+        routerConfig: router,
+        localizationsDelegates: const <LocalizationsDelegate<Object>>[
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: DownloadHistoryScreen(),
       ),
     ),
   );

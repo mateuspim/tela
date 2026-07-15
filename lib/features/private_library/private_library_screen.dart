@@ -3,22 +3,27 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
-import 'package:tela/domain/ports/app_lock.dart';
-import 'package:tela/domain/ports/screen_guard.dart';
+import 'package:tela/features/private_library/private_secure_access.dart';
 
 /// The app-private tier, which nothing but tela can open.
 ///
-/// Holds `FLAG_SECURE` for as long as it is on screen: no screenshots, no
-/// screen recording, and no thumbnail in the app switcher. The flag belongs to
-/// the window rather than to a route, so this screen takes it on the way in and
-/// gives it back on the way out.
+/// Holds `FLAG_SECURE` while on screen and satisfies the app-lock before it
+/// lists anything — both through [PrivateSecureAccess], which the
+/// fullscreen viewer shares so the protection survives the whole private flow.
+/// Tapping a tile opens that image in the secure viewer; a long press still
+/// offers to delete the file.
 class PrivateLibraryScreen extends ConsumerStatefulWidget {
   /// Creates the private library.
   const PrivateLibraryScreen({super.key});
@@ -28,82 +33,18 @@ class PrivateLibraryScreen extends ConsumerStatefulWidget {
       _PrivateLibraryScreenState();
 }
 
-class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
-  /// Held in a field rather than re-read on the way out: Riverpod forbids
-  /// `ref.read` in `dispose`, and the flag has to be given back exactly when
-  /// this screen goes away — there is no later chance to do it.
-  late final ScreenGuard _screenGuard;
-
-  /// False until the lock has been satisfied. Nothing is listed before it.
-  bool _unlocked = false;
-
-  /// True while the lock is being resolved or the system prompt is up.
-  bool _checking = true;
-
+class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
+    with PrivateSecureAccess<PrivateLibraryScreen> {
   @override
   void initState() {
     super.initState();
-    _screenGuard = ref.read(screenGuardProvider);
-    // Before the first frame: a thumbnail can be captured the moment the route
-    // is on screen, so asking for the flag later is asking too late.
-    unawaited(_screenGuard.setSecure(secure: true));
-    unawaited(_unlock());
+    beginPrivateAccess();
   }
 
   @override
   void dispose() {
-    unawaited(_screenGuard.setSecure(secure: false));
+    endPrivateAccess();
     super.dispose();
-  }
-
-  /// Resolves the lock before anything is listed.
-  ///
-  /// The gate lives in the screen rather than on the settings tile that opens
-  /// it, because a route can be reached more ways than one — gating the button
-  /// would leave a deep link to `/private` walking straight past it.
-  ///
-  /// **It fails closed.** If the lock is on, the only way past is a prompt that
-  /// passes; anything else lands on [_locked]. It used to step aside when
-  /// `AppLock.isAvailable()` said no, to avoid trapping the owner outside their
-  /// own files on a device that cannot ask anything — but `isAvailable` cannot
-  /// tell "this device has no credentials" apart from "the sensor is locked out
-  /// for the next 30 seconds", and it reports both as false. On a device whose
-  /// only credential is a fingerprint, that turned five bad reads into an open
-  /// door: found on hardware, 2026-07-14. The owner's way back in is the
-  /// Settings switch, which stays operable precisely for this (`AppLockSwitch`)
-  /// — a lock you can turn off is not a trap, but a lock that opens itself is
-  /// not a lock.
-  Future<void> _unlock() async {
-    final bool locked = await ref
-        .read(settingsRepositoryProvider)
-        .isPrivateLibraryLocked();
-    if (!locked) {
-      if (mounted) setState(() => _pass(unlocked: true));
-      return;
-    }
-    await _authenticate();
-  }
-
-  /// Only [AppLockOutcome.passed] opens the library — including over
-  /// [AppLockOutcome.unavailable], which is the whole point. A device that
-  /// cannot ask is not a device that has proven anything; the owner's way back
-  /// in is to switch the lock off in Settings, which is the one place that
-  /// outcome is honoured.
-  Future<void> _authenticate() async {
-    if (mounted) setState(() => _checking = true);
-    final AppLockOutcome outcome = await ref
-        .read(appLockProvider)
-        .authenticate(
-          reason: AppLocalizations.of(context).privateLibraryUnlockReason,
-        );
-    if (mounted) {
-      setState(() => _pass(unlocked: outcome == AppLockOutcome.passed));
-    }
-  }
-
-  void _pass({required bool unlocked}) {
-    _unlocked = unlocked;
-    _checking = false;
   }
 
   @override
@@ -122,8 +63,8 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
   }
 
   Widget _body(BuildContext context, AppLocalizations l10n) {
-    if (_checking) return const Center(child: CircularProgressIndicator());
-    if (!_unlocked) return _locked(l10n);
+    if (isCheckingLock) return const Center(child: CircularProgressIndicator());
+    if (!isUnlocked) return _locked(l10n);
     return ref
         .watch(privateImagesProvider)
         .when(
@@ -143,7 +84,7 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
       icon: Icons.lock_outline,
       message: l10n.privateLibraryLocked,
       actionLabel: l10n.privateLibraryUnlock,
-      onAction: _authenticate,
+      onAction: authenticate,
     );
   }
 
@@ -158,20 +99,51 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
         message: l10n.privateLibraryEmpty,
       );
     }
-    // Square tiles, not the masonry the other grids use: masonry packs by each
-    // image's aspect ratio, and a file on disk has no known ratio until it is
-    // decoded. A browse tile gets its shape from Wallhaven's metadata; this one
-    // has none to get.
-    return GridView.count(
+    // Masonry keyed to each file's real aspect ratio now that the native
+    // listing decodes its bounds; a corrupt file with none falls back square.
+    return MasonryGridView.count(
       crossAxisCount: wallpaperGridColumns(context),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      padding: const EdgeInsets.all(12),
-      children: <Widget>[
-        for (final PrivateImage image in stored)
-          _PrivateTile(image: image, onDelete: () => _confirmDelete(image)),
-      ],
+      mainAxisSpacing: wallpaperGridSpacing,
+      crossAxisSpacing: wallpaperGridSpacing,
+      padding: wallpaperGridPadding(context),
+      itemCount: stored.length,
+      itemBuilder: (BuildContext context, int index) => _PrivateTile(
+        image: stored[index],
+        position: index,
+        onTap: () => _open(context, stored, index),
+        onDelete: () => _confirmDelete(stored[index]),
+      ),
     );
+  }
+
+  /// Opens the whole private tier in the secure viewer, on the tapped image.
+  ///
+  /// The session is the complete local list, so it never pages — like Favorites
+  /// and History. Its creator disposes it when the viewer returns.
+  void _open(BuildContext context, List<PrivateImage> stored, int index) {
+    unawaited(_pushViewer(context, stored, index));
+  }
+
+  Future<void> _pushViewer(
+    BuildContext context,
+    List<PrivateImage> stored,
+    int index,
+  ) async {
+    final GallerySessionController<PrivateImage> session =
+        GallerySessionController<PrivateImage>(
+          identity: 'private-library',
+          items: stored,
+          initialIndex: index,
+          itemKey: (PrivateImage image) => image.id,
+        );
+    try {
+      await context.pushNamed<void>(
+        TelaRoutes.privateViewerName,
+        extra: session,
+      );
+    } finally {
+      session.dispose();
+    }
   }
 
   Future<void> _confirmDelete(PrivateImage image) async {
@@ -215,9 +187,16 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen> {
 
 /// One app-private file, decoded from disk rather than from the network.
 class _PrivateTile extends StatelessWidget {
-  const _PrivateTile({required this.image, required this.onDelete});
+  const _PrivateTile({
+    required this.image,
+    required this.position,
+    required this.onTap,
+    required this.onDelete,
+  });
 
   final PrivateImage image;
+  final int position;
+  final VoidCallback onTap;
   final VoidCallback onDelete;
 
   @override
@@ -225,29 +204,39 @@ class _PrivateTile extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return Semantics(
       container: true,
+      button: true,
       image: true,
       label: l10n.privateLibraryImageLabel(image.id),
       child: Material(
         clipBehavior: Clip.antiAlias,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(wallpaperTileRadius),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         child: InkWell(
+          onTap: onTap,
           onLongPress: onDelete,
-          child: _thumbnail(context),
+          // A corrupt file has no known ratio; a square keeps the grid rhythm.
+          child: AspectRatio(
+            aspectRatio: image.aspectRatio ?? 1,
+            child: _thumbnail(context),
+          ),
         ),
       ),
     );
   }
 
-  /// Decodes at roughly tile width, not at the source's 6K.
+  /// Decodes at roughly tile width, not at the source's 6K. The decoded
+  /// thumbnail flies into the secure viewer under a shelf-scoped Hero tag.
   Widget _thumbnail(BuildContext context) {
     final double devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-    return Image.file(
-      File.fromUri(image.location),
-      fit: BoxFit.cover,
-      cacheWidth: (_tileWidthDip * devicePixelRatio).round(),
-      errorBuilder: (BuildContext context, Object error, StackTrace? trace) =>
-          const Center(child: Icon(Icons.broken_image_outlined)),
+    return Hero(
+      tag: shelfHeroTag('private-library', image.id, position),
+      child: Image.file(
+        File.fromUri(image.location),
+        fit: BoxFit.cover,
+        cacheWidth: (_tileWidthDip * devicePixelRatio).round(),
+        errorBuilder: (BuildContext context, Object error, StackTrace? trace) =>
+            const Center(child: Icon(Icons.broken_image_outlined)),
+      ),
     );
   }
 

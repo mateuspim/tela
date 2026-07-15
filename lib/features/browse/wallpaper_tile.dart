@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 
 /// One wallpaper in the browse grid.
@@ -13,6 +14,7 @@ class WallpaperTile extends StatelessWidget {
     required this.wallpaper,
     this.onTap,
     this.onLongPress,
+    this.heroTag,
     super.key,
   });
 
@@ -26,6 +28,11 @@ class WallpaperTile extends StatelessWidget {
   /// second action; the download history uses it to forget a row.
   final VoidCallback? onLongPress;
 
+  /// Optional shared-element tag flying this thumbnail into the viewer it
+  /// opens. Scope it by shelf identity so the same id on two shelves does not
+  /// collide (see `shelfHeroTag`); null leaves the tile heroless.
+  final Object? heroTag;
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
@@ -36,7 +43,7 @@ class WallpaperTile extends StatelessWidget {
         aspectRatio: wallpaper.resolution.width / wallpaper.resolution.height,
         child: Material(
           clipBehavior: Clip.antiAlias,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(wallpaperTileRadius),
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
           child: InkWell(
             onTap: onTap,
@@ -55,7 +62,7 @@ class WallpaperTile extends StatelessWidget {
   /// aspect ratio center-punches the image (a landscape becomes a close-up).
   Widget _thumbnail(BuildContext context) {
     final double devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-    return CachedNetworkImage(
+    final Widget image = CachedNetworkImage(
       imageUrl: wallpaper.thumbOriginalUrl,
       fit: BoxFit.cover,
       memCacheWidth: (_tileWidthDip * devicePixelRatio).round(),
@@ -67,6 +74,9 @@ class WallpaperTile extends StatelessWidget {
       errorWidget: (BuildContext context, String url, Object error) =>
           const Center(child: Icon(Icons.broken_image_outlined)),
     );
+    final Object? tag = heroTag;
+    if (tag == null) return image;
+    return Hero(tag: tag, child: image);
   }
 
   /// Half a phone's logical width, matching the 2-column grid.

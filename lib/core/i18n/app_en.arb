@@ -559,6 +559,46 @@
     "description": "Tooltip for returning from the distraction-free wallpaper preview."
   },
 
+  "galleryClose": "Close",
+  "@galleryClose": {
+    "description": "Visible action that closes an immersive gallery viewer."
+  },
+
+  "galleryZoomIn": "Zoom in",
+  "@galleryZoomIn": {
+    "description": "Visible and accessible action that zooms an immersive image."
+  },
+
+  "galleryResetZoom": "Reset zoom",
+  "@galleryResetZoom": {
+    "description": "Visible and accessible action that returns an image to fitted scale."
+  },
+
+  "galleryShowControls": "Show viewer controls",
+  "@galleryShowControls": {
+    "description": "Accessibility action for showing hidden immersive viewer chrome."
+  },
+
+  "galleryHideControls": "Hide viewer controls",
+  "@galleryHideControls": {
+    "description": "Accessibility action for hiding immersive viewer chrome."
+  },
+
+  "galleryMoreActions": "More actions",
+  "@galleryMoreActions": {
+    "description": "Tooltip and label for the overflow menu of a gallery viewer's feature actions."
+  },
+
+  "downloadViewerMissing": "Not on this device",
+  "@downloadViewerMissing": {
+    "description": "Persistent badge in the download viewer when the saved file is gone and Wallhaven is being shown instead. Mirrors the grid's badge so the missing state stays obvious in the viewer too."
+  },
+
+  "downloadHistoryForgetMenu": "Remove from history",
+  "@downloadHistoryForgetMenu": {
+    "description": "Overflow-menu action in the download viewer that forgets the shown row. Opens the same confirmation as the grid's long-press; deliberately not 'Delete', which would name the wrong object."
+  },
+
   "detailMetadataTitle": "Details",
   "detailResolution": "Resolution",
   "detailFileSize": "File size",
@@ -965,6 +1005,29 @@
   "settingsAppLockDisableReason": "Confirm it's you to unlock the private library",
   "@settingsAppLockDisableReason": {
     "description": "Shown by the system prompt when switching the app-lock off. Turning the lock off opens the library, so it asks for the same proof the library does — otherwise the gate is one ungated tap away from being removed."
+  },
+
+  "galleryPrevious": "Previous",
+  "@galleryPrevious": {
+    "description": "Accessible label for selecting the previous loaded gallery item."
+  },
+
+  "galleryNext": "Next",
+  "@galleryNext": {
+    "description": "Accessible label for selecting the next loaded gallery item."
+  },
+
+  "galleryPosition": "{position} of {total}",
+  "@galleryPosition": {
+    "description": "Live gallery position announcement.",
+    "placeholders": {
+      "position": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
   },
 
   "settingsAppLockLockedOut": "Too many attempts. Wait a moment, then try again.",

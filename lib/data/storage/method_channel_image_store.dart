@@ -132,8 +132,17 @@ class MethodChannelImageStore implements ImageStore {
       location: Uri.parse(location),
       savedAt: DateTime.fromMillisecondsSinceEpoch(savedAt),
       sizeBytes: sizeBytes,
+      width: _positiveDimension(raw['width']),
+      height: _positiveDimension(raw['height']),
     );
   }
+
+  /// A pixel dimension the native bounds decode read, or null when it couldn't.
+  ///
+  /// A corrupt file comes back as -1 (or absent on an older payload); either
+  /// way the image is still listed, just without a known shape.
+  int? _positiveDimension(Object? value) =>
+      value is int && value > 0 ? value : null;
 
   StoredImage _storedImageFrom(Object? raw, StorageTier tier) {
     if (raw is Map<Object?, Object?> && raw['success'] == true) {

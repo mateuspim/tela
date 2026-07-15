@@ -2,6 +2,7 @@ package cc.pym.tela
 
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
@@ -108,14 +109,35 @@ class ImageStorage(private val context: Context) {
             .sortedByDescending { it.lastModified() }
             .mapNotNull { file ->
                 val id = idOf(file.name) ?: return@mapNotNull null
+                val (width, height) = pixelBounds(file)
                 mapOf(
                     "id" to id,
                     "location" to Uri.fromFile(file).toString(),
                     "savedAt" to file.lastModified(),
                     "sizeBytes" to file.length(),
+                    "width" to width,
+                    "height" to height,
                 )
             }
         return mapOf("success" to true, "images" to images)
+    }
+
+    /**
+     * Reads a file's pixel dimensions without decoding its pixels.
+     *
+     * `inJustDecodeBounds` fills `outWidth`/`outHeight` from the header alone, so
+     * the private grid can shape each tile to its file without holding a whole
+     * 6K bitmap in memory. A corrupt or truncated file leaves both at -1, which
+     * Dart reads back as unknown and renders as a safe broken-image state.
+     */
+    private fun pixelBounds(file: File): Pair<Int, Int> {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        return try {
+            BitmapFactory.decodeFile(file.absolutePath, options)
+            options.outWidth to options.outHeight
+        } catch (_: Exception) {
+            -1 to -1
+        }
     }
 
     /**
@@ -158,6 +180,62 @@ class ImageStorage(private val context: Context) {
         }
         return mapOf("success" to true, "readable" to readable)
     }
+
+    /**
+     * Copies a MediaStore or SAF image into a decodable cache file.
+     *
+     * Flutter's `FileImage` reads a `file:` path, not a `content:` URI, so the
+     * download viewer cannot decode a gallery or document location directly.
+     * This copies it into a private cache subfolder and hands back the path;
+     * the caller releases it when it moves on. A plain `file:` location never
+     * reaches here — Dart points at it directly — so this only ever materialises
+     * a URI tela does not own, and never risks copying over the original.
+     *
+     * Every failure answers `success=false` rather than throwing: a file the
+     * user deleted is an ordinary state, and the viewer falls back to Wallhaven.
+     */
+    fun materialise(location: Uri): Map<String, Any> {
+        val directory = previewDirectory()
+        if (!directory.exists() && !directory.mkdirs()) return mapOf("success" to false)
+        val target = File(directory, "preview-${System.nanoTime()}")
+        return try {
+            val copied = context.contentResolver.openInputStream(location)?.use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+                true
+            } ?: false
+            if (!copied) {
+                target.delete()
+                mapOf("success" to false)
+            } else {
+                mapOf("success" to true, "path" to target.absolutePath)
+            }
+        } catch (_: Exception) {
+            target.delete()
+            mapOf("success" to false)
+        }
+    }
+
+    /**
+     * Deletes a throwaway preview, refusing any path outside the cache folder.
+     *
+     * The path arrives back over a method channel, so it is confined to
+     * [previewDirectory] before anything is deleted — the same shape of guard
+     * as [deletePrivate]'s id check, so a preview release can never become an
+     * arbitrary-file delete.
+     */
+    fun releasePreview(path: String): Map<String, Any> {
+        val file = File(path)
+        val root = previewDirectory()
+        val within = try {
+            file.canonicalPath.startsWith(root.canonicalPath + File.separator)
+        } catch (_: Exception) {
+            false
+        }
+        if (within && file.isFile) file.delete()
+        return mapOf("success" to true)
+    }
+
+    private fun previewDirectory(): File = File(context.cacheDir, "previews")
 
     private fun privateDirectory(): File = File(context.filesDir, "wallpapers")
 

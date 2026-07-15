@@ -7,13 +7,17 @@ import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
+import 'package:tela/features/browse/gallery_paging_bridge.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
+import 'package:tela/features/detail/wallpaper_gallery_session.dart';
 import 'package:tela/features/settings/blocked_tags_providers.dart';
 
 /// An infinite, masonry-packed grid of wallpapers for one [query].
@@ -22,10 +26,17 @@ import 'package:tela/features/settings/blocked_tags_providers.dart';
 /// its position when you switch away and back.
 class WallpaperGrid extends ConsumerStatefulWidget {
   /// Creates a grid showing results for [query].
-  const WallpaperGrid({required this.query, super.key});
+  const WallpaperGrid({
+    required this.query,
+    this.galleryIdentity = 'browse',
+    super.key,
+  });
 
   /// The listing to show. Page number is managed by the grid, not the caller.
   final SearchQuery query;
+
+  /// Stable shelf kind used to distinguish Browse from linked listings.
+  final String galleryIdentity;
 
   @override
   ConsumerState<WallpaperGrid> createState() => _WallpaperGridState();
@@ -33,6 +44,7 @@ class WallpaperGrid extends ConsumerStatefulWidget {
 
 class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
   late final PagingController<int, Wallpaper> _paging;
+  late final GalleryPagingBridge _bridge;
 
   /// The most recent page, kept so the next fetch can inherit its shuffle seed.
   WallpaperPage? _lastPage;
@@ -44,6 +56,7 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
       getNextPageKey: _nextPageKey,
       fetchPage: _fetchPage,
     );
+    _bridge = GalleryPagingBridge(_paging);
   }
 
   /// Reloads from page 1 when the term or the filters change.
@@ -145,20 +158,26 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     NextPageCallback fetchNextPage,
   ) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final List<Wallpaper> loaded = state.items ?? const <Wallpaper>[];
+    final String identity = wallpaperListingIdentity(
+      widget.galleryIdentity,
+      widget.query,
+    );
     return RefreshIndicator(
       onRefresh: () async => _retry(),
       child: PagedMasonryGridView<int, Wallpaper>.count(
         state: state,
         fetchNextPage: fetchNextPage,
         crossAxisCount: wallpaperGridColumns(context),
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        padding: const EdgeInsets.all(12),
+        mainAxisSpacing: wallpaperGridSpacing,
+        crossAxisSpacing: wallpaperGridSpacing,
+        padding: wallpaperGridPadding(context),
         builderDelegate: PagedChildBuilderDelegate<Wallpaper>(
           itemBuilder: (BuildContext context, Wallpaper wallpaper, int index) =>
               WallpaperTile(
                 wallpaper: wallpaper,
-                onTap: () => _openDetail(context, wallpaper),
+                heroTag: shelfHeroTag(identity, wallpaper.id, index),
+                onTap: () => _openDetail(context, loaded, index),
               ),
           firstPageErrorIndicatorBuilder: (BuildContext context) =>
               _failure(l10n, state.error),
@@ -182,13 +201,42 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     );
   }
 
-  void _openDetail(BuildContext context, Wallpaper wallpaper) {
-    unawaited(
-      context.pushNamed(
-        TelaRoutes.detailName,
-        pathParameters: <String, String>{'wallpaperId': wallpaper.id},
-        extra: wallpaper,
+  void _openDetail(
+    BuildContext context,
+    List<Wallpaper> loaded,
+    int selectedIndex,
+  ) {
+    unawaited(_pushDetail(context, loaded, selectedIndex));
+  }
+
+  Future<void> _pushDetail(
+    BuildContext context,
+    List<Wallpaper> loaded,
+    int selectedIndex,
+  ) async {
+    // `late` so the request-more seam can hand the bridge the very session it
+    // belongs to; the closure only runs once the viewer nears the loaded end.
+    late final GallerySessionController<Wallpaper> session;
+    session = createWallpaperGallerySession(
+      context: context,
+      identity: wallpaperListingIdentity(
+        widget.galleryIdentity,
+        widget.query,
       ),
+      wallpapers: loaded,
+      initialIndex: selectedIndex,
+      requestMore: () => _bridge.appendNextPageInto(session),
     );
+    try {
+      await context.pushNamed<void>(
+        TelaRoutes.detailName,
+        pathParameters: <String, String>{
+          'wallpaperId': session.selectedItem.id,
+        },
+        extra: session,
+      );
+    } finally {
+      session.dispose();
+    }
   }
 }
