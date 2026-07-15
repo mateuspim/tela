@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +25,42 @@ import '../fakes/fake_wallhaven_api.dart';
 import '../fakes/fake_wallpaper_sharer.dart';
 
 void main() {
+  testWidgets(
+    'uses an uncropped thumbnail in the same frame as the full image',
+    (WidgetTester tester) async {
+      final WallpaperDetails details = _details();
+      await _pumpDetail(tester, details);
+
+      final List<CachedNetworkImage> layers = tester
+          .widgetList<CachedNetworkImage>(find.byType(CachedNetworkImage))
+          .where(
+            (CachedNetworkImage image) =>
+                image.imageUrl == details.wallpaper.thumbOriginalUrl ||
+                image.imageUrl == details.wallpaper.fullImageUrl,
+          )
+          .toList();
+
+      expect(
+        layers.map((CachedNetworkImage image) => image.imageUrl),
+        <String>[
+          details.wallpaper.thumbOriginalUrl,
+          details.wallpaper.fullImageUrl,
+        ],
+      );
+      expect(
+        find.byWidgetPredicate(
+          (Widget widget) =>
+              widget is CachedNetworkImage &&
+              widget.imageUrl == details.wallpaper.thumbLargeUrl,
+        ),
+        findsNothing,
+      );
+      final Finder previewLayer = find.byWidget(layers.first);
+      final Finder fullLayer = find.byWidget(layers.last);
+      expect(tester.getSize(previewLayer), tester.getSize(fullLayer));
+    },
+  );
+
   testWidgets('offers a distraction-free preview and a clear way back', (
     WidgetTester tester,
   ) async {

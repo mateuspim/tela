@@ -1,0 +1,119 @@
+import 'package:flutter/material.dart';
+
+/// The display-sized request a [GalleryImageSource] receives from a viewport.
+@immutable
+class GalleryImageRequest {
+  /// Creates a request for an image fitted inside a viewport.
+  const GalleryImageRequest({
+    required this.logicalSize,
+    required this.devicePixelRatio,
+  });
+
+  /// The exact logical size of the contained image frame.
+  final Size logicalSize;
+
+  /// The display density used to choose bounded decode dimensions.
+  final double devicePixelRatio;
+}
+
+/// Supplies pixels to [GalleryViewport] without owning its zoom or geometry.
+abstract interface class GalleryImageSource {
+  /// Builds pixels constrained to [request]'s aspect-ratio-correct frame.
+  Widget build(BuildContext context, GalleryImageRequest request);
+}
+
+/// A reusable, zoomable image canvas that never crops its source by default.
+///
+/// The viewport computes one contained frame from [aspectRatio]. Every loading
+/// and final image supplied by [source] occupies that same frame, so a
+/// progressive preview cannot expose a differently cropped composition around
+/// the final image.
+class GalleryViewport extends StatelessWidget {
+  /// Creates a contained gallery viewport.
+  const GalleryViewport({
+    required this.aspectRatio,
+    required this.semanticsLabel,
+    required this.source,
+    this.transformationController,
+    this.backgroundColor = Colors.black,
+    this.maxScale = 4,
+    super.key,
+  })  : assert(aspectRatio > 0, 'aspectRatio must be positive'),
+        assert(maxScale >= 1, 'maxScale must include the fitted scale');
+
+  /// The uncropped source width divided by its height.
+  final double aspectRatio;
+
+  /// The screen-reader description for the image.
+  final String semanticsLabel;
+
+  /// The pixels rendered inside the aspect-ratio-correct frame.
+  final GalleryImageSource source;
+
+  /// Optional zoom controller, exposed for viewer chrome and reset controls.
+  final TransformationController? transformationController;
+
+  /// The calm canvas shown around an image that does not fill both axes.
+  final Color backgroundColor;
+
+  /// The largest pinch-zoom scale allowed by the viewport.
+  final double maxScale;
+
+  /// Stable hook for geometry regression tests.
+  static const Key imageFrameKey = Key('gallery-viewport-image-frame');
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      image: true,
+      label: semanticsLabel,
+      child: ColoredBox(
+        color: backgroundColor,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final Size viewportSize = constraints.biggest;
+            final Size imageSize = containedImageSize(
+              viewportSize: viewportSize,
+              aspectRatio: aspectRatio,
+            );
+            final GalleryImageRequest request = GalleryImageRequest(
+              logicalSize: imageSize,
+              devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+            );
+            return InteractiveViewer(
+              transformationController: transformationController,
+              maxScale: maxScale,
+              child: SizedBox.fromSize(
+                size: viewportSize,
+                child: Center(
+                  child: SizedBox.fromSize(
+                    key: imageFrameKey,
+                    size: imageSize,
+                    child: source.build(context, request),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// Returns the largest uncropped [aspectRatio] frame inside [viewportSize].
+Size containedImageSize({
+  required Size viewportSize,
+  required double aspectRatio,
+}) {
+  if (!aspectRatio.isFinite || aspectRatio <= 0) {
+    throw ArgumentError.value(aspectRatio, 'aspectRatio', 'must be positive');
+  }
+  if (viewportSize.isEmpty) return Size.zero;
+
+  final double viewportRatio = viewportSize.width / viewportSize.height;
+  if (aspectRatio >= viewportRatio) {
+    return Size(viewportSize.width, viewportSize.width / aspectRatio);
+  }
+  return Size(viewportSize.height * aspectRatio, viewportSize.height);
+}

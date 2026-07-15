@@ -2,6 +2,68 @@
 
 Updated: 2026-07-15
 
+## CURRENT CHECKPOINT — image viewer UX slice 1 complete
+
+The staged implementation is now underway on branch `image-viewer-ux` in the
+existing `.worktrees/image-viewer-ux` worktree. **Continue there; do not create
+another worktree and do not work in `master`.** The broader product contract
+below remains authoritative, but only take the next bounded slice described
+here.
+
+Slice 1 established the shared, honest image viewport:
+
+- `core/ui/gallery_viewport.dart` owns contain geometry, the black canvas,
+  image semantics, display-sized decode requests, and the shared
+  `InteractiveViewer` seam.
+- `core/ui/progressive_network_gallery_source.dart` owns progressive network
+  loading. Its preview and final layers occupy the exact same contained frame,
+  the final layer fades only when animations are enabled, a failed final image
+  leaves the thumbnail fallback visible, and a failed thumbnail has a safe
+  broken-image state.
+- `ProgressiveWallpaperPreview` is now only the Wallhaven adapter. It uses
+  `thumbOriginalUrl`, never the differently cropped `thumbLargeUrl`, and Detail
+  uses the shared viewport in both its normal and current fullscreen surfaces.
+- Regression coverage pins landscape, portrait, square, extreme portrait,
+  orientation changes, identical progressive geometry, bounded decode sizes,
+  reduced motion, failure fallback, and semantics.
+
+Verification completed for this slice:
+
+```bash
+./tool/tela analyze
+./tool/tela test
+```
+
+Both pass; the full suite currently has 404 tests.
+
+### NEXT SLICE ONLY — immersive Detail fullscreen and zoom controls
+
+Turn Detail's current in-widget fullscreen branch into a reusable immersive
+viewer surface in `core/ui`, still for the current single wallpaper. Do not add
+universal gallery sessions, Browse pagination, History, or Private viewing in
+this slice; those remain subsequent checkpoints.
+
+The next slice must:
+
+1. Factor testable fitted/zoomed state around `TransformationController` and
+   connect it to `GalleryViewport` without duplicating image rendering.
+2. Enter Android immersive fullscreen, hide app and system chrome, and restore
+   the app's normal system-UI mode on every exit path, including Back and
+   disposal.
+3. Add tap-to-toggle controls, an obvious 48dp Close control, pinch/pan, and an
+   accessible double-tap zoom/reset path. Provide a visible reset affordance or
+   equivalent screen-reader action; gestures cannot be the only route.
+4. Keep the same selected wallpaper and recompute contain geometry after an
+   orientation change. Back must leave fullscreen first, not pop Detail.
+5. Make chrome and zoom transitions instant when `disableAnimations` is true.
+6. Add focused tests for zoom/reset state, double tap, chrome toggling, Back,
+   reduced motion, semantics/targets, and system-chrome restoration. Mock the
+   platform channel or put system UI behind a small project-owned seam so tests
+   do not depend on a device.
+
+End that slice with format, analyze, the full test suite, a dedicated commit,
+and another concise checkpoint update here.
+
 ## START HERE — immersive image viewing and the next UI/UX pass
 
 This is the next agent's task. Start from clean `master`; its implementation
