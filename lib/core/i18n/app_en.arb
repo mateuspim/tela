@@ -582,6 +582,36 @@
   "detailTags": "Tags",
   "detailNotProvided": "Not provided",
 
+  "detailTagBlockTitle": "Block this tag?",
+  "@detailTagBlockTitle": {
+    "description": "Title of the confirmation dialog shown on long-pressing a tag chip in the detail screen's tag list."
+  },
+
+  "detailTagBlockBody": "You won't see wallpapers tagged \"{name}\" in search results anymore. Unblock it any time from Settings.",
+  "@detailTagBlockBody": {
+    "description": "Body of the block-tag confirmation dialog. Says plainly what the block does and that it can be undone, the same wording discipline as the download-history removal dialog.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+
+  "detailTagBlock": "Block",
+  "@detailTagBlock": {
+    "description": "Confirm button on the block-tag dialog."
+  },
+
+  "detailTagBlocked": "Blocked \"{name}\". You won't see it in search results anymore.",
+  "@detailTagBlocked": {
+    "description": "Snackbar shown after a tag is blocked from the detail screen.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+
   "colorSwatchLabel": "Color {color}",
   "@colorSwatchLabel": {
     "description": "Accessibility label for one colour swatch, on the detail screen and in the filter sheet. Reads out the hex, which is the only name these colours have.",
@@ -655,6 +685,31 @@
   "settingsBrowseDefaultsDescription": "Choose where tela gets the filters it opens with.",
   "@settingsBrowseDefaultsDescription": {
     "description": "Explanation under the browse-defaults settings heading."
+  },
+
+  "blockedTagsTitle": "Blocked tags",
+  "@blockedTagsTitle": {
+    "description": "Title of the settings entry and the screen it opens, listing every tag blocked from the detail screen."
+  },
+
+  "blockedTagsOpenDetail": "Tags hidden from every search, wherever you blocked them.",
+  "@blockedTagsOpenDetail": {
+    "description": "Subtitle of the settings entry that opens the blocked-tags screen."
+  },
+
+  "blockedTagsEmpty": "No tags blocked yet. Long-press a tag on any wallpaper's detail screen to hide it from your searches.",
+  "@blockedTagsEmpty": {
+    "description": "Shown when the blocklist is empty, and teaches the long-press gesture that is the only way to add to it."
+  },
+
+  "blockedTagsUnblock": "Unblock {name}",
+  "@blockedTagsUnblock": {
+    "description": "Accessibility label and tooltip for the action that removes one tag from the blocklist.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
 
   "browseDefaultsAccount": "Wallhaven account",

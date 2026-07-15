@@ -41,4 +41,10 @@ abstract final class TelaRoutes {
 
   /// Download history route name.
   static const String downloadHistoryName = 'download-history';
+
+  /// Blocked-tags management path.
+  static const String blockedTagsPath = '/blocked-tags';
+
+  /// Blocked-tags management route name.
+  static const String blockedTagsName = 'blocked-tags';
 }

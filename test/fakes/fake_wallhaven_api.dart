@@ -13,10 +13,22 @@ import 'package:tela/domain/ports/wallhaven_api.dart';
 /// the use case *built*, which is where the seed and paging bugs live.
 class FakeWallhavenApi implements WallhavenApi {
   /// Creates a fake that answers every search with [page], or throws [failure].
-  FakeWallhavenApi({this.page, this.details, this.account, this.failure});
+  FakeWallhavenApi({
+    this.page,
+    this.pageFor,
+    this.details,
+    this.account,
+    this.failure,
+  });
 
   /// The page every [search] returns, unless [failure] is set.
   final WallpaperPage? page;
+
+  /// Answers each [search] from the query itself rather than a fixed [page] —
+  /// what a test reaches for when the *same* fake must answer differently
+  /// before and after a filter changes, such as a tag going from allowed to
+  /// blocked mid-test. Takes precedence over [page] when both are set.
+  final WallpaperPage Function(SearchQuery query)? pageFor;
 
   /// The detail response returned for every wallpaper id.
   final WallpaperDetails? details;
@@ -42,6 +54,8 @@ class FakeWallhavenApi implements WallhavenApi {
     receivedQueries.add(query);
     final WallhavenFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
+    final WallpaperPage Function(SearchQuery query)? answerWith = pageFor;
+    if (answerWith != null) return answerWith(query);
     return page ??
         const WallpaperPage(
           wallpapers: <Wallpaper>[],

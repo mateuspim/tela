@@ -1370,7 +1370,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
   /// Dominant colours, comma-joined in Wallhaven's order.
   final String colors;
 
-  /// [StorageTier] name of the destination it actually landed in.
+  /// `StorageTier` name of the destination it actually landed in.
   final String tier;
 
   /// The file's URI: MediaStore content, a SAF document, or a local file.
@@ -1805,6 +1805,258 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
   }
 }
 
+class $BlockedTagsTable extends BlockedTags
+    with TableInfo<$BlockedTagsTable, BlockedTagRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BlockedTagsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _blockedAtMeta = const VerificationMeta(
+    'blockedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> blockedAt = GeneratedColumn<DateTime>(
+    'blocked_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, name, blockedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'blocked_tags';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BlockedTagRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('blocked_at')) {
+      context.handle(
+        _blockedAtMeta,
+        blockedAt.isAcceptableOrUnknown(data['blocked_at']!, _blockedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_blockedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  BlockedTagRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BlockedTagRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      blockedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}blocked_at'],
+      )!,
+    );
+  }
+
+  @override
+  $BlockedTagsTable createAlias(String alias) {
+    return $BlockedTagsTable(attachedDatabase, alias);
+  }
+}
+
+class BlockedTagRow extends DataClass implements Insertable<BlockedTagRow> {
+  /// Wallhaven's numeric tag id — what the `-id:{n}` operator actually
+  /// excludes.
+  final int id;
+
+  /// Display name, kept only so the management screen can show what was
+  /// blocked without a network call.
+  final String name;
+
+  /// When it was blocked. Orders the management screen, newest first.
+  final DateTime blockedAt;
+  const BlockedTagRow({
+    required this.id,
+    required this.name,
+    required this.blockedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['blocked_at'] = Variable<DateTime>(blockedAt);
+    return map;
+  }
+
+  BlockedTagsCompanion toCompanion(bool nullToAbsent) {
+    return BlockedTagsCompanion(
+      id: Value(id),
+      name: Value(name),
+      blockedAt: Value(blockedAt),
+    );
+  }
+
+  factory BlockedTagRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BlockedTagRow(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      blockedAt: serializer.fromJson<DateTime>(json['blockedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'blockedAt': serializer.toJson<DateTime>(blockedAt),
+    };
+  }
+
+  BlockedTagRow copyWith({int? id, String? name, DateTime? blockedAt}) =>
+      BlockedTagRow(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        blockedAt: blockedAt ?? this.blockedAt,
+      );
+  BlockedTagRow copyWithCompanion(BlockedTagsCompanion data) {
+    return BlockedTagRow(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      blockedAt: data.blockedAt.present ? data.blockedAt.value : this.blockedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BlockedTagRow(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('blockedAt: $blockedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, blockedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BlockedTagRow &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.blockedAt == this.blockedAt);
+}
+
+class BlockedTagsCompanion extends UpdateCompanion<BlockedTagRow> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<DateTime> blockedAt;
+  const BlockedTagsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.blockedAt = const Value.absent(),
+  });
+  BlockedTagsCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required DateTime blockedAt,
+  }) : name = Value(name),
+       blockedAt = Value(blockedAt);
+  static Insertable<BlockedTagRow> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<DateTime>? blockedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (blockedAt != null) 'blocked_at': blockedAt,
+    });
+  }
+
+  BlockedTagsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? name,
+    Value<DateTime>? blockedAt,
+  }) {
+    return BlockedTagsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      blockedAt: blockedAt ?? this.blockedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (blockedAt.present) {
+      map['blocked_at'] = Variable<DateTime>(blockedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BlockedTagsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('blockedAt: $blockedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$TelaDatabase extends GeneratedDatabase {
   _$TelaDatabase(QueryExecutor e) : super(e);
   $TelaDatabaseManager get managers => $TelaDatabaseManager(this);
@@ -1813,6 +2065,7 @@ abstract class _$TelaDatabase extends GeneratedDatabase {
       $FavoriteWallpapersTable(this);
   late final $DownloadedWallpapersTable downloadedWallpapers =
       $DownloadedWallpapersTable(this);
+  late final $BlockedTagsTable blockedTags = $BlockedTagsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1821,6 +2074,7 @@ abstract class _$TelaDatabase extends GeneratedDatabase {
     settingEntries,
     favoriteWallpapers,
     downloadedWallpapers,
+    blockedTags,
   ];
 }
 
@@ -2713,6 +2967,162 @@ typedef $$DownloadedWallpapersTableProcessedTableManager =
       DownloadRow,
       PrefetchHooks Function()
     >;
+typedef $$BlockedTagsTableCreateCompanionBuilder =
+    BlockedTagsCompanion Function({
+      Value<int> id,
+      required String name,
+      required DateTime blockedAt,
+    });
+typedef $$BlockedTagsTableUpdateCompanionBuilder =
+    BlockedTagsCompanion Function({
+      Value<int> id,
+      Value<String> name,
+      Value<DateTime> blockedAt,
+    });
+
+class $$BlockedTagsTableFilterComposer
+    extends Composer<_$TelaDatabase, $BlockedTagsTable> {
+  $$BlockedTagsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get blockedAt => $composableBuilder(
+    column: $table.blockedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BlockedTagsTableOrderingComposer
+    extends Composer<_$TelaDatabase, $BlockedTagsTable> {
+  $$BlockedTagsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get blockedAt => $composableBuilder(
+    column: $table.blockedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BlockedTagsTableAnnotationComposer
+    extends Composer<_$TelaDatabase, $BlockedTagsTable> {
+  $$BlockedTagsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get blockedAt =>
+      $composableBuilder(column: $table.blockedAt, builder: (column) => column);
+}
+
+class $$BlockedTagsTableTableManager
+    extends
+        RootTableManager<
+          _$TelaDatabase,
+          $BlockedTagsTable,
+          BlockedTagRow,
+          $$BlockedTagsTableFilterComposer,
+          $$BlockedTagsTableOrderingComposer,
+          $$BlockedTagsTableAnnotationComposer,
+          $$BlockedTagsTableCreateCompanionBuilder,
+          $$BlockedTagsTableUpdateCompanionBuilder,
+          (
+            BlockedTagRow,
+            BaseReferences<_$TelaDatabase, $BlockedTagsTable, BlockedTagRow>,
+          ),
+          BlockedTagRow,
+          PrefetchHooks Function()
+        > {
+  $$BlockedTagsTableTableManager(_$TelaDatabase db, $BlockedTagsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BlockedTagsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BlockedTagsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BlockedTagsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<DateTime> blockedAt = const Value.absent(),
+              }) => BlockedTagsCompanion(
+                id: id,
+                name: name,
+                blockedAt: blockedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String name,
+                required DateTime blockedAt,
+              }) => BlockedTagsCompanion.insert(
+                id: id,
+                name: name,
+                blockedAt: blockedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BlockedTagsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$TelaDatabase,
+      $BlockedTagsTable,
+      BlockedTagRow,
+      $$BlockedTagsTableFilterComposer,
+      $$BlockedTagsTableOrderingComposer,
+      $$BlockedTagsTableAnnotationComposer,
+      $$BlockedTagsTableCreateCompanionBuilder,
+      $$BlockedTagsTableUpdateCompanionBuilder,
+      (
+        BlockedTagRow,
+        BaseReferences<_$TelaDatabase, $BlockedTagsTable, BlockedTagRow>,
+      ),
+      BlockedTagRow,
+      PrefetchHooks Function()
+    >;
 
 class $TelaDatabaseManager {
   final _$TelaDatabase _db;
@@ -2723,4 +3133,6 @@ class $TelaDatabaseManager {
       $$FavoriteWallpapersTableTableManager(_db, _db.favoriteWallpapers);
   $$DownloadedWallpapersTableTableManager get downloadedWallpapers =>
       $$DownloadedWallpapersTableTableManager(_db, _db.downloadedWallpapers);
+  $$BlockedTagsTableTableManager get blockedTags =>
+      $$BlockedTagsTableTableManager(_db, _db.blockedTags);
 }

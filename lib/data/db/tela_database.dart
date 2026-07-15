@@ -97,6 +97,25 @@ class DownloadedWallpapers extends Table with WallpaperColumns {
   DateTimeColumn get downloadedAt => dateTime()();
 }
 
+/// One tag the user never wants to see again, kept by id so a rename upstream
+/// cannot slip a blocked tag back into a listing.
+@DataClassName('BlockedTagRow')
+class BlockedTags extends Table {
+  /// Wallhaven's numeric tag id — what the `-id:{n}` operator actually
+  /// excludes.
+  IntColumn get id => integer()();
+
+  /// Display name, kept only so the management screen can show what was
+  /// blocked without a network call.
+  TextColumn get name => text()();
+
+  /// When it was blocked. Orders the management screen, newest first.
+  DateTimeColumn get blockedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+}
+
 /// tela's local database: the one SQLite connection the app opens.
 ///
 /// Adapters in `data/` own the meaning of what they store; features never see
@@ -106,7 +125,12 @@ class DownloadedWallpapers extends Table with WallpaperColumns {
 /// final TelaDatabase db = TelaDatabase.open();
 /// ```
 @DriftDatabase(
-  tables: <Type>[SettingEntries, FavoriteWallpapers, DownloadedWallpapers],
+  tables: <Type>[
+    SettingEntries,
+    FavoriteWallpapers,
+    DownloadedWallpapers,
+    BlockedTags,
+  ],
 )
 class TelaDatabase extends _$TelaDatabase {
   /// Wraps an existing connection — the seam tests use for an in-memory one.
@@ -118,13 +142,14 @@ class TelaDatabase extends _$TelaDatabase {
   }
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   /// Adds tables to an existing database instead of recreating it.
   ///
-  /// The settings table shipped at v1 with real user choices in it, and
-  /// favorites at v2. A downloads table arriving at v3 must not cost anyone
-  /// either — each version only ever adds what the one before it lacked.
+  /// The settings table shipped at v1 with real user choices in it, favorites
+  /// at v2, and downloads at v3. A blocked-tags table arriving at v4 must not
+  /// cost anyone either — each version only ever adds what the one before it
+  /// lacked.
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
@@ -132,6 +157,7 @@ class TelaDatabase extends _$TelaDatabase {
       onUpgrade: (Migrator m, int from, int to) async {
         if (from < 2) await m.createTable(favoriteWallpapers);
         if (from < 3) await m.createTable(downloadedWallpapers);
+        if (from < 4) await m.createTable(blockedTags);
       },
     );
   }
@@ -188,6 +214,28 @@ class TelaDatabase extends _$TelaDatabase {
     final DeleteStatement<$FavoriteWallpapersTable, FavoriteRow> statement =
         delete(favoriteWallpapers)
           ..where(($FavoriteWallpapersTable row) => row.id.equals(id));
+    return statement.go();
+  }
+
+  /// Every blocked tag, most recently blocked first.
+  Future<List<BlockedTagRow>> blockedTagRows() {
+    final SimpleSelectStatement<$BlockedTagsTable, BlockedTagRow> query =
+        select(blockedTags)..orderBy(<OrderClauseGenerator<$BlockedTagsTable>>[
+          ($BlockedTagsTable row) => OrderingTerm.desc(row.blockedAt),
+        ]);
+    return query.get();
+  }
+
+  /// Writes one blocked tag, replacing any earlier block of the same id.
+  Future<void> putBlockedTag(BlockedTagsCompanion row) {
+    return into(blockedTags).insertOnConflictUpdate(row);
+  }
+
+  /// Unblocks one tag. A no-op when [id] was never blocked.
+  Future<void> deleteBlockedTag(int id) {
+    final DeleteStatement<$BlockedTagsTable, BlockedTagRow> statement = delete(
+      blockedTags,
+    )..where(($BlockedTagsTable row) => row.id.equals(id));
     return statement.go();
   }
 

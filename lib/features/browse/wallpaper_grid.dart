@@ -11,8 +11,10 @@ import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
+import 'package:tela/features/settings/blocked_tags_providers.dart';
 
 /// An infinite, masonry-packed grid of wallpapers for one [query].
 ///
@@ -92,9 +94,48 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AsyncValue<List<WallpaperTag>>>(
+      blockedTagsProvider,
+      (
+        AsyncValue<List<WallpaperTag>>? previous,
+        AsyncValue<List<WallpaperTag>> next,
+      ) {
+        if (next.hasValue) unawaited(_reapplyBlocklist());
+      },
+    );
     return PagingListener<int, Wallpaper>(
       controller: _paging,
       builder: _grid,
+    );
+  }
+
+  /// Re-fetches every page already on screen, in place, after a block or
+  /// unblock — without going through [_retry]'s full reset.
+  ///
+  /// [_retry] clears the paging state and re-shows the loading indicator,
+  /// which would yank the user back to the top of a listing they were mid-way
+  /// through just for blocking one tag. This instead swaps each loaded page's
+  /// *contents* for a freshly filtered fetch of the same page, leaving the
+  /// scroll position exactly where it was — the wallpapers under the user's
+  /// thumb may shift as blocked ones drop out, but the list itself doesn't
+  /// jump. A page the user hasn't scrolled to yet already gets the current
+  /// blocklist for free, since every fetch reads it fresh.
+  Future<void> _reapplyBlocklist() async {
+    final List<int>? keys = _paging.value.keys;
+    if (keys == null || keys.isEmpty) return;
+    final search = ref.read(searchWallpapersProvider);
+    // Reuses the pinned shuffle seed, or a random listing would reroll on
+    // every block instead of quietly re-filtering the one it already has.
+    final SearchQuery base = widget.query.copyWith(seed: _lastPage?.seed);
+    final List<WallpaperPage> pages = await Future.wait(
+      keys.map((int key) => search(base.atPage(key))),
+    );
+    if (!mounted) return;
+    _lastPage = pages.last;
+    _paging.value = _paging.value.copyWith(
+      pages: <List<Wallpaper>>[
+        for (final WallpaperPage page in pages) page.wallpapers,
+      ],
     );
   }
 

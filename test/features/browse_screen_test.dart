@@ -16,13 +16,16 @@ import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
+import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/browse_screen.dart';
 import 'package:tela/features/browse/filter_sheet.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
+import 'package:tela/features/settings/blocked_tags_providers.dart';
 
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
+import '../fakes/fake_tag_blocklist_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
 
 Wallpaper _wallpaper(String id) => Wallpaper(
@@ -57,6 +60,11 @@ Future<void> _pumpBrowse(
         settingsRepositoryProvider.overrideWithValue(
           settings ?? FakeSettingsRepository(),
         ),
+        // Every search now reads the standing blocklist. Left unbound, it
+        // opens the real database.
+        tagBlocklistRepositoryProvider.overrideWithValue(
+          FakeTagBlocklistRepository(),
+        ),
       ],
       child: const MaterialApp(
         localizationsDelegates: <LocalizationsDelegate<Object>>[
@@ -73,6 +81,43 @@ Future<void> _pumpBrowse(
   // reach a quiescent frame in a test binding.
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
+}
+
+/// Boots BrowseScreen over an explicit [ProviderContainer], so a test can
+/// reach behind the widget tree to mutate [blocklist] and invalidate
+/// [blockedTagsProvider] the same way blocking a tag from the detail screen
+/// does.
+Future<ProviderContainer> _pumpBrowseWithContainer(
+  WidgetTester tester,
+  FakeWallhavenApi api,
+  FakeTagBlocklistRepository blocklist,
+) async {
+  final ProviderContainer container = ProviderContainer(
+    overrides: <Override>[
+      wallhavenApiProvider.overrideWithValue(api),
+      secretStoreProvider.overrideWithValue(FakeSecretStore()),
+      settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+      tagBlocklistRepositoryProvider.overrideWithValue(blocklist),
+    ],
+  );
+  addTearDown(container.dispose);
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        localizationsDelegates: <LocalizationsDelegate<Object>>[
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: BrowseScreen(),
+      ),
+    ),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+  return container;
 }
 
 void main() {
@@ -214,7 +259,7 @@ void main() {
 
     // The tag rides in `q` beside the term the user typed, not in place of it —
     // this is the first filter tela builds a Wallhaven operator for.
-    expect(SearchQueryFacts(api.receivedQueries.last).q, 'sunset +nature');
+    expect(SearchQueryFacts(api.receivedQueries.last).q, 'sunset +"nature"');
   });
 
   testWidgets('most viewed and most favorited are reachable listings', (
@@ -576,6 +621,45 @@ void main() {
     expect(atLeast.atLeast, '1440x2560');
     expect(atLeast.resolutions, isNull);
   });
+
+  testWidgets(
+    'blocking a tag silently re-fetches the grid already on screen',
+    (WidgetTester tester) async {
+      final FakeWallhavenApi api = FakeWallhavenApi(
+        pageFor: (SearchQuery query) => query.blockedTagNames.isEmpty
+            ? WallpaperPage(
+                wallpapers: <Wallpaper>[
+                  _wallpaper('aaa111'),
+                  _wallpaper('bbb222'),
+                ],
+                currentPage: 1,
+                lastPage: 1,
+              )
+            : WallpaperPage(
+                wallpapers: <Wallpaper>[_wallpaper('aaa111')],
+                currentPage: 1,
+                lastPage: 1,
+              ),
+      );
+      final FakeTagBlocklistRepository blocklist = FakeTagBlocklistRepository();
+      final ProviderContainer container = await _pumpBrowseWithContainer(
+        tester,
+        api,
+        blocklist,
+      );
+
+      expect(find.byType(WallpaperTile), findsNWidgets(2));
+
+      await blocklist.block(const WallpaperTag(id: 9, name: 'spoilers'));
+      container.invalidate(blockedTagsProvider);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // The grid re-fetched in place — no full-screen loading state, no
+      // navigation, just fewer tiles than a moment ago.
+      expect(find.byType(WallpaperTile), findsNWidgets(1));
+    },
+  );
 }
 
 /// Types [term] into the search field and submits it, as the keyboard would.

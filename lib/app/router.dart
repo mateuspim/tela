@@ -9,6 +9,7 @@ import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/downloads/download_history_screen.dart';
 import 'package:tela/features/favorites/favorites_screen.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
+import 'package:tela/features/settings/blocked_tags_screen.dart';
 import 'package:tela/features/settings/settings_screen.dart';
 
 /// The app's routes.
@@ -81,6 +82,11 @@ abstract final class TelaRouter {
           path: TelaRoutes.downloadHistoryPath,
           name: TelaRoutes.downloadHistoryName,
           builder: (_, _) => const DownloadHistoryScreen(),
+        ),
+        GoRoute(
+          path: TelaRoutes.blockedTagsPath,
+          name: TelaRoutes.blockedTagsName,
+          builder: (_, _) => const BlockedTagsScreen(),
         ),
       ],
     );

@@ -122,6 +122,7 @@ class SearchQuery {
     this.color,
     this.page = 1,
     this.seed,
+    this.blockedTagNames = const <String>{},
   });
 
   /// Free-text search, including Wallhaven's operators (`+tag`, `-tag`,
@@ -174,6 +175,21 @@ class SearchQuery {
   /// duplicates. Meaningless for every other sorting.
   final String? seed;
 
+  /// Tag names folded into `q` as Wallhaven's `-name` exclude operator, beside
+  /// [tags] and [term].
+  ///
+  /// Names, not ids: Wallhaven's exact `id:{n}` operator has no exclude side
+  /// (`-id:{n}` is silently ignored, confirmed live 2026-07-15), so a blocked
+  /// tag can only ever reach Wallhaven the same fuzzy way a hand-typed
+  /// `-name` does.
+  ///
+  /// Not something a screen sets: the search use case is the one place that
+  /// fills this in, from the user's standing blocklist, right before the
+  /// request leaves the device — so every query is filtered the same way
+  /// whether it came from the search box, a tab, or a followed tag, and a
+  /// feature can never forget to ask for it.
+  final Set<String> blockedTagNames;
+
   /// Returns a copy with [page] replaced — the paging call, kept explicit so
   /// callers can't accidentally mutate the rest of the query while scrolling.
   SearchQuery atPage(int page) => copyWith(page: page);
@@ -214,6 +230,7 @@ class SearchQuery {
       color: color,
       page: page,
       seed: seed,
+      blockedTagNames: blockedTagNames,
     );
   }
 
@@ -234,6 +251,7 @@ class SearchQuery {
     WallpaperColor? color,
     int? page,
     String? seed,
+    Set<String>? blockedTagNames,
   }) {
     return SearchQuery(
       term: term ?? this.term,
@@ -248,6 +266,7 @@ class SearchQuery {
       color: color ?? this.color,
       page: page ?? this.page,
       seed: seed ?? this.seed,
+      blockedTagNames: blockedTagNames ?? this.blockedTagNames,
     );
   }
 
@@ -271,7 +290,8 @@ class SearchQuery {
         _sameElements(other.tags, tags) &&
         other.color == color &&
         other.page == page &&
-        other.seed == seed;
+        other.seed == seed &&
+        _sameElements(other.blockedTagNames, blockedTagNames);
   }
 
   @override
@@ -289,6 +309,7 @@ class SearchQuery {
       color,
       page,
       seed,
+      Object.hashAllUnordered(blockedTagNames),
     );
   }
 
@@ -306,15 +327,38 @@ class SearchQuery {
   /// Null rather than `''` on purpose — the same distinction [color] and
   /// [ratios] draw: an *absent* `q` is a browse, where an empty `q=` is a
   /// search for the empty string. `sunset` plus a `+nature` tag reads
-  /// `sunset +nature`; the tag alone reads `+nature`, which Wallhaven accepts
-  /// as a leading sign.
+  /// `sunset +"nature"`; the tag alone reads `+"nature"`, which Wallhaven
+  /// accepts as a leading sign.
+  ///
+  /// [term] goes out *alone*, with [tags] and [blockedTagNames] withheld,
+  /// when it is one of Wallhaven's two query-replacing operators — see
+  /// [_isExclusiveOperator].
   String? get _query {
+    if (_isExclusiveOperator) return term;
     final List<String> parts = <String>[
       if (term.isNotEmpty) term,
       for (final SearchTag tag in tags) tag.token,
+      // Same [SearchTag] encoding as [tags], not a hand-rolled `-$name`:
+      // Wallhaven needs the quotes a multi-word tag name requires, and this
+      // is the one place that already gets that right.
+      for (final String name in blockedTagNames)
+        SearchTag(name, TagSense.exclude).token,
     ];
     return parts.isEmpty ? null : parts.join(' ');
   }
+
+  /// Whether [term] is one of Wallhaven's two operators that *replace* the
+  /// whole query rather than compose with it.
+  ///
+  /// Confirmed live against Wallhaven, 2026-07-15: `id:{n}` and `like:{id}`
+  /// return **zero** results the instant anything else shares `q` with them —
+  /// a tag, a blocked tag's `-name`, even bare free text. `@user`, `+tag`,
+  /// `-tag`, and plain keywords all compose normally; only these two don't.
+  /// This is why following a tag chip (which searches `id:{n}`) went blank
+  /// the moment a single tag was blocked: the blocklist was silently turning
+  /// every exact-tag lookup into a self-contradicting, zero-result query.
+  bool get _isExclusiveOperator =>
+      term.startsWith('id:') || term.startsWith('like:');
 
   /// Encodes to Wallhaven's `/search` query params.
   ///

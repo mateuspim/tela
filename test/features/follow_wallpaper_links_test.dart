@@ -16,6 +16,7 @@ import 'package:tela/features/browse/wallpaper_tile.dart';
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
+import '../fakes/fake_tag_blocklist_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
 
 /// A wallpaper is a place you can navigate *from* — this is that path, end to
@@ -49,6 +50,34 @@ void main() {
     expect(api.receivedQueries.last.term, '@pym');
   });
 
+  testWidgets(
+    'a tag chip still finds results when a different tag is blocked',
+    (WidgetTester tester) async {
+      // Regression: Wallhaven returns *zero* results for `id:{n}` the moment
+      // anything else shares q with it, blocked tag or not. This used to
+      // silently turn every followed tag into a self-contradicting, blank
+      // listing as soon as the user had blocked a single, unrelated tag —
+      // confirmed live against Wallhaven, 2026-07-15.
+      final FakeWallhavenApi api = _api();
+      await _pumpDetail(
+        tester,
+        api,
+        blocklist: FakeTagBlocklistRepository(
+          initial: const <WallpaperTag>[
+            WallpaperTag(id: 99, name: 'unrelated'),
+          ],
+        ),
+      );
+
+      await _follow(tester, find.text('nature'));
+
+      expect(
+        api.receivedQueries.last.toQueryParameters()['q'],
+        'id:37',
+      );
+    },
+  );
+
   testWidgets('the browse tabs are left as they were', (
     WidgetTester tester,
   ) async {
@@ -71,14 +100,20 @@ void main() {
 /// Boots the whole app and taps through to one wallpaper's detail screen.
 Future<ProviderContainer> _pumpDetail(
   WidgetTester tester,
-  FakeWallhavenApi api,
-) async {
+  FakeWallhavenApi api, {
+  FakeTagBlocklistRepository? blocklist,
+}) async {
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
       wallhavenApiProvider.overrideWithValue(api),
       secretStoreProvider.overrideWithValue(FakeSecretStore()),
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
       favoritesRepositoryProvider.overrideWithValue(FakeFavoritesRepository()),
+      // Every search now reads the standing blocklist. Left unbound, it opens
+      // the real database.
+      tagBlocklistRepositoryProvider.overrideWithValue(
+        blocklist ?? FakeTagBlocklistRepository(),
+      ),
     ],
   );
   addTearDown(container.dispose);

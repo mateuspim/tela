@@ -126,7 +126,11 @@ class _SettingsList extends StatelessWidget {
       icon: Icons.tune,
       title: l10n.settingsBrowseDefaultsSection,
       description: l10n.settingsBrowseDefaultsDescription,
-      children: const <Widget>[BrowseDefaultsSection()],
+      children: const <Widget>[
+        BrowseDefaultsSection(),
+        Divider(),
+        _BlockedTagsTile(),
+      ],
     );
   }
 
@@ -205,6 +209,23 @@ class _PrivateLibraryTile extends StatelessWidget {
       subtitle: Text(l10n.privateLibraryOpenDetail),
       trailing: const Icon(Icons.chevron_right),
       onTap: () => context.pushNamed(TelaRoutes.privateLibraryName),
+    );
+  }
+}
+
+/// The way into the tags blocked from every search.
+class _BlockedTagsTile extends StatelessWidget {
+  const _BlockedTagsTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return ListTile(
+      leading: const Icon(Icons.label_off_outlined),
+      title: Text(l10n.blockedTagsTitle),
+      subtitle: Text(l10n.blockedTagsOpenDetail),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => context.pushNamed(TelaRoutes.blockedTagsName),
     );
   }
 }

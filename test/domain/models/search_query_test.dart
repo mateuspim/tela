@@ -148,7 +148,7 @@ void main() {
         ],
       ).toQueryParameters();
 
-      expect(params['q'], 'sunset +nature -people');
+      expect(params['q'], 'sunset +"nature" -"people"');
     });
 
     test('sends a tag-only q with no free-text term', () {
@@ -158,22 +158,68 @@ void main() {
         tags: <SearchTag>[SearchTag('nature')],
       ).toQueryParameters();
 
-      expect(params['q'], '+nature');
+      expect(params['q'], '+"nature"');
     });
 
-    test('leaves a hand-typed operator in the term untouched by the tags', () {
-      // The whole point of composing beside the term rather than parsing it:
-      // `like:123` reaches q verbatim, with the tag simply appended.
+    test('sends id: alone, withholding tags and the blocklist', () {
+      // Confirmed live against Wallhaven (2026-07-15): id:{n} returns *zero*
+      // results the moment anything else shares q with it — this is what
+      // made following a tag chip go blank the instant one tag was blocked.
+      final Map<String, String> params = const SearchQuery(
+        term: 'id:37',
+        tags: <SearchTag>[SearchTag('nature')],
+        blockedTagNames: <String>{'spoilers'},
+      ).toQueryParameters();
+
+      expect(params['q'], 'id:37');
+    });
+
+    test('sends like: alone, withholding tags and the blocklist', () {
+      // Same exclusive-operator rule as id:, confirmed live the same way.
       final Map<String, String> params = const SearchQuery(
         term: 'like:123',
         tags: <SearchTag>[SearchTag('nature')],
+        blockedTagNames: <String>{'spoilers'},
       ).toQueryParameters();
 
-      expect(params['q'], 'like:123 +nature');
+      expect(params['q'], 'like:123');
     });
 
     test('sends no q at all for a browse with no term and no tags', () {
       expect(const SearchQuery().toQueryParameters().containsKey('q'), isFalse);
+    });
+
+    test('folds the blocklist into q, as -name after the tags', () {
+      // Not -id:{n}: confirmed live against Wallhaven (2026-07-15) that the
+      // exact-id operator has no exclude side and is silently ignored, where
+      // -name genuinely filters.
+      final Map<String, String> params = const SearchQuery(
+        term: 'sunset',
+        tags: <SearchTag>[SearchTag('nature')],
+        blockedTagNames: <String>{'spoilers'},
+      ).toQueryParameters();
+
+      expect(params['q'], 'sunset +"nature" -"spoilers"');
+    });
+
+    test('sends a blocklist-only q with no term and no tags', () {
+      final Map<String, String> params = const SearchQuery(
+        blockedTagNames: <String>{'spoilers'},
+      ).toQueryParameters();
+
+      expect(params['q'], '-"spoilers"');
+    });
+
+    test('quotes a multi-word blocked tag name, not just single words', () {
+      // The bug this guards: unquoted, Wallhaven reads `-anime girls` as
+      // excluding "anime" *and* weakly matching the bare word "girls" —
+      // never as excluding the one tag. Two of those stacked crushed a real
+      // listing to near zero (found live, 2026-07-15).
+      final Map<String, String> params = const SearchQuery(
+        blockedTagNames: <String>{'anime girls'},
+      ).toQueryParameters();
+
+      expect(params['q'], '-"anime girls"');
     });
 
     test('sends no colour at all when none is chosen', () {
@@ -236,6 +282,10 @@ void main() {
         const SearchQuery(tags: <SearchTag>[SearchTag('nature')]),
         isNot(const SearchQuery()),
       );
+      expect(
+        const SearchQuery(blockedTagNames: <String>{'spoilers'}),
+        isNot(const SearchQuery()),
+      );
     });
 
     test('the same tags in a different order are the same listing', () {
@@ -248,6 +298,18 @@ void main() {
 
       // `+a +b` and `+b +a` are one Wallhaven request, so the grid must not
       // treat reordering them as a new listing and re-fetch.
+      expect(one, same);
+      expect(one.hashCode, same.hashCode);
+    });
+
+    test('the same blocklist in a different order is the same listing', () {
+      const SearchQuery one = SearchQuery(
+        blockedTagNames: <String>{'spoilers', 'gore'},
+      );
+      const SearchQuery same = SearchQuery(
+        blockedTagNames: <String>{'gore', 'spoilers'},
+      );
+
       expect(one, same);
       expect(one.hashCode, same.hashCode);
     });

@@ -28,6 +28,7 @@ import 'package:tela/domain/use_cases/share_wallpaper.dart';
 import 'package:tela/features/detail/progressive_wallpaper_preview.dart';
 import 'package:tela/features/detail/wallpaper_metadata.dart';
 import 'package:tela/features/favorites/favorite_button.dart';
+import 'package:tela/features/settings/blocked_tags_providers.dart';
 
 /// Loads complete metadata independently of the grid's fast listing response.
 final FutureProviderFamily<WallpaperDetails, String> wallpaperDetailsProvider =
@@ -180,6 +181,40 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Asks before blocking a tag — every future search silently excludes it,
+  /// which is not a thing to do on a single stray long press. Mirrors the
+  /// download-history "Remove from history?" dialog: say plainly what will
+  /// happen, and that it can be undone.
+  Future<void> _confirmBlockTag(WallpaperTag tag) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: Text(l10n.detailTagBlockTitle),
+        content: Text(l10n.detailTagBlockBody(tag.name)),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.actionCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.detailTagBlock),
+          ),
+        ],
+      ),
+    );
+    if (confirmed ?? false) await _blockTag(tag);
+  }
+
+  Future<void> _blockTag(WallpaperTag tag) async {
+    await ref.read(tagBlocklistRepositoryProvider).block(tag);
+    refreshBlockedTags(ref);
+    if (mounted) {
+      _showResult(AppLocalizations.of(context).detailTagBlocked(tag.name));
+    }
   }
 
   @override
@@ -343,8 +378,11 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     AppLocalizations l10n,
   ) {
     return details.when(
-      data: (WallpaperDetails value) =>
-          WallpaperMetadata(details: value, onFollow: _follow),
+      data: (WallpaperDetails value) => WallpaperMetadata(
+        details: value,
+        onFollow: _follow,
+        onBlockTag: _confirmBlockTag,
+      ),
       loading: () => const Padding(
         padding: EdgeInsets.all(24),
         child: Center(child: CircularProgressIndicator()),

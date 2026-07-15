@@ -13,6 +13,7 @@ class WallpaperMetadata extends StatelessWidget {
   const WallpaperMetadata({
     required this.details,
     required this.onFollow,
+    required this.onBlockTag,
     super.key,
   });
 
@@ -24,6 +25,12 @@ class WallpaperMetadata extends StatelessWidget {
   /// The panel does not navigate itself: the screen it sits on owns the routes,
   /// and a callback is what lets this widget be tested without one.
   final ValueChanged<WallpaperLink> onFollow;
+
+  /// Called with the tag the user long-pressed, asking to hide it everywhere.
+  ///
+  /// Same reasoning as [onFollow]: the confirmation dialog and the blocklist
+  /// write both belong to the screen, not to this presentational panel.
+  final ValueChanged<WallpaperTag> onBlockTag;
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +76,7 @@ class WallpaperMetadata extends StatelessWidget {
           const SizedBox(height: 16),
           Text(l10n.detailTags, style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
-          _Tags(tags: item.tags, onFollow: onFollow),
+          _Tags(tags: item.tags, onFollow: onFollow, onBlock: onBlockTag),
         ],
       ),
     );
@@ -251,12 +258,21 @@ class _Colors extends StatelessWidget {
 /// A wrapping list of tag chips, or a localized absence state.
 ///
 /// [ActionChip], not [Chip]: each one opens that tag's listing, and a chip that
-/// does nothing is indistinguishable from one that does until you press it.
+/// does nothing is indistinguishable from one that does until you press it. A
+/// long press is layered on top for [onBlock] rather than given its own
+/// affordance — chips are already dense here, and "hide this everywhere" is
+/// exactly the kind of held-down, slightly out-of-the-way gesture that guards
+/// against a stray tap doing it by accident.
 class _Tags extends StatelessWidget {
-  const _Tags({required this.tags, required this.onFollow});
+  const _Tags({
+    required this.tags,
+    required this.onFollow,
+    required this.onBlock,
+  });
 
   final List<WallpaperTag> tags;
   final ValueChanged<WallpaperLink> onFollow;
+  final ValueChanged<WallpaperTag> onBlock;
 
   @override
   Widget build(BuildContext context) {
@@ -266,13 +282,17 @@ class _Tags extends StatelessWidget {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: <Widget>[
-        for (final WallpaperTag tag in tags)
-          ActionChip(
-            label: Text(tag.name),
-            onPressed: () => onFollow(TagLink(tag)),
-          ),
-      ],
+      children: <Widget>[for (final WallpaperTag tag in tags) _tagChip(tag)],
+    );
+  }
+
+  Widget _tagChip(WallpaperTag tag) {
+    return GestureDetector(
+      onLongPress: () => onBlock(tag),
+      child: ActionChip(
+        label: Text(tag.name),
+        onPressed: () => onFollow(TagLink(tag)),
+      ),
     );
   }
 }

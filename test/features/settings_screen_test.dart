@@ -67,6 +67,18 @@ void main() {
     expect(settings.saved.nsfwTier, StorageTier.appPrivate);
   });
 
+  testWidgets('offers a way to the blocked-tags screen', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSettings(tester, FakeSettingsRepository());
+
+    expect(find.text('Blocked tags'), findsOneWidget);
+    expect(
+      find.text('Tags hidden from every search, wherever you blocked them.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('never offers the gallery for explicit wallpapers', (
     WidgetTester tester,
   ) async {

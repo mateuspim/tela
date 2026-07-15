@@ -3,10 +3,12 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
 
 import '../../fakes/fake_secret_store.dart';
+import '../../fakes/fake_tag_blocklist_repository.dart';
 import '../../fakes/fake_wallhaven_api.dart';
 
 const SearchQuery _nsfwQuery = SearchQuery(purity: PurityFilter({Purity.nsfw}));
@@ -18,6 +20,7 @@ void main() {
       final SearchWallpapers search = SearchWallpapers(
         api: api,
         secrets: FakeSecretStore(),
+        blocklist: FakeTagBlocklistRepository(),
       );
 
       await search(const SearchQuery(term: 'forest'));
@@ -32,6 +35,7 @@ void main() {
         final SearchWallpapers search = SearchWallpapers(
           api: api,
           secrets: FakeSecretStore(),
+          blocklist: FakeTagBlocklistRepository(),
         );
 
         await expectLater(
@@ -49,11 +53,44 @@ void main() {
       final SearchWallpapers search = SearchWallpapers(
         api: api,
         secrets: FakeSecretStore(storedKey: 'wallhaven-key'),
+        blocklist: FakeTagBlocklistRepository(),
       );
 
       await search(_nsfwQuery);
 
       expect(api.receivedQueries, hasLength(1));
+    });
+
+    test('folds the standing blocklist into every query as -name', () async {
+      // Not -id:{n}: confirmed live against Wallhaven that the exact-id
+      // operator has no exclude side and is silently ignored.
+      final FakeWallhavenApi api = FakeWallhavenApi();
+      final SearchWallpapers search = SearchWallpapers(
+        api: api,
+        secrets: FakeSecretStore(),
+        blocklist: FakeTagBlocklistRepository(
+          initial: const <WallpaperTag>[WallpaperTag(id: 37, name: 'nature')],
+        ),
+      );
+
+      await search(const SearchQuery(term: 'forest'));
+
+      final SearchQuery sent = api.receivedQueries.single;
+      expect(sent.blockedTagNames, <String>{'nature'});
+      expect(sent.toQueryParameters()['q'], 'forest -"nature"');
+    });
+
+    test('sends no exclude at all with an empty blocklist', () async {
+      final FakeWallhavenApi api = FakeWallhavenApi();
+      final SearchWallpapers search = SearchWallpapers(
+        api: api,
+        secrets: FakeSecretStore(),
+        blocklist: FakeTagBlocklistRepository(),
+      );
+
+      await search(const SearchQuery(term: 'forest'));
+
+      expect(api.receivedQueries.single.blockedTagNames, isEmpty);
     });
   });
 
@@ -65,6 +102,7 @@ void main() {
         final SearchWallpapers search = SearchWallpapers(
           api: api,
           secrets: FakeSecretStore(),
+          blocklist: FakeTagBlocklistRepository(),
         );
         const WallpaperPage first = WallpaperPage(
           wallpapers: <Wallpaper>[],
@@ -91,6 +129,7 @@ void main() {
       final SearchWallpapers search = SearchWallpapers(
         api: api,
         secrets: FakeSecretStore(),
+        blocklist: FakeTagBlocklistRepository(),
       );
       const WallpaperPage first = WallpaperPage(
         wallpapers: <Wallpaper>[],
@@ -106,6 +145,26 @@ void main() {
       final SearchQuery sent = api.receivedQueries.single;
       expect(sent.page, 4);
       expect(sent.seed, 'from-query');
+    });
+
+    test('carries the blocklist into the next page too', () async {
+      final FakeWallhavenApi api = FakeWallhavenApi();
+      final SearchWallpapers search = SearchWallpapers(
+        api: api,
+        secrets: FakeSecretStore(),
+        blocklist: FakeTagBlocklistRepository(
+          initial: const <WallpaperTag>[WallpaperTag(id: 9, name: 'spoilers')],
+        ),
+      );
+      const WallpaperPage first = WallpaperPage(
+        wallpapers: <Wallpaper>[],
+        currentPage: 1,
+        lastPage: 5,
+      );
+
+      await search.nextPageAfter(const SearchQuery(), first);
+
+      expect(api.receivedQueries.single.blockedTagNames, <String>{'spoilers'});
     });
   });
 }

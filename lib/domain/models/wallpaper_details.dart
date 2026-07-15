@@ -56,6 +56,15 @@ class WallpaperTag {
 
   /// Human-readable tag label.
   final String name;
+
+  /// Two tags are the same constraint when their id matches — the id is what
+  /// Wallhaven's `id:{n}` operator and the blocklist both key on, and a tag can
+  /// be renamed upstream without becoming a different tag.
+  @override
+  bool operator ==(Object other) => other is WallpaperTag && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 /// The Wallhaven user credited as a wallpaper's uploader.

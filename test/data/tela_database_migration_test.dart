@@ -7,6 +7,8 @@ import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/downloads/drift_download_history.dart';
 import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
+import 'package:tela/data/tag_blocklist/drift_tag_blocklist_repository.dart';
+import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -57,6 +59,37 @@ void _createV2(File file) {
     ..dispose();
 }
 
+/// The v3 schema, exactly as it shipped: settings, favorites, and downloads —
+/// no blocked tags.
+///
+/// Carries one real download, for the same reason [_createV2] carries a real
+/// favorite: what needs proving is that a device arriving at v4 keeps it.
+void _createV3(File file) {
+  _createV2(file);
+  sqlite3.open(file.path)
+    ..execute(
+      'CREATE TABLE downloaded_wallpapers ( '
+      'id TEXT NOT NULL, full_image_url TEXT NOT NULL, '
+      'thumb_small_url TEXT NOT NULL, thumb_large_url TEXT NOT NULL, '
+      'thumb_original_url TEXT NOT NULL, width INTEGER NOT NULL, '
+      'height INTEGER NOT NULL, file_size_bytes INTEGER NOT NULL, '
+      'purity TEXT NOT NULL, category TEXT NOT NULL, colors TEXT NOT NULL, '
+      'tier TEXT NOT NULL, location TEXT NOT NULL, '
+      'downloaded_at INTEGER NOT NULL, PRIMARY KEY (id));',
+    )
+    ..execute(
+      'INSERT INTO downloaded_wallpapers VALUES ( '
+      "'e7jvjd', 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg', "
+      "'https://th.wallhaven.cc/small/e7/e7jvjd.jpg', "
+      "'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg', "
+      "'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg', "
+      "1080, 2400, 1024, 'sfw', 'general', '#660000', "
+      "'appPrivate', 'content://media/e7jvjd', 1767225600);",
+    )
+    ..execute('PRAGMA user_version = 3;')
+    ..dispose();
+}
+
 void main() {
   late Directory dir;
   late File file;
@@ -70,7 +103,7 @@ void main() {
 
   group('TelaDatabase migration', () {
     test(
-      'v1 → v3 adds the new tables without touching saved settings',
+      'v1 → v4 adds every new table without touching saved settings',
       () async {
         // The device carries a real API key and real download destinations. A
         // migration that recreates the database instead of altering it presents
@@ -96,12 +129,17 @@ void main() {
           isEmpty,
           reason: 'the downloads table must exist and start empty',
         );
+        expect(
+          await DriftTagBlocklistRepository(db).all(),
+          isEmpty,
+          reason: 'the blocked-tags table must exist and start empty',
+        );
 
         await db.close();
       },
     );
 
-    test('v2 → v3 adds downloads and keeps the favorites shelf', () async {
+    test('v2 → v4 adds downloads and blocked tags, keeps favorites', () async {
       _createV2(file);
 
       final TelaDatabase db = TelaDatabase(NativeDatabase(file));
@@ -115,10 +153,29 @@ void main() {
         reason: 'a v2 favorite must survive the upgrade',
       );
       expect(await DriftDownloadHistory(db).downloads(), isEmpty);
+      expect(await DriftTagBlocklistRepository(db).all(), isEmpty);
       expect(
         (await DriftSettingsRepository(db).loadStorageSettings()).sfwTier,
         StorageTier.appPrivate,
       );
+
+      await db.close();
+    });
+
+    test('v3 → v4 adds blocked tags and keeps the download history', () async {
+      _createV3(file);
+
+      final TelaDatabase db = TelaDatabase(NativeDatabase(file));
+
+      final List<DownloadRecord> downloads = await DriftDownloadHistory(
+        db,
+      ).downloads();
+      expect(
+        downloads.single.wallpaper.id,
+        'e7jvjd',
+        reason: 'a v3 download must survive the upgrade',
+      );
+      expect(await DriftTagBlocklistRepository(db).all(), isEmpty);
 
       await db.close();
     });
@@ -128,6 +185,7 @@ void main() {
 
       expect(await DriftFavoritesRepository(db).favorites(), isEmpty);
       expect(await DriftDownloadHistory(db).downloads(), isEmpty);
+      expect(await DriftTagBlocklistRepository(db).all(), isEmpty);
       expect(
         await DriftSettingsRepository(db).loadStorageSettings(),
         StorageSettings.defaults,

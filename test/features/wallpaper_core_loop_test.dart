@@ -14,6 +14,7 @@ import 'package:tela/features/browse/wallpaper_tile.dart';
 
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
+import '../fakes/fake_tag_blocklist_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
 import '../fakes/fake_wallpaper_applier.dart';
 
@@ -62,6 +63,9 @@ Future<void> _pumpApp(
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         wallpaperApplierProvider.overrideWithValue(applier),
         settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+        tagBlocklistRepositoryProvider.overrideWithValue(
+          FakeTagBlocklistRepository(),
+        ),
       ],
       child: const TelaApp(),
     ),

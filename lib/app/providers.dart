@@ -9,6 +9,7 @@ import 'package:tela/data/security/local_auth_app_lock.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/data/storage/method_channel_image_store.dart';
 import 'package:tela/data/storage/method_channel_screen_guard.dart';
+import 'package:tela/data/tag_blocklist/drift_tag_blocklist_repository.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_sharer.dart';
@@ -19,6 +20,7 @@ import 'package:tela/domain/ports/image_store.dart';
 import 'package:tela/domain/ports/screen_guard.dart';
 import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
+import 'package:tela/domain/ports/tag_blocklist_repository.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
 import 'package:tela/domain/ports/wallpaper_sharer.dart';
@@ -108,6 +110,12 @@ final Provider<DownloadHistory> downloadHistoryProvider =
       (Ref ref) => DriftDownloadHistory(ref.watch(telaDatabaseProvider)),
     );
 
+/// The tag-blocklist port, bound to its Drift adapter.
+final Provider<TagBlocklistRepository> tagBlocklistRepositoryProvider =
+    Provider<TagBlocklistRepository>(
+      (Ref ref) => DriftTagBlocklistRepository(ref.watch(telaDatabaseProvider)),
+    );
+
 /// Applies one selected wallpaper to an Android target.
 final Provider<ApplyWallpaper> applyWallpaperProvider =
     Provider<ApplyWallpaper>(
@@ -143,6 +151,7 @@ final Provider<SearchWallpapers> searchWallpapersProvider =
       (Ref ref) => SearchWallpapers(
         api: ref.watch(wallhavenApiProvider),
         secrets: ref.watch(secretStoreProvider),
+        blocklist: ref.watch(tagBlocklistRepositoryProvider),
       ),
     );
 

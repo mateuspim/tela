@@ -20,6 +20,7 @@ import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_image_store.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
+import '../fakes/fake_tag_blocklist_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
 import '../fakes/fake_wallpaper_sharer.dart';
 
@@ -72,6 +73,67 @@ void main() {
     expect(find.text('tela-fixture'), findsOneWidget);
     expect(find.text('landscape'), findsOneWidget);
     expect(find.text('sunset'), findsOneWidget);
+  });
+
+  testWidgets('long-pressing a tag asks before blocking it', (
+    WidgetTester tester,
+  ) async {
+    final WallpaperDetails details = _details();
+    await _pumpDetail(tester, details);
+
+    await tester.ensureVisible(find.text('landscape'));
+    await tester.pump();
+    await tester.longPress(find.text('landscape'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Block this tag?'), findsOneWidget);
+    expect(
+      find.text(
+        'You won\'t see wallpapers tagged "landscape" in search results '
+        'anymore. Unblock it any time from Settings.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('confirming the dialog blocks the tag and says so', (
+    WidgetTester tester,
+  ) async {
+    final WallpaperDetails details = _details();
+    final FakeTagBlocklistRepository blocklist = FakeTagBlocklistRepository();
+    await _pumpDetail(tester, details, blocklist: blocklist);
+
+    await tester.ensureVisible(find.text('landscape'));
+    await tester.pump();
+    await tester.longPress(find.text('landscape'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Block'));
+    await tester.pumpAndSettle();
+
+    expect(blocklist.blockedIds(), <int>{101});
+    expect(
+      find.text(
+        'Blocked "landscape". You won\'t see it in search results anymore.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('cancelling the dialog leaves the tag unblocked', (
+    WidgetTester tester,
+  ) async {
+    final WallpaperDetails details = _details();
+    final FakeTagBlocklistRepository blocklist = FakeTagBlocklistRepository();
+    await _pumpDetail(tester, details, blocklist: blocklist);
+
+    await tester.ensureVisible(find.text('landscape'));
+    await tester.pump();
+    await tester.longPress(find.text('landscape'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(blocklist.blockedIds(), isEmpty);
   });
 
   testWidgets(
@@ -200,6 +262,9 @@ void main() {
         ),
         downloadHistoryProvider.overrideWithValue(history),
         imageStoreProvider.overrideWithValue(FakeImageStore()),
+        tagBlocklistRepositoryProvider.overrideWithValue(
+          FakeTagBlocklistRepository(),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -237,6 +302,7 @@ Future<void> _pumpDetail(
   FakeImageStore? imageStore,
   StorageSettings? settings,
   FakeWallpaperSharer? sharer,
+  FakeTagBlocklistRepository? blocklist,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -258,6 +324,10 @@ Future<void> _pumpDetail(
         // The share button would otherwise reach the real method channel.
         wallpaperSharerProvider.overrideWithValue(
           sharer ?? FakeWallpaperSharer(),
+        ),
+        // Blocking a tag reaches the database too.
+        tagBlocklistRepositoryProvider.overrideWithValue(
+          blocklist ?? FakeTagBlocklistRepository(),
         ),
         if (imageStore != null)
           imageStoreProvider.overrideWithValue(imageStore),

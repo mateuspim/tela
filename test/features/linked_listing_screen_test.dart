@@ -22,6 +22,7 @@ import 'package:tela/features/browse/wallpaper_tile.dart';
 
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
+import '../fakes/fake_tag_blocklist_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
 
 void main() {
@@ -111,6 +112,9 @@ ProviderContainer _container(FakeWallhavenApi api) {
       wallhavenApiProvider.overrideWithValue(api),
       secretStoreProvider.overrideWithValue(FakeSecretStore()),
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+      tagBlocklistRepositoryProvider.overrideWithValue(
+        FakeTagBlocklistRepository(),
+      ),
     ],
   );
 }

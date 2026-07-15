@@ -4,8 +4,19 @@ import 'package:tela/domain/models/search_tag.dart';
 void main() {
   group('SearchTag.token', () {
     test('signs an included tag with +, an excluded tag with -', () {
-      expect(const SearchTag('nature').token, '+nature');
-      expect(const SearchTag('people', TagSense.exclude).token, '-people');
+      expect(const SearchTag('nature').token, '+"nature"');
+      expect(const SearchTag('people', TagSense.exclude).token, '-"people"');
+    });
+
+    test('quotes a multi-word name so Wallhaven treats it as one tag', () {
+      // Unquoted, `-anime girls` parses as excluding "anime" plus a bare,
+      // weakly-matched "girls" — not as excluding the tag "anime girls".
+      // Confirmed live against Wallhaven, 2026-07-15.
+      expect(const SearchTag('anime girls').token, '+"anime girls"');
+      expect(
+        const SearchTag('anime girls', TagSense.exclude).token,
+        '-"anime girls"',
+      );
     });
 
     test('defaults to include — adding a tag usually means "show it"', () {
