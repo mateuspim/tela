@@ -139,8 +139,26 @@ class MainActivity : FlutterFragmentActivity() {
             "listPrivateImages" -> onStorageThread(result) { ImageStorage(this).listPrivate() }
             "deletePrivateImage" -> handleDeletePrivateImage(call, result)
             "canReadImage" -> handleCanReadImage(call, result)
+            "materializeImage" -> handleMaterializeImage(call, result)
+            "releasePreview" -> handleReleasePreview(call, result)
             else -> result.notImplemented()
         }
+    }
+
+    private fun handleMaterializeImage(call: MethodCall, result: MethodChannel.Result) {
+        val location = call.argument<String>("location") ?: run {
+            result.success(mapOf("success" to false))
+            return
+        }
+        onStorageThread(result) { ImageStorage(this).materialise(Uri.parse(location)) }
+    }
+
+    private fun handleReleasePreview(call: MethodCall, result: MethodChannel.Result) {
+        val path = call.argument<String>("path") ?: run {
+            result.success(mapOf("success" to true))
+            return
+        }
+        onStorageThread(result) { ImageStorage(this).releasePreview(path) }
     }
 
     private fun handleCanReadImage(call: MethodCall, result: MethodChannel.Result) {

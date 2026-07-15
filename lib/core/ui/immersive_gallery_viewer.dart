@@ -22,6 +22,9 @@ class ImmersiveGalleryViewer extends StatefulWidget {
     this.onNext,
     this.zoomController,
     this.systemUi = const FlutterImmersiveSystemUi(),
+    this.primaryAction,
+    this.actions = const <Widget>[],
+    this.statusOverlay,
     super.key,
   }) : assert(aspectRatio > 0, 'aspectRatio must be positive'),
        assert(itemCount > 0, 'itemCount must be positive'),
@@ -56,6 +59,20 @@ class ImmersiveGalleryViewer extends StatefulWidget {
 
   /// Injectable system-UI lifecycle used by Android and focused tests.
   final ImmersiveSystemUi systemUi;
+
+  /// A feature's primary action, shown in the transient chrome above the
+  /// navigation row. History passes its Set-wallpaper button here. The viewer
+  /// does not know what it does — feature actions stay outside the surface.
+  final Widget? primaryAction;
+
+  /// Feature actions shown in the top control row, before the close button.
+  /// History passes its overflow menu here. Fades with the rest of the chrome.
+  final List<Widget> actions;
+
+  /// A persistent status shown independent of chrome, at the top. History uses
+  /// it for the "not on this device" badge so a missing file stays obvious even
+  /// while the controls are hidden.
+  final Widget? statusOverlay;
 
   @override
   State<ImmersiveGalleryViewer> createState() => _ImmersiveGalleryViewerState();
@@ -287,6 +304,20 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
       itemCount: widget.itemCount,
       onPrevious: widget.onPrevious,
       onNext: widget.onNext,
+      primaryAction: widget.primaryAction,
+      actions: widget.actions,
+    );
+  }
+
+  Widget _statusOverlay() {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        minimum: const EdgeInsets.only(top: 8),
+        child: Align(child: widget.statusOverlay),
+      ),
     );
   }
 
@@ -314,6 +345,7 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
               children: <Widget>[
                 _imageCanvas(l10n),
                 _viewerChrome(),
+                if (widget.statusOverlay != null) _statusOverlay(),
               ],
             ),
           ),

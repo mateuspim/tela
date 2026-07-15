@@ -14,6 +14,8 @@ class ImmersiveGalleryControls extends StatelessWidget {
     required this.itemCount,
     required this.onPrevious,
     required this.onNext,
+    this.primaryAction,
+    this.actions = const <Widget>[],
     super.key,
   });
 
@@ -44,6 +46,12 @@ class ImmersiveGalleryControls extends StatelessWidget {
   /// Selects the next item, or null at the boundary.
   final VoidCallback? onNext;
 
+  /// A feature's primary action, shown above the navigation row, or null.
+  final Widget? primaryAction;
+
+  /// Feature actions shown in the top row, before the close button.
+  final List<Widget> actions;
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -65,7 +73,16 @@ class ImmersiveGalleryControls extends StatelessWidget {
                 ),
                 Align(
                   alignment: Alignment.bottomCenter,
-                  child: _navigationRow(l10n),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      if (primaryAction != null) ...<Widget>[
+                        primaryAction!,
+                        const SizedBox(height: 12),
+                      ],
+                      _navigationRow(l10n),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -80,7 +97,21 @@ class ImmersiveGalleryControls extends StatelessWidget {
       children: <Widget>[
         _alignedControl(Alignment.centerLeft, _zoomButton(l10n)),
         const SizedBox(width: 12),
-        _alignedControl(Alignment.centerRight, _closeButton(l10n)),
+        _alignedControl(Alignment.centerRight, _trailingControls(l10n)),
+      ],
+    );
+  }
+
+  Widget _trailingControls(AppLocalizations l10n) {
+    if (actions.isEmpty) return _closeButton(l10n);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (final Widget action in actions) ...<Widget>[
+          action,
+          const SizedBox(width: 8),
+        ],
+        _closeButton(l10n),
       ],
     );
   }

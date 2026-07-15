@@ -1,36 +1,31 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
-import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/download_record.dart';
-import 'package:tela/domain/models/wallpaper_apply_failure.dart';
-import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
 /// The wallpapers already on this device, each one tap away from being set.
 ///
-/// Tapping a tile sets it again, from the file the download left behind rather
-/// than from Wallhaven — that is the whole point of keeping the history, so the
-/// tile leads to the target sheet instead of back to the detail screen.
-class DownloadHistoryScreen extends ConsumerStatefulWidget {
+/// Tapping a tile now opens the immersive, local-first viewer at that exact
+/// record — the same first-class fullscreen experience as Browse — with target
+/// selection moved behind the viewer's Set action. A long press still offers to
+/// forget the row, which is not the same as deleting the file.
+class DownloadHistoryScreen extends ConsumerWidget {
   /// Creates the download-history screen.
   const DownloadHistoryScreen({super.key});
 
   @override
-  ConsumerState<DownloadHistoryScreen> createState() =>
-      _DownloadHistoryScreenState();
-}
-
-class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
-  bool _isApplying = false;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final AsyncValue<List<DownloadRecord>> downloads = ref.watch(
       recentDownloadsProvider,
@@ -44,7 +39,8 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
         ),
       ),
       body: downloads.when(
-        data: (List<DownloadRecord> recent) => _grid(context, l10n, recent),
+        data: (List<DownloadRecord> recent) =>
+            _grid(context, ref, l10n, recent),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
           icon: Icons.error_outline,
@@ -56,6 +52,7 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
 
   Widget _grid(
     BuildContext context,
+    WidgetRef ref,
     AppLocalizations l10n,
     List<DownloadRecord> recent,
   ) {
@@ -72,7 +69,7 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
       padding: const EdgeInsets.all(12),
       itemCount: recent.length,
       itemBuilder: (BuildContext context, int index) =>
-          _tile(l10n, recent[index]),
+          _tile(context, ref, l10n, recent, index),
     );
   }
 
@@ -85,7 +82,14 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
   /// while the probe is in flight, or if it fails: an unbadged tile is the
   /// status quo, and a history that will not render because a file check hung
   /// would be a worse screen than one that under-warns.
-  Widget _tile(AppLocalizations l10n, DownloadRecord download) {
+  Widget _tile(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    List<DownloadRecord> recent,
+    int index,
+  ) {
+    final DownloadRecord download = recent[index];
     final Set<String> missing =
         ref.watch(missingDownloadsProvider).value ?? const <String>{};
     final bool isMissing = missing.contains(download.wallpaper.id);
@@ -101,8 +105,8 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
             opacity: isMissing ? 0.55 : 1,
             child: WallpaperTile(
               wallpaper: download.wallpaper,
-              onTap: _isApplying ? null : () => _setAgain(download),
-              onLongPress: _isApplying ? null : () => _confirmForget(download),
+              onTap: () => _open(context, recent, index),
+              onLongPress: () => _confirmForget(context, ref, download),
             ),
           ),
           if (isMissing)
@@ -134,6 +138,37 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
     );
   }
 
+  /// Opens the whole history in the viewer, positioned on the tapped record.
+  ///
+  /// The session is the complete local list (newest first), so it never pages
+  /// — the same complete-local-snapshot invariant Favorites holds. Its creator
+  /// disposes it when the viewer returns; Back restores this grid and scroll.
+  void _open(BuildContext context, List<DownloadRecord> recent, int index) {
+    unawaited(_pushViewer(context, recent, index));
+  }
+
+  Future<void> _pushViewer(
+    BuildContext context,
+    List<DownloadRecord> recent,
+    int index,
+  ) async {
+    final GallerySessionController<DownloadRecord> session =
+        GallerySessionController<DownloadRecord>(
+          identity: 'download-history',
+          items: recent,
+          initialIndex: index,
+          itemKey: (DownloadRecord record) => record.wallpaper.id,
+        );
+    try {
+      await context.pushNamed<void>(
+        TelaRoutes.downloadViewerName,
+        extra: session,
+      );
+    } finally {
+      session.dispose();
+    }
+  }
+
   /// Asks before forgetting a row — and the *wording* is the feature.
   ///
   /// "Remove from history" and "delete the file" are two different actions, and
@@ -141,7 +176,11 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
   /// and will not happen in plain words: the row goes, the wallpaper stays
   /// where it was downloaded. Without that sentence this is a button that reads
   /// as "delete my wallpaper" to half the people who press it.
-  Future<void> _confirmForget(DownloadRecord download) async {
+  Future<void> _confirmForget(
+    BuildContext context,
+    WidgetRef ref,
+    DownloadRecord download,
+  ) async {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool? confirmed = await showDialog<bool>(
       context: context,
@@ -160,31 +199,11 @@ class _DownloadHistoryScreenState extends ConsumerState<DownloadHistoryScreen> {
         ],
       ),
     );
-    if (confirmed ?? false) await _forget(download);
+    if (confirmed ?? false) await _forget(ref, download);
   }
 
-  Future<void> _forget(DownloadRecord download) async {
+  Future<void> _forget(WidgetRef ref, DownloadRecord download) async {
     await ref.read(downloadHistoryProvider).forget(download.wallpaper.id);
     ref.invalidate(recentDownloadsProvider);
-  }
-
-  Future<void> _setAgain(DownloadRecord download) async {
-    final WallpaperTarget? target = await chooseWallpaperTarget(context);
-    if (target == null || !mounted) return;
-    setState(() => _isApplying = true);
-    try {
-      await ref.read(applyDownloadProvider)(download, target);
-      if (mounted) _show(AppLocalizations.of(context).detailApplySuccess);
-    } on WallpaperApplyFailure {
-      if (mounted) _show(AppLocalizations.of(context).detailApplyFailure);
-    } finally {
-      if (mounted) setState(() => _isApplying = false);
-    }
-  }
-
-  void _show(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }

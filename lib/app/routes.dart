@@ -41,4 +41,10 @@ abstract final class TelaRoutes {
 
   /// Download history route name.
   static const String downloadHistoryName = 'download-history';
+
+  /// Path of the immersive, local-first viewer over the download history.
+  static const String downloadViewerPath = '/downloads/view';
+
+  /// Download-history viewer route name.
+  static const String downloadViewerName = 'download-viewer';
 }

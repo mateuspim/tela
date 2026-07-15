@@ -2,12 +2,14 @@ import 'package:go_router/go_router.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/tela_shell.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/features/browse/browse_screen.dart';
 import 'package:tela/features/browse/linked_listing_screen.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/downloads/download_history_screen.dart';
+import 'package:tela/features/downloads/download_immersive_session.dart';
 import 'package:tela/features/favorites/favorites_screen.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
 import 'package:tela/features/settings/settings_screen.dart';
@@ -91,6 +93,17 @@ abstract final class TelaRouter {
           path: TelaRoutes.downloadHistoryPath,
           name: TelaRoutes.downloadHistoryName,
           builder: (_, _) => const DownloadHistoryScreen(),
+        ),
+        GoRoute(
+          path: TelaRoutes.downloadViewerPath,
+          name: TelaRoutes.downloadViewerName,
+          redirect: (_, GoRouterState state) =>
+              state.extra is GallerySessionController<DownloadRecord>
+              ? null
+              : TelaRoutes.downloadHistoryPath,
+          builder: (_, GoRouterState state) => DownloadImmersiveSession(
+            session: state.extra! as GallerySessionController<DownloadRecord>,
+          ),
         ),
       ],
     );

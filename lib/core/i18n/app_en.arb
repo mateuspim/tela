@@ -584,6 +584,21 @@
     "description": "Accessibility action for hiding immersive viewer chrome."
   },
 
+  "galleryMoreActions": "More actions",
+  "@galleryMoreActions": {
+    "description": "Tooltip and label for the overflow menu of a gallery viewer's feature actions."
+  },
+
+  "downloadViewerMissing": "Not on this device",
+  "@downloadViewerMissing": {
+    "description": "Persistent badge in the download viewer when the saved file is gone and Wallhaven is being shown instead. Mirrors the grid's badge so the missing state stays obvious in the viewer too."
+  },
+
+  "downloadHistoryForgetMenu": "Remove from history",
+  "@downloadHistoryForgetMenu": {
+    "description": "Overflow-menu action in the download viewer that forgets the shown row. Opens the same confirmation as the grid's long-press; deliberately not 'Delete', which would name the wrong object."
+  },
+
   "detailMetadataTitle": "Details",
   "detailResolution": "Resolution",
   "detailFileSize": "File size",

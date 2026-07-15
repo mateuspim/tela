@@ -8,6 +8,7 @@ import 'package:tela/data/secrets/secure_secret_store.dart';
 import 'package:tela/data/security/local_auth_app_lock.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/data/storage/method_channel_image_store.dart';
+import 'package:tela/data/storage/method_channel_local_preview_cache.dart';
 import 'package:tela/data/storage/method_channel_screen_guard.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
@@ -16,6 +17,7 @@ import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/image_store.dart';
+import 'package:tela/domain/ports/local_preview_cache.dart';
 import 'package:tela/domain/ports/screen_guard.dart';
 import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
@@ -70,6 +72,13 @@ final Provider<WallpaperSharer> wallpaperSharerProvider =
 final Provider<ImageStore> imageStoreProvider = Provider<ImageStore>(
   (Ref ref) => MethodChannelImageStore(),
 );
+
+/// The local-preview port, bound to native materialisation of a download's
+/// `content:`/SAF location into a decodable cache file.
+final Provider<LocalPreviewCache> localPreviewCacheProvider =
+    Provider<LocalPreviewCache>(
+      (Ref ref) => MethodChannelLocalPreviewCache(),
+    );
 
 /// The screen-protection port, bound to Android's `FLAG_SECURE`.
 final Provider<ScreenGuard> screenGuardProvider = Provider<ScreenGuard>(

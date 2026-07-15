@@ -2,13 +2,76 @@
 
 Updated: 2026-07-15
 
-## CURRENT CHECKPOINT — image viewer UX slice 4 complete
+## CURRENT CHECKPOINT — image viewer UX slice 5 complete
 
 The staged implementation is now underway on branch `image-viewer-ux` in the
 existing `.worktrees/image-viewer-ux` worktree. **Continue there; do not create
 another worktree and do not work in `master`.** The broader product contract
 below remains authoritative, but only take the next bounded slice described
 here.
+
+Slice 5 gives Download History the same first-class fullscreen viewing as
+Browse and moves target selection behind a Set action (delivery-order step 3):
+
+- A History tile now opens the shared immersive surface at that exact record,
+  over the whole history (newest first) as one local `GallerySessionController`
+  snapshot. `features/downloads/download_immersive_session.dart` is the new
+  feature wrapper around `ImmersiveGalleryViewer` (no new zoom impl); it passes
+  **no** `requestMore`, so `canRequestMore` is false and it never pages — the
+  same complete-local-snapshot isolation Favorites holds.
+- Local-first, so the viewer works offline. A new `LocalPreviewCache` port
+  (`domain/ports/local_preview_cache.dart`) + `LocalPreview` model materialise a
+  download's location — `file:`, MediaStore `content:`, or a SAF document URI —
+  into a decodable file. `DownloadGallerySource` shows that file first and falls
+  back to `ProgressiveWallpaperPreview`'s network source on a null result or a
+  decode error, releasing any throwaway copy when the selection moves or the
+  widget disposes. The adapter `MethodChannelLocalPreviewCache` resolves a
+  `file:` path directly in Dart and copies a `content:`/SAF one through native
+  `materializeImage`/`releasePreview` on `cc.pym.tela/images`; the Kotlin side
+  copies into a `cacheDir/previews` folder and confines every release to it. No
+  URI or path is ever logged.
+- The viewer's primary action is **Set wallpaper** → target sheet →
+  `ApplyDownload`, so the missing-file → Wallhaven fallback stays intact. An
+  overflow action carries "Remove from history" with the exact pinned wording,
+  and the grid's long-press still forgets. Set, the missing badge, and forget
+  all follow the item currently shown, never the tile that opened the viewer.
+- `ImmersiveGalleryViewer` gained three generic slots — `primaryAction`,
+  `actions`, `statusOverlay` — so feature actions stay *outside* the shared
+  surface. History puts Set in `primaryAction`, its overflow in `actions`
+  (both fade with the transient chrome), and the persistent "not on this
+  device" badge in `statusOverlay`. The missing badge is derived from
+  `missingDownloadsProvider`, agreeing with the grid.
+- Aspect ratio and masonry geometry use the record's real `Wallpaper.resolution`.
+  Previous/Next, swipe, and arrow keys move through the history order; returning
+  restores the grid and its scroll position (the viewer is pushed over the
+  history route).
+
+Slice 5 verification (all green; full suite now 446 tests):
+
+```bash
+./tool/tela gen-l10n   # three new strings: gallery-more-actions, viewer-missing, forget-menu
+./tool/tela dart format <touched Dart files>
+./tool/tela analyze
+./tool/tela test test/data/method_channel_local_preview_cache_test.dart \
+  test/features/download_immersive_session_test.dart \
+  test/features/download_history_screen_test.dart
+./tool/tela test
+```
+
+New/covered tests: adapter resolves all three URI schemes and releases only
+temporary copies; viewer shows local-first, falls back to Wallhaven with the
+badge when the file is gone, Set → target → `ApplyDownload`, overflow forget
+keeps the pinned "the file stays" sentence, Set/forget follow the shown item
+across Next, temporary previews are released; the screen opens the viewer at the
+tapped record (not index zero) and restores the grid + scroll on return.
+`FakeLocalPreviewCache` is the named fake modelling the three schemes.
+
+One note for the next agent: the private-library viewer is step 4 and was
+deliberately **not** touched here. The native `materializeImage`/`releasePreview`
+Kotlin was written but has not run on a device — the Dart side is proven through
+the fake; a device pass should confirm a `content:`/SAF preview actually decodes.
+
+### PRIOR SLICE — slice 4 (public viewer paging)
 
 Slice 4 connects the public viewer to Wallhaven pagination:
 
@@ -103,47 +166,51 @@ Slice 3 verification:
 
 All pass; the full suite now has 426 tests.
 
-### NEXT SLICE ONLY — Download History local viewer
+### NEXT SLICE ONLY — private/NSFW secure viewer (delivery-order step 4)
 
-Give Download History the same first-class fullscreen viewing as Browse, and
-move target selection behind a Set action. This is delivery-order step 3. Do
-**not** touch the private/NSFW library in this slice — that is step 4.
+Give the private/NSFW library the same first-class fullscreen viewing, plus the
+image dimensions its tiles have never had, and a Set-from-private flow. This is
+delivery-order step 4. Slice 5 (History) is done; **reuse the same shared
+`ImmersiveGalleryViewer` and its `primaryAction`/`actions`/`statusOverlay` slots
+— do not add a new zoom implementation.** The private library is
+`features/private_library/`, listed by `privateImagesProvider`, and every
+`PrivateImage` must be treated as sensitive even when its original purity is
+unknown.
 
-Today a History tile immediately opens the Home/Lock/Both target sheet. Instead:
+1. **Dimensions.** `PrivateImage` carries no width/height, so its tiles are
+   square `BoxFit.cover` today, cropping every non-square file in the one
+   gallery where recognising an image before acting on it matters most. Extend
+   the native private listing (`ImageStorage.listPrivate` + the DTO mapping in
+   `MethodChannelImageStore`) to return pixel width/height from a **bounds-only**
+   decode (`BitmapFactory.Options.inJustDecodeBounds`), add those to
+   `PrivateImage`, and use them for aspect-ratio tiles and the viewer aspect
+   ratio. A corrupt/unreadable file must still render a safe broken-image state
+   and must not crash the gallery.
+2. **Secure viewer.** Tapping a private tile opens a secure fullscreen gallery
+   (one local `GallerySessionController<PrivateImage>` over the complete list,
+   like History — no `requestMore`). The route must **independently** hold
+   `FLAG_SECURE` (via `ScreenGuard`) and respect the app-lock gate — do not rely
+   on the grid staying mounted behind it. Swiping visits the other private
+   images without dropping `FLAG_SECURE` or re-running authentication. Position
+   announcements must never expose a file name or path; there is no image or
+   link sharing here, by design.
+3. **Source.** Private files are plain `file:` locations under tela's internal
+   dir, so the existing `LocalPreviewCache` resolves them directly (non-temporary
+   — never release the user's own file). Never place a private preview in shared
+   cache or MediaStore, and never log its path.
+4. **Set from private.** Add a small pure-Dart use case that sends the private
+   file URI through the existing `WallpaperApplier` port (the primary action,
+   Home/Lock/Both behind it — the same shape as History's Set). Delete stays an
+   explicit, confirmed action that returns to the nearest remaining image or the
+   empty state; the secure window must stay active through grid, viewer, target
+   sheet, and delete confirmation, releasing only after leaving the private flow.
 
-1. Tapping a History tile opens the shared immersive viewer (reuse
-   `ImmersiveGalleryViewer` / `WallpaperImmersiveSession`, not a new zoom impl)
-   at that exact record, over the full history order (newest first) as one
-   local `GallerySessionController` snapshot. History is complete and local:
-   pass **no** `requestMore` (like Favorites), so `canRequestMore` is false.
-2. Show the saved local file first so the viewer works offline.
-   `DownloadRecord.location` can be `file:`, MediaStore `content:`, or a SAF
-   document URI — do **not** assume `FileImage` reads all three. If Flutter
-   needs a materialised cache file, put that platform work behind a
-   project-owned port/adapter and clean up temporary previews. Never log a URI
-   or path.
-3. If the file is missing, keep the "missing locally" state obvious in the
-   viewer (as the grid already badges it) and fall back to the network source,
-   preserving the existing re-download/apply path.
-4. The viewer's primary action is **Set wallpaper**; only then Home / Lock /
-   Both, reusing `ApplyDownload` so the missing-file fallback stays intact. Set,
-   missing-file, and forget actions must follow the item currently shown, not
-   the tile originally tapped.
-5. Keep "remove from history" distinct from deleting the file, with its exact
-   existing wording (a widget test already pins that sentence — keep it green).
-   Surface it in a discoverable viewer overflow/action as well as any long-press
-   shortcut.
-6. Use the record's real `Wallpaper.resolution` for the viewer aspect ratio and
-   masonry geometry.
-7. Previous/Next, swipe, and arrow keys move through the history order and keep
-   Set/missing/forget bound to the shown item. Returning restores the grid and
-   scroll position.
-
-Add focused tests for: tap → viewer at the tapped record; local-first source
-and the missing-file network fallback; Set → target → `ApplyDownload`; forget
-confirmation wording; actions following the selected item across Next/Previous;
-and back/scroll restoration. Mock the three URI schemes behind the port with a
-named fake.
+Add focused tests for: dimension mapping (including a corrupt file that still
+renders safe); lock pass/fail gating the viewer; `FLAG_SECURE` acquired before
+content and retained across viewer/target-sheet/delete; no share action; the
+Set-from-private use case reaching `WallpaperApplier`; delete selecting the next
+then previous then closing to empty; and the position announcement never
+carrying a path. Mock the applier and screen guard with named fakes.
 
 End that slice with format, analyze, the full test suite, a dedicated commit,
 and another concise checkpoint update here.
