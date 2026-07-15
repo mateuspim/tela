@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
@@ -153,12 +154,101 @@ void main() {
     for (final Key key in const <Key>[
       Key('immersive-viewer-close'),
       Key('immersive-viewer-zoom'),
+      Key('immersive-viewer-previous'),
+      Key('immersive-viewer-next'),
     ]) {
       final Size target = tester.getSize(find.byKey(key));
       expect(target.width, greaterThanOrEqualTo(48));
       expect(target.height, greaterThanOrEqualTo(48));
     }
     semantics.dispose();
+  });
+
+  testWidgets('shows position and disabled controls at loaded boundaries', (
+    WidgetTester tester,
+  ) async {
+    final SemanticsHandle semantics = tester.ensureSemantics();
+    await _pumpViewer(
+      tester,
+      itemCount: 3,
+      onNext: () {},
+    );
+
+    expect(find.bySemanticsLabel('1 of 3'), findsOneWidget);
+    expect(find.text('Previous'), findsOneWidget);
+    expect(find.text('Next'), findsOneWidget);
+    final ButtonStyleButton previous = tester.widget<ButtonStyleButton>(
+      find.byKey(const Key('immersive-viewer-previous')),
+    );
+    final ButtonStyleButton next = tester.widget<ButtonStyleButton>(
+      find.byKey(const Key('immersive-viewer-next')),
+    );
+    expect(previous.onPressed, isNull);
+    expect(next.onPressed, isNotNull);
+    semantics.dispose();
+  });
+
+  testWidgets('swipe and keyboard arrows use the same navigation', (
+    WidgetTester tester,
+  ) async {
+    int previous = 0;
+    int next = 0;
+    await _pumpViewer(
+      tester,
+      position: 2,
+      itemCount: 3,
+      onPrevious: () => previous++,
+      onNext: () => next++,
+    );
+
+    await tester.fling(
+      find.byType(GalleryViewport),
+      const Offset(-300, 0),
+      800,
+    );
+    await tester.pump();
+    expect(next, 1);
+
+    await tester.fling(find.byType(GalleryViewport), const Offset(300, 0), 800);
+    await tester.pump();
+    expect(previous, 1);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pump();
+    expect(next, 2);
+    expect(previous, 2);
+  });
+
+  testWidgets('horizontal input pans instead of paging while zoomed', (
+    WidgetTester tester,
+  ) async {
+    int next = 0;
+    final GalleryZoomController zoomController = GalleryZoomController();
+    addTearDown(zoomController.dispose);
+    await _pumpViewer(
+      tester,
+      zoomController: zoomController,
+      disableAnimations: true,
+      itemCount: 2,
+      onNext: () => next++,
+    );
+    await tester.tap(find.text('Zoom in'));
+    await tester.pump();
+    final double before = zoomController.transformationController.value.entry(
+      0,
+      3,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+
+    expect(next, 0);
+    expect(
+      zoomController.transformationController.value.entry(0, 3),
+      before - 48,
+    );
   });
 
   testWidgets('enters immersive mode and restores before close', (
@@ -230,6 +320,10 @@ Future<void> _pumpViewer(
   bool disableAnimations = false,
   double aspectRatio = 16 / 9,
   Size viewportSize = const Size(800, 600),
+  int position = 1,
+  int itemCount = 1,
+  VoidCallback? onPrevious,
+  VoidCallback? onNext,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -255,6 +349,10 @@ Future<void> _pumpViewer(
               zoomController: zoomController,
               systemUi: systemUi ?? FakeImmersiveSystemUi(),
               onClose: onClose ?? () async {},
+              position: position,
+              itemCount: itemCount,
+              onPrevious: onPrevious,
+              onNext: onNext,
             ),
           ),
         ),

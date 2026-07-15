@@ -2,7 +2,7 @@
 
 Updated: 2026-07-15
 
-## CURRENT CHECKPOINT — image viewer UX slice 2 complete
+## CURRENT CHECKPOINT — image viewer UX slice 3 complete
 
 The staged implementation is now underway on branch `image-viewer-ux` in the
 existing `.worktrees/image-viewer-ux` worktree. **Continue there; do not create
@@ -10,80 +10,71 @@ another worktree and do not work in `master`.** The broader product contract
 below remains authoritative, but only take the next bounded slice described
 here.
 
-Slice 1 established the shared, honest image viewport. Slice 2 now turns
-Detail's single-wallpaper fullscreen preview into a reusable immersive surface:
+Slices 1 and 2 established the honest shared viewport and reusable immersive
+surface. Slice 3 adds already-loaded public gallery sessions:
 
-- `core/ui/immersive_gallery_viewer.dart` owns the edge-to-edge surface,
-  transient tap-toggle chrome, double-tap and visible zoom/reset paths, 48dp
-  Close control, Back interception, and reduced-motion transitions. It still
-  delegates all pixels and contain geometry to `GalleryViewport`.
-- `core/ui/gallery_zoom_controller.dart` exposes fitted/zoomed state around a
-  `TransformationController`; pinch and pan update the same state used by the
-  visible reset action. Fitted scale is clamped to 1.
-- `core/ui/immersive_system_ui.dart` is the project-owned seam for entering
-  `immersiveSticky` and restoring tela's normal `edgeToEdge` mode. Restoration
-  happens before Close/Back completes and again safely on disposal, with a fake
-  used by widget tests instead of a device channel.
-- Detail opens the immersive viewer as its own route. Back therefore restores
-  normal system chrome and returns to the same Detail wallpaper before Detail
-  itself can leave. The route fade, chrome opacity, progressive image fade, and
-  zoom animation all become instant when animations are disabled.
-- Focused coverage pins controller state, double tap, visible zoom/reset,
-  pinch/pan, chrome toggling, Back, reduced motion, semantics, 48dp targets,
-  orientation contain geometry, and system-chrome restoration through Close,
-  Back, and disposal.
+- `core/ui/gallery_session_controller.dart` owns stable shelf identity,
+  ordered loaded items, selected index, boundaries, immediate-neighbour
+  prefetch, append, and an optional request-more callback without importing
+  Riverpod, `PagingController`, or Wallhaven transport.
+- Browse, Favorites, and linked listings create a session from the exact shelf
+  snapshot and tapped index. Query-backed and linked shelves have distinct,
+  deterministic identities; Favorites uses `favorites`. Returning keeps the
+  existing route and scroll state.
+- Immersive chrome now has visible 48dp Previous/Next controls with true
+  boundary-disabled states and a live accessible “x of y” position. Horizontal
+  swipe and keyboard/D-pad arrows share selection behavior.
+- Raw pointer observation detects fitted swipes without competing with
+  `InteractiveViewer`. While zoomed, touch input pans and horizontal keys pan
+  by a bounded step; explicit Previous/Next still selects and resets zoom.
+- Detail, metadata loading, favorite/share/download/Set actions, and the normal
+  preview all follow the session selection. Closing fullscreen leaves Detail
+  on that selected wallpaper.
+- Immediate loaded neighbours warm their aspect-correct preview and full image.
+  No next page is requested in this slice.
 
-Slice 1 verification was:
-
-```bash
-./tool/tela analyze
-./tool/tela test
-```
-
-Both pass; the full suite currently has 404 tests.
-
-Slice 2 verification:
+Slice 3 verification:
 
 ```bash
 ./tool/tela dart format <touched Dart files>
 ./tool/tela analyze
-./tool/tela test test/core/gallery_zoom_controller_test.dart \
+./tool/tela test test/core/gallery_session_controller_test.dart \
+  test/core/gallery_zoom_controller_test.dart \
   test/core/immersive_gallery_viewer_test.dart \
   test/core/gallery_viewport_test.dart \
+  test/features/gallery_session_launch_test.dart \
   test/features/wallpaper_detail_screen_test.dart
 ./tool/tela test
 ```
 
-All pass; the full suite now has 416 tests.
+All pass; the full suite now has 426 tests.
 
-### NEXT SLICE ONLY — already-loaded public gallery sessions
+### NEXT SLICE ONLY — public viewer pagination bridge
 
-Add reusable gallery-session navigation for the wallpapers already loaded in
-Browse, Favorites, and linked listings. Do not add next-page loading yet. Do
-not touch Download History or the private viewer in this slice.
+Connect the existing optional request-more seam for Browse and linked listings
+only. Favorites remains a complete local snapshot. Do not touch Download
+History or the private viewer in this slice.
 
 The next slice must:
 
-1. Introduce a small project-owned session/controller seam carrying an ordered
-   wallpaper list, selected index, and stable gallery identity. Keep it
-   independent of `PagingController`, Riverpod, and Wallhaven transport.
-2. Open Browse, Favorites, and linked-listing Detail on the exact tapped item
-   with every item already loaded by that shelf reachable in both directions.
-3. Add visible 48dp Previous/Next controls, horizontal swipe, keyboard/D-pad
-   arrows, boundary-disabled states, and an accessible “x of y” announcement.
-   No navigation path may be gesture-only.
-4. Reset zoom when selection changes. While zoomed, horizontal input must pan
-   the current image rather than change pages; explicit Previous/Next controls
-   may still change selection and then reset zoom.
-5. Keep Detail metadata, favorite/share/download/Set actions bound to the
-   selected wallpaper after navigation. Exiting fullscreen must leave Detail
-   showing that selected wallpaper, while Back to the shelf preserves its
-   existing route and scroll state.
-6. Prefetch only the immediate already-loaded neighbours. Expose—but do not
-   connect—an optional request-more seam for the later Browse pagination slice.
-7. Add focused pure/controller and widget tests for exact starting index,
-   boundaries, all input modes, zoom gating/reset, selected action binding,
-   position semantics, neighbour prefetch, and shelf return state.
+1. Add a small `WallpaperGrid` adapter that asks its existing paging controller
+   for the next page and appends newly arrived items to the open gallery
+   session. Keep `GallerySessionController` independent of the paging package.
+2. Request more when Browse or a linked session approaches its loaded end, at
+   most once per outstanding page. Never request from Favorites.
+3. Preserve Wallhaven random seeds and existing query/paging behavior by going
+   through the grid's current fetch path; do not issue transport calls from the
+   viewer or Detail.
+4. Deduplicate appended wallpapers by id, preserve current selection, update
+   “x of y”, and enable Next as soon as a new neighbour arrives.
+5. Keep the current loaded boundary and visible controls usable while a request
+   is pending or fails. Expose a non-blocking retry path without replacing the
+   selected image or closing fullscreen.
+6. Keep neighbour prefetch limited to the immediate loaded items even as pages
+   append. Do not prefetch a whole new page.
+7. Add focused tests for near-end triggering, one in-flight request, append and
+   deduplication, seed/query preservation, failure/retry, Favorites isolation,
+   and selected/scroll state across viewer exit.
 
 End that slice with format, analyze, the full test suite, a dedicated commit,
 and another concise checkpoint update here.

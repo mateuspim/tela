@@ -13,13 +13,22 @@ import 'package:tela/domain/ports/wallhaven_api.dart';
 /// the use case *built*, which is where the seed and paging bugs live.
 class FakeWallhavenApi implements WallhavenApi {
   /// Creates a fake that answers every search with [page], or throws [failure].
-  FakeWallhavenApi({this.page, this.details, this.account, this.failure});
+  FakeWallhavenApi({
+    this.page,
+    this.details,
+    this.detailsById = const <String, WallpaperDetails>{},
+    this.account,
+    this.failure,
+  });
 
   /// The page every [search] returns, unless [failure] is set.
   final WallpaperPage? page;
 
   /// The detail response returned for every wallpaper id.
   final WallpaperDetails? details;
+
+  /// Optional per-id responses for gallery-selection tests.
+  final Map<String, WallpaperDetails> detailsById;
 
   /// The account settings `GET /settings` answers with. Defaults to tela's own
   /// defaults, which is a *different* account from every test that sets this —
@@ -32,6 +41,9 @@ class FakeWallhavenApi implements WallhavenApi {
 
   /// Every query passed to [search], oldest first.
   final List<SearchQuery> receivedQueries = <SearchQuery>[];
+
+  /// Wallpaper ids requested for complete metadata, oldest first.
+  final List<String> receivedDetailIds = <String>[];
 
   /// How many times [accountSettings] was called — the key check is one
   /// request, and it must stay one.
@@ -52,9 +64,10 @@ class FakeWallhavenApi implements WallhavenApi {
 
   @override
   Future<WallpaperDetails> wallpaperDetails(String id) async {
+    receivedDetailIds.add(id);
     final WallhavenFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
-    final WallpaperDetails? result = details;
+    final WallpaperDetails? result = detailsById[id] ?? details;
     if (result == null) {
       throw const UnexpectedResponseFailure('Fake has no detail response');
     }

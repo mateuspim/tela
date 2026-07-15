@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
+import 'package:tela/core/ui/immersive_gallery_controls.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 
 /// A reusable edge-to-edge gallery surface with zoom and transient chrome.
@@ -14,10 +16,16 @@ class ImmersiveGalleryViewer extends StatefulWidget {
     required this.semanticsLabel,
     required this.source,
     required this.onClose,
+    this.position = 1,
+    this.itemCount = 1,
+    this.onPrevious,
+    this.onNext,
     this.zoomController,
     this.systemUi = const FlutterImmersiveSystemUi(),
     super.key,
-  }) : assert(aspectRatio > 0, 'aspectRatio must be positive');
+  }) : assert(aspectRatio > 0, 'aspectRatio must be positive'),
+       assert(itemCount > 0, 'itemCount must be positive'),
+       assert(position > 0 && position <= itemCount, 'position must be valid');
 
   /// The source width divided by its height.
   final double aspectRatio;
@@ -30,6 +38,18 @@ class ImmersiveGalleryViewer extends StatefulWidget {
 
   /// Closes the surrounding fullscreen route after system chrome is restored.
   final Future<void> Function() onClose;
+
+  /// One-based selected position exposed to sighted and assistive users.
+  final int position;
+
+  /// Number of already-loaded items reachable in this session.
+  final int itemCount;
+
+  /// Selects the previous item. Null at a true loaded boundary.
+  final VoidCallback? onPrevious;
+
+  /// Selects the next item. Null at a true loaded boundary.
+  final VoidCallback? onNext;
 
   /// Optional externally owned zoom state, primarily for gallery sessions.
   final GalleryZoomController? zoomController;
@@ -56,6 +76,9 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
   bool _isExiting = false;
   bool _allowPop = false;
   Offset _doubleTapPosition = Offset.zero;
+  int _pointerCount = 0;
+  Offset? _swipeStart;
+  Offset? _swipeLatest;
 
   @override
   void initState() {
@@ -172,33 +195,98 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
   }
 
   Widget _imageCanvas(AppLocalizations l10n) {
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: _chromeVisible
-          ? l10n.galleryHideControls
-          : l10n.galleryShowControls,
-      onTap: _toggleChrome,
-      child: GalleryViewport(
-        aspectRatio: widget.aspectRatio,
-        semanticsLabel: widget.semanticsLabel,
-        source: widget.source,
-        transformationController: _zoomController.transformationController,
-        onInteractionStart: _stopProgrammaticZoom,
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _startSwipe,
+      onPointerMove: _updateSwipe,
+      onPointerUp: _finishSwipe,
+      onPointerCancel: _cancelSwipe,
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        label: _chromeVisible
+            ? l10n.galleryHideControls
+            : l10n.galleryShowControls,
         onTap: _toggleChrome,
-        onDoubleTapDown: _rememberDoubleTap,
-        onDoubleTap: _toggleDoubleTapZoom,
+        child: GalleryViewport(
+          aspectRatio: widget.aspectRatio,
+          semanticsLabel: widget.semanticsLabel,
+          source: widget.source,
+          transformationController: _zoomController.transformationController,
+          onInteractionStart: _stopProgrammaticZoom,
+          onTap: _toggleChrome,
+          onDoubleTapDown: _rememberDoubleTap,
+          onDoubleTap: _toggleDoubleTapZoom,
+        ),
       ),
     );
   }
 
+  void _startSwipe(PointerDownEvent event) {
+    _pointerCount++;
+    if (_pointerCount != 1 || _zoomController.isZoomed) {
+      _swipeStart = null;
+      return;
+    }
+    _swipeStart = event.localPosition;
+    _swipeLatest = event.localPosition;
+  }
+
+  void _updateSwipe(PointerMoveEvent event) {
+    if (_pointerCount == 1 && _swipeStart != null) {
+      _swipeLatest = event.localPosition;
+    }
+  }
+
+  void _finishSwipe(PointerUpEvent event) {
+    final Offset? start = _swipeStart;
+    final Offset end = _swipeLatest ?? event.localPosition;
+    if (_pointerCount > 0) _pointerCount--;
+    _swipeStart = null;
+    _swipeLatest = null;
+    if (_pointerCount != 0 || start == null || _zoomController.isZoomed) return;
+    final Offset delta = end - start;
+    if (delta.dx.abs() < 64 || delta.dx.abs() <= delta.dy.abs()) return;
+    if (delta.dx < 0) {
+      widget.onNext?.call();
+    } else {
+      widget.onPrevious?.call();
+    }
+  }
+
+  void _cancelSwipe(PointerCancelEvent event) {
+    if (_pointerCount > 0) _pointerCount--;
+    _swipeStart = null;
+    _swipeLatest = null;
+  }
+
+  void _handlePreviousInput() {
+    if (_zoomController.isZoomed) {
+      _zoomController.panBy(const Offset(48, 0));
+      return;
+    }
+    widget.onPrevious?.call();
+  }
+
+  void _handleNextInput() {
+    if (_zoomController.isZoomed) {
+      _zoomController.panBy(const Offset(-48, 0));
+      return;
+    }
+    widget.onNext?.call();
+  }
+
   Widget _viewerChrome() {
-    return _ViewerChrome(
+    return ImmersiveGalleryControls(
       visible: _chromeVisible,
       duration: _chromeDuration(),
       zoomed: _zoomController.isZoomed,
       onToggleZoom: _toggleCenteredZoom,
       onClose: () => unawaited(_exitFullscreen()),
+      position: widget.position,
+      itemCount: widget.itemCount,
+      onPrevious: widget.onPrevious,
+      onNext: widget.onNext,
     );
   }
 
@@ -210,95 +298,27 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
       onPopInvokedWithResult: (bool didPop, void result) {
         if (!didPop) unawaited(_exitFullscreen());
       },
-      child: Material(
-        color: Colors.black,
-        child: Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            _imageCanvas(l10n),
-            _viewerChrome(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ViewerChrome extends StatelessWidget {
-  const _ViewerChrome({
-    required this.visible,
-    required this.duration,
-    required this.zoomed,
-    required this.onToggleZoom,
-    required this.onClose,
-  });
-
-  final bool visible;
-  final Duration duration;
-  final bool zoomed;
-  final VoidCallback onToggleZoom;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    return IgnorePointer(
-      ignoring: !visible,
-      child: ExcludeSemantics(
-        excluding: !visible,
-        child: AnimatedOpacity(
-          key: const Key('immersive-viewer-chrome'),
-          opacity: visible ? 1 : 0,
-          duration: duration,
-          child: SafeArea(
-            minimum: const EdgeInsets.all(12),
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: _controlRow(l10n),
+      child: CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          const SingleActivator(LogicalKeyboardKey.arrowLeft):
+              _handlePreviousInput,
+          const SingleActivator(LogicalKeyboardKey.arrowRight):
+              _handleNextInput,
+        },
+        child: Focus(
+          autofocus: true,
+          child: Material(
+            color: Colors.black,
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                _imageCanvas(l10n),
+                _viewerChrome(),
+              ],
             ),
           ),
         ),
       ),
     );
-  }
-
-  Widget _controlRow(AppLocalizations l10n) {
-    return Row(
-      children: <Widget>[
-        _alignedControl(Alignment.centerLeft, _zoomButton(l10n)),
-        const SizedBox(width: 12),
-        _alignedControl(Alignment.centerRight, _closeButton(l10n)),
-      ],
-    );
-  }
-
-  Widget _alignedControl(Alignment alignment, Widget child) {
-    return Expanded(
-      child: Align(alignment: alignment, child: child),
-    );
-  }
-
-  Widget _zoomButton(AppLocalizations l10n) {
-    return FilledButton.tonalIcon(
-      key: const Key('immersive-viewer-zoom'),
-      onPressed: onToggleZoom,
-      style: _buttonStyle(),
-      icon: Icon(zoomed ? Icons.zoom_out_map : Icons.zoom_in),
-      label: Text(zoomed ? l10n.galleryResetZoom : l10n.galleryZoomIn),
-    );
-  }
-
-  Widget _closeButton(AppLocalizations l10n) {
-    return FilledButton.icon(
-      key: const Key('immersive-viewer-close'),
-      onPressed: onClose,
-      style: _buttonStyle(),
-      icon: const Icon(Icons.close),
-      label: Text(l10n.galleryClose),
-    );
-  }
-
-  ButtonStyle _buttonStyle() {
-    return FilledButton.styleFrom(minimumSize: const Size(48, 48));
   }
 }

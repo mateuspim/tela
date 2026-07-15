@@ -937,6 +937,29 @@
     "description": "Shown by the system prompt when switching the app-lock off. Turning the lock off opens the library, so it asks for the same proof the library does — otherwise the gate is one ungated tap away from being removed."
   },
 
+  "galleryPrevious": "Previous",
+  "@galleryPrevious": {
+    "description": "Accessible label for selecting the previous loaded gallery item."
+  },
+
+  "galleryNext": "Next",
+  "@galleryNext": {
+    "description": "Accessible label for selecting the next loaded gallery item."
+  },
+
+  "galleryPosition": "{position} of {total}",
+  "@galleryPosition": {
+    "description": "Live gallery position announcement.",
+    "placeholders": {
+      "position": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+
   "settingsAppLockLockedOut": "Too many attempts. Wait a moment, then try again.",
   "@settingsAppLockLockedOut": {
     "description": "Shown when the app-lock cannot be switched off because the sensor is locked out. Deliberately refused rather than waved through: a lockout is the lock working, and letting it through would make five failed fingerprints the way past it."

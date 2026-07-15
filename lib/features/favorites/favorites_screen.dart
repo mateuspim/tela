@@ -6,10 +6,12 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
+import 'package:tela/features/detail/wallpaper_gallery_session.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 
 /// The wallpapers the user kept, read from SQLite.
@@ -64,18 +66,41 @@ class FavoritesScreen extends ConsumerWidget {
       itemCount: saved.length,
       itemBuilder: (BuildContext context, int index) => WallpaperTile(
         wallpaper: saved[index],
-        onTap: () => _openDetail(context, saved[index]),
+        onTap: () => _openDetail(context, saved, index),
       ),
     );
   }
 
-  void _openDetail(BuildContext context, Wallpaper wallpaper) {
-    unawaited(
-      context.pushNamed(
+  void _openDetail(
+    BuildContext context,
+    List<Wallpaper> saved,
+    int selectedIndex,
+  ) {
+    unawaited(_pushDetail(context, saved, selectedIndex));
+  }
+
+  Future<void> _pushDetail(
+    BuildContext context,
+    List<Wallpaper> saved,
+    int selectedIndex,
+  ) async {
+    final GallerySessionController<Wallpaper> session =
+        createWallpaperGallerySession(
+          context: context,
+          identity: 'favorites',
+          wallpapers: saved,
+          initialIndex: selectedIndex,
+        );
+    try {
+      await context.pushNamed<void>(
         TelaRoutes.detailName,
-        pathParameters: <String, String>{'wallpaperId': wallpaper.id},
-        extra: wallpaper,
-      ),
-    );
+        pathParameters: <String, String>{
+          'wallpaperId': session.selectedItem.id,
+        },
+        extra: session,
+      );
+    } finally {
+      session.dispose();
+    }
   }
 }

@@ -53,6 +53,16 @@ final class GalleryZoomController extends ChangeNotifier {
     transformationController.value = Matrix4.identity();
   }
 
+  /// Pans a zoomed image by a small logical offset for keyboard and D-pad use.
+  void panBy(Offset offset) {
+    if (!isZoomed) return;
+    final Matrix4 next = Matrix4.copy(transformationController.value);
+    next
+      ..setEntry(0, 3, next.entry(0, 3) + offset.dx)
+      ..setEntry(1, 3, next.entry(1, 3) + offset.dy);
+    transformationController.value = next;
+  }
+
   bool _readsAsZoomed() {
     return transformationController.value.getMaxScaleOnAxis() > 1.001;
   }

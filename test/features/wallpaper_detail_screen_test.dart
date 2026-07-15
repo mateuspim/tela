@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
@@ -15,6 +16,7 @@ import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
+import 'package:tela/features/favorites/favorite_button.dart';
 
 import '../fakes/fake_download_history.dart';
 import '../fakes/fake_favorites_repository.dart';
@@ -23,6 +25,7 @@ import '../fakes/fake_immersive_system_ui.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_applier.dart';
 import '../fakes/fake_wallpaper_sharer.dart';
 
 void main() {
@@ -105,6 +108,95 @@ void main() {
     expect(find.byType(WallpaperDetailScreen), findsOneWidget);
     expect(systemUi.restoreCalls, 1);
   });
+
+  testWidgets(
+    'gallery navigation resets zoom and rebinds Detail and its actions',
+    (WidgetTester tester) async {
+      final WallpaperDetails first = _details();
+      final WallpaperDetails second = _otherDetails();
+      final GallerySessionController<Wallpaper> gallery =
+          GallerySessionController<Wallpaper>(
+            identity: 'favorites',
+            items: <Wallpaper>[first.wallpaper, second.wallpaper],
+            initialIndex: 0,
+          );
+      final FakeWallhavenApi api = FakeWallhavenApi(
+        detailsById: <String, WallpaperDetails>{
+          first.wallpaper.id: first,
+          second.wallpaper.id: second,
+        },
+      );
+      final FakeImageStore imageStore = FakeImageStore();
+      final FakeWallpaperSharer sharer = FakeWallpaperSharer();
+      final FakeWallpaperApplier applier = FakeWallpaperApplier();
+      await _pumpDetail(
+        tester,
+        first,
+        api: api,
+        gallerySession: gallery,
+        imageStore: imageStore,
+        sharer: sharer,
+        applier: applier,
+        disableAnimations: true,
+      );
+
+      await tester.tap(find.byTooltip('View wallpaper full screen'));
+      await tester.pumpAndSettle();
+      tester
+          .widget<ButtonStyleButton>(
+            find.byKey(const Key('immersive-viewer-zoom')),
+          )
+          .onPressed!();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Reset zoom'), findsOneWidget);
+
+      tester
+          .widget<ButtonStyleButton>(
+            find.byKey(const Key('immersive-viewer-next')),
+          )
+          .onPressed!();
+      await tester.pump();
+
+      expect(gallery.selectedItem, second.wallpaper);
+      expect(find.text('Zoom in'), findsOneWidget);
+      expect(find.bySemanticsLabel('2 of 2'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('Wallpaper ${second.wallpaper.id}'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+
+      final FavoriteButton favorite = tester.widget<FavoriteButton>(
+        find.byType(FavoriteButton),
+      );
+      expect(favorite.wallpaper, second.wallpaper);
+      expect(find.text('second-uploader'), findsOneWidget);
+
+      await tester.tap(find.text('Set wallpaper'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Home screen'));
+      await tester.pumpAndSettle();
+      expect(applier.receivedSource, Uri.parse(second.wallpaper.fullImageUrl));
+
+      await tester.tap(find.bySemanticsLabel('Download'));
+      await tester.pumpAndSettle();
+      expect(imageStore.receivedImageUrl, second.wallpaper.fullImageUrl);
+
+      await tester.tap(find.byTooltip('Share'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Link'));
+      await tester.pumpAndSettle();
+      expect(
+        sharer.sharedLinks.single,
+        Uri.parse('https://wallhaven.cc/w/${second.wallpaper.id}'),
+      );
+
+      await tester.pumpWidget(const SizedBox());
+      gallery.dispose();
+    },
+  );
 
   testWidgets('uses preview and information panes on a wide screen', (
     WidgetTester tester,
@@ -302,12 +394,16 @@ Future<void> _pumpDetail(
   StorageSettings? settings,
   FakeWallpaperSharer? sharer,
   FakeImmersiveSystemUi? immersiveSystemUi,
+  FakeWallhavenApi? api,
+  GallerySessionController<Wallpaper>? gallerySession,
+  FakeWallpaperApplier? applier,
+  bool disableAnimations = false,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
         wallhavenApiProvider.overrideWithValue(
-          FakeWallhavenApi(details: details),
+          api ?? FakeWallhavenApi(details: details),
         ),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         settingsRepositoryProvider.overrideWithValue(
@@ -326,8 +422,18 @@ Future<void> _pumpDetail(
         ),
         if (imageStore != null)
           imageStoreProvider.overrideWithValue(imageStore),
+        if (applier != null)
+          wallpaperApplierProvider.overrideWithValue(applier),
       ],
       child: MaterialApp(
+        builder: disableAnimations
+            ? (BuildContext context, Widget? child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(disableAnimations: true),
+                child: child!,
+              )
+            : null,
         localizationsDelegates: const <LocalizationsDelegate<Object>>[
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
@@ -336,7 +442,8 @@ Future<void> _pumpDetail(
         ],
         supportedLocales: AppLocalizations.supportedLocales,
         home: WallpaperDetailScreen(
-          wallpaper: details.wallpaper,
+          wallpaper: gallerySession == null ? details.wallpaper : null,
+          gallerySession: gallerySession,
           immersiveSystemUi: immersiveSystemUi ?? FakeImmersiveSystemUi(),
         ),
       ),
@@ -375,5 +482,34 @@ WallpaperDetails _details({Purity purity = Purity.sfw}) {
     source: 'https://example.com/source',
     views: 4523,
     favorites: 128,
+  );
+}
+
+WallpaperDetails _otherDetails() {
+  const Wallpaper wallpaper = Wallpaper(
+    id: 'bbb222',
+    fullImageUrl: 'https://w.wallhaven.cc/full/bb/wallhaven-bbb222.jpg',
+    thumbSmallUrl: 'https://th.wallhaven.cc/small/bb/bbb222.jpg',
+    thumbLargeUrl: 'https://th.wallhaven.cc/lg/bb/bbb222.jpg',
+    thumbOriginalUrl: 'https://th.wallhaven.cc/orig/bb/bbb222.jpg',
+    resolution: Resolution(2160, 3840),
+    fileSizeBytes: 2048,
+    purity: Purity.sfw,
+    category: Category.general,
+    colors: <String>['#0066cc'],
+  );
+  return const WallpaperDetails(
+    wallpaper: wallpaper,
+    ratio: '0.56',
+    fileType: 'image/jpeg',
+    tags: <WallpaperTag>[WallpaperTag(id: 303, name: 'portrait')],
+    uploader: WallpaperUploader(
+      username: 'second-uploader',
+      group: 'User',
+      avatarUrl: 'https://example.com/second-avatar.jpg',
+    ),
+    source: '',
+    views: 12,
+    favorites: 3,
   );
 }

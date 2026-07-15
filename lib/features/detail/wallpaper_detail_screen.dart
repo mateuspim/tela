@@ -8,7 +8,7 @@ import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
-import 'package:tela/core/ui/immersive_gallery_viewer.dart';
+import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
@@ -28,6 +28,7 @@ import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/use_cases/share_wallpaper.dart';
 import 'package:tela/features/detail/progressive_wallpaper_preview.dart';
+import 'package:tela/features/detail/wallpaper_immersive_session.dart';
 import 'package:tela/features/detail/wallpaper_metadata.dart';
 import 'package:tela/features/favorites/favorite_button.dart';
 
@@ -45,13 +46,20 @@ final FutureProviderFamily<WallpaperDetails, String> wallpaperDetailsProvider =
 class WallpaperDetailScreen extends ConsumerStatefulWidget {
   /// Creates the detail screen for a grid [wallpaper].
   const WallpaperDetailScreen({
-    required this.wallpaper,
+    this.wallpaper,
+    this.gallerySession,
     this.immersiveSystemUi = const FlutterImmersiveSystemUi(),
     super.key,
-  });
+  }) : assert(
+         (wallpaper == null) != (gallerySession == null),
+         'provide either wallpaper or gallerySession',
+       );
 
   /// The selected wallpaper, including its full-resolution URL.
-  final Wallpaper wallpaper;
+  final Wallpaper? wallpaper;
+
+  /// An ordered shelf snapshot. Its creator retains disposal ownership.
+  final GallerySessionController<Wallpaper>? gallerySession;
 
   /// The Android system-chrome seam used by the immersive preview.
   final ImmersiveSystemUi immersiveSystemUi;
@@ -62,9 +70,38 @@ class WallpaperDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
+  late final GallerySessionController<Wallpaper> _gallery;
+  late final bool _ownsGallery;
   bool _isApplying = false;
   bool _isDownloading = false;
   bool _isSharing = false;
+
+  Wallpaper get _wallpaper => _gallery.selectedItem;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownsGallery = widget.gallerySession == null;
+    _gallery =
+        widget.gallerySession ??
+        GallerySessionController<Wallpaper>(
+          identity: 'wallpaper:${widget.wallpaper!.id}',
+          items: <Wallpaper>[widget.wallpaper!],
+          initialIndex: 0,
+        );
+    _gallery.addListener(_selectionChanged);
+  }
+
+  void _selectionChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _gallery.removeListener(_selectionChanged);
+    if (_ownsGallery) _gallery.dispose();
+    super.dispose();
+  }
 
   Future<void> _chooseTarget() async {
     final WallpaperTarget? target = await chooseWallpaperTarget(context);
@@ -75,7 +112,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   Future<void> _apply(WallpaperTarget target) async {
     setState(() => _isApplying = true);
     try {
-      await ref.read(applyWallpaperProvider)(widget.wallpaper, target);
+      await ref.read(applyWallpaperProvider)(_wallpaper, target);
       if (mounted) _showResult(AppLocalizations.of(context).detailApplySuccess);
     } on WallpaperApplyFailure {
       if (mounted) _showResult(AppLocalizations.of(context).detailApplyFailure);
@@ -103,7 +140,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
         children: <Widget>[
           ListTile(title: Text(l10n.detailDownloadChooseTier)),
           for (final StorageTier tier in StorageSettings.choicesFor(
-            widget.wallpaper.purity,
+            _wallpaper.purity,
           ))
             _downloadTierTile(l10n, tier),
         ],
@@ -132,7 +169,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   Future<void> _download([StorageTier? tier]) async {
     setState(() => _isDownloading = true);
     try {
-      await ref.read(downloadWallpaperProvider)(widget.wallpaper, tier: tier);
+      await ref.read(downloadWallpaperProvider)(_wallpaper, tier: tier);
       ref
         ..invalidate(recentDownloadsProvider)
         ..invalidate(privateImagesProvider);
@@ -154,7 +191,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   Future<void> _chooseShare() async {
     final ShareOption? option = await chooseShareOption(
       context,
-      shareOptionsFor(widget.wallpaper.purity),
+      shareOptionsFor(_wallpaper.purity),
     );
     if (option == null || !mounted) return;
     await _share(option);
@@ -165,8 +202,8 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     try {
       final ShareWallpaper share = ref.read(shareWallpaperProvider);
       await switch (option) {
-        ShareOption.link => share.link(widget.wallpaper),
-        ShareOption.image => share.image(widget.wallpaper),
+        ShareOption.link => share.link(_wallpaper),
+        ShareOption.image => share.image(_wallpaper),
       };
     } on WallpaperShareFailure {
       if (mounted) _showResult(AppLocalizations.of(context).detailShareFailure);
@@ -194,12 +231,12 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final AsyncValue<WallpaperDetails> details = ref.watch(
-      wallpaperDetailsProvider(widget.wallpaper.id),
+      wallpaperDetailsProvider(_wallpaper.id),
     );
     final bool expanded = MediaQuery.sizeOf(context).width >= _expandedWidth;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.wallpaper.resolution.toString()),
+        title: Text(_wallpaper.resolution.toString()),
         actions: expanded ? null : _compactActions(l10n),
       ),
       body: expanded
@@ -212,7 +249,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
 
   List<Widget> _compactActions(AppLocalizations l10n) {
     return <Widget>[
-      FavoriteButton(wallpaper: widget.wallpaper),
+      FavoriteButton(wallpaper: _wallpaper),
       _shareButton(l10n),
       _downloadButton(l10n),
     ];
@@ -286,7 +323,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        ProgressiveWallpaperPreview(wallpaper: widget.wallpaper),
+        ProgressiveWallpaperPreview(wallpaper: _wallpaper),
         Positioned(
           top: 12,
           right: 12,
@@ -325,13 +362,8 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   }
 
   Widget _fullscreenSurface(BuildContext routeContext) {
-    final AppLocalizations l10n = AppLocalizations.of(routeContext);
-    return ImmersiveGalleryViewer(
-      aspectRatio:
-          widget.wallpaper.resolution.width /
-          widget.wallpaper.resolution.height,
-      semanticsLabel: l10n.detailPreviewLabel(widget.wallpaper.id),
-      source: ProgressiveWallpaperPreview.sourceFor(widget.wallpaper),
+    return WallpaperImmersiveSession(
+      gallery: _gallery,
       systemUi: widget.immersiveSystemUi,
       onClose: () async => Navigator.of(routeContext).pop(),
     );
@@ -351,7 +383,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Row(
         children: <Widget>[
-          FavoriteButton(wallpaper: widget.wallpaper),
+          FavoriteButton(wallpaper: _wallpaper),
           const Spacer(),
           _shareButton(l10n),
           _downloadButton(l10n),

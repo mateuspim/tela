@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/tela_shell.dart';
+import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/features/browse/browse_screen.dart';
@@ -58,10 +59,19 @@ abstract final class TelaRouter {
           path: TelaRoutes.detailPath,
           name: TelaRoutes.detailName,
           redirect: (_, GoRouterState state) =>
-              state.extra is Wallpaper ? null : TelaRoutes.browsePath,
-          builder: (_, GoRouterState state) => WallpaperDetailScreen(
-            wallpaper: state.extra! as Wallpaper,
-          ),
+              state.extra is Wallpaper ||
+                  state.extra is GallerySessionController<Wallpaper>
+              ? null
+              : TelaRoutes.browsePath,
+          builder: (_, GoRouterState state) {
+            final Object extra = state.extra!;
+            return WallpaperDetailScreen(
+              wallpaper: extra is Wallpaper ? extra : null,
+              gallerySession: extra is GallerySessionController<Wallpaper>
+                  ? extra
+                  : null,
+            );
+          },
         ),
         GoRoute(
           path: TelaRoutes.linkedListingPath,
