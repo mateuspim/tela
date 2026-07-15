@@ -91,6 +91,8 @@ void main() {
               'location': 'file:///data/user/0/cc.pym.tela/files/w-e7jvjd.jpg',
               'savedAt': 1750000000000,
               'sizeBytes': 2048,
+              'width': 1080,
+              'height': 2400,
             },
           ],
         },
@@ -104,10 +106,44 @@ void main() {
       expect(fake.receivedMethod, 'listPrivateImages');
       expect(images.single.id, 'e7jvjd');
       expect(images.single.sizeBytes, 2048);
+      expect(images.single.width, 1080);
+      expect(images.single.height, 2400);
+      expect(images.single.aspectRatio, closeTo(1080 / 2400, 1e-9));
       expect(
         images.single.savedAt,
         DateTime.fromMillisecondsSinceEpoch(1750000000000),
       );
+    });
+
+    test('a corrupt file lists with unknown, safe dimensions', () async {
+      // The native bounds decode answers -1 for a file it cannot read; the row
+      // must still list (so the library is not emptied) but carry no ratio, so
+      // the gallery falls back to a square, broken-image state rather than
+      // dividing by an unknown dimension.
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: <Object?, Object?>{
+            'success': true,
+            'images': <Object?>[
+              <Object?, Object?>{
+                'id': 'corrupt',
+                'location': 'file:///files/w-corrupt.jpg',
+                'savedAt': 1750000000000,
+                'sizeBytes': 8,
+                'width': -1,
+                'height': -1,
+              },
+            ],
+          },
+        ).call,
+      );
+
+      final PrivateImage image = (await store.privateImages()).single;
+
+      expect(image.id, 'corrupt');
+      expect(image.width, isNull);
+      expect(image.height, isNull);
+      expect(image.aspectRatio, isNull);
     });
 
     test('an empty tier lists nothing rather than failing', () async {

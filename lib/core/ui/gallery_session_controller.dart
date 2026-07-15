@@ -122,6 +122,25 @@ final class GallerySessionController<T> extends ChangeNotifier {
     _prefetchNeighbours();
   }
 
+  /// Removes the selected item, advancing to the nearest one that remains.
+  ///
+  /// Selection stays on the same index, so the item that slid up from behind
+  /// the deleted one — the *next* — becomes current; deleting the last item
+  /// clamps back to the new last, the *previous*. Returns false when nothing
+  /// remains, leaving an empty session the caller must close rather than draw:
+  /// the private viewer deletes with this and pops to the grid's empty state.
+  bool removeSelected() {
+    final List<T> remaining = List<T>.of(_items)..removeAt(_selectedIndex);
+    _items = List<T>.unmodifiable(remaining);
+    if (remaining.isEmpty) return false;
+    if (_selectedIndex >= remaining.length) {
+      _selectedIndex = remaining.length - 1;
+    }
+    notifyListeners();
+    _prefetchNeighbours();
+    return true;
+  }
+
   /// Asks the shelf for its next page, at most once at a time.
   ///
   /// A failed request is recorded rather than thrown, so an auto-trigger from

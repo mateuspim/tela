@@ -25,6 +25,7 @@ import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
 import 'package:tela/domain/ports/wallpaper_sharer.dart';
 import 'package:tela/domain/use_cases/apply_download.dart';
+import 'package:tela/domain/use_cases/apply_private_image.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
 import 'package:tela/domain/use_cases/forget_api_key.dart';
@@ -139,6 +140,13 @@ final Provider<DownloadWallpaper> downloadWallpaperProvider =
 final Provider<ApplyDownload> applyDownloadProvider = Provider<ApplyDownload>(
   (Ref ref) => ApplyDownload(applier: ref.watch(wallpaperApplierProvider)),
 );
+
+/// Sets an app-private wallpaper, from the file only tela can open.
+final Provider<ApplyPrivateImage> applyPrivateImageProvider =
+    Provider<ApplyPrivateImage>(
+      (Ref ref) =>
+          ApplyPrivateImage(applier: ref.watch(wallpaperApplierProvider)),
+    );
 
 /// Shares one wallpaper out — its Wallhaven link, or the image file itself.
 final Provider<ShareWallpaper> shareWallpaperProvider =

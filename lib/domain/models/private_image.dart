@@ -8,11 +8,17 @@ import 'package:meta/meta.dart';
 @immutable
 class PrivateImage {
   /// Creates a listing entry for one app-private file.
+  ///
+  /// [width] and [height] are the file's pixel dimensions from a bounds-only
+  /// decode, and are null when the file could not be decoded — a corrupt or
+  /// truncated download the gallery must still render as a safe broken state.
   const PrivateImage({
     required this.id,
     required this.location,
     required this.savedAt,
     required this.sizeBytes,
+    this.width,
+    this.height,
   });
 
   /// Wallhaven's id, recovered from the file name.
@@ -26,6 +32,24 @@ class PrivateImage {
 
   /// Size of the file on disk.
   final int sizeBytes;
+
+  /// Pixel width from a bounds-only decode, or null when it could not decode.
+  final int? width;
+
+  /// Pixel height from a bounds-only decode, or null when it could not decode.
+  final int? height;
+
+  /// The file's width over its height, or null when either is unknown.
+  ///
+  /// Null for a corrupt file whose bounds could not be read: the tile falls
+  /// back to a square, and the viewer to a neutral square canvas, both showing
+  /// a safe broken-image state rather than dividing by an unknown dimension.
+  double? get aspectRatio {
+    final int? w = width;
+    final int? h = height;
+    if (w == null || h == null || w <= 0 || h <= 0) return null;
+    return w / h;
+  }
 
   @override
   bool operator ==(Object other) => other is PrivateImage && other.id == id;

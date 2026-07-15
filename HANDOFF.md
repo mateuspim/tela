@@ -2,13 +2,90 @@
 
 Updated: 2026-07-15
 
-## CURRENT CHECKPOINT — image viewer UX slice 5 complete
+## CURRENT CHECKPOINT — image viewer UX slice 6 complete
 
 The staged implementation is now underway on branch `image-viewer-ux` in the
 existing `.worktrees/image-viewer-ux` worktree. **Continue there; do not create
 another worktree and do not work in `master`.** The broader product contract
 below remains authoritative, but only take the next bounded slice described
 here.
+
+Slice 6 gives the private/NSFW library the same first-class fullscreen viewing
+as Browse and History, the image dimensions its tiles never had, and a
+Set-from-private flow (delivery-order step 4):
+
+- **Dimensions.** The native listing (`ImageStorage.listPrivate`) now runs a
+  bounds-only decode (`BitmapFactory.Options.inJustDecodeBounds`) per file and
+  returns pixel `width`/`height`; a corrupt file reads back as `-1`.
+  `MethodChannelImageStore` maps those to `PrivateImage.width/height` as `int?`
+  (null for absent or non-positive), and `PrivateImage.aspectRatio` is null when
+  either is unknown. The grid is now `MasonryGridView` with each tile shaped to
+  its `aspectRatio`, falling back to a square for a corrupt file; the viewer uses
+  the same ratio, or a square canvas for an unknown one.
+- **Secure viewer.** `features/private_library/private_immersive_session.dart`
+  wraps the shared `ImmersiveGalleryViewer` over one local
+  `GallerySessionController<PrivateImage>` (complete list, **no** `requestMore`).
+  It holds `FLAG_SECURE` and satisfies the app-lock **independently** of the
+  grid via a new `PrivateSecureAccess` mixin (`private_secure_access.dart`) that
+  both the grid and the viewer mix in — so neither leans on the other, and the
+  gate is per-entry (not per-swipe). The `ScreenGuard` adapter is now
+  **reference-counted**: the grid and viewer both acquire, and the window clears
+  only after the last release, so the viewer popping never strips protection
+  from the grid still behind it. `FakeScreenGuard` folds the same balance.
+- **Source.** `PrivateGallerySource` resolves the plain `file:` location through
+  the existing `LocalPreviewCache` (non-temporary — the user's own file is never
+  released) with **no** network fallback; an unreadable or corrupt file renders a
+  safe broken-image state. No path is ever placed in shared cache or logged.
+- **Set + delete.** A pure-Dart `ApplyPrivateImage` use case
+  (`applyPrivateImageProvider`) sends the private URI through `WallpaperApplier`
+  — the viewer's primary action, Home/Lock/Both behind it. There is **no** share
+  action, by design. Delete is explicit and confirmed;
+  `GallerySessionController.removeSelected()` advances to the next image (the one
+  that slid into the index), then the previous at the end, and returns false when
+  empty so the viewer pops to the grid's empty state. The secure window stays up
+  through grid, viewer, target sheet, and delete confirmation.
+- Position/semantics announcements never carry a file name or path (the position
+  is the `galleryPosition` "x of y"; the image label is the path-free
+  `privateLibraryImageLabel`). No new l10n strings were needed — Set, delete, and
+  the target sheet all reuse existing keys, so `gen-l10n` was not run.
+
+Slice 6 verification (all green; full suite now 470 tests):
+
+```bash
+./tool/tela dart format <touched Dart files>
+./tool/tela analyze
+./tool/tela test test/domain/models/private_image_test.dart \
+  test/data/method_channel_image_store_test.dart \
+  test/data/method_channel_screen_guard_test.dart \
+  test/domain/use_cases/apply_private_image_test.dart \
+  test/core/gallery_session_controller_test.dart \
+  test/features/private_immersive_session_test.dart
+./tool/tela test
+```
+
+New/covered tests: dimension mapping including a corrupt file (native `-1` →
+null dims, safe state); reference-counted screen guard (only the window's edges
+cross the channel); `ApplyPrivateImage` reaches the applier with the private URI
+and never falls back; `removeSelected` next/previous/empty; app-lock pass/fail
+gating the viewer and not re-running on swipe; `FLAG_SECURE` acquired before
+content and held across viewer → target sheet → delete confirmation, released on
+dispose; no share action; Set → target → applier; delete next-then-previous-then
+-empty; the position announcement carrying no path; corrupt file safe state.
+Named fakes: `FakeWallpaperApplier`, `FakeScreenGuard`, `FakeAppLock`,
+`FakeLocalPreviewCache`, `FakeImageStore`.
+
+One note for the next agent: the native `BitmapFactory` bounds decode has not
+run on a device — the Dart mapping is proven through the channel fake, and the
+`file:`-scheme `LocalPreviewCache` path is exercised (private files take no
+native round-trip), but a device pass should confirm a real private file decodes
+its bounds and that `FLAG_SECURE` survives the grid↔viewer round trip. Also note
+the shared viewer's close **button** relies on `ImmersiveGalleryViewer`'s
+`PopScope`/`_allowPop`, which does not pop on the first synchronous `maybePop`;
+the private viewer's own delete-to-empty exit uses an unconditional
+`Navigator.pop()` to sidestep that, but the button-close path is inherited from
+History and unverified on hardware.
+
+### PRIOR SLICE — slice 5 (History viewer)
 
 Slice 5 gives Download History the same first-class fullscreen viewing as
 Browse and moves target selection behind a Set action (delivery-order step 3):
@@ -166,54 +243,46 @@ Slice 3 verification:
 
 All pass; the full suite now has 426 tests.
 
-### NEXT SLICE ONLY — private/NSFW secure viewer (delivery-order step 4)
+### NEXT SLICE ONLY — gallery paging/transitions + shelf polish (step 5)
 
-Give the private/NSFW library the same first-class fullscreen viewing, plus the
-image dimensions its tiles have never had, and a Set-from-private flow. This is
-delivery-order step 4. Slice 5 (History) is done; **reuse the same shared
-`ImmersiveGalleryViewer` and its `primaryAction`/`actions`/`statusOverlay` slots
-— do not add a new zoom implementation.** The private library is
-`features/private_library/`, listed by `privateImagesProvider`, and every
-`PrivateImage` must be treated as sensitive even when its original purity is
-unknown.
+The viewers are all built (Detail, History, Private). Step 5 is the last
+implementation slice before the device matrix: finish the **shelf polish** and
+the **transitions** that tie every gallery together, without re-opening the
+domain, storage, or privacy model. Reuse the shared `GalleryViewport`,
+`ImmersiveGalleryViewer`, and `GallerySessionController` — this is a
+consistency-and-motion pass, not new surfaces.
 
-1. **Dimensions.** `PrivateImage` carries no width/height, so its tiles are
-   square `BoxFit.cover` today, cropping every non-square file in the one
-   gallery where recognising an image before acting on it matters most. Extend
-   the native private listing (`ImageStorage.listPrivate` + the DTO mapping in
-   `MethodChannelImageStore`) to return pixel width/height from a **bounds-only**
-   decode (`BitmapFactory.Options.inJustDecodeBounds`), add those to
-   `PrivateImage`, and use them for aspect-ratio tiles and the viewer aspect
-   ratio. A corrupt/unreadable file must still render a safe broken-image state
-   and must not crash the gallery.
-2. **Secure viewer.** Tapping a private tile opens a secure fullscreen gallery
-   (one local `GallerySessionController<PrivateImage>` over the complete list,
-   like History — no `requestMore`). The route must **independently** hold
-   `FLAG_SECURE` (via `ScreenGuard`) and respect the app-lock gate — do not rely
-   on the grid staying mounted behind it. Swiping visits the other private
-   images without dropping `FLAG_SECURE` or re-running authentication. Position
-   announcements must never expose a file name or path; there is no image or
-   link sharing here, by design.
-3. **Source.** Private files are plain `file:` locations under tela's internal
-   dir, so the existing `LocalPreviewCache` resolves them directly (non-temporary
-   — never release the user's own file). Never place a private preview in shared
-   cache or MediaStore, and never log its path.
-4. **Set from private.** Add a small pure-Dart use case that sends the private
-   file URI through the existing `WallpaperApplier` port (the primary action,
-   Home/Lock/Both behind it — the same shape as History's Set). Delete stays an
-   explicit, confirmed action that returns to the nearest remaining image or the
-   empty state; the secure window must stay active through grid, viewer, target
-   sheet, and delete confirmation, releasing only after leaving the private flow.
+1. **Consistent shelf polish.** Apply one quality bar across Browse, Favorites,
+   History, and Private (see "Gallery and screen polish" below): a 12dp grid
+   rhythm and 16dp corners everywhere, responsive column counts that never go
+   comically narrow, edge padding that respects safe areas and the navigation
+   mode, and headers/empty/error/loading states that do not dominate the
+   gallery. History and Private already use `MasonryGridView`; make sure Browse
+   and Favorites read as the same system. No important action should be reachable
+   only through an undiscoverable long press.
+2. **Transitions.** Short, spatially coherent animations that become instant when
+   `MediaQuery.disableAnimationsOf` is true. A restrained Hero from tile to
+   viewer is welcome — but duplicate ids across shelves must not create duplicate
+   Hero tags (History and Private can hold the same Wallhaven id as Browse), so
+   scope the tag by shelf identity. Returning must still restore the grid and its
+   scroll position.
+3. **Decode budget.** Confirm every grid caps decode to the display and prefetch
+   stays to the immediate viewer neighbour only — do not decode a gallery of 6K
+   originals or keep unbounded bytes. The viewer already clamps; audit the tiles.
 
-Add focused tests for: dimension mapping (including a corrupt file that still
-renders safe); lock pass/fail gating the viewer; `FLAG_SECURE` acquired before
-content and retained across viewer/target-sheet/delete; no share action; the
-Set-from-private use case reaching `WallpaperApplier`; delete selecting the next
-then previous then closing to empty; and the position announcement never
-carrying a path. Mock the applier and screen guard with named fakes.
+Add focused tests for: the shared grid geometry at 390x844, 844x390, and a
+>=840dp surface; reduced-motion collapsing transitions to instant; Hero tags
+staying unique when the same id appears on two shelves; and scroll restoration
+on return. Keep the image the interface and **Set wallpaper** the one primary
+action — do not add decorative controls to fill tablet space.
 
 End that slice with format, analyze, the full test suite, a dedicated commit,
-and another concise checkpoint update here.
+and another concise checkpoint update here. Then step 6 is the full automated +
+real-device matrix (Browse, Detail, History, Private, in portrait and
+landscape), including the device confirmations still owed from slices 5 and 6:
+the native `materializeImage`/`releasePreview` copy for a `content:`/SAF History
+preview, and the `BitmapFactory` bounds decode plus the `FLAG_SECURE`
+grid↔viewer round trip for Private.
 
 ## START HERE — immersive image viewing and the next UI/UX pass
 

@@ -2,6 +2,7 @@ package cc.pym.tela
 
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
@@ -108,14 +109,35 @@ class ImageStorage(private val context: Context) {
             .sortedByDescending { it.lastModified() }
             .mapNotNull { file ->
                 val id = idOf(file.name) ?: return@mapNotNull null
+                val (width, height) = pixelBounds(file)
                 mapOf(
                     "id" to id,
                     "location" to Uri.fromFile(file).toString(),
                     "savedAt" to file.lastModified(),
                     "sizeBytes" to file.length(),
+                    "width" to width,
+                    "height" to height,
                 )
             }
         return mapOf("success" to true, "images" to images)
+    }
+
+    /**
+     * Reads a file's pixel dimensions without decoding its pixels.
+     *
+     * `inJustDecodeBounds` fills `outWidth`/`outHeight` from the header alone, so
+     * the private grid can shape each tile to its file without holding a whole
+     * 6K bitmap in memory. A corrupt or truncated file leaves both at -1, which
+     * Dart reads back as unknown and renders as a safe broken-image state.
+     */
+    private fun pixelBounds(file: File): Pair<Int, Int> {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        return try {
+            BitmapFactory.decodeFile(file.absolutePath, options)
+            options.outWidth to options.outHeight
+        } catch (_: Exception) {
+            -1 to -1
+        }
     }
 
     /**

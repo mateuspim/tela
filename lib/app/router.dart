@@ -3,6 +3,7 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/app/tela_shell.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/domain/models/download_record.dart';
+import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/features/browse/browse_screen.dart';
@@ -11,6 +12,7 @@ import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/downloads/download_history_screen.dart';
 import 'package:tela/features/downloads/download_immersive_session.dart';
 import 'package:tela/features/favorites/favorites_screen.dart';
+import 'package:tela/features/private_library/private_immersive_session.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
 import 'package:tela/features/settings/settings_screen.dart';
 
@@ -88,6 +90,17 @@ abstract final class TelaRouter {
           path: TelaRoutes.privateLibraryPath,
           name: TelaRoutes.privateLibraryName,
           builder: (_, _) => const PrivateLibraryScreen(),
+        ),
+        GoRoute(
+          path: TelaRoutes.privateViewerPath,
+          name: TelaRoutes.privateViewerName,
+          redirect: (_, GoRouterState state) =>
+              state.extra is GallerySessionController<PrivateImage>
+              ? null
+              : TelaRoutes.privateLibraryPath,
+          builder: (_, GoRouterState state) => PrivateImmersiveSession(
+            session: state.extra! as GallerySessionController<PrivateImage>,
+          ),
         ),
         GoRoute(
           path: TelaRoutes.downloadHistoryPath,

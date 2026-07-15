@@ -207,6 +207,72 @@ void main() {
     await gallery.requestMore();
     expect(gallery.isRequestingMore, isFalse);
   });
+  group('removeSelected', () {
+    test('advances to the next item, which slid into the same index', () {
+      final GallerySessionController<String> gallery =
+          GallerySessionController<String>(
+            identity: 'private-library',
+            items: const <String>['a', 'b', 'c'],
+            initialIndex: 1,
+          );
+      addTearDown(gallery.dispose);
+
+      expect(gallery.removeSelected(), isTrue);
+      // 'b' is gone; 'c' has slid up into index 1 — the next image.
+      expect(gallery.items, <String>['a', 'c']);
+      expect(gallery.selectedIndex, 1);
+      expect(gallery.selectedItem, 'c');
+    });
+
+    test('falls back to the previous item at the end', () {
+      final GallerySessionController<String> gallery =
+          GallerySessionController<String>(
+            identity: 'private-library',
+            items: const <String>['a', 'b', 'c'],
+            initialIndex: 2,
+          );
+      addTearDown(gallery.dispose);
+
+      expect(gallery.removeSelected(), isTrue);
+      // Nothing follows 'c', so selection clamps back to 'b', the previous.
+      expect(gallery.items, <String>['a', 'b']);
+      expect(gallery.selectedIndex, 1);
+      expect(gallery.selectedItem, 'b');
+    });
+
+    test('returns false when the last item is removed', () {
+      final GallerySessionController<String> gallery =
+          GallerySessionController<String>(
+            identity: 'private-library',
+            items: const <String>['a'],
+            initialIndex: 0,
+          );
+      addTearDown(gallery.dispose);
+
+      expect(gallery.removeSelected(), isFalse);
+      expect(gallery.items, isEmpty);
+    });
+
+    test('notifies listeners while items remain, not when emptied', () {
+      final GallerySessionController<String> gallery =
+          GallerySessionController<String>(
+            identity: 'private-library',
+            items: const <String>['a', 'b'],
+            initialIndex: 0,
+          );
+      addTearDown(gallery.dispose);
+      int notifications = 0;
+      gallery
+        ..addListener(() => notifications++)
+        ..removeSelected();
+      expect(notifications, 1);
+
+      // The session is now down to its last item; emptying it does not notify —
+      // the caller closes the viewer instead of drawing an empty session.
+      gallery.removeSelected();
+      expect(notifications, 1);
+    });
+  });
 }
 
 /// Yields until scheduled microtasks (the deferred initial request) settle.
