@@ -21,6 +21,7 @@ GallerySessionController<Wallpaper> createWallpaperGallerySession({
     prefetchItem: (Wallpaper wallpaper) =>
         _prefetchWallpaper(context, wallpaper),
     requestMore: requestMore,
+    itemKey: (Wallpaper wallpaper) => wallpaper.id,
   );
 }
 

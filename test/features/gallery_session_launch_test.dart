@@ -62,6 +62,11 @@ void main() {
     expect(captured!.items, loaded);
     expect(captured!.selectedIndex, 1);
     expect(captured!.selectedItem.id, 'second');
+    expect(
+      captured!.canRequestMore,
+      isTrue,
+      reason: 'a Browse shelf can page for more',
+    );
   });
 
   testWidgets('Favorites returns to the same scrolled shelf after Detail', (
@@ -124,6 +129,11 @@ void main() {
     expect(captured!.selectedItem, tapped);
     expect(captured!.items[captured!.selectedIndex], tapped);
     expect(captured!.items, inserted.reversed.toList());
+    expect(
+      captured!.canRequestMore,
+      isFalse,
+      reason: 'Favorites is a complete local snapshot and never pages',
+    );
 
     router.pop();
     await tester.pumpAndSettle();

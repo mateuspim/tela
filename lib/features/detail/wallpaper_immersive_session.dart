@@ -33,31 +33,40 @@ class WallpaperImmersiveSession extends StatefulWidget {
 
 class _WallpaperImmersiveSessionState extends State<WallpaperImmersiveSession> {
   late final GalleryZoomController _zoomController;
+  late int _selectedIndex;
 
   @override
   void initState() {
     super.initState();
     _zoomController = GalleryZoomController();
-    widget.gallery.addListener(_selectionChanged);
+    _selectedIndex = widget.gallery.selectedIndex;
+    widget.gallery.addListener(_galleryChanged);
   }
 
   @override
   void didUpdateWidget(WallpaperImmersiveSession oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.gallery == widget.gallery) return;
-    oldWidget.gallery.removeListener(_selectionChanged);
-    widget.gallery.addListener(_selectionChanged);
+    oldWidget.gallery.removeListener(_galleryChanged);
+    widget.gallery.addListener(_galleryChanged);
+    _selectedIndex = widget.gallery.selectedIndex;
     _zoomController.reset();
   }
 
-  void _selectionChanged() {
-    _zoomController.reset();
+  /// Rebuilds on any session change, but resets zoom only when the selected
+  /// image actually changes — an appended page must not fling the current
+  /// image back to fitted scale mid-view.
+  void _galleryChanged() {
+    if (widget.gallery.selectedIndex != _selectedIndex) {
+      _selectedIndex = widget.gallery.selectedIndex;
+      _zoomController.reset();
+    }
     if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    widget.gallery.removeListener(_selectionChanged);
+    widget.gallery.removeListener(_galleryChanged);
     _zoomController.dispose();
     super.dispose();
   }

@@ -13,6 +13,7 @@ import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
+import 'package:tela/features/browse/gallery_paging_bridge.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/detail/wallpaper_gallery_session.dart';
 
@@ -40,6 +41,7 @@ class WallpaperGrid extends ConsumerStatefulWidget {
 
 class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
   late final PagingController<int, Wallpaper> _paging;
+  late final GalleryPagingBridge _bridge;
 
   /// The most recent page, kept so the next fetch can inherit its shuffle seed.
   WallpaperPage? _lastPage;
@@ -51,6 +53,7 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
       getNextPageKey: _nextPageKey,
       fetchPage: _fetchPage,
     );
+    _bridge = GalleryPagingBridge(_paging);
   }
 
   /// Reloads from page 1 when the term or the filters change.
@@ -164,16 +167,19 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     List<Wallpaper> loaded,
     int selectedIndex,
   ) async {
-    final GallerySessionController<Wallpaper> session =
-        createWallpaperGallerySession(
-          context: context,
-          identity: wallpaperListingIdentity(
-            widget.galleryIdentity,
-            widget.query,
-          ),
-          wallpapers: loaded,
-          initialIndex: selectedIndex,
-        );
+    // `late` so the request-more seam can hand the bridge the very session it
+    // belongs to; the closure only runs once the viewer nears the loaded end.
+    late final GallerySessionController<Wallpaper> session;
+    session = createWallpaperGallerySession(
+      context: context,
+      identity: wallpaperListingIdentity(
+        widget.galleryIdentity,
+        widget.query,
+      ),
+      wallpapers: loaded,
+      initialIndex: selectedIndex,
+      requestMore: () => _bridge.appendNextPageInto(session),
+    );
     try {
       await context.pushNamed<void>(
         TelaRoutes.detailName,

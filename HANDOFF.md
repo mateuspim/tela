@@ -2,13 +2,67 @@
 
 Updated: 2026-07-15
 
-## CURRENT CHECKPOINT — image viewer UX slice 3 complete
+## CURRENT CHECKPOINT — image viewer UX slice 4 complete
 
 The staged implementation is now underway on branch `image-viewer-ux` in the
 existing `.worktrees/image-viewer-ux` worktree. **Continue there; do not create
 another worktree and do not work in `master`.** The broader product contract
 below remains authoritative, but only take the next bounded slice described
 here.
+
+Slice 4 connects the public viewer to Wallhaven pagination:
+
+- `GallerySessionController` now owns a one-in-flight-at-a-time request-more
+  guard, appends deduplicated by an optional `itemKey`, updates position and
+  enables Next the instant items arrive, prefetches only the immediate new
+  neighbour, records a failed request (`hasRequestFailed`) rather than throwing,
+  and auto-asks for more when the selection nears the loaded end (including a
+  shelf opened on its last tile, deferred one microtask so wiring completes). It
+  still imports no Riverpod, paging package, or transport.
+- `features/browse/gallery_paging_bridge.dart` is the small adapter: it drives
+  the grid's *own* `PagingController.fetchNextPage` and appends the new tail to
+  the open session. Going through the grid's fetch path is what preserves the
+  live query and the `random` shuffle seed; `fetchNextPage` returns void, so the
+  bridge observes completion through the controller's loading flag. A failed
+  page rethrows the paging error so the session marks it for retry.
+- `WallpaperGrid` builds a `GalleryPagingBridge` and hands each session a
+  `requestMore` closure bound to that session, plus an `itemKey` of the
+  wallpaper id. Favorites (a plain `MasonryGridView`, no `WallpaperGrid`) passes
+  no `requestMore`, so `canRequestMore` is false and it never pages — the
+  complete-local-snapshot invariant holds structurally, not by convention.
+- `WallpaperImmersiveSession` now resets zoom only when the *selected index*
+  changes, so an appended page rebuilds Next/position without flinging the
+  current image back to fitted scale.
+- The non-blocking retry path is `session.requestMore()` itself: it leaves the
+  selected image, loaded boundary, chrome, and fullscreen untouched, clears the
+  in-flight guard on completion, and the near-end auto-trigger retries as the
+  user keeps navigating. No new viewer chrome was added for it.
+
+Slice 4 verification (all green; full suite now 434 tests):
+
+```bash
+./tool/tela dart format <touched Dart files>
+./tool/tela analyze
+./tool/tela test test/core/gallery_session_controller_test.dart \
+  test/features/gallery_paging_bridge_test.dart \
+  test/features/gallery_session_launch_test.dart
+./tool/tela test
+```
+
+New/covered tests: near-end triggering (on select and on a last-tile mount),
+one in-flight request at a time, append ordering + id dedup, query/seed
+preservation through the grid's fetch path, failure-then-retry, Favorites
+isolation (`canRequestMore` false, never pages), position + Next after append,
+and the existing selected-item/scroll-restoration-across-viewer-exit coverage.
+
+One test-shape note for the next agent: a widget test that taps a tile and
+expects only page 1 loaded is unreliable — `PagedMasonryGridView` eagerly
+fetches page 2 to fill the viewport. Test the bridge's append/dedup directly
+against a hand-driven `PagingController` (see
+`gallery_paging_bridge_test.dart`), and assert seed/query preservation via the
+page-2 request the grid records.
+
+### PRIOR SLICES
 
 Slices 1 and 2 established the honest shared viewport and reusable immersive
 surface. Slice 3 adds already-loaded public gallery sessions:
@@ -49,32 +103,47 @@ Slice 3 verification:
 
 All pass; the full suite now has 426 tests.
 
-### NEXT SLICE ONLY — public viewer pagination bridge
+### NEXT SLICE ONLY — Download History local viewer
 
-Connect the existing optional request-more seam for Browse and linked listings
-only. Favorites remains a complete local snapshot. Do not touch Download
-History or the private viewer in this slice.
+Give Download History the same first-class fullscreen viewing as Browse, and
+move target selection behind a Set action. This is delivery-order step 3. Do
+**not** touch the private/NSFW library in this slice — that is step 4.
 
-The next slice must:
+Today a History tile immediately opens the Home/Lock/Both target sheet. Instead:
 
-1. Add a small `WallpaperGrid` adapter that asks its existing paging controller
-   for the next page and appends newly arrived items to the open gallery
-   session. Keep `GallerySessionController` independent of the paging package.
-2. Request more when Browse or a linked session approaches its loaded end, at
-   most once per outstanding page. Never request from Favorites.
-3. Preserve Wallhaven random seeds and existing query/paging behavior by going
-   through the grid's current fetch path; do not issue transport calls from the
-   viewer or Detail.
-4. Deduplicate appended wallpapers by id, preserve current selection, update
-   “x of y”, and enable Next as soon as a new neighbour arrives.
-5. Keep the current loaded boundary and visible controls usable while a request
-   is pending or fails. Expose a non-blocking retry path without replacing the
-   selected image or closing fullscreen.
-6. Keep neighbour prefetch limited to the immediate loaded items even as pages
-   append. Do not prefetch a whole new page.
-7. Add focused tests for near-end triggering, one in-flight request, append and
-   deduplication, seed/query preservation, failure/retry, Favorites isolation,
-   and selected/scroll state across viewer exit.
+1. Tapping a History tile opens the shared immersive viewer (reuse
+   `ImmersiveGalleryViewer` / `WallpaperImmersiveSession`, not a new zoom impl)
+   at that exact record, over the full history order (newest first) as one
+   local `GallerySessionController` snapshot. History is complete and local:
+   pass **no** `requestMore` (like Favorites), so `canRequestMore` is false.
+2. Show the saved local file first so the viewer works offline.
+   `DownloadRecord.location` can be `file:`, MediaStore `content:`, or a SAF
+   document URI — do **not** assume `FileImage` reads all three. If Flutter
+   needs a materialised cache file, put that platform work behind a
+   project-owned port/adapter and clean up temporary previews. Never log a URI
+   or path.
+3. If the file is missing, keep the "missing locally" state obvious in the
+   viewer (as the grid already badges it) and fall back to the network source,
+   preserving the existing re-download/apply path.
+4. The viewer's primary action is **Set wallpaper**; only then Home / Lock /
+   Both, reusing `ApplyDownload` so the missing-file fallback stays intact. Set,
+   missing-file, and forget actions must follow the item currently shown, not
+   the tile originally tapped.
+5. Keep "remove from history" distinct from deleting the file, with its exact
+   existing wording (a widget test already pins that sentence — keep it green).
+   Surface it in a discoverable viewer overflow/action as well as any long-press
+   shortcut.
+6. Use the record's real `Wallpaper.resolution` for the viewer aspect ratio and
+   masonry geometry.
+7. Previous/Next, swipe, and arrow keys move through the history order and keep
+   Set/missing/forget bound to the shown item. Returning restores the grid and
+   scroll position.
+
+Add focused tests for: tap → viewer at the tapped record; local-first source
+and the missing-file network fallback; Set → target → `ApplyDownload`; forget
+confirmation wording; actions following the selected item across Next/Previous;
+and back/scroll restoration. Mock the three URI schemes behind the port with a
+named fake.
 
 End that slice with format, analyze, the full test suite, a dedicated commit,
 and another concise checkpoint update here.

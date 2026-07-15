@@ -15,6 +15,7 @@ class FakeWallhavenApi implements WallhavenApi {
   /// Creates a fake that answers every search with [page], or throws [failure].
   FakeWallhavenApi({
     this.page,
+    this.pagesByNumber = const <int, WallpaperPage>{},
     this.details,
     this.detailsById = const <String, WallpaperDetails>{},
     this.account,
@@ -23,6 +24,10 @@ class FakeWallhavenApi implements WallhavenApi {
 
   /// The page every [search] returns, unless [failure] is set.
   final WallpaperPage? page;
+
+  /// Per-page-number responses, so pagination tests can serve a distinct page 2
+  /// and assert on the query the grid built to reach it.
+  final Map<int, WallpaperPage> pagesByNumber;
 
   /// The detail response returned for every wallpaper id.
   final WallpaperDetails? details;
@@ -54,7 +59,8 @@ class FakeWallhavenApi implements WallhavenApi {
     receivedQueries.add(query);
     final WallhavenFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
-    return page ??
+    return pagesByNumber[query.page] ??
+        page ??
         const WallpaperPage(
           wallpapers: <Wallpaper>[],
           currentPage: 1,
