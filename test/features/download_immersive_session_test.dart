@@ -136,6 +136,11 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
     await tester.pumpAndSettle();
     expect(history.recorded, isEmpty);
+    // And it leaves: the row it was showing is gone. This exit rides the same
+    // PopScope -> _exitFullscreen -> onClose path as the close button, so it
+    // was dead for the same reason until onClose stopped calling maybePop().
+    expect(find.byType(DownloadImmersiveSession), findsNothing);
+    expect(find.text('grid'), findsOneWidget);
   });
 
   testWidgets('releases every temporary preview it materialised', (
@@ -152,6 +157,23 @@ void main() {
     await tester.pumpAndSettle();
     // Leaving the first record behind released its throwaway copy.
     expect(cache.released, isNotEmpty);
+  });
+
+  // The close button did nothing on the tablet: onClose called maybePop(),
+  // which consulted the viewer's own PopScope before its canPop rebuild had
+  // landed, so the exit re-entered itself and the route stayed put. Back
+  // worked, which is what hid it. The private viewer pins the same path.
+  testWidgets('the close button pops the viewer back to the grid', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, _session(<DownloadRecord>[_download('e7jvjd')]));
+    expect(find.byType(DownloadImmersiveSession), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('immersive-viewer-close')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DownloadImmersiveSession), findsNothing);
+    expect(find.text('grid'), findsOneWidget);
   });
 }
 
@@ -186,14 +208,30 @@ Future<void> _pump(
           GlobalCupertinoLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: DownloadImmersiveSession(
-          session: session,
-          systemUi: FakeImmersiveSystemUi(),
+        // The viewer is pushed over a history-grid stand-in, as in the app, so
+        // its close path has somewhere to pop back to.
+        home: Scaffold(
+          body: Builder(
+            builder: (BuildContext context) => Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => DownloadImmersiveSession(
+                      session: session,
+                      systemUi: FakeImmersiveSystemUi(),
+                    ),
+                  ),
+                ),
+                child: const Text('grid'),
+              ),
+            ),
+          ),
         ),
       ),
     ),
   );
-  await tester.pump();
+  await tester.tap(find.text('grid'));
+  await tester.pumpAndSettle();
 }
 
 GallerySessionController<DownloadRecord> _session(

@@ -108,7 +108,10 @@ class _DownloadImmersiveSessionState
         primaryAction: _setButton(l10n),
         actions: <Widget>[_overflow(l10n)],
         statusOverlay: missing ? _missingBadge(l10n) : null,
-        onClose: () async => Navigator.of(context).maybePop(),
+        // pop(), never maybePop(): the viewer's own PopScope defers to
+        // _exitFullscreen, so consulting it from inside onClose is a cycle
+        // that leaves the route standing.
+        onClose: () async => Navigator.of(context).pop(),
       ),
     );
   }

@@ -121,7 +121,10 @@ class _PrivateImmersiveSessionState
         ),
         primaryAction: _setButton(l10n),
         actions: <Widget>[_deleteButton(l10n)],
-        onClose: () async => Navigator.of(context).maybePop(),
+        // pop(), never maybePop(): the viewer's own PopScope defers to
+        // _exitFullscreen, so consulting it from inside onClose is a cycle
+        // that leaves the route standing. See the delete-to-empty exit below.
+        onClose: () async => Navigator.of(context).pop(),
       ),
     );
   }

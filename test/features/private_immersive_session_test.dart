@@ -231,6 +231,23 @@ void main() {
     expect(find.text('grid'), findsOneWidget);
     expect(find.byType(PrivateImmersiveSession), findsNothing);
   });
+
+  // The close button was inherited from History and dead on the tablet: onClose
+  // called maybePop(), which consulted the viewer's own PopScope before its
+  // canPop rebuild had landed, so the exit re-entered itself and nothing
+  // popped. The bug is inherited, so History pins this separately.
+  testWidgets('the close button pops the viewer back to the grid', (
+    WidgetTester tester,
+  ) async {
+    await _open(tester, _session(<PrivateImage>[_image('a')]));
+    expect(find.byType(PrivateImmersiveSession), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('immersive-viewer-close')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PrivateImmersiveSession), findsNothing);
+    expect(find.text('grid'), findsOneWidget);
+  });
 }
 
 Future<void> _confirmDelete(WidgetTester tester) async {
