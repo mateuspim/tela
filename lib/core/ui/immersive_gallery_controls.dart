@@ -9,6 +9,7 @@ class ImmersiveGalleryControls extends StatelessWidget {
     required this.duration,
     required this.zoomed,
     required this.onToggleZoom,
+    required this.onHideChrome,
     required this.onClose,
     required this.position,
     required this.itemCount,
@@ -31,6 +32,14 @@ class ImmersiveGalleryControls extends StatelessWidget {
   /// Toggles fitted and zoomed state.
   final VoidCallback onToggleZoom;
 
+  /// Hides this chrome, leaving the image alone on the canvas.
+  ///
+  /// Hides rather than toggles: the control is only reachable while the chrome
+  /// is up, so the other half of the toggle could never be pressed from here.
+  /// Bringing it back is the canvas's job: tapping the image shows the chrome
+  /// again, and announces as much to a screen reader.
+  final VoidCallback onHideChrome;
+
   /// Closes the fullscreen route.
   final VoidCallback onClose;
 
@@ -51,6 +60,10 @@ class ImmersiveGalleryControls extends StatelessWidget {
 
   /// Feature actions shown in the top row, before the close button.
   final List<Widget> actions;
+
+  /// Below this the labelled buttons stop fitting side by side, and become
+  /// icons with the same words in their tooltips.
+  static const double _compactWidth = 560;
 
   @override
   Widget build(BuildContext context) {
@@ -93,12 +106,46 @@ class ImmersiveGalleryControls extends StatelessWidget {
   }
 
   Widget _controlRow(AppLocalizations l10n) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool compact = constraints.maxWidth < _compactWidth;
+        return Row(
+          children: <Widget>[
+            _alignedControl(
+              Alignment.centerLeft,
+              _leadingControls(l10n, compact: compact),
+            ),
+            const SizedBox(width: 12),
+            _alignedControl(Alignment.centerRight, _trailingControls(l10n)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _leadingControls(AppLocalizations l10n, {required bool compact}) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        _alignedControl(Alignment.centerLeft, _zoomButton(l10n)),
-        const SizedBox(width: 12),
-        _alignedControl(Alignment.centerRight, _trailingControls(l10n)),
+        _zoomButton(l10n, compact: compact),
+        const SizedBox(width: 8),
+        _hideChromeButton(l10n),
       ],
+    );
+  }
+
+  /// Hides the chrome this button is part of.
+  ///
+  /// Icon-only, unlike its neighbours: the row already carries a labelled zoom
+  /// button and a labelled close, and a third label is what tips it over on a
+  /// phone. The tooltip and the semantics label carry the words.
+  Widget _hideChromeButton(AppLocalizations l10n) {
+    return _tonalControl(
+      compact: true,
+      key: const Key('immersive-viewer-hide-chrome'),
+      label: l10n.galleryHideControls,
+      icon: Icons.visibility_off_outlined,
+      onPressed: onHideChrome,
     );
   }
 
@@ -121,7 +168,7 @@ class ImmersiveGalleryControls extends StatelessWidget {
       height: 48,
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
-          final bool compact = constraints.maxWidth < 560;
+          final bool compact = constraints.maxWidth < _compactWidth;
           final String positionLabel = l10n.galleryPosition(
             position,
             itemCount,
@@ -131,7 +178,7 @@ class ImmersiveGalleryControls extends StatelessWidget {
               Expanded(
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: _navigationButton(
+                  child: _tonalControl(
                     compact: compact,
                     key: const Key('immersive-viewer-previous'),
                     label: l10n.galleryPrevious,
@@ -165,7 +212,7 @@ class ImmersiveGalleryControls extends StatelessWidget {
               Expanded(
                 child: Align(
                   alignment: Alignment.centerRight,
-                  child: _navigationButton(
+                  child: _tonalControl(
                     compact: compact,
                     key: const Key('immersive-viewer-next'),
                     label: l10n.galleryNext,
@@ -181,7 +228,10 @@ class ImmersiveGalleryControls extends StatelessWidget {
     );
   }
 
-  Widget _navigationButton({
+  /// A tonal control that drops its label when the row is too narrow to seat
+  /// it — the same trade the navigation row makes, now that the top row has
+  /// three controls to fit rather than two.
+  Widget _tonalControl({
     required bool compact,
     required Key key,
     required String label,
@@ -212,13 +262,13 @@ class ImmersiveGalleryControls extends StatelessWidget {
     );
   }
 
-  Widget _zoomButton(AppLocalizations l10n) {
-    return FilledButton.tonalIcon(
+  Widget _zoomButton(AppLocalizations l10n, {required bool compact}) {
+    return _tonalControl(
+      compact: compact,
       key: const Key('immersive-viewer-zoom'),
+      label: zoomed ? l10n.galleryResetZoom : l10n.galleryZoomIn,
+      icon: zoomed ? Icons.zoom_out_map : Icons.zoom_in,
       onPressed: onToggleZoom,
-      style: _buttonStyle(),
-      icon: Icon(zoomed ? Icons.zoom_out_map : Icons.zoom_in),
-      label: Text(zoomed ? l10n.galleryResetZoom : l10n.galleryZoomIn),
     );
   }
 

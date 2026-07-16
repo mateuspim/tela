@@ -117,6 +117,54 @@ void main() {
     expect(chrome.opacity, 1);
   });
 
+  // Tapping the image was the only way to hide the controls, which is not a
+  // thing anyone finds by looking.
+  testWidgets('an explicit button hides the chrome, and tap brings it back', (
+    WidgetTester tester,
+  ) async {
+    await _pumpViewer(tester);
+
+    await tester.tap(find.byKey(const Key('immersive-viewer-hide-chrome')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(const Key('immersive-viewer-chrome')),
+          )
+          .opacity,
+      0,
+    );
+
+    // The button hides the row it lives in, so the canvas has to be the way
+    // back — otherwise this control is a one-way door out of the chrome.
+    await tester.tapAt(const Offset(400, 300));
+    await tester.pump(kDoubleTapTimeout);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(const Key('immersive-viewer-chrome')),
+          )
+          .opacity,
+      1,
+    );
+  });
+
+  testWidgets('the hide-chrome button is reachable and labelled', (
+    WidgetTester tester,
+  ) async {
+    final SemanticsHandle semantics = tester.ensureSemantics();
+    await _pumpViewer(tester);
+
+    expect(find.bySemanticsLabel('Hide viewer controls'), findsOneWidget);
+    final Size target = tester.getSize(
+      find.byKey(const Key('immersive-viewer-hide-chrome')),
+    );
+    expect(target.width, greaterThanOrEqualTo(48));
+    expect(target.height, greaterThanOrEqualTo(48));
+    semantics.dispose();
+  });
+
   testWidgets('reduced motion makes chrome and zoom transitions instant', (
     WidgetTester tester,
   ) async {

@@ -173,6 +173,17 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
     setState(() => _chromeVisible = !_chromeVisible);
   }
 
+  /// Hides the chrome from the chrome's own button.
+  ///
+  /// The button goes away with everything else it sits among, so this is a
+  /// one-way door and the canvas is the way back: tapping the image calls
+  /// [_toggleChrome], and the canvas's semantics label announces exactly that
+  /// (`galleryShowControls`) for a screen reader. Those two are what keep this
+  /// from being a control that hides itself for good.
+  void _hideChrome() {
+    if (_chromeVisible) setState(() => _chromeVisible = false);
+  }
+
   void _rememberDoubleTap(TapDownDetails details) {
     _doubleTapPosition = details.localPosition;
   }
@@ -305,6 +316,7 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
       duration: _chromeDuration(),
       zoomed: _zoomController.isZoomed,
       onToggleZoom: _toggleCenteredZoom,
+      onHideChrome: _hideChrome,
       onClose: () => unawaited(_exitFullscreen()),
       position: widget.position,
       itemCount: widget.itemCount,
