@@ -2,19 +2,61 @@
 
 Updated: 2026-07-16
 
-## START HERE — the desk work is done; what is left needs the device
+## START HERE — the debts are paid; the next work is new
 
-The cold-launch hang is **fixed and verified on the tablet**, and the Drift test
-seam that used to sit third on this list is **closed** (`3a09f67`). The suite is
-**561 tests** green. Everything still open needs hands on hardware, or a key:
+Everything that was owed at a desk is done. The cold-launch hang is fixed and
+verified on the tablet, the Drift test seam is closed (`3a09f67`), and the
+tablet is **carrying a fresh release build of exactly this code** (see "Device
+state"). The suite is **561 tests** green, `analyze` and `format` clean.
 
-1. **The device verifications**, which need the owner's own hands: the
-   wallpaper-apply round trip, the real biometric prompt, and the cache figure
-   after a real browse. See "What is owed".
-2. **The keystore**, whenever shipping matters. The only part of item 7 left.
+So the next agent is not picking up a repair. It is picking up **Wave 3's
+unclosed exit criterion, and then Wave 4** — see `PLAN.md` §12.
 
-There is no third item at a desk right now. If you are looking for one, the
-honest answer is that the next real information comes from the tablet.
+### 1. Wave 3's exit is not met, and this is the real next thing
+
+`PLAN.md` says it plainly, and it is easy to miss because all four slices are
+built:
+
+> the ratio and resolution filters have only ever met `FakeWallhavenApi`, so
+> tela has never actually *sent* a `ratios=9x20` or a `resolutions=` to the real
+> server.
+
+**This project has been burned by exactly this before.** `-id:` exclude is
+silently ignored by Wallhaven — the response is identical to no filter at all —
+and no unit test could ever have caught it, because the fake answered. The same
+hole is open under `ratios` and `resolutions` right now: a filter that visibly
+does nothing is the `ratios=bogus` trap the fix list already warned about once.
+
+Verify it **live**, not by test. Both halves need proving and they are different
+claims:
+
+- **Wallhaven's side** — that the param does what we think — can be checked with
+  `curl` from any machine, and is the cheap half.
+- **tela's side** — that tela *sends* what it thinks it sends — cannot. It needs
+  the app to make the request. Note the release build does not log URLs (by
+  rule), so plan for how you will observe it before you start: a debug build
+  against a proxy, or an assertion at the Dio interceptor, beats squinting at a
+  grid and guessing whether the results "look 9x20".
+
+The device already has a filter badge showing **1** active filter on a fresh
+launch (the *Automatic* resolution, folding the screen in) — which is itself the
+resolution path reaching the real server on every single cold launch, unproven.
+
+### 2. Then Wave 4, which is where the product goes next
+
+Unbuilt, in `PLAN.md`'s own order: crop/reposition editor before apply, daily
+auto-rotate (WorkManager), collections browser, and **Omarchy sync** — export
+favorites to an Aether-consumable format, which is the one that closes the
+desktop↔mobile loop this app exists inside. The share sheet is done.
+
+### Still owed on hardware, and only the owner can
+
+Unchanged, and it does not block the above:
+
+1. The wallpaper-apply round trip (it changes the owner's wallpaper).
+2. The real biometric prompt (adb cannot pass `FLAG_SECURE`).
+3. The cache figure after a real browse.
+4. **The keystore**, whenever shipping matters. The only part of item 7 left.
 
 ### Housekeeping, whenever
 
@@ -190,10 +232,37 @@ cache figure after a real browse.
 ## Device state as of this handoff
 
 - Installed: `app-release.apk` — universal, **R8 on**, debug-signed, versionCode 1,
-  **carrying the cold-launch fix** (installed with `adb install -r`; both
-  versionCodes checked as 1 first, so no downgrade and no wipe).
-- **Data: wiped.** Fresh database, no API key, no blocklist, no saved filters.
-- It **cold-launches to a loaded grid**, untouched, four times out of four.
+  **carrying the cold-launch fix and the database binding** (`3a09f67`), built
+  and installed 2026-07-16 20:03 with `adb install -r`; both versionCodes read
+  as 1 *from the APKs themselves* first, so no downgrade and no wipe.
+- **Data: preserved** across that install, but it is the post-wipe data — fresh
+  database, no API key, no blocklist, no saved filters.
+- It **cold-launches to a loaded grid**, untouched, on this build too, with a
+  clean logcat (no `UnimplementedError`, no `ProviderException`, zero Flutter
+  error lines). That is not just a smoke test: the grid cannot render without
+  the blocklist, which reaches `telaDatabaseProvider` → `openTelaDatabase`, so a
+  loaded grid *is* the end-to-end proof that `main.dart`'s new override works on
+  hardware.
+
+### Read the versionCode, do not infer it
+
+There is no `aapt` on the host or in the toolchain image, which is how "install
+the split APK" survived long enough to wipe the tablet. Parse it out of the
+artifact instead — `tool/` has no home for this yet, so it lived in the
+scratchpad, and the 40 lines are worth rewriting over trusting a build flag:
+
+| artifact | versionCode (read, 2026-07-16) |
+|---|---|
+| `app-release.apk` (universal) | **1** ← the only one to install |
+| `app-debug.apk` | 1 |
+| `app-armeabi-v7a-release.apk` | 1001 |
+| `app-arm64-v8a-release.apk` | **2001** ← the trap |
+| `app-x86_64-release.apk` | 4001 |
+
+Those confirm the rule rather than restate it: Flutter's split scheme is
+`1000 × abiIndex + base`, and the reading reproduced the 2001 this file already
+documented, which is what makes the 1 trustworthy. **The stale split APKs from
+17:47 are still in `build/app/outputs/flutter-apk/`.** Do not install them.
 - The tablet (SM-X730, `192.168.50.191:5555`) is on a **VPN** (`tun0`, NordVPN).
   It resolves and pings `wallhaven.cc` at ~118ms. The VPN is *not* the hang — a
   tab tap loads instantly over the same tunnel — but it does add real latency, and
