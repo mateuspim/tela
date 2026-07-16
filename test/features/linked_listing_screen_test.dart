@@ -16,8 +16,10 @@ import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
+import 'package:tela/features/browse/browse_filter_button.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/browse/linked_listing_screen.dart';
+import 'package:tela/features/browse/linked_query_controller.dart';
 import 'package:tela/features/browse/wallpaper_grid.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
@@ -100,6 +102,121 @@ void main() {
     expect(query.categories.categories, <Category>{Category.anime});
     expect(query.purity.purities, <Purity>{Purity.sfw, Purity.sketchy});
     expect(query.color, WallpaperColor('#0066cc'));
+  });
+
+  testWidgets('offers a way to filter the listing', (
+    WidgetTester tester,
+  ) async {
+    // Missing entirely until now: the filter sheet already knew every filter
+    // this screen honours, but the only button that opened it was private to
+    // BrowseScreen.
+    await _pumpListing(
+      tester,
+      _api(),
+      const TagLink(WallpaperTag(id: 37, name: 'nature')),
+    );
+
+    expect(find.byType(BrowseFilterButton), findsOneWidget);
+  });
+
+  testWidgets('filtering the listing re-queries it, and leaves browse alone', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = _api();
+    final ProviderContainer container = _container(api);
+    await _pumpListing(
+      tester,
+      api,
+      const TagLink(WallpaperTag(id: 37, name: 'nature')),
+      container: container,
+    );
+
+    container
+        .read(linkedQueryProvider('linked:tag:37').notifier)
+        .applyFilters(
+          const SearchQuery(
+            categories: CategoryFilter(<Category>{Category.people}),
+          ),
+        );
+    await tester.pumpAndSettle();
+
+    // The listing itself narrowed...
+    expect(
+      api.receivedQueries.last.categories.categories,
+      <Category>{Category.people},
+    );
+    expect(api.receivedQueries.last.term, 'id:37');
+    // ...and the tabs waiting underneath did not. A pushed listing is a detour:
+    // Back must leave browse exactly as it was.
+    expect(
+      container.read(browseQueryProvider).categories.categories,
+      const SearchQuery().categories.categories,
+    );
+  });
+
+  testWidgets('two listings do not inherit each other', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = _api();
+    final ProviderContainer container = _container(api);
+    await _pumpListing(
+      tester,
+      api,
+      const TagLink(WallpaperTag(id: 37, name: 'nature')),
+      container: container,
+    );
+    container
+        .read(linkedQueryProvider('linked:tag:37').notifier)
+        .applyFilters(
+          const SearchQuery(
+            categories: CategoryFilter(<Category>{Category.people}),
+          ),
+        );
+
+    // A second listing is seeded from browse, not from the tag just narrowed.
+    expect(
+      container
+          .read(linkedQueryProvider('linked:uploader:pym'))
+          .categories
+          .categories,
+      const SearchQuery().categories.categories,
+    );
+  });
+
+  testWidgets('resetting a listing puts the purity back to safe', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallhavenApi api = _api();
+    final ProviderContainer container = _container(api);
+    // A sketchy session, inherited into the listing on arrival.
+    container
+        .read(browseQueryProvider.notifier)
+        .applyFilters(
+          const SearchQuery(
+            purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
+          ),
+        );
+    await _pumpListing(
+      tester,
+      api,
+      const TagLink(WallpaperTag(id: 37, name: 'nature')),
+      container: container,
+    );
+    expect(
+      container.read(linkedQueryProvider('linked:tag:37')).purity.purities,
+      <Purity>{Purity.sfw, Purity.sketchy},
+    );
+
+    container
+        .read(linkedQueryProvider('linked:tag:37').notifier)
+        .clearFilters();
+
+    // Reset is the button that ends a sketchy session. Re-inheriting browse's
+    // current query here would have left it sketchy.
+    expect(
+      container.read(linkedQueryProvider('linked:tag:37')).purity.purities,
+      <Purity>{Purity.sfw},
+    );
   });
 }
 

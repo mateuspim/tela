@@ -13,42 +13,52 @@ import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/search_tag.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
+import 'package:tela/features/browse/browse_filter_scope.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/browse/resolution_filter_field.dart';
 import 'package:tela/features/browse/tag_filter_field.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
 
-/// Opens the filter sheet over the browse grid.
+/// Opens the filter sheet over the shelf [scope] belongs to.
 ///
 /// It edits a *draft* and applies it in one write, unlike the settings screen:
 /// every applied query is a Wallhaven request out of the 45/min budget, so five
 /// toggles must not cost five listings.
 ///
+/// The sheet never names the shelf it is filtering: [scope] decides whether the
+/// write lands on Browse's global filters or one linked listing's own.
+///
 /// ```dart
-/// await showFilterSheet(context);
+/// await showFilterSheet(context, scope: browseScope);
 /// ```
-Future<void> showFilterSheet(BuildContext context) {
+Future<void> showFilterSheet(
+  BuildContext context, {
+  required BrowseFilterScope scope,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    builder: (BuildContext context) => const FractionallySizedBox(
+    builder: (BuildContext context) => FractionallySizedBox(
       heightFactor: .94,
-      child: FilterSheet(),
+      child: FilterSheet(scope: scope),
     ),
   );
 }
 
 /// The category / purity / order / range / ratio filters, as one draft.
 class FilterSheet extends ConsumerStatefulWidget {
-  /// Creates the sheet, seeded from the query the grids are showing now.
-  const FilterSheet({super.key});
+  /// Creates the sheet, seeded from the query [scope] is showing now.
+  const FilterSheet({required this.scope, super.key});
+
+  /// The shelf's filters: where the draft starts and where Apply lands.
+  final BrowseFilterScope scope;
 
   @override
   ConsumerState<FilterSheet> createState() => _FilterSheetState();
 }
 
 class _FilterSheetState extends ConsumerState<FilterSheet> {
-  late SearchQuery _draft = ref.read(browseQueryProvider);
+  late SearchQuery _draft = widget.scope.filters;
 
   /// Filters scroll; the actions do not.
   ///
@@ -385,12 +395,12 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
   }
 
   void _apply() {
-    ref.read(browseQueryProvider.notifier).applyFilters(_draft);
+    widget.scope.applyFilters(_draft);
     Navigator.of(context).pop();
   }
 
   void _reset() {
-    ref.read(browseQueryProvider.notifier).clearFilters();
+    widget.scope.clearFilters();
     Navigator.of(context).pop();
   }
 
@@ -402,6 +412,11 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
   /// also switches the source to this device — a "save these as my default"
   /// that left browse still opening on the account's would be a button that
   /// appears to do nothing.
+  ///
+  /// The *applying* half is scoped like any other apply, but the saving half is
+  /// deliberately not: "my default filters" is one answer for the device, not a
+  /// per-listing one, so saving from a tag listing still sets what Browse opens
+  /// on next time.
   Future<void> _saveAsDefault() async {
     final SearchQuery saved = _draft;
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
@@ -409,7 +424,7 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
       context,
     ).filterSavedAsDefault;
 
-    ref.read(browseQueryProvider.notifier).applyFilters(saved);
+    widget.scope.applyFilters(saved);
     Navigator.of(context).pop();
     await ref.read(browseDefaultsProvider.notifier).saveDeviceDefaults(saved);
     messenger.showSnackBar(SnackBar(content: Text(confirmation)));

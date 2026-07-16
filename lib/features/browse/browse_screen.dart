@@ -5,9 +5,9 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/browse_filter_text.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/features/browse/browse_filter_button.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/browse/browse_search_field.dart';
-import 'package:tela/features/browse/filter_sheet.dart';
 import 'package:tela/features/browse/wallpaper_grid.dart';
 
 /// The app's home: one Wallhaven listing per sorting, as tabs.
@@ -72,7 +72,10 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
         titleSpacing: 16,
         title: const BrowseSearchField(),
         actions: <Widget>[
-          _filterButton(context, l10n, activeBrowseFilterCount(query)),
+          BrowseFilterButton(
+            filters: query,
+            scope: ref.read(browseQueryProvider.notifier),
+          ),
           const SizedBox(width: 8),
         ],
         bottom: _tabBar(l10n, tabs, sortings),
@@ -158,25 +161,5 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
     final TabController? tabs = _tabs;
     if (tabs == null) return;
     _selected = _sortings[tabs.index];
-  }
-
-  Widget _filterButton(
-    BuildContext context,
-    AppLocalizations l10n,
-    int activeFilters,
-  ) {
-    return IconButton.filledTonal(
-      icon: ExcludeSemantics(
-        child: Badge(
-          isLabelVisible: activeFilters > 0,
-          label: Text('$activeFilters'),
-          child: const Icon(Icons.tune),
-        ),
-      ),
-      tooltip: activeFilters == 0
-          ? l10n.browseFilters
-          : l10n.browseFiltersActive(activeFilters),
-      onPressed: () => showFilterSheet(context),
-    );
   }
 }

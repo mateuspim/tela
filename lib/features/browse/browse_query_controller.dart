@@ -3,6 +3,7 @@ import 'package:tela/app/browse_defaults.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/features/browse/browse_filter_scope.dart';
 
 /// The listing the browse tabs are currently showing.
 final NotifierProvider<BrowseQueryController, SearchQuery> browseQueryProvider =
@@ -25,7 +26,8 @@ final NotifierProvider<BrowseQueryController, SearchQuery> browseQueryProvider =
 /// ```dart
 /// ref.read(browseQueryProvider.notifier).search('sunset');
 /// ```
-class BrowseQueryController extends Notifier<SearchQuery> {
+class BrowseQueryController extends Notifier<SearchQuery>
+    implements BrowseFilterScope {
   /// The filters a listing starts from, and what "Reset" resets to.
   BrowseDefaults _defaults = const BrowseDefaults();
 
@@ -48,6 +50,16 @@ class BrowseQueryController extends Notifier<SearchQuery> {
     return _defaults.applyTo(const SearchQuery());
   }
 
+  @override
+  SearchQuery get filters => state;
+
+  /// The query a shelf opens on with nothing set by hand — what "Reset" means.
+  ///
+  /// Onto a *fresh* query rather than the current one, which is what puts the
+  /// purity back to safe. A linked listing resets to this same place: its
+  /// filters are its own, but "no filters" is not a per-shelf opinion.
+  SearchQuery get defaultQuery => _defaults.applyTo(const SearchQuery());
+
   /// Sets the free-text term. Empty means "browse", not "search for nothing".
   void search(String term) {
     state = state.copyWith(term: term.trim());
@@ -58,17 +70,19 @@ class BrowseQueryController extends Notifier<SearchQuery> {
   /// The filter sheet edits a draft and applies it here in one write: each
   /// applied query costs one of the 45 req/min, so five toggles must not cost
   /// five listings.
+  @override
   void applyFilters(SearchQuery filters) {
     state = filters.copyWith(term: state.term);
   }
 
   /// Restores the defaults browse currently opens on.
   ///
-  /// Onto a *fresh* query, so this is also the one place the purity goes back
-  /// to safe — "Reset filters" is the button that undoes a sketchy or explicit
-  /// session. The term survives: it is not a filter.
+  /// The one place the purity goes back to safe — "Reset filters" is the button
+  /// that undoes a sketchy or explicit session. The term survives: it is not a
+  /// filter.
+  @override
   void clearFilters() {
-    state = _defaults.applyTo(const SearchQuery()).copyWith(term: state.term);
+    state = defaultQuery.copyWith(term: state.term);
   }
 
   void _onDefaults(
