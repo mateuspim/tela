@@ -2,13 +2,22 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:tela/app/app.dart';
 import 'package:tela/app/providers.dart';
 
 /// Entry point. The [ProviderScope] here is the app's one DI root — every port
 /// is bound to an adapter in `app/providers.dart`, never reached for globally.
+///
+/// The database is the one binding *applied* here rather than defaulted there.
+/// [telaDatabaseProvider] deliberately has no default, so a test that forgets
+/// to fake a Drift-backed port fails by name instead of quietly opening the
+/// real thing. [openTelaDatabase] is still the adapter, and still lives beside
+/// every other one; this is only the line that switches it on for the app.
 void main() {
-  final ProviderContainer container = ProviderContainer();
+  final ProviderContainer container = ProviderContainer(
+    overrides: <Override>[telaDatabaseProvider.overrideWith(openTelaDatabase)],
+  );
   unawaited(_purgeLegacyImageCache(container));
   runApp(
     UncontrolledProviderScope(container: container, child: const TelaApp()),

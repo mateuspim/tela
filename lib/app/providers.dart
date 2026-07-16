@@ -102,13 +102,54 @@ final Provider<AppLock> appLockProvider = Provider<AppLock>(
 );
 
 /// tela's SQLite database, opened once and closed with the provider scope.
+///
+/// **Has no default, deliberately**: `main.dart` is the one place that binds
+/// it, with [openTelaDatabase]. Opening the real database here read as the
+/// obvious default and was a trap. Any widget test mounting anything reaching a
+/// Drift-backed port would silently get the real one — and that is most of
+/// them, since `WallpaperGrid` listens to the blocklist for its re-filter.
+///
+/// The failure never named a database. `TelaDatabase.open()` resolves its path
+/// through path_provider, which answers no plugin under `flutter test`, and
+/// lazily — so the provider *constructed* fine and the error surfaced later and
+/// elsewhere, as an `AsyncError` inside `blockedTagsProvider` that the grid's
+/// own change-gate reads as "no value yet" and correctly ignores. What the
+/// author saw was an empty grid, and a `RangeError` from tapping a tile that
+/// was never there. It cost two harnesses, one of them the cold-launch hang's
+/// own regression test.
+///
+/// Unbound now throws, by name, at the moment of the read.
 final Provider<TelaDatabase> telaDatabaseProvider = Provider<TelaDatabase>((
   Ref ref,
 ) {
+  throw UnimplementedError(
+    'telaDatabaseProvider has no default and must be overridden. '
+    'Production binds it in main.dart: '
+    'telaDatabaseProvider.overrideWith(openTelaDatabase). '
+    'A test should instead override the Drift-backed port it actually needs '
+    '(settingsRepositoryProvider, favoritesRepositoryProvider, '
+    'downloadHistoryProvider or tagBlocklistRepositoryProvider) with its fake.',
+  );
+});
+
+/// Opens the real database and closes it with the scope: the production binding
+/// for [telaDatabaseProvider], applied once in `main.dart`.
+///
+/// Lives here beside the ports it feeds rather than in `main.dart`, so the
+/// wiring stays in the one file that knows which adapter every port gets.
+///
+/// ```dart
+/// ProviderContainer(
+///   overrides: <Override>[
+///     telaDatabaseProvider.overrideWith(openTelaDatabase),
+///   ],
+/// );
+/// ```
+TelaDatabase openTelaDatabase(Ref ref) {
   final TelaDatabase db = TelaDatabase.open();
   ref.onDispose(db.close);
   return db;
-});
+}
 
 /// The settings port, bound to its Drift adapter.
 final Provider<SettingsRepository> settingsRepositoryProvider =
