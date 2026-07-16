@@ -5,6 +5,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/screen_guard.dart';
+import 'package:tela/features/private_library/private_unlock_session.dart';
 
 /// The secure-access lifecycle shared by the app-private tier's two screens.
 ///
@@ -12,9 +13,14 @@ import 'package:tela/domain/ports/screen_guard.dart';
 /// as they are on screen and must refuse to show anything until the app-lock is
 /// satisfied. Neither leans on the other: the viewer is pushed *over* the grid,
 /// but a window flag is not a route, and the gate is defence in depth rather
-/// than a one-time toll paid at the grid. The [ScreenGuard] is
-/// reference-counted, so both holding it keeps the window protected across the
-/// whole private flow.
+/// than a gate on whatever opened it. The [ScreenGuard] is reference-counted,
+/// so both holding it keeps the window protected across the whole private flow.
+///
+/// Defence in depth is about the *gate*, not the *toll*. Both screens gate;
+/// only the first one to be reached charges for it, because
+/// [privateUnlockSessionProvider] remembers a satisfied lock for as long as the
+/// app stays in the foreground. Authenticating twice to see one image was a
+/// bug, not the policy.
 ///
 /// A state mixes this in, calls [beginPrivateAccess] from `initState` and
 /// [endPrivateAccess] from `dispose`, and gates its body on [isCheckingLock] /
@@ -54,12 +60,21 @@ mixin PrivateSecureAccess<T extends ConsumerStatefulWidget>
   ///
   /// The gate lives in each screen rather than on whatever opened it, because a
   /// route can be reached more ways than one — gating a button would leave the
-  /// content one deep link away from being shown ungated.
+  /// content one deep link away from being shown ungated. That argument is
+  /// about *where the gate lives*, though, not about how often the owner pays:
+  /// a lock satisfied moments ago on the grid is satisfied for the viewer it
+  /// opens, so an already-paid toll is inherited from
+  /// [privateUnlockSessionProvider] rather than charged again. Backgrounding
+  /// revokes it there, and a screen reached cold still prompts.
   Future<void> _unlock() async {
     final bool locked = await ref
         .read(settingsRepositoryProvider)
         .isPrivateLibraryLocked();
     if (!locked) {
+      if (mounted) setState(() => _pass(unlocked: true));
+      return;
+    }
+    if (ref.read(privateUnlockSessionProvider)) {
       if (mounted) setState(() => _pass(unlocked: true));
       return;
     }
@@ -83,9 +98,11 @@ mixin PrivateSecureAccess<T extends ConsumerStatefulWidget>
         .authenticate(
           reason: AppLocalizations.of(context).privateLibraryUnlockReason,
         );
-    if (mounted) {
-      setState(() => _pass(unlocked: outcome == AppLockOutcome.passed));
-    }
+    final bool passed = outcome == AppLockOutcome.passed;
+    // Only a genuine pass is worth inheriting; a failure leaves the session as
+    // locked as it found it.
+    if (passed) ref.read(privateUnlockSessionProvider.notifier).grant();
+    if (mounted) setState(() => _pass(unlocked: passed));
   }
 
   void _pass({required bool unlocked}) {
