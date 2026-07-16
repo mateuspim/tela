@@ -1,8 +1,390 @@
 # tela handoff
 
-Updated: 2026-07-15
+Updated: 2026-07-16
 
-## CURRENT CHECKPOINT — image viewer UX slice 7 complete
+## CURRENT CHECKPOINT — the seven are fixed; the device pass is what is owed
+
+All seven items from the device pass below are **done on `master`, uncommitted**,
+each with the regression test the project rule asks for. The suite is **546
+tests** green (from 514); `./tool/tela analyze` is clean, `dart format .` clean,
+`gen-l10n` run (five new strings), and both `build apk --debug` and `build apk
+--release --split-per-abi` succeed.
+
+**Every fix was mutation-checked**: the fix was reverted and the new test watched
+to fail with the real symptom, then restored. That mattered most for item 1,
+which had been known since slice 6 and was never once pinned.
+
+### What the fix list turned out to be
+
+Seven, plus four things the list did not know:
+
+1. **Close button** — `maybePop()` → `pop()` in both sessions. **Also dead for
+   the same reason: History's "remove from history"** (`_confirmForget`), whose
+   test only asserted the row was forgotten, never that the viewer left. Both
+   pinned now. The forget path deliberately keeps `maybePop()`: it routes *into*
+   `_exitFullscreen` (restoring system UI), which is the intended direction.
+2. **Double app-lock** — `privateUnlockSessionProvider` holds the *satisfied*
+   state for one foreground session; both screens still gate. `FLAG_SECURE`
+   untouched. The revoke listens for lifecycle in the **provider**, not the
+   mixin: the unlock outlives both screens, and a revoke that only fires while
+   the grid is mounted is not a revoke. `inactive` deliberately does not revoke —
+   the biometric prompt itself raises it.
+3. **appPrivate in History** — gated on destination at both layers plus the read
+   side, and **the migration decision was made: purge** (schema v5). The read
+   filter alone was not enough: `backup_rules.xml` says in as many words that the
+   Drift database backs up, so an unpurged row keeps a private file's location in
+   the user's cloud backup — the exact exposure the tier exists to prevent. Note
+   the v3 migration fixture *was* the bug (a `sfw` + `appPrivate` row) and the
+   old test asserted it was listed.
+4. **Linked-listing filter** — `BrowseFilterButton` extracted and shared.
+   Decision made: **per-listing override** (`linkedQueryProvider`, autoDispose,
+   seeded from Browse). **The handoff's second decision dissolved**: it conflated
+   `Sorting` (the tabs) with `SortOrder` (the sheet's asc/desc). Only `Sorting` is
+   forced, so Order works fine here; Top-range is meaningless exactly as it is on
+   Browse's own non-Top tabs, which `filter_sheet.dart:292` already settled by
+   showing it with a hint.
+5. **Hide-chrome button** — added, icon-only. Forced the top row to adopt the
+   navigation row's `compact` breakpoint (it overflowed at 300dp), so
+   `_navigationButton` became the shared `_tonalControl`.
+6. **Image cache** — split into `thumbnailImageCache` (600 objects, 30d) and
+   `fullImageCache` (10 objects, 3d), both project-owned, with a `Clear cache`
+   Settings tile behind a new `FetchedImageCache` port. **Correction to the fix
+   direction: a byte-capped `CacheManager` does not exist.** `Config` caps
+   *objects* only — which is precisely why one bucket could reach 2GB — so the
+   split is what makes a count mean a budget. No WorkManager needed.
+7. **APK size** — R8 + `shrinkResources` + `--split-per-abi`. **arm64-v8a is now
+   22.4 MiB**, from a 62 MiB fat APK. Both levers are real and were measured:
+   without R8 the split arm64 APK is 35.4MB, with it 23.5MB. (Do not reason
+   about R8 from the *shrunk* APK's 1.5MB `classes.dex` — that is the output.
+   The unminified dex is ~13MB of AndroidX, Kotlin stdlib and plugins.) Release signing now
+   reads a gitignored `android/key.properties`; **absent, it still falls back to
+   the debug key and now warns at configure time.** Creating that keystore is the
+   owner's, and is the only part of item 7 left.
+
+### The device pass (2026-07-16, second run)
+
+**The owner ran it: everything worked.** No regressions reported across the
+fixed flows. Two things came out of it anyway, and the second is the important
+one.
+
+**The "173MB" is the debug APK — the same wrong artifact as the 201MB.** The
+installed package reports `flags=[ DEBUGGABLE … ]` and its `/data/app` directory
+is 165MB. R8 does not touch a debug build, so that number could not have moved
+and never will. **`app-arm64-v8a-release.apk` is 22.4 MiB.** Measure that one, or
+item 7 stays untested. What the device actually holds:
+
+| | |
+|---|---|
+| `/data/app/…` (the APK) | **165MB** — debug; ~22 MiB in release |
+| `files/wallpapers` | **235MB** — 32 private wallpapers. The user's own data. |
+| `app_flutter/flutter_assets` | **94MB** — debug-only; absent from release |
+| `cache/` | **empty** — the image cache had already been cleared |
+| `app_flutter/tela.sqlite` | 45KB |
+
+So the app is not big. Its APK was measured in the one form that is, and the
+rest is 32 wallpapers someone chose to keep.
+
+**The find: the old cache bucket was orphaned, and it was mine.** Splitting the
+buckets left `libCachedImageData` — the ~2GB one — referenced by nothing.
+`flutter_cache_manager` evicts a bucket only while that bucket is in use, so an
+abandoned one never shrinks: an upgrading device would have kept every byte
+forever while the new "Clear cache" tile reported **0 B** beside it. The tablet
+still had `files/libCachedImageData.db`, 2.5MB of rows, hours after the split.
+Fixed: `purgeLegacyCache()` on the port, deleting the files **and** the sqflite
+index beside them (the two live in different directories — deleting the folder
+alone leaves rows pointing at nothing), run unawaited from `main()` so nobody has
+to go looking, and counted in `sizeInBytes()` until it is gone. Six tests,
+including the upgrade case.
+
+The tablet's cache being empty is why this did not show up as a number: it was
+luck, not correctness.
+
+### What is owed
+
+The device pass confirmed the *behaviour*. What it did not confirm is anything
+that only a **release** build or a **real prompt** can show:
+
+- **Item 2 wants a real biometric prompt.** The lifecycle revoke is pinned
+  against Flutter's own state machine, but whether Android delivers `paused`
+  *before* `local_auth` returns — the ordering the grant relies on — is a device
+  fact, not a test fact. If an OEM delivers it late, the unlock would be revoked
+  immediately after being granted and the toll would be charged twice again,
+  which is the old bug wearing a new hat.
+- **Item 7 wants R8 exercised.** The method channels are reached by channel name,
+  never by a Kotlin reference, so R8 cannot see they are used;
+  `proguard-rules.pro` keeps `cc.pym.tela.**` for exactly that reason. A stripped
+  handler presents as a plugin that silently stops answering — no wallpaper
+  applied, no private listing, no share. **Install the release APK, not the debug
+  one**, or this is untested.
+- **Item 6 wants a real browse.** The tablet's cache was already empty, so the
+  buckets have never been seen filling and evicting against real Wallhaven
+  traffic. Browse a while, then read the Settings tile's figure.
+
+Install `app-arm64-v8a-release.apk`. Use `run`, not `install` — see `tool/tela`.
+
+## PRIOR CHECKPOINT — slice 7 is merged, and the tablet found seven things
+
+**Superseded: every item below is fixed. Kept for the root-causes, which are
+still the best description of what was wrong.**
+
+`image-viewer-ux` is merged into `master` as **`babce71`** and the device pass is
+done. The worktree has nothing left to give; **work in `master` from here**, or
+in short-lived branches off it. What follows is the fix list the SM-X730
+produced, each item root-caused to a file and a line. **This is now the work.**
+
+Every fix below gets a regression test — the project rule, and in the case of the
+first item, the *reason* it is still a bug: it has been known since slice 6 and
+was never once pinned by a test.
+
+### The merge itself (done)
+
+Five conflicts, all additive, all resolved "keep both": `routes.dart` and
+`router.dart` (blocked-tags vs. download-viewer routes, now siblings),
+`wallpaper_grid.dart` (imports only), and two test files. `dart format .`,
+`./tool/tela analyze`, `./tool/tela gen-l10n` and `./tool/tela build apk --debug`
+are all clean; the suite is **514 tests** green.
+
+The merge surfaced exactly one regression, in the two tests the merge notes
+predicted — and it is worth reading as a **design smell rather than a test bug**.
+Master's `_reapplyBlocklist` and the branch's Hero tags live in different methods
+of `wallpaper_grid.dart`, so git auto-merged them happily; but the merged
+`build()` now calls `ref.listen(blockedTagsProvider, …)`
+(`wallpaper_grid.dart:110`), which gives *the grid* a hard dependency on the real
+Drift-backed `tagBlocklistRepositoryProvider` → `telaDatabaseProvider` →
+`TelaDatabase.open()`. The branch's two minimal-`ProviderScope` harnesses predate
+that dependency, so they reached real Drift and collided with live paging. Fixed
+test-only, by giving both the `FakeTagBlocklistRepository` that master's own
+`browse_screen_test` already wires. **The seam is still sharp**: any future
+harness that mounts `WallpaperGrid` will silently open a database unless it
+remembers this. Worth a shared test helper, or a hard look at whether the grid
+should know about the blocklist at all.
+
+### 1. The close button never closes (P1 — and we have known since slice 6)
+
+**Symptom, on the tablet:** the viewer's Close button does nothing; Android Back
+is the only way out.
+
+**Root cause, confirmed.** `_exitFullscreen()`
+(`immersive_gallery_viewer.dart:163`) sets `_allowPop = true` inside `setState`
+and then *synchronously* awaits `widget.onClose()`. Both the private and the
+History sessions implement `onClose` as `Navigator.of(context).maybePop()`
+(`private_immersive_session.dart:124`, `download_immersive_session.dart:111`).
+`maybePop` **consults the route's `PopScope`**, which still reports
+`canPop: false` — the `setState` rebuild has not run yet. So the `PopScope` fires
+`onPopInvokedWithResult(didPop: false)` (`immersive_gallery_viewer.dart:335`),
+which calls `_exitFullscreen()` again, which hits the `_isExiting` guard and
+returns. **Nothing pops.** Android Back works because by then the rebuild landed
+and `canPop` is true.
+
+This also explains why Detail's viewer closes fine:
+`wallpaper_detail_screen.dart:407` uses `Navigator.pop()`, not `maybePop()`, and
+`pop()` bypasses `PopScope` entirely. The private viewer's delete-to-empty exit
+sidesteps it the same way, deliberately — and slice 6 wrote that down (see its
+note below), while slice 7 concluded it "did not surface and needed no fix." It
+surfaced.
+
+**Fix direction:** use `Navigator.pop()` in both sessions. `_exitFullscreen` *is*
+what the `PopScope` defers to; consulting the `PopScope` from inside it is the
+cycle. Do not "fix" this by awaiting a frame before `onClose` — that leaves the
+re-entrant call in place and makes the exit depend on frame timing.
+
+**Regression test:** pump each session, tap `Key('immersive-viewer-close')`,
+assert the route is gone. Both sessions — the bug is inherited, so testing one
+proves nothing about the other.
+
+### 2. The private library asks for the lock twice (P1)
+
+**Symptom:** authenticate to open the private grid, then authenticate *again* to
+open a fullscreen image.
+
+**Root cause:** this is currently **by design**, and the design is wrong.
+`PrivateSecureAccess._unlocked` (`private_secure_access.dart:29`) is per-`State`,
+and both the grid and the viewer mix the mixin in and call `beginPrivateAccess()`
+from `initState`. The mixin's own docstring argues for it: "Neither leans on the
+other… the gate is defence in depth rather than a one-time toll paid at the grid."
+
+**Keep the reason, drop the toll.** The docstring's real argument is
+*deep-linkability* — "a route can be reached more ways than one — gating a button
+would leave the content one deep link away from being shown ungated." That
+argument is about where the **gate** lives, not about how often the user pays. So
+keep the gate on both screens; hoist only the *satisfied* state into a
+session-scoped provider, invalidated when the app backgrounds. A viewer opened
+over an unlocked grid inherits the unlock; a viewer reached cold still prompts.
+
+The `FLAG_SECURE` half is reference-counted and correct — **do not touch it**.
+
+**Regression tests:** viewer opened after a grid unlock does not prompt; viewer
+opened cold *does* prompt; the unlock does not survive backgrounding.
+
+### 3. A private download is indexed in History (P1 — privacy-shaped)
+
+**Symptom:** download a *safe* or *sketchy* wallpaper straight to the private
+library and it shows up in Download History.
+
+**Root cause:** both layers gate on **purity**, never on **destination**.
+`DownloadWallpaper._remember` (`download_wallpaper.dart`) reads
+`if (wallpaper.isNsfw) return;`, and `DriftDownloadHistory.record`
+(`drift_download_history.dart:53`) repeats exactly that check. So an SFW
+wallpaper sent to `appPrivate` — by config or by the long-press per-download
+override — earns a history row.
+
+**The invariant needs restating, not patching.** Today it reads "explicit
+wallpapers are never recorded here" (`download_history.dart`, port docstring).
+It should read: **nothing in `appPrivate` is ever recorded here, whatever its
+purity** — the private library *is* that tier's index, and a history row is
+precisely the ungated, backed-up thumbnail index the tier exists to prevent.
+Keep the purity rule as well; both, at both layers, the way every other NSFW rule
+here is enforced twice.
+
+Touches the port docstring, `_remember`, `DriftDownloadHistory.record`, and the
+read side — `downloads()` should drop `appPrivate` rows too, which also cleans up
+the bad rows already on the user's device for free. A one-time purge migration is
+optional; decide it explicitly.
+
+**Regression tests:** sfw → `appPrivate` writes no row; sketchy → `appPrivate`
+writes no row; sfw → `sharedGallery` still writes one.
+
+### 4. No filter on a tag or uploader listing (P2 — feature)
+
+**Symptom:** follow a tag or an uploader and the filter button is gone; no way to
+see only General or only People for that tag, or to set purity or colour.
+
+**Root cause:** `LinkedListingScreen` builds an `AppBar` with no `actions`
+(`linked_listing_screen.dart:32`). `BrowseScreen` has `_filterButton(…)` in its
+`actions` (`browse_screen.dart:75`) and it is **private to that file**.
+
+**The good news:** nothing else is missing. The filter sheet already offers
+categories, purity, tags, ratio, resolution, colour, order and top range
+(`filter_sheet.dart:123-159`), and `LinkedListingScreen` *already inherits*
+`browseQueryProvider` (line 27-30), so those filters already apply here — only the
+control is absent. Extract `_filterButton` into a shared widget and add it.
+
+**Two decisions to make first**, both real:
+
+- The sheet writes the **global** `browseQueryProvider`, so filtering from a tag
+  listing also re-filters the Browse tabs behind it. That matches the screen's
+  own docstring ("their filters still apply here, as they do on wallhaven.cc") —
+  but say yes to it on purpose, or build a per-listing override.
+- `LinkedListingScreen` forces `sorting: Sorting.dateAdded` (line 29), so the
+  sheet's Order and Top-range groups would sit there doing nothing. Either drop
+  the force, or hide those groups on a linked listing. A filter that visibly does
+  nothing is the exact trap the `ratios=bogus` finding warned about.
+
+### 5. A button to hide the viewer chrome (P2 — feature)
+
+Today the only way to hide the controls is tapping the image
+(`immersive_gallery_viewer.dart:229-243`). Add an explicit control to
+`ImmersiveGalleryControls`.
+
+Two notes. The l10n already exists — `galleryShowControls` / `galleryHideControls`
+are in the ARB and are currently used as the canvas's semantics label — so this
+needs no `gen-l10n`, only a tooltip. And **the button hides the thing the button
+is in**: tap-to-show must keep working, or the controls become unreachable.
+
+### 6. The image cache reaches ~2GB (P2)
+
+**Root cause:** no `CacheManager` is configured anywhere in the app — grep finds
+zero `CacheManager`, `stalePeriod`, or `maxNrOfCacheObjects`. So every
+`CachedNetworkImage` falls to `DefaultCacheManager`: **200 objects, 30-day stale
+period, capped by object count rather than bytes.**
+
+The killer is what shares that one bucket. `wallpaper_gallery_session.dart:53`
+caches `wallpaper.fullImageUrl` — full-resolution Wallhaven originals, routinely
+5–20MB and up to 8K — alongside tiny thumbnails, against a cap that cannot tell
+them apart. 200 × ~10MB ≈ 2GB. That is the number on the device.
+
+**Fix direction:** project-owned cache managers, one bucket per role — thumbnails
+(many, small, long-lived) and full images (few, huge, tight byte budget). Note
+that per the CLAUDE.md ports rule this is already a violation: `cached_network_image`'s
+cache is a third-party dependency reaching straight into features, with no
+project-owned interface and no adapter.
+
+**On the requested worker:** a byte-capped `CacheManager` self-evicts, so an
+Android WorkManager (a new dependency, a new port, a new native seam) is probably
+unnecessary. Recommend the cheaper shape first — cap, evict on resume, and a
+"Clear cache (1.9GB)" tile in Settings showing the real figure — and only reach
+for a worker if that proves insufficient.
+
+Do not confuse this with the decode budget: `cacheWidth`/`ResizeImage` are
+already applied correctly across the gallery sources, and they bound **memory**.
+The 2GB is **disk**.
+
+### 7. The 201MB app is a debug build (P3 — measurement correction)
+
+Measured on this machine: `app-debug.apk` is **192MB**; `app-release.apk` is
+**62MB**. The 201MB on the tablet is the *debug* APK installed for the device
+pass — debug carries the JIT VM, both ABIs, and no tree-shaking. So "we are
+building stuff we don't need" is not what is happening; the wrong artifact was
+being measured.
+
+**But 62MB is still ~3× a normal Flutter release**, and that part is real:
+`android/app/build.gradle.kts` has no `minifyEnabled`, no `shrinkResources`, and
+no ABI splits — its `buildTypes` block sets a signing config and nothing else.
+Enable R8 and resource shrinking and build `--split-per-abi` (or an AAB, which
+Play splits for you); expect ~20–25MB per ABI. The release build is also **still
+debug-signed** — a TODO in that same block, worth folding into this fix.
+
+### Carried debts (not from the device)
+
+- **`_reapplyBlocklist` fires on the blocklist's first resolution**, not only on
+  changes: a `FutureProvider` going `AsyncLoading → AsyncData` counts as a change
+  (`wallpaper_grid.dart:110-118`). Whether it costs a redundant full re-fetch is a
+  **race** — `_reapplyBlocklist` early-returns when no pages are loaded yet (line
+  138), and on device the fast Drift read usually wins. Unpredictable-but-usually-
+  benign is worse than consistently wrong, and it is what broke the two merge
+  tests. Gate it on genuine changes.
+- **The chrome's Next/Previous bypass the zoom-aware input path.**
+  `immersive_gallery_viewer.dart:311-312` wires the controls to `widget.onNext` /
+  `widget.onPrevious` raw, while `_handleNextInput` / `_handlePreviousInput`
+  (lines 286-300, which *pan* when zoomed) are bound only to the arrow keys. So
+  while zoomed, arrow keys pan and the buttons jump to the next wallpaper. Slice 3
+  says explicit Previous/Next *should* select while zoomed — so this may be
+  correct and merely undocumented. Settle it, then pin it.
+- **Suite is 514 tests; the merge notes expected ~575.** Nothing is red, so this
+  is most likely a stale estimate. Never reconciled.
+- **The viewer's Next button did not advance on the tablet** (stayed "1 of 48",
+  appeared to toggle chrome instead); a swipe worked and reached "2 of 48". Most
+  likely adb tap coordinates missing the button at 2560×1600 rather than a bug,
+  but it is unresolved and wants one real finger.
+
+### What the tablet did confirm
+
+All with clean logcat — no Flutter exceptions, no RenderFlex overflow, no FATAL,
+no "multiple heroes": app launch (Impeller/Vulkan, 2560×1600, Monet core palette
+detected); the landscape browse grid with adaptive rail and aspect-correct
+masonry; tile→Detail Hero landing on the exact tapped wallpaper; Detail's
+two-pane; the immersive viewer full-bleed; **public paging into real Wallhaven**
+("1 of 48" → "2 of 48", Previous correctly enabling); Settings' two-pane
+including the three-tier storage copy.
+
+**The private path's `FLAG_SECURE` is genuinely engaged.** Opening the private
+library raised Samsung's `BiometricPromptRoot … (secure)`, which adb cannot pass.
+`screencap` at that point returned fully black (35,940 bytes) and a later BACK
+recovered to a normal 280,229-byte frame — proving the black was the secure
+window and not a crash. **No private screenshot was captured, and capture is not
+possible.**
+
+### Still owed on the device
+
+Unchanged from the slice-7 list, and still owed because the app-lock cannot be
+passed over adb: the native `BitmapFactory` bounds decode returning a real private
+file's dimensions; `FLAG_SECURE` surviving the grid↔viewer round trip and the
+inherited close-button path (item 1 above blocks this one outright); and History's
+native `materializeImage`/`releasePreview` decoding a real `content:`/SAF preview.
+
+These need the owner's own eyes and cannot be automated: the Hero flight reading
+well against real thumbnails on all four shelves (flying the decoded thumbnail,
+not a blank box); no "multiple heroes" on a repeated wallpaper under `random`
+sort; reduce motion collapsing to an instant cut; landscape safe-area clearing
+the gesture bar with no double gap; grid and scroll restoration on return.
+
+One more, specific to the merge: block a tag from Detail with a Browse grid open
+and confirm the in-place re-filter survives the tiles shifting under it. Note the
+failure mode — `shelf_hero_tag.dart` documents that a shifted tile **simply does
+not fly** rather than flying to the wrong image, so watch for a *silently missing*
+flight, not for an exception.
+
+## PRIOR CHECKPOINT — image viewer UX slice 7 complete (merged as `babce71`)
 
 The staged implementation continues on branch `image-viewer-ux` in the existing
 `.worktrees/image-viewer-ux` worktree. **Continue there; do not create another
@@ -330,13 +712,13 @@ Slice 3 verification:
 
 All pass; the full suite now has 426 tests.
 
-### NEXT SLICE ONLY — the device matrix (step 6)
+### ~~NEXT SLICE ONLY~~ — the device matrix (step 6) — **DONE 2026-07-16**
 
-Steps 1–5 are **done** (see the slice-7 checkpoint at the top of this file). The
-only work left before merge is step 6: the full automated + real-device matrix,
-run against the exact commit on the Samsung SM-X730 in **both** portrait and
-landscape, over Browse, Detail, History, and the private library. Nothing more
-should be implemented — this is a confirmation pass.
+**This pass has been run; its results are the fix list at the top of this file.**
+Kept for the record. Steps 1–5 were done at slice 7; step 6 was the full
+automated + real-device matrix on the SM-X730, and it produced seven findings —
+including the close-button bug that slice 6 predicted below and slice 7 waved
+through.
 
 Before installing, run the pre-handoff gate from the "Acceptance matrix" below:
 `./tool/tela gen-l10n`, `dart format .`, `./tool/tela analyze`, `./tool/tela
