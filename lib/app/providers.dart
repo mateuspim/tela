@@ -4,6 +4,7 @@ import 'package:tela/core/network/wallhaven_client.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/downloads/drift_download_history.dart';
 import 'package:tela/data/favorites/drift_favorites_repository.dart';
+import 'package:tela/data/images/cache_manager_fetched_image_cache.dart';
 import 'package:tela/data/secrets/secure_secret_store.dart';
 import 'package:tela/data/security/local_auth_app_lock.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
@@ -17,6 +18,7 @@ import 'package:tela/data/wallpaper/method_channel_wallpaper_sharer.dart';
 import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
+import 'package:tela/domain/ports/fetched_image_cache.dart';
 import 'package:tela/domain/ports/image_store.dart';
 import 'package:tela/domain/ports/local_preview_cache.dart';
 import 'package:tela/domain/ports/screen_guard.dart';
@@ -81,6 +83,12 @@ final Provider<ImageStore> imageStoreProvider = Provider<ImageStore>(
 final Provider<LocalPreviewCache> localPreviewCacheProvider =
     Provider<LocalPreviewCache>(
       (Ref ref) => MethodChannelLocalPreviewCache(),
+    );
+
+/// The fetched-image disk cache, as Settings can measure and empty it.
+final Provider<FetchedImageCache> fetchedImageCacheProvider =
+    Provider<FetchedImageCache>(
+      (Ref ref) => CacheManagerFetchedImageCache(),
     );
 
 /// The screen-protection port, bound to Android's `FLAG_SECURE`.

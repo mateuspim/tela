@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/network/wallpaper_image_caches.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 
@@ -64,6 +65,7 @@ class WallpaperTile extends StatelessWidget {
     final double devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     final Widget image = CachedNetworkImage(
       imageUrl: wallpaper.thumbOriginalUrl,
+      cacheManager: thumbnailImageCache,
       fit: BoxFit.cover,
       memCacheWidth: (_tileWidthDip * devicePixelRatio).round(),
       fadeInDuration: MediaQuery.disableAnimationsOf(context)

@@ -12,6 +12,7 @@ import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/features/settings/api_key_section.dart';
 import 'package:tela/features/settings/app_lock_switch.dart';
 import 'package:tela/features/settings/browse_defaults_section.dart';
+import 'package:tela/features/settings/clear_cache_tile.dart';
 import 'package:tela/features/settings/storage_settings_controller.dart';
 
 /// Where downloads go, configured for safe and explicit content separately.
@@ -80,6 +81,8 @@ class _SettingsList extends StatelessWidget {
         const SizedBox(height: 16),
         _downloadsGroup(l10n),
         const SizedBox(height: 16),
+        _storageGroup(l10n),
+        const SizedBox(height: 16),
         _privacyGroup(l10n),
       ],
     );
@@ -105,6 +108,8 @@ class _SettingsList extends StatelessWidget {
               _downloadsGroup(l10n),
               const SizedBox(height: 16),
               _privacyGroup(l10n),
+              const SizedBox(height: 16),
+              _storageGroup(l10n),
             ],
           ),
         ),
@@ -155,6 +160,18 @@ class _SettingsList extends StatelessWidget {
           note: l10n.settingsDownloadsNsfwNote,
         ),
       ],
+    );
+  }
+
+  /// Its own group rather than a line under Downloads, because the difference
+  /// between the two is the whole point: a download is a file the user kept,
+  /// and everything in the cache is a copy tela can fetch again.
+  Widget _storageGroup(AppLocalizations l10n) {
+    return _SettingsGroup(
+      icon: Icons.sd_storage_outlined,
+      title: l10n.settingsStorageSection,
+      description: l10n.settingsStorageDescription,
+      children: const <Widget>[ClearCacheTile()],
     );
   }
 

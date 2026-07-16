@@ -35,6 +35,9 @@ dependencies:
   dynamic_color: ^1.7.0
   flutter:
     sdk: flutter
+  # Direct, not just transitive: the project configures its own thumbnail and
+  # full-image cache buckets in core/network/wallpaper_image_caches.dart.
+  flutter_cache_manager: ^3.4.1
   flutter_localizations:
     sdk: flutter
   flutter_riverpod: ^3.3.2
@@ -47,10 +50,16 @@ dependencies:
   intl: ^0.20.2
   local_auth: ^2.3.0
   meta: ^1.18.0
+  # Direct, not just transitive: the image-cache adapter measures the cache
+  # folders under the temp directory to report a real "Clear cache" figure.
+  path_provider: ^2.1.5
 
 dev_dependencies:
   build_runner: ^2.10.4
   drift_dev: ^2.28.2
+  # Test-only: the image-cache fake implements flutter_cache_manager's
+  # FileSystem seam, whose one method returns this package's File.
+  file: ^7.0.1
   flutter_test:
     sdk: flutter
   # Raw SQLite, so the migration test can build a real v1 database by hand —

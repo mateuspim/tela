@@ -1,5 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:tela/core/network/wallpaper_image_caches.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
 
 /// A network source that keeps an honest thumbnail visible while full pixels
@@ -48,8 +50,12 @@ class ProgressiveNetworkGallerySource implements GalleryImageSource {
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
+        // The two layers are the same picture but nothing like the same file,
+        // so they are cached apart: the preview is a thumbnail worth keeping,
+        // the full image is tens of MB worth evicting early.
         _image(
           previewUrl,
+          cache: thumbnailImageCache,
           cacheWidth: cacheWidth,
           cacheHeight: cacheHeight,
           fadeInDuration: Duration.zero,
@@ -57,6 +63,7 @@ class ProgressiveNetworkGallerySource implements GalleryImageSource {
         ),
         _image(
           imageUrl,
+          cache: fullImageCache,
           cacheWidth: cacheWidth,
           cacheHeight: cacheHeight,
           fadeInDuration: effectiveFade,
@@ -68,6 +75,7 @@ class ProgressiveNetworkGallerySource implements GalleryImageSource {
 
   Widget _image(
     String imageUrl, {
+    required CacheManager cache,
     required int cacheWidth,
     required int cacheHeight,
     required Duration fadeInDuration,
@@ -75,6 +83,7 @@ class ProgressiveNetworkGallerySource implements GalleryImageSource {
   }) {
     return CachedNetworkImage(
       imageUrl: imageUrl,
+      cacheManager: cache,
       fit: BoxFit.contain,
       memCacheWidth: cacheWidth,
       memCacheHeight: cacheHeight,

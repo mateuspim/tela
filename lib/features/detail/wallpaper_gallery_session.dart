@@ -1,7 +1,7 @@
 import 'dart:async';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/widgets.dart';
+import 'package:tela/core/network/wallpaper_image_caches.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -45,12 +45,18 @@ Future<void> _prefetchWallpaper(
 ) async {
   await Future.wait<void>(<Future<void>>[
     precacheImage(
-      CachedNetworkImageProvider(wallpaper.thumbOriginalUrl),
+      CachedNetworkImageProvider(
+        wallpaper.thumbOriginalUrl,
+        cacheManager: thumbnailImageCache,
+      ),
       context,
       onError: (Object error, StackTrace? stackTrace) {},
     ),
     precacheImage(
-      CachedNetworkImageProvider(wallpaper.fullImageUrl),
+      CachedNetworkImageProvider(
+        wallpaper.fullImageUrl,
+        cacheManager: fullImageCache,
+      ),
       context,
       onError: (Object error, StackTrace? stackTrace) {},
     ),

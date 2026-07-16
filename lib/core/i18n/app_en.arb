@@ -912,6 +912,37 @@
     }
   },
 
+  "settingsStorageSection": "Storage",
+  "@settingsStorageSection": {
+    "description": "Heading for the group of on-device storage settings."
+  },
+
+  "settingsStorageDescription": "Space tela is using for images it can fetch again.",
+  "@settingsStorageDescription": {
+    "description": "Explanation under the storage settings heading."
+  },
+
+  "settingsClearCache": "Clear image cache",
+  "@settingsClearCache": {
+    "description": "Title of the tile that empties the fetched-image disk cache."
+  },
+
+  "settingsClearCacheSize": "{size} of thumbnails and previews. Downloads are not touched.",
+  "@settingsClearCacheSize": {
+    "description": "Subtitle of the clear-cache tile, naming how much would be freed and reassuring that saved wallpapers are safe.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "1.9 GB"
+      }
+    }
+  },
+
+  "settingsCacheCleared": "Image cache cleared.",
+  "@settingsCacheCleared": {
+    "description": "Confirmation shown after the image cache is emptied."
+  },
+
   "settingsPrivacySection": "Privacy",
   "@settingsPrivacySection": {
     "description": "Heading for the group of privacy settings."
