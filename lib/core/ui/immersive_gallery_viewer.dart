@@ -294,6 +294,26 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
     _swipeLatest = null;
   }
 
+  /// Handles a *directional* left — an arrow key or D-pad, where the user is
+  /// steering within the image rather than naming a wallpaper.
+  ///
+  /// Zoomed, that intent reads as pan: the image is larger than the viewport
+  /// and left is how you reach the rest of it, so a bounded step moves the
+  /// image instead of the selection. Fitted, there is nowhere to pan and the
+  /// same key means previous.
+  ///
+  /// The chrome's Previous/Next deliberately do **not** come through here —
+  /// [_viewerChrome] hands them [ImmersiveGalleryViewer.onPrevious] and
+  /// [ImmersiveGalleryViewer.onNext] directly, so they select even while
+  /// zoomed. A labelled button names a wallpaper; an arrow only names a
+  /// direction, and the direction is ambiguous exactly when zoomed. Per slice
+  /// 3: "While zoomed, touch input pans and horizontal keys pan by a bounded
+  /// step; explicit Previous/Next still selects and resets zoom."
+  ///
+  /// The reset half is not the viewer's: it resets nothing on selection, since
+  /// it does not own the selection. Each session resets its zoom controller
+  /// when the selected index changes (see `WallpaperImmersiveSession`), which
+  /// covers the buttons, a swipe, and a key alike.
   void _handlePreviousInput() {
     if (_zoomController.isZoomed) {
       _zoomController.panBy(const Offset(48, 0));
@@ -302,6 +322,8 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
     widget.onPrevious?.call();
   }
 
+  /// Directional right. See [_handlePreviousInput] for why the chrome's
+  /// buttons bypass this and select even while zoomed.
   void _handleNextInput() {
     if (_zoomController.isZoomed) {
       _zoomController.panBy(const Offset(-48, 0));
@@ -320,6 +342,10 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
       onClose: () => unawaited(_exitFullscreen()),
       position: widget.position,
       itemCount: widget.itemCount,
+      // Straight through, not via _handlePreviousInput/_handleNextInput: an
+      // explicit button selects even while zoomed (see _handlePreviousInput),
+      // and a tear-off is never null, which would silently cost the buttons
+      // their boundary-disabled states.
       onPrevious: widget.onPrevious,
       onNext: widget.onNext,
       primaryAction: widget.primaryAction,

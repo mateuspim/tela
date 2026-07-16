@@ -269,7 +269,10 @@ void main() {
     expect(previous, 2);
   });
 
-  testWidgets('horizontal input pans instead of paging while zoomed', (
+  // Named for keys, not "horizontal input": the chrome's Next button is
+  // horizontal input too and deliberately does the opposite, which the test
+  // below this one pins.
+  testWidgets('keyboard arrows pan instead of paging while zoomed', (
     WidgetTester tester,
   ) async {
     int next = 0;
@@ -297,6 +300,40 @@ void main() {
       zoomController.transformationController.value.entry(0, 3),
       before - 48,
     );
+  });
+
+  testWidgets('the explicit Next button still selects while zoomed', (
+    WidgetTester tester,
+  ) async {
+    int next = 0;
+    final GalleryZoomController zoomController = GalleryZoomController();
+    addTearDown(zoomController.dispose);
+    await _pumpViewer(
+      tester,
+      zoomController: zoomController,
+      disableAnimations: true,
+      itemCount: 2,
+      onNext: () => next++,
+    );
+    await tester.tap(find.text('Zoom in'));
+    await tester.pump();
+    final double before = zoomController.transformationController.value.entry(
+      0,
+      3,
+    );
+
+    tester
+        .widget<ButtonStyleButton>(
+          find.byKey(const Key('immersive-viewer-next')),
+        )
+        .onPressed!();
+    await tester.pump();
+
+    // A labelled button names a wallpaper; an arrow key only names a
+    // direction, and a direction is ambiguous exactly when zoomed. So the same
+    // gesture the arrow key pans with, this selects with — deliberately.
+    expect(next, 1);
+    expect(zoomController.transformationController.value.entry(0, 3), before);
   });
 
   testWidgets('enters immersive mode and restores before close', (
