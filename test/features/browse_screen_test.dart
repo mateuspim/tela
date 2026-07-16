@@ -660,6 +660,37 @@ void main() {
       expect(find.byType(WallpaperTile), findsNWidgets(1));
     },
   );
+
+  testWidgets(
+    'the blocklist merely loading does not re-fetch the page already on screen',
+    (WidgetTester tester) async {
+      final FakeWallhavenApi api = FakeWallhavenApi(
+        page: WallpaperPage(
+          wallpapers: <Wallpaper>[_wallpaper('aaa111')],
+          currentPage: 1,
+          lastPage: 1,
+        ),
+      );
+      // The blocklist loses the race deliberately: it resolves with the first
+      // page already on screen, which is when a re-fetch-on-first-resolution
+      // has loaded pages to spend a request on. Resolving first, it would find
+      // no pages and cost nothing, and this would pass either way. The delay
+      // must outlast the 300ms _pumpBrowseWithContainer itself pumps, or the
+      // baseline below is captured after the re-fetch it is meant to catch.
+      final FakeTagBlocklistRepository blocklist = FakeTagBlocklistRepository(
+        readDelay: const Duration(milliseconds: 600),
+      );
+      await _pumpBrowseWithContainer(tester, api, blocklist);
+      expect(find.byType(WallpaperTile), findsOneWidget);
+      final int afterFirstPage = api.receivedQueries.length;
+
+      await tester.pump(const Duration(seconds: 1));
+
+      // Nothing was blocked, so nothing changed, so nothing is worth asking
+      // Wallhaven again — the opening fetch read this same empty blocklist.
+      expect(api.receivedQueries, hasLength(afterFirstPage));
+    },
+  );
 }
 
 /// Types [term] into the search field and submits it, as the keyboard would.

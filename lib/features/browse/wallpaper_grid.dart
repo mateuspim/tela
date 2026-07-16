@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +16,8 @@ import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
+import 'package:tela/domain/ports/tag_blocklist_repository.dart';
+import 'package:tela/domain/use_cases/search_wallpapers.dart';
 import 'package:tela/features/browse/gallery_paging_bridge.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/detail/wallpaper_gallery_session.dart';
@@ -113,7 +116,7 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
         AsyncValue<List<WallpaperTag>>? previous,
         AsyncValue<List<WallpaperTag>> next,
       ) {
-        if (next.hasValue) unawaited(_reapplyBlocklist());
+        if (_blocklistChanged(previous, next)) unawaited(_reapplyBlocklist());
       },
     );
     return PagingListener<int, Wallpaper>(
@@ -121,6 +124,37 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
       builder: _grid,
     );
   }
+
+  /// Whether the blocklist's effect on a search actually changed between
+  /// [previous] and [next] — the only thing worth re-fetching for.
+  ///
+  /// Listening for `hasValue` alone is not that: a [FutureProvider] resolving
+  /// for the first time (`AsyncLoading` → `AsyncData`) has a value where a
+  /// moment ago it had none, so a plain `hasValue` re-fetches page 1 the
+  /// instant the blocklist first loads — against the very blocklist the
+  /// opening fetch already read for itself, since [SearchWallpapers] re-reads
+  /// it on every call. Whether that costs a redundant request or nothing at
+  /// all comes down to which resolves first, so it is a race rather than a
+  /// steady cost; hence the gate.
+  ///
+  /// Compares tag *names*, not the tags: names are the shape a search filters
+  /// on ([TagBlocklistRepository.blockedNames]), so an upstream rename that
+  /// keeps its id is a genuine change here even though the tags compare equal
+  /// (`WallpaperTag ==` is id-only, deliberately), and a set is order-free
+  /// where the provider's most-recent-first list is not.
+  bool _blocklistChanged(
+    AsyncValue<List<WallpaperTag>>? previous,
+    AsyncValue<List<WallpaperTag>> next,
+  ) {
+    final List<WallpaperTag>? before = previous?.value;
+    final List<WallpaperTag>? after = next.value;
+    if (before == null || after == null) return false;
+    return !setEquals(_blockedNames(before), _blockedNames(after));
+  }
+
+  Set<String> _blockedNames(List<WallpaperTag> tags) => <String>{
+    for (final WallpaperTag tag in tags) tag.name,
+  };
 
   /// Re-fetches every page already on screen, in place, after a block or
   /// unblock — without going through [_retry]'s full reset.
