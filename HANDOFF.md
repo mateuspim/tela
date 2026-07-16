@@ -2,7 +2,152 @@
 
 Updated: 2026-07-16
 
-## START HERE — the code debts are closed; the device is the work
+## START HERE — the release build hangs on cold launch
+
+**This is the work. It is real, reproducible, unfixed, and not understood.** The
+device found it, which is the whole reason the device pass exists.
+
+| build | cold launch, no taps | result |
+|---|---|---|
+| **release** | wait 64s+ | **blank grid, spinner still turning** |
+| **debug** | wait 8s | loads |
+| **release** | tap *any* sorting tab | loads instantly |
+
+The owner hit it first and described the workaround exactly: *"if i move from top
+to latest it retrieves the files."* Tapping a tab is not a quirk — it is the
+diagnostic. A tab tap changes the grid's query, which reaches `_retry()` →
+`_paging.refresh()`, and *that* fetch works. The one scheduled at launch never
+lands.
+
+### What it is not — each ruled out with evidence, do not re-litigate
+
+- **Not R8.** Set `isMinifyEnabled = false` *and* `isShrinkResources = false` in
+  `android/app/build.gradle.kts`, rebuilt, reinstalled: **still stuck**. (That
+  edit is reverted; the tree is clean.)
+- **Not the data.** Still stuck against a freshly wiped database with no API key,
+  no blocklist, no saved filters.
+- **Not `a1e057d` / `75b7fbb` / `54b2aa7`.** Those commits are in the debug build
+  too, and debug loads fine.
+- **Not the INTERNET permission** (the classic release-only fetch failure). It is
+  in `src/main/AndroidManifest.xml`, and `dumpsys` reports `granted=true`.
+- **Not the rate limiter.** `_recent` starts empty on launch, and the backoff caps
+  at 1+2+4=7s.
+- **Not a crash.** pid held steady across the whole hang; zero `AndroidRuntime`
+  errors; one `am_proc_start`.
+- **Not an error state.** It is a real spinner — confirmed by looking at the
+  pixels, not by inferring from a metric.
+
+So it is **release-vs-debug timing**: AOT is fast enough to lose a race that JIT
+is slow enough to win.
+
+### The lead (a hypothesis, NOT proven — prove or kill it first)
+
+Two things collide at startup:
+
+1. `PagedLayoutBuilder.initState` (infinite_scroll_pagination 5.1.1) schedules the
+   opening fetch through `WidgetsBinding.instance.addPostFrameCallback`.
+   `PagingController.fetchNextPage` opens with `if (this.operation != null)
+   return;` — a re-entrancy guard. Anything that leaves that guard wrong makes
+   every later fetch a silent no-op, which is exactly a permanent spinner.
+2. `browseDefaultsProvider` resolves *asynchronously* at startup. Its listener
+   (`BrowseQueryController._onDefaults` → `_adopt`) writes `browseQueryProvider`,
+   so `BrowseScreen` rebuilds with a new query, so `WallpaperGrid.didUpdateWidget`
+   sees `widget.query != oldWidget.query` and calls `_retry()` → `_lastPage =
+   null; _paging.refresh()`. `refresh()` does `operation = null; value =
+   value.reset()`.
+
+So the opening fetch and a `refresh()` race, and the startup query change is what
+fires the starting gun.
+
+There is a **second smell in our own code**, worth suspecting on its own merits:
+`wallpaper_grid.dart` writes `_lastPage` from `_fetchPage`, which two concurrent
+fetches both do. `_nextPageKey` returns `null` when `_lastPage != null &&
+!_lastPage.hasMore`, and `fetchNextPage` turns a null key into `hasNextPage:
+false` **permanently**. A grid that believes it has no next page never fetches
+again. A discarded fetch's page can still land in `_lastPage`, because
+`_fetchPage` mutates it before the controller decides the result is stale.
+
+### How to reproduce, and how to measure it honestly
+
+```bash
+./tool/tela build apk --release          # NOT --split-per-abi; see the trap below
+# install (see the install rule below), then:
+adb shell am force-stop cc.pym.tela && adb shell am start -n cc.pym.tela/.MainActivity
+# do not touch the screen; screenshot after 30s+
+adb exec-out screencap -p > /tmp/f.png
+magick /tmp/f.png -crop 2200x900+200+340 +repage -format "%[fx:standard_deviation]\n" info:
+# loaded ≈ 0.20   blank ≈ 0.01
+```
+
+That stddev trick is useful but **it lies about error states**: an error view is
+also dark and also scores low. Look at the image before concluding anything.
+
+The next step is a widget test, not another device build: pump the grid, resolve
+`browseDefaultsProvider` *mid-fetch* so the query changes under an in-flight first
+page, and assert the grid reaches content rather than spinning. That reproduces
+the race on the desk where it can be mutation-checked. If it will not reproduce in
+a test, the hypothesis above is wrong — kill it and start from the eliminations.
+
+## The install rule — read this before touching the device
+
+**A `--split-per-abi` release APK bumps the versionCode. Installing one arms a
+trap that wipes the device's data on the next debug build.**
+
+| artifact | versionCode |
+|---|---|
+| `app-arm64-v8a-release.apk` | **2001** |
+| `app-release.apk` (universal) | 1 |
+| `app-debug.apk` | 1 |
+
+Install the split APK (2001), then run any debug build (1), and Android refuses
+the downgrade — so `flutter run` **uninstalls the app to get out of it**, taking
+the Drift database and the Keystore-backed API key with it. That is precisely the
+failure `tool/tela`'s header describes; note it names the *signature*, which sent
+this session chasing a signature check that passed while the versionCode was the
+real trigger. **Check both.**
+
+This already cost the tablet its data once, on 2026-07-16: 32 private wallpapers
+and the stored API key, gone. The old handoff line that said "Install
+`app-arm64-v8a-release.apk`" is what armed it, and is now deleted.
+
+- **Use `flutter build apk --release`** (universal, versionCode 1) for anything
+  going on the device. It exercises R8 identically — R8 is a buildType setting,
+  not a split setting — and it can never downgrade.
+- **Use `adb install -r`**, not `flutter install` and not `flutter run`, when an
+  in-place update is what you want. `-r` cannot uninstall; its worst case is a
+  harmless error. Only `--split-per-abi` when *measuring per-ABI size*, and then
+  do not leave it on the device.
+
+## What the device did confirm (item 7's R8 question, largely answered)
+
+Verified statically against the R8'd APK, and at runtime:
+
+- All four method-channel handlers survive R8 with their names intact:
+  `Downloads`, `ImageStorage`, `WallpaperSharing`, `MainActivity`. So does every
+  channel-name string (`cc.pym.tela/images`, `/screen`, `/share`, `/wallpaper`).
+  The `-keep class cc.pym.tela.**` rule does its job.
+- The release build launches clean: no `FATAL`, no `ClassNotFound`, no
+  `MissingPluginException`.
+- It reaches **real Wallhaven** and renders the grid — once a tab tap shakes the
+  hang loose. So R8 breaks neither the network path nor the image pipeline.
+
+**Still owed on the device**: the wallpaper-apply round trip (proving the handler
+*answers*, not just that it exists — that changes the owner's wallpaper, so it is
+theirs to run), the real biometric prompt (adb cannot pass `FLAG_SECURE`), and the
+cache figure after a real browse.
+
+## Device state as of this handoff
+
+- Installed: `app-release.apk` — universal, **R8 on**, debug-signed, versionCode 1.
+- **Data: wiped.** Fresh database, no API key, no blocklist, no saved filters.
+- The tablet (SM-X730, `192.168.50.191:5555`) is on a **VPN** (`tun0`, NordVPN).
+  It resolves and pings `wallhaven.cc` at ~118ms. The VPN is *not* the hang — a
+  tab tap loads instantly over the same tunnel — but it does add real latency, and
+  it is a live variable in anything measured from that device.
+- No keystore (`android/key.properties` absent), so release falls back to the
+  debug key with a warning. Fine for testing, still owed before shipping.
+
+## PRIOR — the code debts are closed
 
 All seven device findings are **fixed and committed on `master`**, and the three
 carried debts that could be settled at a desk now are. The suite is **553 tests**
@@ -34,15 +179,15 @@ work to the same bar** — a test that passes before and after is not a test.
 
 ### The next work, in order
 
-The three desk-bound debts are closed (below). What is left needs the device:
+Superseded by the cold-launch hang at the top of this file — that is the work now.
+After it:
 
-1. **The device verifications below**, which need the owner's own hands and a
-   **release** APK.
+1. **The device verifications below**, which need the owner's own hands.
 2. **The keystore**, whenever shipping matters. The only part of item 7 left.
 
 If a third thing is wanted: `WallpaperGrid` mounting silently opens a Drift
 database (see the seam note under the prior checkpoint). It has bitten one test
-harness already.
+harness already — and it is in the startup path the hang lives in.
 
 ### The three carried debts, settled 2026-07-16
 
@@ -132,7 +277,10 @@ one.
 installed package reports `flags=[ DEBUGGABLE … ]` and its `/data/app` directory
 is 165MB. R8 does not touch a debug build, so that number could not have moved
 and never will. **`app-arm64-v8a-release.apk` is 22.4 MiB.** Measure that one, or
-item 7 stays untested. What the device actually holds:
+item 7 stays untested. (**Measure** it — do not *install* it. Its versionCode is
+2001 and installing it wipes the device on the next debug build; see "The install
+rule" at the top. R8 can be exercised from the universal APK instead.) What the
+device actually holds:
 
 | | |
 |---|---|
@@ -181,14 +329,18 @@ that only a **release** build or a **real prompt** can show:
   buckets have never been seen filling and evicting against real Wallhaven
   traffic. Browse a while, then read the Settings tile's figure.
 - ~~**The viewer's Next button did not advance on the tablet**~~ — **likely
-  closed**, and now the only device-pending item that is not about a release
-  build. It was suspected to be adb tap coordinates missing the button at
+  closed.** It was suspected to be adb tap coordinates missing the button at
   2560×1600 rather than a bug, and the 2026-07-16 device pass reported the viewer
   working. The button is pinned by tests at both the viewer and Detail (see debt
   2 above), including while zoomed — so a real failure here would be the tap, not
   the code. Confirm with one real finger and delete this line.
 
-Install `app-arm64-v8a-release.apk`. Use `run`, not `install` — see `tool/tela`.
+**Item 7's R8 half is largely answered** — see "What the device did confirm" at
+the top. What is left there is the wallpaper-apply round trip.
+
+For how to get a build onto the device without wiping it, see **The install
+rule** at the top of this file. The instruction that used to sit here — install
+`app-arm64-v8a-release.apk` — is what wiped the tablet, and is gone.
 
 ## PRIOR CHECKPOINT — slice 7 is merged, and the tablet found seven things
 
