@@ -2,21 +2,63 @@
 
 Updated: 2026-07-16
 
-## START HERE — pick up the device verifications
+## START HERE — the desk work is done; what is left needs the device
 
-The cold-launch hang is **fixed and verified on the tablet** (see below). The
-open work is now, in order:
+The cold-launch hang is **fixed and verified on the tablet**, and the Drift test
+seam that used to sit third on this list is **closed** (`3a09f67`). The suite is
+**561 tests** green. Everything still open needs hands on hardware, or a key:
 
 1. **The device verifications**, which need the owner's own hands: the
    wallpaper-apply round trip, the real biometric prompt, and the cache figure
    after a real browse. See "What is owed".
 2. **The keystore**, whenever shipping matters. The only part of item 7 left.
 
+There is no third item at a desk right now. If you are looking for one, the
+honest answer is that the next real information comes from the tablet.
+
+### Housekeeping, whenever
+
+Both worktrees are **spent and fully merged** — `master..image-viewer-ux` and
+`master..ui-ux-polish` are both empty, and both trees are clean. They are dead
+weight, and a leaked container in one is exactly what produces the phantom
+apk-missing errors. Safe to `git worktree remove` both.
+
+## SOLVED — the Drift test seam (`3a09f67`)
+
+`telaDatabaseProvider` **has no default any more**. It used to open the real
+database, which every Drift-backed port hangs off — settings, favorites,
+download history, blocklist — so any test mounting a widget that reached one got
+the real thing. Mounting a `WallpaperGrid` was enough, since its `build` listens
+to the blocklist.
+
+**The failure never named a database**, which is why it cost two harnesses.
+`TelaDatabase.open()` resolves through path_provider, which answers no plugin
+under `flutter test`, *lazily* — so the provider constructed fine and the error
+landed elsewhere as an `AsyncError` in `blockedTagsProvider`, which the grid's
+own change-gate correctly ignores as "no value yet". The symptom was an empty
+grid and a `RangeError` from tapping a tile that was never built. Verified by
+deleting the override from `gallery_session_launch_test` and watching exactly
+that.
+
+Unbound now throws by name at the read, naming both ways out. `main.dart`
+applies the production binding with `overrideWith(openTelaDatabase)` — still
+lazy, so boot is unchanged. No existing test needed touching; all 557 were
+already overriding their ports properly. Pinned by
+`test/app/tela_database_binding_test.dart` (4 tests), mutation-checked.
+
+**The other fix was considered and rejected**, so do not re-litigate it: folding
+blocked names into `SearchQuery` at the provider would have let the grid drop
+the blocklist entirely, but `blockedTagNames` is documented as *"not something a
+screen sets"* — the use case fills it in right before the request leaves,
+precisely so no feature can forget. Trading that production invariant for
+convenient tests is a bad trade.
+
 ## SOLVED — the release cold-launch hang
 
 **Fixed**, in `wallpaper_grid.dart`'s `_retry()`. Four for four clean cold
 launches on the SM-X730 in release, untouched, grid fully loaded — where it used
-to spin forever. The suite is **557 tests** green.
+to spin forever. The suite was **557 tests** green at this fix; it is **561**
+now that the database seam is pinned too.
 
 The lead in the old handoff pointed at the right two lines and the wrong
 mechanism, so the *shape* is worth keeping:
@@ -163,7 +205,8 @@ cache figure after a real browse.
 
 All seven device findings are **fixed and committed on `master`**, and the three
 carried debts that could be settled at a desk now are. The suite was **553 tests**
-green at that point (from 514), and is **557** now that the hang is pinned;
+green at that point (from 514); **557** once the hang was pinned, and **561**
+with the database seam (`3a09f67`);
 `./tool/tela analyze` clean, `dart format .` clean, `gen-l10n`
 run (five new strings), and `build apk --debug` and `build apk --release
 --split-per-abi` both succeed. **Work in `master`**, or short-lived branches off
@@ -198,11 +241,12 @@ file. What is left:
 1. **The device verifications below**, which need the owner's own hands.
 2. **The keystore**, whenever shipping matters. The only part of item 7 left.
 
-If a third thing is wanted: `WallpaperGrid` mounting silently opens a Drift
-database (see the seam note under the prior checkpoint). It has bitten one test
-harness already, and it bit the hang's own regression test — every harness that
-mounts the grid must remember to bind `tagBlocklistRepositoryProvider` or it
-reaches the real database. Still worth a shared test helper.
+The third item that used to sit here — `WallpaperGrid` mounting silently opening
+a Drift database — is **closed** in `3a09f67`; see the top of this file. It was
+fixed at `telaDatabaseProvider` rather than with the shared test helper this
+line used to ask for: a helper would have made the trap convenient to avoid,
+while an unbound provider that throws by name makes it impossible to fall into,
+for all four Drift ports at once.
 
 ### The three carried debts, settled 2026-07-16
 
