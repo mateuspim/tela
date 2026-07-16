@@ -2,17 +2,54 @@
 
 Updated: 2026-07-16
 
-## CURRENT CHECKPOINT — the seven are fixed; the device pass is what is owed
+## START HERE — the seven are fixed and committed; four debts are the work
 
-All seven items from the device pass below are **done on `master`, uncommitted**,
-each with the regression test the project rule asks for. The suite is **546
-tests** green (from 514); `./tool/tela analyze` is clean, `dart format .` clean,
-`gen-l10n` run (five new strings), and both `build apk --debug` and `build apk
---release --split-per-abi` succeed.
+All seven device findings are **fixed and committed on `master`**, `babce71` →
+`70b5638`, one commit per item plus this document. The suite is **551 tests**
+green (from 514); `./tool/tela analyze` clean, `dart format .` clean, `gen-l10n`
+run (five new strings), and `build apk --debug` and `build apk --release
+--split-per-abi` both succeed. **Work in `master`**, or short-lived branches off
+it. The `.worktrees/image-viewer-ux` worktree is spent.
+
+```
+5e661d7  fix: let the viewer's close button actually close
+4128780  fix: charge the app-lock once per session, not once per screen
+8155ba4  fix: keep every app-private download out of Download History
+626a9bb  feat: let a tag or uploader listing be filtered, on its own terms
+1becb61  feat: give the viewer a button that hides its chrome
+ea5e94f  fix: cap the image cache, which had reached ~2GB on a tablet
+d29b4b4  build: shrink the release APK, and stop silently debug-signing it
+70b5638  docs: record the fix list as done, and what the device still owes
+```
+
+Each commit body carries its own *why*, including where the fix list was wrong.
+Read those before re-litigating a decision.
 
 **Every fix was mutation-checked**: the fix was reverted and the new test watched
 to fail with the real symptom, then restored. That mattered most for item 1,
-which had been known since slice 6 and was never once pinned.
+which had been known since slice 6 and was never once pinned. **Hold the next
+work to the same bar** — a test that passes before and after is not a test.
+
+### The next work, in order
+
+Nothing here is blocked, and none of it is large. Roughly ascending in doubt:
+
+1. **Gate `_reapplyBlocklist` on genuine changes** (`wallpaper_grid.dart:110-118`)
+   — the first of the carried debts below, and the only one that is unambiguously
+   a bug. It is also the one that broke two tests at the merge.
+2. **Settle the chrome's Next/Previous vs. the zoom-aware input path**, then pin
+   whichever answer is right. It may already be correct; it is certainly
+   undocumented.
+3. **Reconcile the test count**, or delete the debt. 551 now; the merge notes
+   expected ~575 against 514. Most likely a stale estimate that has never been
+   checked, and it costs ten minutes to stop wondering.
+4. **The device verifications below**, which need the owner's own hands and a
+   **release** APK.
+5. **The keystore**, whenever shipping matters. The only part of item 7 left.
+
+If a fifth thing is wanted rather than a fourth: `WallpaperGrid` mounting silently
+opens a Drift database (see the seam note under the prior checkpoint). It has bitten
+one test harness already.
 
 ### What the fix list turned out to be
 
@@ -121,6 +158,34 @@ that only a **release** build or a **real prompt** can show:
   traffic. Browse a while, then read the Settings tile's figure.
 
 Install `app-arm64-v8a-release.apk`. Use `run`, not `install` — see `tool/tela`.
+
+### Carried debts — still open, and now the work
+
+Carried unchanged from the prior checkpoint except where noted. Nothing below
+came from the device; all of it predates the fix list.
+
+- **`_reapplyBlocklist` fires on the blocklist's first resolution**, not only on
+  changes: a `FutureProvider` going `AsyncLoading → AsyncData` counts as a change
+  (`wallpaper_grid.dart:110-118`). Whether it costs a redundant full re-fetch is a
+  **race** — it early-returns when no pages are loaded yet (line 138), and on
+  device the fast Drift read usually wins. Unpredictable-but-usually-benign is
+  worse than consistently wrong, and it is what broke the two merge tests. Gate it
+  on genuine changes.
+- **The chrome's Next/Previous bypass the zoom-aware input path.** The controls
+  are wired to `widget.onNext` / `widget.onPrevious` raw, while
+  `_handleNextInput` / `_handlePreviousInput` (which *pan* when zoomed) are bound
+  only to the arrow keys. So while zoomed, arrow keys pan and the buttons jump to
+  the next wallpaper. Slice 3 says explicit Previous/Next *should* select while
+  zoomed — so this may be correct and merely undocumented. Settle it, then pin it.
+  (Line numbers moved when the hide-chrome button landed; find it in
+  `_viewerChrome`.)
+- **Suite is 551 tests; the merge notes expected ~575** against the 514 that were
+  there. Nothing is red, so this is most likely a stale estimate. Still never
+  reconciled.
+- ~~**The viewer's Next button did not advance on the tablet**~~ — **likely
+  closed.** It was suspected to be adb tap coordinates missing the button at
+  2560×1600 rather than a bug, and the 2026-07-16 device pass reported the viewer
+  working. Confirm with one real finger and delete this line.
 
 ## PRIOR CHECKPOINT — slice 7 is merged, and the tablet found seven things
 
@@ -326,26 +391,11 @@ debug-signed** — a TODO in that same block, worth folding into this fix.
 
 ### Carried debts (not from the device)
 
-- **`_reapplyBlocklist` fires on the blocklist's first resolution**, not only on
-  changes: a `FutureProvider` going `AsyncLoading → AsyncData` counts as a change
-  (`wallpaper_grid.dart:110-118`). Whether it costs a redundant full re-fetch is a
-  **race** — `_reapplyBlocklist` early-returns when no pages are loaded yet (line
-  138), and on device the fast Drift read usually wins. Unpredictable-but-usually-
-  benign is worse than consistently wrong, and it is what broke the two merge
-  tests. Gate it on genuine changes.
-- **The chrome's Next/Previous bypass the zoom-aware input path.**
-  `immersive_gallery_viewer.dart:311-312` wires the controls to `widget.onNext` /
-  `widget.onPrevious` raw, while `_handleNextInput` / `_handlePreviousInput`
-  (lines 286-300, which *pan* when zoomed) are bound only to the arrow keys. So
-  while zoomed, arrow keys pan and the buttons jump to the next wallpaper. Slice 3
-  says explicit Previous/Next *should* select while zoomed — so this may be
-  correct and merely undocumented. Settle it, then pin it.
-- **Suite is 514 tests; the merge notes expected ~575.** Nothing is red, so this
-  is most likely a stale estimate. Never reconciled.
-- **The viewer's Next button did not advance on the tablet** (stayed "1 of 48",
-  appeared to toggle chrome instead); a swipe worked and reached "2 of 48". Most
-  likely adb tap coordinates missing the button at 2560×1600 rather than a bug,
-  but it is unresolved and wants one real finger.
+**Moved to the current checkpoint, which is where the open work belongs.** The
+one detail worth keeping here: the Next button "did not advance" on the *first*
+tablet run (stayed "1 of 48", appeared to toggle chrome instead) while a swipe
+reached "2 of 48" — the evidence for it being adb tap coordinates at 2560×1600
+rather than a bug.
 
 ### What the tablet did confirm
 
