@@ -21,6 +21,7 @@ class FakeWallhavenApi implements WallhavenApi {
     this.detailsById = const <String, WallpaperDetails>{},
     this.account,
     this.failure,
+    this.searchDelay,
   });
 
   /// The page every [search] returns, unless [failure] is set.
@@ -51,6 +52,13 @@ class FakeWallhavenApi implements WallhavenApi {
   /// When set, every call throws this instead of returning a page.
   final WallhavenFailure? failure;
 
+  /// How long each [search] takes to answer, decided from the query itself.
+  ///
+  /// What a test reaches for when two searches must be in flight at once and
+  /// the *order they land in* is the thing under test — a request the grid has
+  /// already abandoned can still answer, and answer last.
+  final Duration Function(SearchQuery query)? searchDelay;
+
   /// Every query passed to [search], oldest first.
   final List<SearchQuery> receivedQueries = <SearchQuery>[];
 
@@ -63,7 +71,11 @@ class FakeWallhavenApi implements WallhavenApi {
 
   @override
   Future<WallpaperPage> search(SearchQuery query) async {
+    // Recorded when the request is *made*, not when it answers: a test
+    // asserting on what was asked for must not depend on what answered first.
     receivedQueries.add(query);
+    final Duration? delay = searchDelay?.call(query);
+    if (delay != null) await Future<void>.delayed(delay);
     final WallhavenFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
     final WallpaperPage Function(SearchQuery query)? answerWith = pageFor;

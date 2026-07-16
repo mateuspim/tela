@@ -2,91 +2,99 @@
 
 Updated: 2026-07-16
 
-## START HERE — the release build hangs on cold launch
+## START HERE — pick up the device verifications
 
-**This is the work. It is real, reproducible, unfixed, and not understood.** The
-device found it, which is the whole reason the device pass exists.
+The cold-launch hang is **fixed and verified on the tablet** (see below). The
+open work is now, in order:
 
-| build | cold launch, no taps | result |
-|---|---|---|
-| **release** | wait 64s+ | **blank grid, spinner still turning** |
-| **debug** | wait 8s | loads |
-| **release** | tap *any* sorting tab | loads instantly |
+1. **The device verifications**, which need the owner's own hands: the
+   wallpaper-apply round trip, the real biometric prompt, and the cache figure
+   after a real browse. See "What is owed".
+2. **The keystore**, whenever shipping matters. The only part of item 7 left.
 
-The owner hit it first and described the workaround exactly: *"if i move from top
-to latest it retrieves the files."* Tapping a tab is not a quirk — it is the
-diagnostic. A tab tap changes the grid's query, which reaches `_retry()` →
-`_paging.refresh()`, and *that* fetch works. The one scheduled at launch never
-lands.
+## SOLVED — the release cold-launch hang
 
-### What it is not — each ruled out with evidence, do not re-litigate
+**Fixed**, in `wallpaper_grid.dart`'s `_retry()`. Four for four clean cold
+launches on the SM-X730 in release, untouched, grid fully loaded — where it used
+to spin forever. The suite is **557 tests** green.
 
-- **Not R8.** Set `isMinifyEnabled = false` *and* `isShrinkResources = false` in
-  `android/app/build.gradle.kts`, rebuilt, reinstalled: **still stuck**. (That
-  edit is reverted; the tree is clean.)
-- **Not the data.** Still stuck against a freshly wiped database with no API key,
-  no blocklist, no saved filters.
-- **Not `a1e057d` / `75b7fbb` / `54b2aa7`.** Those commits are in the debug build
-  too, and debug loads fine.
-- **Not the INTERNET permission** (the classic release-only fetch failure). It is
-  in `src/main/AndroidManifest.xml`, and `dumpsys` reports `granted=true`.
-- **Not the rate limiter.** `_recent` starts empty on launch, and the backoff caps
-  at 1+2+4=7s.
-- **Not a crash.** pid held steady across the whole hang; zero `AndroidRuntime`
-  errors; one `am_proc_start`.
-- **Not an error state.** It is a real spinner — confirmed by looking at the
-  pixels, not by inferring from a metric.
+The lead in the old handoff pointed at the right two lines and the wrong
+mechanism, so the *shape* is worth keeping:
 
-So it is **release-vs-debug timing**: AOT is fast enough to lose a race that JIT
-is slow enough to win.
+**`PagingController.refresh()` does not re-fetch.** It sets `operation = null`
+and `value = value.reset()`, and that is all. The re-fetch is a *side effect*:
+`PagedLayoutBuilder.didUpdateWidget` fires one only when it sees `oldWidget.state
+!= widget.state`. `PagingState` compares **by value** (deep equality on
+`PagingStateBase`), and `reset()` returns a state equal to the pristine one. So
+when the layout has only ever been built with the pristine state — which is the
+case until the opening fetch's `isLoading: true` has actually *drawn a frame* —
+`refresh()` is invisible: no diff, no re-fetch. Meanwhile it has already cleared
+the guard that would have let the opening fetch's own result land, so that gets
+discarded as stale on arrival. **Nobody is left to ask.** Permanent spinner.
 
-### The lead (a hypothesis, NOT proven — prove or kill it first)
+A sorting tab "fixed" it because `TabBarView`'s children are keyed by sorting: a
+tab tap *mounts a new grid*, whose fresh controller fetches from `initState`. It
+was never repairing the broken one.
 
-Two things collide at startup:
+**What rewrites the query inside that one-frame window** — and this is the part
+the old lead got wrong. It is *not* mainly `browseDefaultsProvider`: on the wiped
+tablet the defaults resolve to tela's own, the query is unchanged, and Riverpod
+does not even notify. The trigger that fires on **every** cold launch is
+`screenResolution(context)`: Android delivers real display metrics after the
+first frame, `BrowseScreen` folds them into every query via
+`forScreen(...)` → `AtLeastResolution`, and the query is rewritten under the
+opening fetch. No account, no key, no saved filters needed — which is exactly why
+a wiped device still hung, and why a fixed test viewport never saw it. Defaults
+resolving is a second, rarer trigger through the same hole.
 
-1. `PagedLayoutBuilder.initState` (infinite_scroll_pagination 5.1.1) schedules the
-   opening fetch through `WidgetsBinding.instance.addPostFrameCallback`.
-   `PagingController.fetchNextPage` opens with `if (this.operation != null)
-   return;` — a re-entrancy guard. Anything that leaves that guard wrong makes
-   every later fetch a silent no-op, which is exactly a permanent spinner.
-2. `browseDefaultsProvider` resolves *asynchronously* at startup. Its listener
-   (`BrowseQueryController._onDefaults` → `_adopt`) writes `browseQueryProvider`,
-   so `BrowseScreen` rebuilds with a new query, so `WallpaperGrid.didUpdateWidget`
-   sees `widget.query != oldWidget.query` and calls `_retry()` → `_lastPage =
-   null; _paging.refresh()`. `refresh()` does `operation = null; value =
-   value.reset()`.
+Release vs. debug was real but incidental: AOT lands the rewrite inside the
+window, JIT draws a frame first and recovers.
 
-So the opening fetch and a `refresh()` race, and the startup query change is what
-fires the starting gun.
+The fix is that `_retry()` asks for the page itself rather than hoping something
+notices. It cannot double-fetch — the guard `refresh()` clears is the same one
+that makes the layout's own scheduled call a no-op. A second, latent bug is fixed
+beside it: `_fetchPage` wrote `_lastPage` even for a fetch the controller had
+already abandoned, and a stale `hasMore: false` there ends the *new* listing at
+page one, forever. Both halves are mutation-checked independently.
 
-There is a **second smell in our own code**, worth suspecting on its own merits:
-`wallpaper_grid.dart` writes `_lastPage` from `_fetchPage`, which two concurrent
-fetches both do. `_nextPageKey` returns `null` when `_lastPage != null &&
-!_lastPage.hasMore`, and `fetchNextPage` turns a null key into `hasNextPage:
-false` **permanently**. A grid that believes it has no next page never fetches
-again. A discarded fetch's page can still land in `_lastPage`, because
-`_fetchPage` mutates it before the controller decides the result is stale.
+Pinned by `test/features/browse_opening_fetch_test.dart` (4 tests), at both
+altitudes — the grid's own `didUpdateWidget` path, and the real `BrowseScreen`
+under both triggers. All four fail on the unfixed code with the device's exact
+symptom: **zero tiles**.
 
-### How to reproduce, and how to measure it honestly
+### If you ever measure this on the device again
+
+Two ways the measurement lies, one of which cost this session several rounds:
+
+- **A black screenshot usually means the tablet is locked, not that the app is
+  stuck.** `screencap` on a dozing or keyguarded device returns ~19KB of black,
+  which looks exactly like the hang. Check `dumpsys power | grep mWakefulness`
+  and `dumpsys window | grep isKeyguardShowing` *before* believing a dark frame.
+  A loaded grid is ~2.1MB. Wake with `input keyevent KEYCODE_WAKEUP` and dismiss
+  with a swipe.
+- **The stddev trick lies about error states**: an error view is also dark and
+  also scores low. Look at the image.
 
 ```bash
-./tool/tela build apk --release          # NOT --split-per-abi; see the trap below
-# install (see the install rule below), then:
+./tool/tela build apk --release          # NOT --split-per-abi; see the install rule
+adb install -r build/app/outputs/flutter-apk/app-release.apk
 adb shell am force-stop cc.pym.tela && adb shell am start -n cc.pym.tela/.MainActivity
-# do not touch the screen; screenshot after 30s+
+# do not touch the screen; screenshot after 25s+
 adb exec-out screencap -p > /tmp/f.png
-magick /tmp/f.png -crop 2200x900+200+340 +repage -format "%[fx:standard_deviation]\n" info:
-# loaded ≈ 0.20   blank ≈ 0.01
 ```
 
-That stddev trick is useful but **it lies about error states**: an error view is
-also dark and also scores low. Look at the image before concluding anything.
+### What it was not — each ruled out with evidence, do not re-litigate
 
-The next step is a widget test, not another device build: pump the grid, resolve
-`browseDefaultsProvider` *mid-fetch* so the query changes under an in-flight first
-page, and assert the grid reaches content rather than spinning. That reproduces
-the race on the desk where it can be mutation-checked. If it will not reproduce in
-a test, the hypothesis above is wrong — kill it and start from the eliminations.
+Kept because these eliminations are what the builds were spent on, and they all
+still hold:
+
+- **Not R8.** `isMinifyEnabled = false` *and* `isShrinkResources = false`:
+  still stuck.
+- **Not the data.** Stuck against a freshly wiped database. (And now understood:
+  the trigger never needed any data.)
+- **Not `a1e057d` / `75b7fbb` / `54b2aa7`.** Those are in the debug build too.
+- **Not the INTERNET permission**, **not the rate limiter**, **not a crash**,
+  **not an error state**.
 
 ## The install rule — read this before touching the device
 
@@ -128,8 +136,9 @@ Verified statically against the R8'd APK, and at runtime:
   The `-keep class cc.pym.tela.**` rule does its job.
 - The release build launches clean: no `FATAL`, no `ClassNotFound`, no
   `MissingPluginException`.
-- It reaches **real Wallhaven** and renders the grid — once a tab tap shakes the
-  hang loose. So R8 breaks neither the network path nor the image pipeline.
+- It reaches **real Wallhaven** and renders the grid — on cold launch now, and at
+  the time only once a tab tap shook the hang loose. Either way R8 breaks neither
+  the network path nor the image pipeline.
 
 **Still owed on the device**: the wallpaper-apply round trip (proving the handler
 *answers*, not just that it exists — that changes the owner's wallpaper, so it is
@@ -138,8 +147,11 @@ cache figure after a real browse.
 
 ## Device state as of this handoff
 
-- Installed: `app-release.apk` — universal, **R8 on**, debug-signed, versionCode 1.
+- Installed: `app-release.apk` — universal, **R8 on**, debug-signed, versionCode 1,
+  **carrying the cold-launch fix** (installed with `adb install -r`; both
+  versionCodes checked as 1 first, so no downgrade and no wipe).
 - **Data: wiped.** Fresh database, no API key, no blocklist, no saved filters.
+- It **cold-launches to a loaded grid**, untouched, four times out of four.
 - The tablet (SM-X730, `192.168.50.191:5555`) is on a **VPN** (`tun0`, NordVPN).
   It resolves and pings `wallhaven.cc` at ~118ms. The VPN is *not* the hang — a
   tab tap loads instantly over the same tunnel — but it does add real latency, and
@@ -150,8 +162,9 @@ cache figure after a real browse.
 ## PRIOR — the code debts are closed
 
 All seven device findings are **fixed and committed on `master`**, and the three
-carried debts that could be settled at a desk now are. The suite is **553 tests**
-green (from 514); `./tool/tela analyze` clean, `dart format .` clean, `gen-l10n`
+carried debts that could be settled at a desk now are. The suite was **553 tests**
+green at that point (from 514), and is **557** now that the hang is pinned;
+`./tool/tela analyze` clean, `dart format .` clean, `gen-l10n`
 run (five new strings), and `build apk --debug` and `build apk --release
 --split-per-abi` both succeed. **Work in `master`**, or short-lived branches off
 it. The `.worktrees/image-viewer-ux` worktree is spent.
@@ -179,15 +192,17 @@ work to the same bar** — a test that passes before and after is not a test.
 
 ### The next work, in order
 
-Superseded by the cold-launch hang at the top of this file — that is the work now.
-After it:
+The cold-launch hang that used to sit here is **fixed** — see the top of this
+file. What is left:
 
 1. **The device verifications below**, which need the owner's own hands.
 2. **The keystore**, whenever shipping matters. The only part of item 7 left.
 
 If a third thing is wanted: `WallpaperGrid` mounting silently opens a Drift
 database (see the seam note under the prior checkpoint). It has bitten one test
-harness already — and it is in the startup path the hang lives in.
+harness already, and it bit the hang's own regression test — every harness that
+mounts the grid must remember to bind `tagBlocklistRepositoryProvider` or it
+reaches the real database. Still worth a shared test helper.
 
 ### The three carried debts, settled 2026-07-16
 

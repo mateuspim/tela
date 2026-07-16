@@ -52,6 +52,18 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
   /// The most recent page, kept so the next fetch can inherit its shuffle seed.
   WallpaperPage? _lastPage;
 
+  /// Which listing [_lastPage] is allowed to describe.
+  ///
+  /// Bumped by [_retry], so a fetch that was superseded while in flight cannot
+  /// write its page back over the one that replaced it. [PagingController]
+  /// already discards a superseded fetch's *items* — it compares the operation
+  /// it started with against the current one — but [_fetchPage] mutates
+  /// [_lastPage] before the controller ever gets to make that call, and
+  /// [_nextPageKey] answers `null` (meaning "no next page, ever") for a
+  /// [_lastPage] that says `hasMore: false`. A page from the query the user
+  /// just left could otherwise end the new listing at page one.
+  int _generation = 0;
+
   @override
   void initState() {
     super.initState();
@@ -87,8 +99,9 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
   }
 
   Future<List<Wallpaper>> _fetchPage(int pageKey) async {
+    final int generation = _generation;
     final WallpaperPage page = await _requestPage(pageKey);
-    _lastPage = page;
+    if (generation == _generation) _lastPage = page;
     return page.wallpapers;
   }
 
@@ -103,9 +116,38 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     return search.nextPageAfter(widget.query, previous);
   }
 
+  /// Throws away the listing on screen and fetches page 1 of the current query.
+  ///
+  /// The [PagingController.fetchNextPage] is ours to make and is **not**
+  /// redundant with the one [PagedLayoutBuilder] schedules for itself. That one
+  /// is fired from `didUpdateWidget` only when the paging *state* is seen to
+  /// change, and [PagingController.refresh] resets the state to its pristine
+  /// value — which the layout is already holding whenever the opening fetch has
+  /// not yet drawn a frame. `PagingState` compares by value, so pristine
+  /// replacing pristine is no change at all: nothing re-fetches, while
+  /// `refresh()` has already cleared the in-flight guard that would have let
+  /// the opening fetch's result land. The grid spins forever, and only a fresh
+  /// grid (a sorting tab) recovers.
+  ///
+  /// That is the cold-launch hang the tablet found (#hang, 2026-07-16). Two
+  /// things rewrite the query while the opening fetch is still away: Android
+  /// delivering its real display metrics after the first frame — which browse
+  /// folds into every query as an *Automatic* resolution filter, so it happens
+  /// on every launch, with no account and no saved filters needed — and
+  /// `browseDefaultsProvider` resolving asynchronously. A release build is
+  /// quick enough to land either inside that one-frame window; a debug build
+  /// draws a frame first and recovers, which is why this only ever showed up on
+  /// a real device in release.
+  ///
+  /// Asking for the page ourselves does not depend on the window at all. It
+  /// cannot double-fetch: the guard `refresh()` clears is the same one that
+  /// makes the layout's own scheduled call a no-op.
   void _retry() {
     _lastPage = null;
-    _paging.refresh();
+    _generation++;
+    _paging
+      ..refresh()
+      ..fetchNextPage();
   }
 
   @override
@@ -170,6 +212,7 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
   Future<void> _reapplyBlocklist() async {
     final List<int>? keys = _paging.value.keys;
     if (keys == null || keys.isEmpty) return;
+    final int generation = _generation;
     final search = ref.read(searchWallpapersProvider);
     // Reuses the pinned shuffle seed, or a random listing would reroll on
     // every block instead of quietly re-filtering the one it already has.
@@ -178,6 +221,9 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
       keys.map((int key) => search(base.atPage(key))),
     );
     if (!mounted) return;
+    // A re-filter of the listing the user has already left must not land on the
+    // one that replaced it — these are whole pages, so it would be visible.
+    if (generation != _generation) return;
     _lastPage = pages.last;
     _paging.value = _paging.value.copyWith(
       pages: <List<Wallpaper>>[
