@@ -62,8 +62,11 @@ void _createV2(File file) {
 /// The v3 schema, exactly as it shipped: settings, favorites, and downloads —
 /// no blocked tags.
 ///
-/// Carries one real download, for the same reason [_createV2] carries a real
-/// favorite: what needs proving is that a device arriving at v4 keeps it.
+/// Carries two real downloads, for the same reason [_createV2] carries a real
+/// favorite: what needs proving is what a device arriving at v5 keeps and what
+/// it loses. One went to the gallery and must survive. The other is the bug
+/// itself — a **safe** wallpaper sent to the app-private tier, which v3 happily
+/// recorded because it only ever gated on purity. v5 must purge that one.
 void _createV3(File file) {
   _createV2(file);
   sqlite3.open(file.path)
@@ -84,10 +87,34 @@ void _createV3(File file) {
       "'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg', "
       "'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg', "
       "1080, 2400, 1024, 'sfw', 'general', '#660000', "
-      "'appPrivate', 'content://media/e7jvjd', 1767225600);",
+      "'sharedGallery', 'content://media/e7jvjd', 1767225600);",
+    )
+    ..execute(
+      'INSERT INTO downloaded_wallpapers VALUES ( '
+      "'7j1mzo', 'https://w.wallhaven.cc/full/7j/wallhaven-7j1mzo.jpg', "
+      "'https://th.wallhaven.cc/small/7j/7j1mzo.jpg', "
+      "'https://th.wallhaven.cc/lg/7j/7j1mzo.jpg', "
+      "'https://th.wallhaven.cc/orig/7j/7j1mzo.jpg', "
+      "1080, 2400, 1024, 'sfw', 'general', '#660000', "
+      "'appPrivate', 'file:///data/tela/7j1mzo.jpg', 1767225600);",
     )
     ..execute('PRAGMA user_version = 3;')
     ..dispose();
+}
+
+/// Reads the download rows straight out of SQLite, past the adapter's filter.
+///
+/// The filter would hide a purged row and an unpurged one alike, so proving
+/// the migration actually *deleted* anything means asking the file itself —
+/// which is the copy that ends up in the user's cloud backup.
+List<String> _rawDownloadIds(File file) {
+  final Database db = sqlite3.open(file.path);
+  final ResultSet rows = db.select('SELECT id FROM downloaded_wallpapers;');
+  final List<String> ids = rows
+      .map((Row row) => row['id'] as String)
+      .toList(growable: false);
+  db.dispose();
+  return ids;
 }
 
 void main() {
@@ -103,7 +130,7 @@ void main() {
 
   group('TelaDatabase migration', () {
     test(
-      'v1 → v4 adds every new table without touching saved settings',
+      'v1 → v5 adds every new table without touching saved settings',
       () async {
         // The device carries a real API key and real download destinations. A
         // migration that recreates the database instead of altering it presents
@@ -139,7 +166,7 @@ void main() {
       },
     );
 
-    test('v2 → v4 adds downloads and blocked tags, keeps favorites', () async {
+    test('v2 → v5 adds downloads and blocked tags, keeps favorites', () async {
       _createV2(file);
 
       final TelaDatabase db = TelaDatabase(NativeDatabase(file));
@@ -162,7 +189,7 @@ void main() {
       await db.close();
     });
 
-    test('v3 → v4 adds blocked tags and keeps the download history', () async {
+    test('v3 → v5 adds blocked tags and keeps the download history', () async {
       _createV3(file);
 
       final TelaDatabase db = TelaDatabase(NativeDatabase(file));
@@ -173,11 +200,29 @@ void main() {
       expect(
         downloads.single.wallpaper.id,
         'e7jvjd',
-        reason: 'a v3 download must survive the upgrade',
+        reason: 'a v3 download to the gallery must survive the upgrade',
       );
       expect(await DriftTagBlocklistRepository(db).all(), isEmpty);
 
       await db.close();
+    });
+
+    test('v3 → v5 purges the app-private rows, not just hides them', () async {
+      _createV3(file);
+      expect(
+        _rawDownloadIds(file),
+        containsAll(<String>['e7jvjd', '7j1mzo']),
+        reason: 'v3 recorded the private download; that is the bug',
+      );
+
+      final TelaDatabase db = TelaDatabase(NativeDatabase(file));
+      // Touch the history so the migration has certainly run.
+      await DriftDownloadHistory(db).downloads();
+      await db.close();
+
+      // Gone from the file, not merely filtered out of the listing: the row is
+      // what gets backed up, so hiding it would leave the exposure in place.
+      expect(_rawDownloadIds(file), <String>['e7jvjd']);
     });
 
     test('a fresh install creates every table', () async {

@@ -82,9 +82,12 @@ class FavoriteWallpapers extends Table with WallpaperColumns {
 /// Keyed by wallpaper id, so downloading the same wallpaper twice updates one
 /// row rather than stacking duplicates in the history.
 ///
-/// **Never holds an explicit wallpaper.** Those live in the private library,
-/// behind `FLAG_SECURE` and the app-lock; a row here would be an ungated index
-/// of them, in a database Android's Auto Backup carries off the device.
+/// **Never holds an explicit wallpaper, and never an app-private one.** Both
+/// live in the private library, behind `FLAG_SECURE` and the app-lock; a row
+/// here would be an ungated index of them, in a database Android's Auto Backup
+/// carries off the device. The tier rule is the one that is easy to miss: a
+/// perfectly safe wallpaper sent to the `appPrivate` tier was sent there to be
+/// private, and purity has nothing to say about that.
 @DataClassName('DownloadRow')
 class DownloadedWallpapers extends Table with WallpaperColumns {
   /// `StorageTier` name of the destination it actually landed in.
@@ -142,14 +145,15 @@ class TelaDatabase extends _$TelaDatabase {
   }
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   /// Adds tables to an existing database instead of recreating it.
   ///
   /// The settings table shipped at v1 with real user choices in it, favorites
   /// at v2, and downloads at v3. A blocked-tags table arriving at v4 must not
   /// cost anyone either — each version only ever adds what the one before it
-  /// lacked.
+  /// lacked. v5 is the exception that proves the shape: it adds nothing and
+  /// *removes* rows, because those rows should never have been written.
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
@@ -158,8 +162,30 @@ class TelaDatabase extends _$TelaDatabase {
         if (from < 2) await m.createTable(favoriteWallpapers);
         if (from < 3) await m.createTable(downloadedWallpapers);
         if (from < 4) await m.createTable(blockedTags);
+        if (from < 5) await purgePrivateDownloads();
       },
     );
+  }
+
+  /// Deletes every app-private download row, wherever it came from.
+  ///
+  /// Until v5 the history gated on purity alone, so a *safe* wallpaper sent to
+  /// the app-private tier — by config, or by the per-download override — earned
+  /// a row. Filtering those out on read is not enough to undo it: this
+  /// database is backed up (see `backup_rules.xml`, which excludes only the
+  /// encrypted API key), so an unpurged row keeps a private file's location and
+  /// thumbnails in the user's cloud backup — the exact exposure the tier exists
+  /// to prevent. The file itself is never touched, only the index of it.
+  ///
+  /// The tier is matched as a string literal rather than through `StorageTier`:
+  /// a migration is frozen at the moment it shipped, and must keep matching the
+  /// value that was really written even if the enum is renamed later.
+  Future<void> purgePrivateDownloads() {
+    final DeleteStatement<$DownloadedWallpapersTable, DownloadRow> statement =
+        delete(downloadedWallpapers)..where(
+          ($DownloadedWallpapersTable row) => row.tier.equals('appPrivate'),
+        );
+    return statement.go();
   }
 
   /// Every download, most recent first.

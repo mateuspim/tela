@@ -28,19 +28,27 @@ class DriftDownloadHistory implements DownloadHistory {
   final TelaDatabase _db;
   final DateTime Function() _now;
 
-  /// Reads the history back, dropping any row that reads as explicit.
+  /// Reads the history back, dropping any row that is explicit or app-private.
   ///
   /// [record] is what keeps those rows out in the first place; this is the door
   /// behind it. A row whose purity is corrupt reads as `nsfw` by design, and
   /// the one thing that must not happen is an explicit thumbnail appearing on
   /// a screen with no `FLAG_SECURE` and no lock — so it is dropped, not shown.
+  /// The tier check is the same argument for the same reason: a private
+  /// download's index is the private library, never this list.
+  ///
+  /// The v5 migration purged the app-private rows written before that rule
+  /// existed, so this filter is the door and not the cleanup — a row reaching
+  /// it now would mean [record] let one through.
   @override
   Future<List<DownloadRecord>> downloads() async {
     final List<DownloadRow> rows = await _db.downloadRows();
-    return rows
-        .where((DownloadRow row) => storedPurity(row.purity) != Purity.nsfw)
-        .map(_toRecord)
-        .toList();
+    return rows.where(_isListable).map(_toRecord).toList();
+  }
+
+  bool _isListable(DownloadRow row) {
+    if (storedPurity(row.purity) == Purity.nsfw) return false;
+    return storedTier(row.tier) != StorageTier.appPrivate;
   }
 
   @override
@@ -50,6 +58,7 @@ class DriftDownloadHistory implements DownloadHistory {
     required Uri location,
   }) async {
     if (wallpaper.isNsfw) return;
+    if (tier == StorageTier.appPrivate) return;
     await _db.putDownload(_toRow(wallpaper, tier, location));
   }
 

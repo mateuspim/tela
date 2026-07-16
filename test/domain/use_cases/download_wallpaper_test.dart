@@ -93,6 +93,51 @@ void main() {
       expect(imageStore.receivedTier, StorageTier.filesOutsideGallery);
       expect(history.recorded, isEmpty);
     });
+
+    // The rule is the destination, not the wallpaper. A safe wallpaper sent to
+    // the private tier was sent there to be private, and the private library is
+    // already that tier's index; a history row would be the ungated, backed-up
+    // one the tier exists to prevent.
+    test(
+      'never records a download to the private tier, whatever its purity',
+      () async {
+        for (final Purity purity in <Purity>[Purity.sfw, Purity.sketchy]) {
+          final FakeImageStore imageStore = FakeImageStore();
+          final FakeDownloadHistory history = FakeDownloadHistory();
+          final DownloadWallpaper download = _download(
+            imageStore,
+            history: history,
+          );
+
+          await download(_wallpaper(purity), tier: StorageTier.appPrivate);
+
+          expect(
+            imageStore.receivedTier,
+            StorageTier.appPrivate,
+            reason: 'the file itself is still stored, as asked',
+          );
+          expect(
+            history.recorded,
+            isEmpty,
+            reason: '$purity to appPrivate must earn no history row',
+          );
+        }
+      },
+    );
+
+    test('still records a safe download to the gallery', () async {
+      final FakeImageStore imageStore = FakeImageStore();
+      final FakeDownloadHistory history = FakeDownloadHistory();
+      final DownloadWallpaper download = _download(
+        imageStore,
+        history: history,
+      );
+
+      await download(_wallpaper(Purity.sfw), tier: StorageTier.sharedGallery);
+
+      // The rule above must not have quietly emptied History altogether.
+      expect(history.recorded.single.tier, StorageTier.sharedGallery);
+    });
   });
 }
 

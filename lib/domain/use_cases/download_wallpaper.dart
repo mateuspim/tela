@@ -43,13 +43,20 @@ class DownloadWallpaper {
     return stored;
   }
 
-  /// Records the download, except for an explicit one.
+  /// Records the download, except for an explicit one or a private one.
   ///
-  /// The purity check is here *and* in the adapter, the same way the NSFW
-  /// storage rule is enforced twice: an explicit wallpaper's home is the
-  /// private library, not a browsable, backed-up row on an ungated screen.
+  /// Both checks are here *and* in the adapter, the same way the NSFW storage
+  /// rule is enforced twice: an explicit wallpaper's home is the private
+  /// library, not a browsable, backed-up row on an ungated screen.
+  ///
+  /// The destination check is the one purity cannot stand in for. It reads
+  /// [StoredImage.tier] — where the file actually *landed* — rather than the
+  /// requested tier, so the adapter has the last word on it. A safe wallpaper
+  /// sent to the private tier is still a private download, and it was the
+  /// per-download override that made that ordinary rather than exotic.
   Future<void> _remember(Wallpaper wallpaper, StoredImage stored) async {
     if (wallpaper.isNsfw) return;
+    if (stored.tier == StorageTier.appPrivate) return;
     await _history.record(
       wallpaper: wallpaper,
       tier: stored.tier,

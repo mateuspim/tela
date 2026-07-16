@@ -76,9 +76,12 @@ void main() {
       () async {
         final Wallpaper wallpaper = _wallpaper('e7jvjd');
 
+        // Two recordable tiers on purpose: a first write to appPrivate is now
+        // refused outright, which would leave this proving nothing about the
+        // second one replacing it.
         await history.record(
           wallpaper: wallpaper,
-          tier: StorageTier.appPrivate,
+          tier: StorageTier.filesOutsideGallery,
           location: Uri.parse('file:///data/tela/old.jpg'),
         );
         await history.record(
@@ -99,6 +102,44 @@ void main() {
       // ungated, backed-up index of it.
       await _record(history, _wallpaper('e7jvjd', purity: Purity.nsfw));
 
+      expect(await history.downloads(), isEmpty);
+    });
+
+    test('refuses to record a download to the private tier', () async {
+      // The second door again, this time on the destination rather than the
+      // wallpaper: the private library is that tier's index, so a row here
+      // would be the ungated copy of it. Purity does not come into it.
+      await _record(
+        history,
+        _wallpaper('e7jvjd'),
+        tier: StorageTier.appPrivate,
+      );
+      await _record(
+        history,
+        _wallpaper('7j1mzo', purity: Purity.sketchy),
+        tier: StorageTier.appPrivate,
+      );
+
+      expect(await history.downloads(), isEmpty);
+    });
+
+    test('still records a safe download to the gallery', () async {
+      await _record(history, _wallpaper('e7jvjd'));
+
+      // The rule above must not have quietly emptied History altogether.
+      expect(
+        (await history.downloads()).single.tier,
+        StorageTier.sharedGallery,
+      );
+    });
+
+    test('drops an app-private row written before the rule existed', () async {
+      await _record(history, _wallpaper('e7jvjd'));
+      await _forceTier(db, 'e7jvjd', 'appPrivate');
+
+      // The v5 migration purges these, but the filter is the door behind it —
+      // a private download's thumbnail must not reach an ungated screen even
+      // if a row somehow reaches this listing.
       expect(await history.downloads(), isEmpty);
     });
 
@@ -141,11 +182,20 @@ void main() {
 
 final Uri _location = Uri.parse('content://media/external/images/media/42');
 
-Future<void> _record(DriftDownloadHistory history, Wallpaper wallpaper) {
-  return history.record(
-    wallpaper: wallpaper,
-    tier: StorageTier.sharedGallery,
-    location: _location,
+Future<void> _record(
+  DriftDownloadHistory history,
+  Wallpaper wallpaper, {
+  StorageTier tier = StorageTier.sharedGallery,
+}) {
+  return history.record(wallpaper: wallpaper, tier: tier, location: _location);
+}
+
+/// Retiers a row behind the adapter's back, standing in for the rows written
+/// before the destination rule existed.
+Future<void> _forceTier(TelaDatabase db, String id, String tier) {
+  return db.customStatement(
+    'UPDATE downloaded_wallpapers SET tier = ? WHERE id = ?',
+    <Object>[tier, id],
   );
 }
 

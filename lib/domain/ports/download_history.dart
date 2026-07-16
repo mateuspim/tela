@@ -7,20 +7,35 @@ import 'package:tela/domain/models/wallpaper.dart';
 /// A pure-domain port: Wallhaven has no idea these exist, and the fact that its
 /// adapter speaks SQL is not something a use case may observe.
 ///
-/// **Explicit wallpapers are never recorded here**, in any tier. They already
-/// have a home — the private library, which lists the real files behind
-/// `FLAG_SECURE` and the app-lock. A history row is the opposite of that: an
-/// ungated, backed-up index of thumbnails and URLs, which is precisely what the
-/// app-private tier exists to prevent. Implementations enforce this themselves;
-/// callers must not have to remember it.
+/// Two kinds of download are never recorded here, and the second is the one
+/// that is easy to get wrong.
+///
+/// **Nothing in [StorageTier.appPrivate] is ever recorded, whatever its
+/// purity.** The rule is about the *destination*, not the wallpaper: a safe
+/// wallpaper the user deliberately sent to the private tier — by config, or by
+/// the per-download override — was sent there to be private, and the private
+/// library is already that tier's index. A history row is the opposite of an
+/// index behind `FLAG_SECURE` and an app-lock: it is an ungated, backed-up
+/// list of thumbnails, URLs and file locations, which is precisely what the
+/// tier exists to prevent. Purity says nothing about that; the destination
+/// does.
+///
+/// **Explicit wallpapers are never recorded here either**, in any tier, for
+/// the same reason arriving from the other side: their home is the private
+/// library.
+///
+/// Implementations enforce both themselves; callers must not have to remember.
 abstract interface class DownloadHistory {
-  /// Every recorded download, most recent first. Never explicit ones.
+  /// Every recorded download, most recent first.
+  ///
+  /// Never explicit ones, and never app-private ones — the same two rules
+  /// [record] applies, applied again on the way out.
   Future<List<DownloadRecord>> downloads();
 
   /// Records one completed download, replacing any earlier row for the same id.
   ///
-  /// Silently keeps explicit wallpapers out rather than throwing: the file is
-  /// already safely on disk by the time this runs, and a refused *history*
+  /// Silently keeps the two excluded kinds out rather than throwing: the file
+  /// is already safely on disk by the time this runs, and a refused *history*
   /// write must not read to the user as a failed download.
   Future<void> record({
     required Wallpaper wallpaper,
