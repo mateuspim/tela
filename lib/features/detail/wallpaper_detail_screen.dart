@@ -89,6 +89,7 @@ class WallpaperDetailScreen extends ConsumerStatefulWidget {
 class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   late final GallerySessionController<Wallpaper> _gallery;
   late final bool _ownsGallery;
+  late final PageController _pages;
   bool _isApplying = false;
   bool _isDownloading = false;
   bool _isSharing = false;
@@ -107,16 +108,30 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
           items: <Wallpaper>[widget.wallpaper!],
           initialIndex: 0,
         );
+    _pages = PageController(initialPage: _gallery.selectedIndex);
     _gallery.addListener(_selectionChanged);
   }
 
+  /// Keeps the preview pager and the rest of the screen on the session's
+  /// selection, whichever moved it.
+  ///
+  /// A swipe drives the session through [_onPageTurned]; anything else — the
+  /// chevrons, or the fullscreen viewer paging the shared session while Detail
+  /// sits behind it — moves the session first, and the pager is caught up here.
+  /// The guard makes the two directions one loop, not two: a swipe leaves the
+  /// pager already on the selection, so nothing is jumped back.
   void _selectionChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    if (_pages.hasClients && _pages.page?.round() != _gallery.selectedIndex) {
+      _pages.jumpToPage(_gallery.selectedIndex);
+    }
+    setState(() {});
   }
 
   @override
   void dispose() {
     _gallery.removeListener(_selectionChanged);
+    _pages.dispose();
     if (_ownsGallery) _gallery.dispose();
     super.dispose();
   }
@@ -435,17 +450,21 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
   }
 
+  /// The wallpaper, swipeable across the whole shelf without leaving Detail.
+  ///
+  /// A [PageView] over the same session the fullscreen viewer pages, so a swipe
+  /// here moves the selection and the metadata, actions, and Set button below
+  /// all follow. Chevrons offer the same step for a thumb that would rather
+  /// tap, each shown only while there is a loaded neighbour to reach.
   Widget _preview() {
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        ProgressiveWallpaperPreview(
-          wallpaper: _wallpaper,
-          heroTag: shelfHeroTag(
-            _gallery.identity,
-            _wallpaper.id,
-            _gallery.selectedIndex,
-          ),
+        PageView.builder(
+          controller: _pages,
+          onPageChanged: _onPageTurned,
+          itemCount: _gallery.items.length,
+          itemBuilder: (BuildContext context, int index) => _previewPage(index),
         ),
         Positioned(
           top: 12,
@@ -456,7 +475,81 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
             icon: const Icon(Icons.fullscreen),
           ),
         ),
+        if (_gallery.canSelectPrevious)
+          _pageChevron(
+            key: const Key('detail-previous'),
+            alignment: Alignment.centerLeft,
+            icon: Icons.chevron_left,
+            tooltip: AppLocalizations.of(context).galleryPrevious,
+            onPressed: () => _turnTo(_gallery.selectedIndex - 1),
+          ),
+        if (_gallery.canSelectNext)
+          _pageChevron(
+            key: const Key('detail-next'),
+            alignment: Alignment.centerRight,
+            icon: Icons.chevron_right,
+            tooltip: AppLocalizations.of(context).galleryNext,
+            onPressed: () => _turnTo(_gallery.selectedIndex + 1),
+          ),
       ],
+    );
+  }
+
+  /// One page of the preview pager.
+  ///
+  /// Only the selected page carries the shared-element [Hero]: the grid flies
+  /// one tile in, and a second Hero whose tag matches another grid tile would
+  /// be the "multiple heroes" crash, so the neighbours the pager pre-builds
+  /// stay heroless until they are the one on screen.
+  Widget _previewPage(int index) {
+    final Wallpaper wallpaper = _gallery.items[index];
+    return ProgressiveWallpaperPreview(
+      wallpaper: wallpaper,
+      heroTag: index == _gallery.selectedIndex
+          ? shelfHeroTag(_gallery.identity, wallpaper.id, index)
+          : null,
+    );
+  }
+
+  Widget _pageChevron({
+    required Key key,
+    required Alignment alignment,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Align(
+      alignment: alignment,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: IconButton.filledTonal(
+          key: key,
+          onPressed: onPressed,
+          tooltip: tooltip,
+          icon: Icon(icon),
+        ),
+      ),
+    );
+  }
+
+  /// A swipe (or a chevron's animation) landed on [index]: move the session,
+  /// which reselect-ignores a no-op and rebinds everything else.
+  void _onPageTurned(int index) => _gallery.select(index);
+
+  /// Steps the pager to [index], animating unless the platform asked not to —
+  /// where a jump keeps the step instant and testable.
+  void _turnTo(int index) {
+    if (index < 0 || index >= _gallery.items.length) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pages.jumpToPage(index);
+      return;
+    }
+    unawaited(
+      _pages.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      ),
     );
   }
 

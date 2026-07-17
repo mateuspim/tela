@@ -425,6 +425,118 @@ void main() {
     expect(find.text("Couldn't open the link."), findsOneWidget);
   });
 
+  testWidgets('swiping the preview selects the next wallpaper', (
+    WidgetTester tester,
+  ) async {
+    final WallpaperDetails first = _details();
+    final WallpaperDetails second = _otherDetails();
+    final GallerySessionController<Wallpaper> gallery = _twoItemGallery(
+      first,
+      second,
+    );
+    await _pumpDetail(
+      tester,
+      first,
+      gallerySession: gallery,
+      api: _detailsApi(first, second),
+    );
+
+    await tester.drag(find.byType(PageView), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+
+    // The session moved, and the screen rebound to it: the app bar reads the
+    // new wallpaper's resolution and the preview names the new image.
+    expect(gallery.selectedItem, second.wallpaper);
+    expect(
+      find.bySemanticsLabel('Wallpaper ${second.wallpaper.id}'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the chevrons step forward and back through the shelf', (
+    WidgetTester tester,
+  ) async {
+    final WallpaperDetails first = _details();
+    final WallpaperDetails second = _otherDetails();
+    final GallerySessionController<Wallpaper> gallery = _twoItemGallery(
+      first,
+      second,
+    );
+    await _pumpDetail(
+      tester,
+      first,
+      gallerySession: gallery,
+      api: _detailsApi(first, second),
+      disableAnimations: true,
+    );
+
+    await tester.tap(find.byKey(const Key('detail-next')));
+    await tester.pumpAndSettle();
+    expect(gallery.selectedItem, second.wallpaper);
+
+    await tester.tap(find.byKey(const Key('detail-previous')));
+    await tester.pumpAndSettle();
+    expect(gallery.selectedItem, first.wallpaper);
+  });
+
+  testWidgets('a chevron appears only where there is a neighbour', (
+    WidgetTester tester,
+  ) async {
+    final WallpaperDetails first = _details();
+    final WallpaperDetails second = _otherDetails();
+    final GallerySessionController<Wallpaper> gallery = _twoItemGallery(
+      first,
+      second,
+    );
+    await _pumpDetail(
+      tester,
+      first,
+      gallerySession: gallery,
+      api: _detailsApi(first, second),
+      disableAnimations: true,
+    );
+
+    // First of two: nowhere back, somewhere forward.
+    expect(find.byKey(const Key('detail-previous')), findsNothing);
+    expect(find.byKey(const Key('detail-next')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('detail-next')));
+    await tester.pumpAndSettle();
+
+    // Last of two: the mirror image.
+    expect(find.byKey(const Key('detail-previous')), findsOneWidget);
+    expect(find.byKey(const Key('detail-next')), findsNothing);
+  });
+
+  testWidgets('the pager catches up when the session moves from outside', (
+    WidgetTester tester,
+  ) async {
+    // The fullscreen viewer pages the shared session while Detail sits behind
+    // it; on return the pager must be on the selected image, not where the last
+    // swipe left it. Driving the session directly stands in for that path.
+    final WallpaperDetails first = _details();
+    final WallpaperDetails second = _otherDetails();
+    final GallerySessionController<Wallpaper> gallery = _twoItemGallery(
+      first,
+      second,
+    );
+    await _pumpDetail(
+      tester,
+      first,
+      gallerySession: gallery,
+      api: _detailsApi(first, second),
+      disableAnimations: true,
+    );
+
+    gallery.selectNext();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.bySemanticsLabel('Wallpaper ${second.wallpaper.id}'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a download refreshes the listings that exist to show it', (
     WidgetTester tester,
   ) async {
@@ -482,6 +594,29 @@ void main() {
     expect(history.recorded, hasLength(1));
     expect(await container.read(recentDownloadsProvider.future), hasLength(1));
   });
+}
+
+/// A two-wallpaper Detail session, for the swipe and chevron paging tests.
+GallerySessionController<Wallpaper> _twoItemGallery(
+  WallpaperDetails first,
+  WallpaperDetails second,
+) {
+  return GallerySessionController<Wallpaper>(
+    identity: 'favorites',
+    items: <Wallpaper>[first.wallpaper, second.wallpaper],
+    initialIndex: 0,
+  );
+}
+
+/// A fake API that answers full metadata for both wallpapers in the session, so
+/// paging between them resolves rather than erroring.
+FakeWallhavenApi _detailsApi(WallpaperDetails first, WallpaperDetails second) {
+  return FakeWallhavenApi(
+    detailsById: <String, WallpaperDetails>{
+      first.wallpaper.id: first,
+      second.wallpaper.id: second,
+    },
+  );
 }
 
 /// A viewport tall enough to show the whole compact metadata column without
