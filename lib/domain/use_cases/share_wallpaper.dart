@@ -13,7 +13,7 @@ class ShareWallpaper {
   /// Shares the wallpaper's public Wallhaven page. Allowed for any purity — the
   /// page is public, so the link reveals nothing tela is holding back.
   Future<void> link(Wallpaper wallpaper) {
-    return _sharer.shareLink(_pageOf(wallpaper));
+    return _sharer.shareLink(wallpaper.pageUrl);
   }
 
   /// Shares the full-resolution image file itself.
@@ -33,10 +33,5 @@ class ShareWallpaper {
       source: Uri.parse(wallpaper.fullImageUrl),
       fileName: wallpaperFileName(wallpaper),
     );
-  }
-
-  /// The wallpaper's page on wallhaven.cc, e.g. `https://wallhaven.cc/w/e7jvjd`.
-  Uri _pageOf(Wallpaper wallpaper) {
-    return Uri.parse('https://wallhaven.cc/w/${wallpaper.id}');
   }
 }

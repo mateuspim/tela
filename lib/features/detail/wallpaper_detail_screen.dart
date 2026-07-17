@@ -17,6 +17,7 @@ import 'package:tela/core/ui/wallpaper_failure_text.dart';
 import 'package:tela/core/ui/wallpaper_share_sheet.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/bitmap_export_rule.dart';
+import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/share_option.dart';
@@ -291,6 +292,16 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
   }
 
+  /// Hands a URL — a wallpaper's source or its Wallhaven page — to the device
+  /// browser, saying so only when nothing can open it.
+  Future<void> _openLink(Uri url) async {
+    try {
+      await ref.read(externalLinkProvider).open(url);
+    } on ExternalLinkFailure {
+      if (mounted) _showResult(AppLocalizations.of(context).detailLinkFailure);
+    }
+  }
+
   void _showResult(String message) {
     ScaffoldMessenger.of(
       context,
@@ -509,6 +520,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
         details: value,
         onFollow: _follow,
         onBlockTag: _confirmBlockTag,
+        onOpenLink: _openLink,
       ),
       loading: () => const Padding(
         padding: EdgeInsets.all(24),

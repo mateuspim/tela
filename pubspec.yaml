@@ -53,6 +53,9 @@ dependencies:
   # Direct, not just transitive: the image-cache adapter measures the cache
   # folders under the temp directory to report a real "Clear cache" figure.
   path_provider: ^2.1.5
+  # Behind the ExternalLink port: "View on Wallhaven" and a wallpaper's
+  # credited source open in the device browser, not an embedded web view.
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   build_runner: ^2.10.4

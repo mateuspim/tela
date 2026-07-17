@@ -30,11 +30,46 @@ void main() {
 
     expect(followed, ColorLink(WallpaperColor('#0066cc')));
   });
+
+  testWidgets('a URL source opens outside tela', (WidgetTester tester) async {
+    Uri? opened;
+    await _pumpMetadata(tester, onOpenLink: (Uri url) => opened = url);
+
+    await tester.tap(find.text('https://example.com/source'));
+
+    expect(opened, Uri.parse('https://example.com/source'));
+  });
+
+  testWidgets('View on Wallhaven opens the wallpaper page', (
+    WidgetTester tester,
+  ) async {
+    Uri? opened;
+    await _pumpMetadata(tester, onOpenLink: (Uri url) => opened = url);
+
+    await tester.tap(find.text('View on Wallhaven'));
+
+    expect(opened, Uri.parse('https://wallhaven.cc/w/e7jvjd'));
+  });
+
+  testWidgets('a non-URL source stays plain, copyable text', (
+    WidgetTester tester,
+  ) async {
+    // Wallhaven's source is free text: a bare attribution must not become a
+    // link that opens nothing. It stays SelectableText, so it can be copied.
+    await _pumpMetadata(tester, source: 'Photographer: Jane Doe');
+
+    expect(
+      find.widgetWithText(SelectableText, 'Photographer: Jane Doe'),
+      findsOneWidget,
+    );
+  });
 }
 
 Future<void> _pumpMetadata(
   WidgetTester tester, {
-  required ValueChanged<WallpaperLink> onFollow,
+  ValueChanged<WallpaperLink>? onFollow,
+  ValueChanged<Uri>? onOpenLink,
+  String source = 'https://example.com/source',
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -46,9 +81,10 @@ Future<void> _pumpMetadata(
       home: Scaffold(
         body: SingleChildScrollView(
           child: WallpaperMetadata(
-            details: _details(),
-            onFollow: onFollow,
+            details: _details(source: source),
+            onFollow: onFollow ?? (_) {},
             onBlockTag: (_) {},
+            onOpenLink: onOpenLink ?? (_) {},
           ),
         ),
       ),
@@ -57,28 +93,29 @@ Future<void> _pumpMetadata(
   await tester.pump();
 }
 
-WallpaperDetails _details() => const WallpaperDetails(
-  wallpaper: Wallpaper(
-    id: 'e7jvjd',
-    fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
-    thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
-    thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
-    thumbOriginalUrl: 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg',
-    resolution: Resolution(3840, 2160),
-    fileSizeBytes: 1048576,
-    purity: Purity.sfw,
-    category: Category.general,
-    colors: <String>['#0066cc'],
-  ),
-  ratio: '1.78',
-  fileType: 'image/jpeg',
-  tags: <WallpaperTag>[WallpaperTag(id: 101, name: 'landscape')],
-  uploader: WallpaperUploader(
-    username: 'tela-fixture',
-    group: 'User',
-    avatarUrl: 'https://example.com/avatar.jpg',
-  ),
-  source: 'https://example.com/source',
-  views: 4523,
-  favorites: 128,
-);
+WallpaperDetails _details({String source = 'https://example.com/source'}) =>
+    WallpaperDetails(
+      wallpaper: const Wallpaper(
+        id: 'e7jvjd',
+        fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
+        thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
+        thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
+        thumbOriginalUrl: 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg',
+        resolution: Resolution(3840, 2160),
+        fileSizeBytes: 1048576,
+        purity: Purity.sfw,
+        category: Category.general,
+        colors: <String>['#0066cc'],
+      ),
+      ratio: '1.78',
+      fileType: 'image/jpeg',
+      tags: const <WallpaperTag>[WallpaperTag(id: 101, name: 'landscape')],
+      uploader: const WallpaperUploader(
+        username: 'tela-fixture',
+        group: 'User',
+        avatarUrl: 'https://example.com/avatar.jpg',
+      ),
+      source: source,
+      views: 4523,
+      favorites: 128,
+    );

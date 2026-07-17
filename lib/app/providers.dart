@@ -16,8 +16,10 @@ import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
 import 'package:tela/data/wallpaper/method_channel_system_wallpaper_editor.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_sharer.dart';
+import 'package:tela/data/wallpaper/url_launcher_external_link.dart';
 import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/download_history.dart';
+import 'package:tela/domain/ports/external_link.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/fetched_image_cache.dart';
 import 'package:tela/domain/ports/image_store.dart';
@@ -82,6 +84,11 @@ final Provider<SystemWallpaperEditor> systemWallpaperEditorProvider =
     Provider<SystemWallpaperEditor>(
       (Ref ref) => MethodChannelSystemWallpaperEditor(),
     );
+
+/// The external-link port, bound to the device browser via `url_launcher`.
+final Provider<ExternalLink> externalLinkProvider = Provider<ExternalLink>(
+  (Ref ref) => const UrlLauncherExternalLink(),
+);
 
 /// The three-tier image-storage port, bound to Android's scoped-storage API.
 final Provider<ImageStore> imageStoreProvider = Provider<ImageStore>(

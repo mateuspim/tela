@@ -14,11 +14,17 @@ class WallpaperMetadata extends StatelessWidget {
     required this.details,
     required this.onFollow,
     required this.onBlockTag,
+    required this.onOpenLink,
     super.key,
   });
 
   /// Detail data to render.
   final WallpaperDetails details;
+
+  /// Called with a URL to open outside tela — the credited source, or the
+  /// wallpaper's Wallhaven page. The screen owns the browser hand-off; a
+  /// callback keeps this panel testable without one.
+  final ValueChanged<Uri> onOpenLink;
 
   /// Called with the tag or uploader the user tapped.
   ///
@@ -62,10 +68,9 @@ class WallpaperMetadata extends StatelessWidget {
               onTap: () => onFollow(UploaderLink(item.uploader.username)),
             ),
           ),
-          _MetadataRow(
-            l10n.detailSource,
-            item.source.isEmpty ? l10n.detailNotProvided : item.source,
-          ),
+          _sourceRow(l10n, item),
+          const SizedBox(height: 4),
+          _viewOnWallhaven(l10n, item),
           const SizedBox(height: 12),
           Text(
             l10n.detailColors,
@@ -121,6 +126,47 @@ class WallpaperMetadata extends StatelessWidget {
       l10n.detailFileSizeBytes(_number(bytes));
 
   String _number(int value) => NumberFormat.decimalPattern().format(value);
+
+  /// The credited source: a tappable link when it is a web address, plain
+  /// selectable text otherwise.
+  ///
+  /// Wallhaven's `source` is free text an uploader typed — often a URL, but
+  /// sometimes a bare attribution — so only an `http(s)` address becomes a
+  /// link; anything else stays copyable text rather than a control that would
+  /// open nothing.
+  Widget _sourceRow(AppLocalizations l10n, WallpaperDetails item) {
+    final Uri? url = _webUrl(item.source);
+    if (url == null) {
+      return _MetadataRow(
+        l10n.detailSource,
+        item.source.isEmpty ? l10n.detailNotProvided : item.source,
+      );
+    }
+    return _MetadataRow.linked(
+      l10n.detailSource,
+      value: _MetadataLink(text: item.source, onTap: () => onOpenLink(url)),
+    );
+  }
+
+  /// The always-available way out to the wallpaper's public page.
+  Widget _viewOnWallhaven(AppLocalizations l10n, WallpaperDetails item) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: () => onOpenLink(item.wallpaper.pageUrl),
+        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+        icon: const Icon(Icons.open_in_new, size: 18),
+        label: Text(l10n.detailViewOnWallhaven),
+      ),
+    );
+  }
+
+  /// [raw] as an absolute `http(s)` URL, or null when it is not one.
+  Uri? _webUrl(String raw) {
+    final Uri? url = Uri.tryParse(raw.trim());
+    if (url == null || !url.isAbsolute) return null;
+    return url.scheme == 'http' || url.scheme == 'https' ? url : null;
+  }
 }
 
 /// A glanceable fact at the top of the metadata panel.

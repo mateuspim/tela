@@ -71,5 +71,12 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- So url_launcher can resolve a browser for "View on Wallhaven" and
+             a wallpaper's source under Android 11+ package visibility. Without
+             it, launchUrl finds no handler and the link silently fails. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
     </queries>
 </manifest>

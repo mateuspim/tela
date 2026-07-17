@@ -9,6 +9,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -19,6 +20,7 @@ import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/favorites/favorite_button.dart';
 
 import '../fakes/fake_download_history.dart';
+import '../fakes/fake_external_link.dart';
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_image_store.dart';
 import '../fakes/fake_immersive_system_ui.dart';
@@ -394,6 +396,35 @@ void main() {
     ]);
   });
 
+  testWidgets('View on Wallhaven hands the page to the browser', (
+    WidgetTester tester,
+  ) async {
+    await _tallSurface(tester);
+    final FakeExternalLink links = FakeExternalLink();
+    final WallpaperDetails details = _details();
+    await _pumpDetail(tester, details, externalLink: links);
+
+    await tester.tap(find.text('View on Wallhaven'));
+    await tester.pumpAndSettle();
+
+    expect(links.opened, <Uri>[details.wallpaper.pageUrl]);
+  });
+
+  testWidgets('a link that opens nothing says so, and no more', (
+    WidgetTester tester,
+  ) async {
+    await _tallSurface(tester);
+    final FakeExternalLink links = FakeExternalLink(
+      failure: const ExternalLinkFailure(ExternalLinkProblem.unavailable),
+    );
+    await _pumpDetail(tester, _details(), externalLink: links);
+
+    await tester.tap(find.text('View on Wallhaven'));
+    await tester.pumpAndSettle();
+
+    expect(find.text("Couldn't open the link."), findsOneWidget);
+  });
+
   testWidgets('a download refreshes the listings that exist to show it', (
     WidgetTester tester,
   ) async {
@@ -453,6 +484,14 @@ void main() {
   });
 }
 
+/// A viewport tall enough to show the whole compact metadata column without
+/// scrolling — 800 wide keeps it under the 840dp two-pane breakpoint — so a
+/// metadata action can be tapped where the default 600px surface hides it.
+Future<void> _tallSurface(WidgetTester tester) async {
+  await tester.binding.setSurfaceSize(const Size(800, 1600));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
 Future<void> _pumpDetail(
   WidgetTester tester,
   WallpaperDetails details, {
@@ -464,6 +503,7 @@ Future<void> _pumpDetail(
   FakeWallhavenApi? api,
   GallerySessionController<Wallpaper>? gallerySession,
   FakeWallpaperApplier? applier,
+  FakeExternalLink? externalLink,
   bool disableAnimations = false,
 }) async {
   await tester.pumpWidget(
@@ -499,6 +539,8 @@ Future<void> _pumpDetail(
           imageStoreProvider.overrideWithValue(imageStore),
         if (applier != null)
           wallpaperApplierProvider.overrideWithValue(applier),
+        if (externalLink != null)
+          externalLinkProvider.overrideWithValue(externalLink),
       ],
       child: MaterialApp(
         builder: disableAnimations

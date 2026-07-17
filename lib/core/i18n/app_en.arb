@@ -647,6 +647,16 @@
   "detailTags": "Tags",
   "detailNotProvided": "Not provided",
 
+  "detailViewOnWallhaven": "View on Wallhaven",
+  "@detailViewOnWallhaven": {
+    "description": "Action on the detail screen that opens the wallpaper's public wallhaven.cc page in the device browser."
+  },
+
+  "detailLinkFailure": "Couldn't open the link.",
+  "@detailLinkFailure": {
+    "description": "Shown when the device has no app to open a source or Wallhaven link tapped on the detail screen."
+  },
+
   "detailTagBlockTitle": "Block this tag?",
   "@detailTagBlockTitle": {
     "description": "Title of the confirmation dialog shown on long-pressing a tag chip in the detail screen's tag list."

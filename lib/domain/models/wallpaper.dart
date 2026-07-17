@@ -72,6 +72,14 @@ class Wallpaper {
   /// invariant is that NSFW files are never MediaStore-indexed in any tier.
   bool get isNsfw => purity == Purity.nsfw;
 
+  /// The wallpaper's public page on wallhaven.cc, e.g.
+  /// `https://wallhaven.cc/w/e7jvjd`.
+  ///
+  /// Public whatever the purity: it is the same page anyone reaches on the
+  /// site, so linking to it exports nothing tela is holding back (see
+  /// `ShareWallpaper.link`).
+  Uri get pageUrl => Uri.parse('https://wallhaven.cc/w/$id');
+
   @override
   bool operator ==(Object other) => other is Wallpaper && other.id == id;
 
