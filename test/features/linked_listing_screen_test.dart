@@ -17,9 +17,9 @@ import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/browse_filter_button.dart';
+import 'package:tela/features/browse/browse_filter_scope.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/browse/linked_listing_screen.dart';
-import 'package:tela/features/browse/linked_query_controller.dart';
 import 'package:tela/features/browse/wallpaper_grid.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
@@ -73,21 +73,44 @@ void main() {
     expect(query.resolution, isA<AtLeastResolution>());
   });
 
-  testWidgets('the filters the user is browsing under still apply here', (
+  testWidgets('the seed the link was followed under is what applies here', (
     WidgetTester tester,
   ) async {
+    // The bug this pins: a tag followed mid-browse must inherit the listing the
+    // user was actually on, not Browse's global filters. Here Browse is safe,
+    // but the seed is a sketchy People + colour session — the seed must win, or
+    // a sketchy→wallpaper→tag chain silently drops back to safe.
+    final FakeWallhavenApi api = _api();
+    await _pumpListing(
+      tester,
+      api,
+      const UploaderLink('pym'),
+      seed: SearchQuery(
+        categories: const CategoryFilter(<Category>{Category.anime}),
+        purity: const PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
+        color: WallpaperColor('#0066cc'),
+      ),
+    );
+
+    final SearchQuery query = api.receivedQueries.single;
+    expect(query.categories.categories, <Category>{Category.anime});
+    expect(query.purity.purities, <Purity>{Purity.sfw, Purity.sketchy});
+    expect(query.color, WallpaperColor('#0066cc'));
+  });
+
+  testWidgets("with no seed, it falls back to Browse's own filters", (
+    WidgetTester tester,
+  ) async {
+    // Arriving without an origin — a deep link, a curated shelf — still lands
+    // in the user's current world, the same starting point arriving from
+    // Browse gives. Read once at arrival, not watched (see below).
     final FakeWallhavenApi api = _api();
     final ProviderContainer container = _container(api);
-    // The listing is reached from a wallpaper, mid-browse — so it inherits the
-    // listing the user is already on. Only the term and the sorting are the
-    // link's. Following a tag must not quietly widen a filter they set.
     container
         .read(browseQueryProvider.notifier)
         .applyFilters(
-          SearchQuery(
-            categories: const CategoryFilter(<Category>{Category.anime}),
-            purity: const PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
-            color: WallpaperColor('#0066cc'),
+          const SearchQuery(
+            purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
           ),
         );
 
@@ -98,16 +121,46 @@ void main() {
       container: container,
     );
 
-    final SearchQuery query = api.receivedQueries.single;
-    expect(query.categories.categories, <Category>{Category.anime});
-    expect(query.purity.purities, <Purity>{Purity.sfw, Purity.sketchy});
-    expect(query.color, WallpaperColor('#0066cc'));
+    expect(api.receivedQueries.single.purity.purities, <Purity>{
+      Purity.sfw,
+      Purity.sketchy,
+    });
+  });
+
+  testWidgets('a later change to Browse does not reach into an open listing', (
+    WidgetTester tester,
+  ) async {
+    // Inheriting is a starting point, not a subscription: the seed is read
+    // once at arrival, so narrowing Browse behind this must not re-narrow it.
+    final FakeWallhavenApi api = _api();
+    final ProviderContainer container = _container(api);
+    await _pumpListing(
+      tester,
+      api,
+      const TagLink(WallpaperTag(id: 37, name: 'nature')),
+      container: container,
+    );
+
+    container
+        .read(browseQueryProvider.notifier)
+        .applyFilters(
+          const SearchQuery(
+            categories: CategoryFilter(<Category>{Category.people}),
+          ),
+        );
+    await tester.pumpAndSettle();
+
+    // Still browsing under the defaults it opened on, not Browse's new People.
+    expect(
+      api.receivedQueries.last.categories.categories,
+      const SearchQuery().categories.categories,
+    );
   });
 
   testWidgets('offers a way to filter the listing', (
     WidgetTester tester,
   ) async {
-    // Missing entirely until now: the filter sheet already knew every filter
+    // Missing entirely until Wave 3: the filter sheet already knew every filter
     // this screen honours, but the only button that opened it was private to
     // BrowseScreen.
     await _pumpListing(
@@ -131,13 +184,11 @@ void main() {
       container: container,
     );
 
-    container
-        .read(linkedQueryProvider('linked:tag:37').notifier)
-        .applyFilters(
-          const SearchQuery(
-            categories: CategoryFilter(<Category>{Category.people}),
-          ),
-        );
+    _scope(tester).applyFilters(
+      const SearchQuery(
+        categories: CategoryFilter(<Category>{Category.people}),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // The listing itself narrowed...
@@ -154,71 +205,37 @@ void main() {
     );
   });
 
-  testWidgets('two listings do not inherit each other', (
-    WidgetTester tester,
-  ) async {
-    final FakeWallhavenApi api = _api();
-    final ProviderContainer container = _container(api);
-    await _pumpListing(
-      tester,
-      api,
-      const TagLink(WallpaperTag(id: 37, name: 'nature')),
-      container: container,
-    );
-    container
-        .read(linkedQueryProvider('linked:tag:37').notifier)
-        .applyFilters(
-          const SearchQuery(
-            categories: CategoryFilter(<Category>{Category.people}),
-          ),
-        );
-
-    // A second listing is seeded from browse, not from the tag just narrowed.
-    expect(
-      container
-          .read(linkedQueryProvider('linked:uploader:pym'))
-          .categories
-          .categories,
-      const SearchQuery().categories.categories,
-    );
-  });
-
   testWidgets('resetting a listing puts the purity back to safe', (
     WidgetTester tester,
   ) async {
     final FakeWallhavenApi api = _api();
-    final ProviderContainer container = _container(api);
-    // A sketchy session, inherited into the listing on arrival.
-    container
-        .read(browseQueryProvider.notifier)
-        .applyFilters(
-          const SearchQuery(
-            purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
-          ),
-        );
+    // A sketchy session, inherited into the listing on arrival as the seed.
     await _pumpListing(
       tester,
       api,
       const TagLink(WallpaperTag(id: 37, name: 'nature')),
-      container: container,
+      seed: const SearchQuery(
+        purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
+      ),
     );
-    expect(
-      container.read(linkedQueryProvider('linked:tag:37')).purity.purities,
-      <Purity>{Purity.sfw, Purity.sketchy},
-    );
+    expect(api.receivedQueries.single.purity.purities, <Purity>{
+      Purity.sfw,
+      Purity.sketchy,
+    });
 
-    container
-        .read(linkedQueryProvider('linked:tag:37').notifier)
-        .clearFilters();
+    _scope(tester).clearFilters();
+    await tester.pumpAndSettle();
 
-    // Reset is the button that ends a sketchy session. Re-inheriting browse's
-    // current query here would have left it sketchy.
-    expect(
-      container.read(linkedQueryProvider('linked:tag:37')).purity.purities,
-      <Purity>{Purity.sfw},
-    );
+    // Reset is the button that ends a sketchy session. Re-inheriting the seed
+    // here would have left it sketchy.
+    expect(api.receivedQueries.last.purity.purities, <Purity>{Purity.sfw});
   });
 }
+
+/// The screen answers [BrowseFilterScope] over its own state; this is the seam
+/// the shared filter sheet writes through, driven directly here.
+BrowseFilterScope _scope(WidgetTester tester) =>
+    tester.state(find.byType(LinkedListingScreen)) as BrowseFilterScope;
 
 FakeWallhavenApi _api() => FakeWallhavenApi(
   page: WallpaperPage(
@@ -246,6 +263,7 @@ Future<void> _pumpListing(
   WidgetTester tester,
   FakeWallhavenApi api,
   WallpaperLink link, {
+  SearchQuery? seed,
   ProviderContainer? container,
 }) async {
   final ProviderContainer scope = container ?? _container(api);
@@ -259,7 +277,7 @@ Future<void> _pumpListing(
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
         ],
-        home: LinkedListingScreen(link: link),
+        home: LinkedListingScreen(link: link, seed: seed),
       ),
     ),
   );

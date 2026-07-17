@@ -18,6 +18,7 @@ import 'package:tela/core/ui/wallpaper_share_sheet.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/bitmap_export_rule.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/share_option.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -31,6 +32,7 @@ import 'package:tela/domain/models/wallpaper_share_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/use_cases/share_wallpaper.dart';
+import 'package:tela/features/browse/linked_listing_args.dart';
 import 'package:tela/features/detail/crop_wallpaper_screen.dart';
 import 'package:tela/features/detail/progressive_wallpaper_preview.dart';
 import 'package:tela/features/detail/wallpaper_immersive_session.dart';
@@ -54,6 +56,7 @@ class WallpaperDetailScreen extends ConsumerStatefulWidget {
   const WallpaperDetailScreen({
     this.wallpaper,
     this.gallerySession,
+    this.originFilters,
     this.immersiveSystemUi = const FlutterImmersiveSystemUi(),
     super.key,
   }) : assert(
@@ -66,6 +69,13 @@ class WallpaperDetailScreen extends ConsumerStatefulWidget {
 
   /// An ordered shelf snapshot. Its creator retains disposal ownership.
   final GallerySessionController<Wallpaper>? gallerySession;
+
+  /// The filters of the listing this detail was opened from, forwarded to any
+  /// tag or uploader followed from here so the drill-down inherits the world
+  /// the user was already in — sketchy stays sketchy — rather than resetting to
+  /// Browse's own. Null when the shelf had no filters to inherit (Favorites,
+  /// History, a deep link), which falls back to Browse, as it always did.
+  final SearchQuery? originFilters;
 
   /// The Android system-chrome seam used by the immersive preview.
   final ImmersiveSystemUi immersiveSystemUi;
@@ -274,7 +284,10 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   /// browse tabs are left exactly as the user had them.
   void _follow(WallpaperLink link) {
     unawaited(
-      context.pushNamed(TelaRoutes.linkedListingName, extra: link),
+      context.pushNamed(
+        TelaRoutes.linkedListingName,
+        extra: LinkedListingArgs(link: link, seed: widget.originFilters),
+      ),
     );
   }
 

@@ -18,6 +18,7 @@ import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/gallery_paging_bridge.dart';
 import 'package:tela/features/browse/wallpaper_grid.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
+import 'package:tela/features/detail/wallpaper_detail_args.dart';
 
 import '../fakes/fake_tag_blocklist_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
@@ -176,7 +177,7 @@ GoRouter _router({
         name: TelaRoutes.detailName,
         builder: (_, GoRouterState state) {
           final GallerySessionController<Wallpaper> session =
-              state.extra! as GallerySessionController<Wallpaper>;
+              (state.extra! as WallpaperDetailArgs).session;
           onDetail(session);
           return Scaffold(body: Text(session.selectedItem.id));
         },

@@ -9,7 +9,9 @@ import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/features/browse/browse_screen.dart';
+import 'package:tela/features/browse/linked_listing_args.dart';
 import 'package:tela/features/browse/linked_listing_screen.dart';
+import 'package:tela/features/detail/wallpaper_detail_args.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/downloads/download_history_screen.dart';
 import 'package:tela/features/downloads/download_immersive_session.dart';
@@ -67,18 +69,25 @@ abstract final class TelaRouter {
           name: TelaRoutes.detailName,
           redirect: (_, GoRouterState state) =>
               state.extra is Wallpaper ||
-                  state.extra is GallerySessionController<Wallpaper>
+                  state.extra is GallerySessionController<Wallpaper> ||
+                  state.extra is WallpaperDetailArgs
               ? null
               : TelaRoutes.browsePath,
           pageBuilder: (BuildContext context, GoRouterState state) {
             final Object extra = state.extra!;
+            final WallpaperDetailArgs? args = extra is WallpaperDetailArgs
+                ? extra
+                : null;
             return fadeGalleryPage<void>(
               context: context,
               child: WallpaperDetailScreen(
                 wallpaper: extra is Wallpaper ? extra : null,
-                gallerySession: extra is GallerySessionController<Wallpaper>
-                    ? extra
-                    : null,
+                gallerySession:
+                    args?.session ??
+                    (extra is GallerySessionController<Wallpaper>
+                        ? extra
+                        : null),
+                originFilters: args?.originFilters,
               ),
             );
           },
@@ -87,12 +96,22 @@ abstract final class TelaRouter {
           path: TelaRoutes.linkedListingPath,
           name: TelaRoutes.linkedListingName,
           redirect: (_, GoRouterState state) =>
-              state.extra is WallpaperLink ? null : TelaRoutes.browsePath,
-          pageBuilder: (BuildContext context, GoRouterState state) =>
-              fadeGalleryPage<void>(
-                context: context,
-                child: LinkedListingScreen(link: state.extra! as WallpaperLink),
+              state.extra is WallpaperLink || state.extra is LinkedListingArgs
+              ? null
+              : TelaRoutes.browsePath,
+          pageBuilder: (BuildContext context, GoRouterState state) {
+            final Object extra = state.extra!;
+            final LinkedListingArgs? args = extra is LinkedListingArgs
+                ? extra
+                : null;
+            return fadeGalleryPage<void>(
+              context: context,
+              child: LinkedListingScreen(
+                link: args?.link ?? extra as WallpaperLink,
+                seed: args?.seed,
               ),
+            );
+          },
         ),
         GoRoute(
           path: TelaRoutes.privateLibraryPath,

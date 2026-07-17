@@ -20,6 +20,7 @@ import 'package:tela/domain/ports/tag_blocklist_repository.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
 import 'package:tela/features/browse/gallery_paging_bridge.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
+import 'package:tela/features/detail/wallpaper_detail_args.dart';
 import 'package:tela/features/detail/wallpaper_gallery_session.dart';
 import 'package:tela/features/settings/blocked_tags_providers.dart';
 
@@ -313,7 +314,13 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
         pathParameters: <String, String>{
           'wallpaperId': session.selectedItem.id,
         },
-        extra: session,
+        // The grid's own query travels with the session so a tag or colour
+        // followed from the detail screen inherits the filters this listing is
+        // under, not Browse's global ones (see WallpaperDetailArgs).
+        extra: WallpaperDetailArgs(
+          session: session,
+          originFilters: widget.query,
+        ),
       );
     } finally {
       session.dispose();

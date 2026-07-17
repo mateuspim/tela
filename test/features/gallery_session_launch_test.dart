@@ -16,6 +16,7 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/wallpaper_grid.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
+import 'package:tela/features/detail/wallpaper_detail_args.dart';
 import 'package:tela/features/favorites/favorites_screen.dart';
 
 import '../fakes/fake_favorites_repository.dart';
@@ -160,8 +161,13 @@ GoRouter _router({
         path: TelaRoutes.detailPath,
         name: TelaRoutes.detailName,
         builder: (_, GoRouterState state) {
+          // Faithful to the real router: a grid wraps the session with its
+          // origin filters, while a curated shelf pushes the session bare.
+          final Object extra = state.extra!;
           final GallerySessionController<Wallpaper> session =
-              state.extra! as GallerySessionController<Wallpaper>;
+              extra is WallpaperDetailArgs
+              ? extra.session
+              : extra as GallerySessionController<Wallpaper>;
           onDetail(session);
           return Scaffold(body: Text(session.selectedItem.id));
         },
