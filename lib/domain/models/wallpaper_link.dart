@@ -1,25 +1,33 @@
 import 'package:meta/meta.dart';
+import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 
-/// Somewhere a wallpaper points at: one of the two things tela prints on a
-/// detail screen that lead to a listing of their own.
+/// Somewhere a wallpaper points at: one of the things tela prints on a detail
+/// screen that lead to a listing of their own — a tag, an uploader, a colour.
 ///
 /// A link is deliberately *not* a query. It names only what the user asked to
-/// see — a tag, an uploader — and the screen that shows it layers on the
-/// filters they are browsing under and the resolution of the device in their
-/// hand. Both forms are Wallhaven `q` operators, so following one costs a
-/// search and nothing else.
+/// see and knows how to [narrow] a query down to it, layering itself over the
+/// filters they are already browsing under (their purity, categories, ratio)
+/// and the resolution of the device in their hand. So following one costs a
+/// search and nothing else, and never widens a filter the user set.
 ///
 /// ```dart
-/// const TagLink(WallpaperTag(id: 37, name: 'nature')).term; // 'id:37'
+/// const TagLink(WallpaperTag(id: 37, name: 'nature')).narrow(query).term;
+/// // 'id:37'
 /// ```
 @immutable
 sealed class WallpaperLink {
   /// Creates a link.
   const WallpaperLink();
 
-  /// The Wallhaven `q` term that searches for this link's listing.
-  String get term;
+  /// Narrows [query] to this link's listing, keeping the filters already on it.
+  ///
+  /// Always newest-first. A tag or uploader replaces the search term with its
+  /// `q` operator — sent alone, because `id:`/`@` return nothing when combined
+  /// with other `q` text. A colour sets the colour filter and clears the term.
+  /// Everything else on [query] is the user's and is left untouched.
+  SearchQuery narrow(SearchQuery query);
 }
 
 /// Every wallpaper carrying one exact tag.
@@ -32,12 +40,12 @@ final class TagLink extends WallpaperLink {
   /// name while the query searches on the id.
   final WallpaperTag tag;
 
-  /// `id:{n}`, which is Wallhaven's **exact**-tag operator.
-  ///
-  /// Not `+{name}`: that is a fuzzy text match, and it would quietly return
-  /// wallpapers carrying a *different* tag whose name merely reads the same.
+  /// `id:{n}`, Wallhaven's **exact**-tag operator — not `+{name}`, which is a
+  /// fuzzy text match that would quietly return a *different* tag reading the
+  /// same. Sent alone, as `id:` demands.
   @override
-  String get term => 'id:${tag.id}';
+  SearchQuery narrow(SearchQuery query) =>
+      query.copyWith(term: 'id:${tag.id}', sorting: Sorting.dateAdded);
 
   @override
   bool operator ==(Object other) => other is TagLink && other.tag.id == tag.id;
@@ -61,7 +69,8 @@ final class UploaderLink extends WallpaperLink {
 
   /// `@{username}`, Wallhaven's uploader operator.
   @override
-  String get term => '@$username';
+  SearchQuery narrow(SearchQuery query) =>
+      query.copyWith(term: '@$username', sorting: Sorting.dateAdded);
 
   @override
   bool operator ==(Object other) =>
@@ -69,4 +78,28 @@ final class UploaderLink extends WallpaperLink {
 
   @override
   int get hashCode => Object.hash(UploaderLink, username);
+}
+
+/// Every wallpaper sharing one of a wallpaper's dominant colours.
+///
+/// The colour is a query *param* (`colors=`), not a `q` operator, so it sets
+/// [SearchQuery.color] and clears the term rather than replacing it — "more
+/// like this colour", under whatever purity and categories the user was on.
+@immutable
+final class ColorLink extends WallpaperLink {
+  /// Creates a link to [color]'s listing.
+  const ColorLink(this.color);
+
+  /// The dominant colour tapped, from Wallhaven's fixed palette.
+  final WallpaperColor color;
+
+  @override
+  SearchQuery narrow(SearchQuery query) =>
+      query.withColor(color).copyWith(term: '', sorting: Sorting.dateAdded);
+
+  @override
+  bool operator ==(Object other) => other is ColorLink && other.color == color;
+
+  @override
+  int get hashCode => Object.hash(ColorLink, color);
 }

@@ -157,6 +157,33 @@ void main() {
     );
   });
 
+  testWidgets('a colour listing sends the colour and keeps the seed', (
+    WidgetTester tester,
+  ) async {
+    // "More wallpapers in this colour" is a followed listing too: it sets the
+    // colour param, drops the term, and keeps the purity the user was on — the
+    // same inheritance every follow gets.
+    final FakeWallhavenApi api = _api();
+    await _pumpListing(
+      tester,
+      api,
+      ColorLink(WallpaperColor('#0066cc')),
+      seed: const SearchQuery(
+        purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
+      ),
+    );
+
+    final SearchQuery query = api.receivedQueries.single;
+    expect(query.color, WallpaperColor('#0066cc'));
+    expect(query.term, '');
+    expect(query.sorting, Sorting.dateAdded);
+    expect(query.purity.purities, <Purity>{Purity.sfw, Purity.sketchy});
+    expect(
+      tester.widget<WallpaperGrid>(find.byType(WallpaperGrid)).galleryIdentity,
+      'linked:color:0066cc',
+    );
+  });
+
   testWidgets('offers a way to filter the listing', (
     WidgetTester tester,
   ) async {

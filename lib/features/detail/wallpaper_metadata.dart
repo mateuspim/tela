@@ -72,7 +72,7 @@ class WallpaperMetadata extends StatelessWidget {
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const SizedBox(height: 8),
-          _Colors(colors: item.wallpaper.colors),
+          _Colors(colors: item.wallpaper.colors, onFollow: onFollow),
           const SizedBox(height: 16),
           Text(l10n.detailTags, style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
@@ -227,15 +227,18 @@ class _MetadataLink extends StatelessWidget {
   }
 }
 
-/// Dominant palette chips, with labels for non-visual access.
+/// Dominant palette chips, each opening that colour's listing.
 ///
 /// A colour Wallhaven sends in a shape we don't recognise is dropped rather
 /// than painted: it costs that one swatch, where parsing it eagerly would take
-/// the whole metadata panel down with it.
+/// the whole metadata panel down with it. The readable ones are tappable —
+/// "more wallpapers in this colour", under whatever filters the user is on —
+/// the same follow the tags and uploader offer.
 class _Colors extends StatelessWidget {
-  const _Colors({required this.colors});
+  const _Colors({required this.colors, required this.onFollow});
 
   final List<String> colors;
+  final ValueChanged<WallpaperLink> onFollow;
 
   @override
   Widget build(BuildContext context) {
@@ -249,7 +252,10 @@ class _Colors extends StatelessWidget {
       runSpacing: 8,
       children: <Widget>[
         for (final WallpaperColor color in readable)
-          WallpaperSwatch(color: color),
+          WallpaperSwatch(
+            color: color,
+            onTap: () => onFollow(ColorLink(color)),
+          ),
       ],
     );
   }

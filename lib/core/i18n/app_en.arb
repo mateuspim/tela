@@ -419,6 +419,11 @@
     "description": "Says what a listing followed from the uploader is. Deliberately 'uploads' and not 'profile': Wallhaven's API has no user endpoint, so their uploads are all tela can show."
   },
 
+  "listingColored": "Wallpapers in this color",
+  "@listingColored": {
+    "description": "Says what a listing followed from a colour swatch is: every wallpaper sharing that dominant colour, under the user's current filters."
+  },
+
   "detailSetWallpaper": "Set wallpaper",
   "@detailSetWallpaper": {
     "description": "Primary action on the wallpaper detail screen."

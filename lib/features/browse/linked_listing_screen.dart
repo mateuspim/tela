@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
+import 'package:tela/core/ui/wallpaper_swatch.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/features/browse/browse_filter_button.dart';
@@ -81,10 +83,10 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
   @override
   Widget build(BuildContext context) {
     final String identity = _galleryIdentity;
-    // The term and the sorting are the link's, not the user's: this listing
-    // *is* that tag, newest first. What the sheet writes survives the layering.
-    final SearchQuery query = _filters
-        .copyWith(term: widget.link.term, sorting: Sorting.dateAdded)
+    // The link narrows the query — its term or its colour, always newest first;
+    // the rest is the user's, and what the sheet writes survives the layering.
+    final SearchQuery query = widget.link
+        .narrow(_filters)
         .forScreen(screenResolution(context));
 
     return Scaffold(
@@ -103,31 +105,46 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
   ///
   /// The second line is not decoration: an uploader's listing is their
   /// *uploads*, and Wallhaven's API has no profile to show even if the screen
-  /// wanted to imply one.
+  /// wanted to imply one. A colour has no name to print, so its swatch stands
+  /// in for one beside the same kind of caption.
   Widget _title(BuildContext context) {
     final TextTheme text = Theme.of(context).textTheme;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(_name, style: text.titleMedium),
-        Text(_kind(AppLocalizations.of(context)), style: text.labelSmall),
-      ],
-    );
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return switch (widget.link) {
+      TagLink(:final WallpaperTag tag) => _captioned(
+        tag.name,
+        l10n.listingTagged,
+        text,
+      ),
+      UploaderLink(:final String username) => _captioned(
+        '@$username',
+        l10n.listingUploads,
+        text,
+      ),
+      ColorLink(:final WallpaperColor color) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          WallpaperSwatch(color: color),
+          const SizedBox(width: 12),
+          Text(l10n.listingColored, style: text.titleMedium),
+        ],
+      ),
+    };
   }
 
-  String get _name => switch (widget.link) {
-    TagLink(:final WallpaperTag tag) => tag.name,
-    UploaderLink(:final String username) => '@$username',
-  };
+  Widget _captioned(String name, String kind, TextTheme text) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: <Widget>[
+      Text(name, style: text.titleMedium),
+      Text(kind, style: text.labelSmall),
+    ],
+  );
 
   String get _galleryIdentity => switch (widget.link) {
     TagLink(:final WallpaperTag tag) => 'linked:tag:${tag.id}',
     UploaderLink(:final String username) => 'linked:uploader:$username',
-  };
-
-  String _kind(AppLocalizations l10n) => switch (widget.link) {
-    TagLink() => l10n.listingTagged,
-    UploaderLink() => l10n.listingUploads,
+    ColorLink(:final WallpaperColor color) =>
+      'linked:color:${color.toApiValue()}',
   };
 }
