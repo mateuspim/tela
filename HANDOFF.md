@@ -2,7 +2,96 @@
 
 Updated: 2026-07-17
 
-## START HERE — Wave 4's crop item is complete; the rest of Wave 4 is open
+## START HERE — a UI/UX pass landed five slices; beauty thread and one device item remain
+
+The owner asked for a UI/UX pass — "make it more beautiful" **and** fix some
+core-loop interactions. This session did the **interaction half**: five slices,
+`f662ba4` → `163c414`, all on `master`. The suite is **632 tests** green (from
+614), `analyze` and `dart format` clean, every new behaviour mutation-checked
+(revert the fix, watch the new test fail with the real symptom, restore). None
+of it has been on the device yet — that pass is owed (see the end of this
+section).
+
+The pass was **planned first, then sliced**, at the owner's request, with the
+two open threads split: **A = beauty** (expressive chrome — a branded accent, a
+real logo mark, editorial headers, a glass app bar; *not started*), **B =
+interactions** (built below).
+
+| slice | commit | what the user can now do |
+|---|---|---|
+| B1 | `f662ba4` | Follow a tag/uploader and **keep the filters you were browsing** — sketchy stays sketchy across a tag→wallpaper→tag chain |
+| B2a | `eea8021` | **Tap a dominant colour** → a listing of more wallpapers in it, under the same filters |
+| B2b | `01a517e` | Open a wallpaper's **source**, and a **View on Wallhaven** action, in the device browser |
+| B3 | `fd03c58` | **Swipe or step between wallpapers on the detail page**, not only in fullscreen |
+| B4 | `163c414` | A **Library tab** hubbing favorites + download history + private, so the two tiers aren't buried in Settings |
+
+### The decisions inside these worth not re-litigating
+
+- **B1's root cause was one layer down from where it looked.** Following a link
+  reseeded filters from the *global* Browse query (`linkedQueryProvider`'s
+  `build()` read `browseQueryProvider`), so a listing you had narrowed to sketchy
+  lost it the moment you drilled through a wallpaper. The detail screen carried
+  **no query context at all**. The fix threads the active `SearchQuery` as an
+  *origin seed* grid → detail → follow (`WallpaperDetailArgs`, `LinkedListingArgs`)
+  and makes `LinkedListingScreen` seed-authoritative on local state — which
+  **retired `linkedQueryProvider`/`LinkedQueryController`**, a global holder that
+  only ever served that one transient screen. Safe against the `id:` exclusivity
+  rule: the link's `id:N` stays the sole `q` term; inherited purity/ratios/colour
+  ride as separate params and never pollute `q`.
+- **B2a generalised the link, it didn't special-case colour.** `WallpaperLink`
+  went from a `term` getter to `narrow(query)`, so a link can be a `q` operator
+  (tag, uploader) **or** a param (colour, via `ColorLink` → `withColor`) without
+  the screen branching. Colour therefore flows through the *same* follow path as
+  tags, inheriting B1's seed for free — the detail screen needed no change.
+- **B2b is a real port, per the CLAUDE.md rule.** `ExternalLink`
+  (over `url_launcher`) + a domain `ExternalLinkFailure` that carries only a
+  category, so a tapped address never reaches logs/UI. The Wallhaven page URL is
+  centralised on `Wallpaper.pageUrl` (reused by `ShareWallpaper`). A free-text
+  source that isn't an `http(s)` URL stays plain, copyable text. **Needed a
+  manifest change**: an `https` `<queries>` intent so `launchUrl` resolves a
+  browser under Android 11+ package visibility.
+- **B3 reuses the session, not a second paging model.** The detail preview is a
+  `PageView` over the *same* `GallerySessionController` the fullscreen viewer
+  pages. Pager↔session sync is one guarded loop (swipe → `select`; an outside
+  move — a chevron, or the fullscreen viewer paging the shared session while
+  Detail sits behind it — moves the session first and the pager jumps to catch
+  up). **Only the selected page carries the Hero**, so the neighbours the pager
+  pre-builds can't collide with a grid tile's tag ("multiple heroes").
+- **B4 was additive, and Private stayed discreet on purpose.** History/Private
+  were reachable only through Settings, where their placement is *deliberately*
+  contextual (history by the download routing, private by the app-lock — the old
+  `_PrivateLibraryTile` docstring argued for it). So the Library tab **adds** a
+  faster path without taking the Settings ones away; the entry row is one shared
+  `LibraryDestinationTile` used by both, and Private is a plain locked row, never
+  a thumbnailed shortcut. `FavoritesScreen` was extracted to `FavoritesGrid` and
+  retired; the favorites shell branch is now `/library`.
+
+### Owed on the device (only the owner can), for this pass
+
+1. **B2b's browser hand-off** — `launchUrl` is a real platform round trip, like
+   the wallpaper-apply ones; it can't be unit-tested. Tap *View on Wallhaven* and
+   a source link on the tablet.
+2. **B5 — "the history gallery is finnicky."** The owner reported this but it was
+   never pinned to a symptom; it needs eyes on the device to diagnose before it
+   can be fixed. **Not started.**
+3. A general look at B1–B4 on real hardware: the colour drilldown, the detail
+   swipe/chevrons, and the new Library nav.
+
+### What the beauty thread (A) is, when it resumes
+
+Agreed direction: **expressive chrome, but keep Material You** — borrow the
+device palette for surfaces, add a fixed tela accent (the `0xFF7772E5` seed
+family, today only a *fallback*) for brand moments, harmonised alongside Monet so
+identity survives on every device. Slices sketched but unbuilt: **A1** brand
+accent + a real `tela` logo mark (the rail's brand slot is still
+`appTitle.substring(0,1)`) + stronger selected states; **A2** a glass/gradient
+app bar + editorial shelf headers (the new Library tab is the natural first
+canvas); **A3** tile treatment + richer per-shelf empty/loading states.
+
+## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
+
+*(Was the START HERE before the UI/UX pass above; still the live description of
+Wave 4's product work.)*
 
 Wave 3 is closed. **Wave 4's crop item is done, both halves.** The
 system-editor half shipped first (`266a0d7`) and ran on the SM-X730: Detail's
