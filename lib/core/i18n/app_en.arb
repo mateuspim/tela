@@ -539,6 +539,21 @@
     "description": "Safe fallback when the wallpaper cannot be shared."
   },
 
+  "detailAdjust": "Adjust & set",
+  "@detailAdjust": {
+    "description": "Tooltip on the app-bar button that opens Android's own crop-and-set wallpaper editor, where the wallpaper can be repositioned before it is applied."
+  },
+
+  "detailAdjustFailure": "Couldn't open the wallpaper editor.",
+  "@detailAdjustFailure": {
+    "description": "Safe fallback when the system wallpaper editor cannot be opened."
+  },
+
+  "detailAdjustUnavailable": "This device has no wallpaper editor.",
+  "@detailAdjustUnavailable": {
+    "description": "Shown when the device ships no crop-and-set wallpaper activity at all. Not a failure the user can act on, so it says what is true rather than suggesting a retry."
+  },
+
   "detailPreviewLabel": "Wallpaper {wallpaperId}",
   "@detailPreviewLabel": {
     "description": "Accessibility label for the full-screen preview.",

@@ -1,34 +1,120 @@
 # tela handoff
 
-Updated: 2026-07-16
+Updated: 2026-07-17
 
-## START HERE — Wave 3 is closed; the next work is Wave 4
+## START HERE — Wave 4 is open; its first slice is built and verified on device
 
-Everything that was owed at a desk is done. The cold-launch hang is fixed and
-verified on the tablet, the Drift test seam is closed (`3a09f67`), **Wave 3's
-exit criterion is met** (`7510500`, below), and the tablet is **carrying a fresh
-release build of the cold-launch fix** (see "Device state" — it predates
-`7510500`, which is tests only and changes no shipped code). The suite is
-**573 tests** green, `analyze` and `format` clean.
+Wave 3 is closed. **Wave 4's crop item — the system-editor half — is done and
+run on the SM-X730.** Detail's *Adjust & set* hands the wallpaper to Android's
+own crop-and-set editor: on the tablet it opens Samsung's "Wallpaper and style"
+picker on the right image, with the Lock/Home previews and reposition. The suite
+is **598 tests** green (from 573), `analyze` and `format` clean, and both
+`build apk --debug` and `--release` succeed.
 
-So the next agent is not picking up a repair, and no longer a verification
-either. It is picking up **Wave 4** — see `PLAN.md` §12.
+### The device taught us the AOSP path is dead on One UI — read this before touching it
 
-### 1. Wave 4, which is where the product goes next
+The first build shipped only `getCropAndSetWallpaperIntent` and it **threw
+`IllegalArgumentException` on the SM-X730** ("Couldn't open the wallpaper
+editor"). That method is not a generic lookup: it pins the intent to the default
+*launcher* package, then to a configured cropper package, and One UI ships
+neither as a `CROP_AND_SET_WALLPAPER` handler — so it throws rather than
+returns. It is simply dead on One UI, and likely other OEM skins.
 
-Unbuilt, in `PLAN.md`'s own order: crop/reposition editor before apply, daily
-auto-rotate (WorkManager), collections browser, and **Omarchy sync** — export
-favorites to an Aether-consumable format, which is the one that closes the
-desktop↔mobile loop this app exists inside. The share sheet is done.
+The working path, verified on hardware, is a fallback: **`ACTION_ATTACH_DATA`
+(`image/*`) wrapped in a chooser**. That is the "Use image as…" mechanism Gallery
+fires; on the SM-X730 it resolves to `com.samsung.android.app.dressroom/
+.presentation.SetAsWallPaperActivity` — the same crop/Home-Lock/widgets editor —
+which read our FileProvider file cleanly (no `SecurityException`, no decode
+error; the read grant forwards through the resolver). `SystemWallpaperEditing`
+now tries the AOSP intent first (a cleaner one-tap cropper where it works, e.g.
+stock Android) and falls back to the chooser. **Do not** try to target the OEM
+component directly to skip the chooser: launching `SetAsWallPaperActivity` by
+explicit component bounced straight back to the launcher on the tablet, and
+picking "the wallpaper app" out of the handler list needs a per-brand heuristic
+that already broke once here (`SET_WALLPAPER` without a type does not match
+Samsung's editor). The chooser is the OEM-agnostic path and the owner accepted
+its one cost: WhatsApp/Contacts appear beside "Wallpaper and style" in the list.
+
+### The slice, and the decision inside it worth not re-litigating
+
+The idea came from the owner: on a Samsung, setting a wallpaper from the gallery
+opens a system app that resizes and shows the widgets, so hand off to *that*
+rather than building a cropper. It is the right call and it is nearly free here —
+the hand-off needs a `content://` URI typed `image/*`, and `WallpaperSharing`
+already had every piece: the FileProvider, the authority, the one-shot read
+grant, the download-to-cache.
+
+**But it is SFW-only, and that is not a new rule.** The pixels reach a separate
+app that keeps its own wallpaper history — the ungated index the private tier
+exists to prevent — which is the same shape as the image share the domain already
+refuses for explicit content. So `mayExportBitmap` is now the single home for
+"explicit pixels never leave the app", and **`shareOptionsFor` asks it too**, so
+the two cannot drift apart. A test pins exactly that agreement across every
+purity. Enforced twice, the way every NSFW rule here is: `AdjustWallpaper` throws,
+and the button is withheld.
+
+Three things that are deliberate, not oversights:
+
+- **Success says nothing.** The editor owns the crop, the Home/Lock/Both choice
+  and the apply, and hands back no result. A "wallpaper set" snackbar would be a
+  lie — the user may still be framing it, or may have backed out. Only failures
+  speak, and "this device has no wallpaper editor" is its own message because it
+  is not a thing to retry.
+- **`resolveActivity` is not used to detect a missing editor.** From API 30
+  package visibility can hide a handler from our own query even when the device
+  has one — a null there would refuse a picker that exists. The chooser fallback
+  sidesteps this: the system resolver enumerates handlers out of our process, so
+  no `<queries>` entry is needed. A missing editor surfaces as
+  `ActivityNotFoundException`, caught at the launch.
+- **A separate cache folder** (`adjusted/`, added to `file_paths.xml`). Both
+  hand-off folders wipe on the way in, so sharing one would make a share and an
+  adjust delete each other's file. `ImageHandoffCache` now owns that wipe for
+  both — it is a privacy rule, and it earns one home.
+
+### Still owed on Wave 4's crop item
+
+**Our own editor**, for the NSFW/private path and as the fallback when no system
+editor resolves. The shape is already decided: `BitmapRegionDecoder.decodeRegion`
+→ `setBitmap`, which is deterministic where `visibleCropHint` is only a *hint*
+OEMs may reinterpret, and which decodes just the chosen sub-rect and so dodges
+`PLAN.md` §15's 6K OOM risk. `MainActivity`'s `setStream(..., null, ...)` crop
+hint stays null until then.
+
+### The rest of Wave 4
+
+Unbuilt, in `PLAN.md`'s own order: daily auto-rotate (WorkManager), collections
+browser, and **Omarchy sync** — export favorites to an Aether-consumable format,
+which is the one that closes the desktop↔mobile loop this app exists inside.
+
+**Omarchy sync's unknown is already eliminated, so do not re-research it.**
+Aether keeps `~/.config/aether/favorites.json`: a top-level JSON array whose
+Wallhaven entries are `{id, path, thumbs:{small}, resolution, file_size}`, where
+`path` is the full-res Wallhaven URL and the presence of `id` is what marks an
+entry Wallhaven rather than local (`internal/favorites/service.go` in
+`bjarneo/aether`). tela's `Wallpaper` covers every field exactly — `id`,
+`fullImageUrl`, `thumbSmallUrl`, `resolution`, `fileSizeBytes` — and
+`FavoritesRepository` stores the whole `Wallpaper`, so the export needs no
+network. Two decisions remain open: the **transport** (write into the
+`filesOutsideGallery` tier `PLAN.md` already calls the USB/MTP desktop-sync path,
+versus pushing through the share sheet) and **NSFW** — whether explicit favorites'
+URLs belong in a plaintext desktop config. Note a link is not an export under
+`mayExportBitmap`, so that rule does not decide it for you.
 
 ### Still owed on hardware, and only the owner can
 
-Unchanged, and it does not block the above:
+1. ~~The *Adjust & set* hand-off.~~ **Done, verified on the SM-X730 (2026-07-17):**
+   tapped on a safe wallpaper, the chooser opened, "Wallpaper and style" launched
+   Samsung's editor on the right image with the Lock/Home previews, and it read
+   the FileProvider file with no grant or decode error. NSFW button absent,
+   confirmed. The one thing still unseen by choice: pressing "Next" through to an
+   actual apply (that would change the owner's wallpaper) — but the editor owns
+   that step and hears nothing back either way.
+2. The wallpaper-apply round trip (it changes the owner's wallpaper).
+3. The real biometric prompt (adb cannot pass `FLAG_SECURE`).
+4. The cache figure after a real browse.
+5. **The keystore**, whenever shipping matters. The only part of item 7 left.
 
-1. The wallpaper-apply round trip (it changes the owner's wallpaper).
-2. The real biometric prompt (adb cannot pass `FLAG_SECURE`).
-3. The cache figure after a real browse.
-4. **The keystore**, whenever shipping matters. The only part of item 7 left.
+Items 2–5 are unchanged and none of them block the above.
 
 ### Housekeeping — done
 

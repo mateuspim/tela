@@ -2,7 +2,6 @@ package cc.pym.tela
 
 import android.app.Activity
 import android.content.Intent
-import androidx.core.content.FileProvider
 import java.io.File
 
 /**
@@ -19,6 +18,8 @@ import java.io.File
  * the chooser and must run on it.
  */
 class WallpaperSharing(private val activity: Activity) {
+    private val cache = ImageHandoffCache(activity, SHARE_DIRECTORY)
+
     /** Fires an ACTION_SEND chooser for [page]. Returns tela's result map. */
     fun shareLink(page: String): Map<String, Any> {
         val intent = Intent(Intent.ACTION_SEND)
@@ -34,32 +35,17 @@ class WallpaperSharing(private val activity: Activity) {
      * The shared-cache folder is emptied first, so a past share cannot pile up
      * in cache — only the wallpaper being shared right now is ever exposed.
      */
-    fun downloadToShareCache(imageUrl: String, fileName: String): File? {
-        val file = cacheFile(fileName)
-        return try {
-            Downloads.fetch(imageUrl, file)
-            file
-        } catch (_: Exception) {
-            file.delete()
-            null
-        }
-    }
+    fun downloadToShareCache(imageUrl: String, fileName: String): File? =
+        cache.download(imageUrl, fileName)
 
     /** Fires an ACTION_SEND chooser for [file]. Run this on the UI thread. */
     fun shareImageFile(file: File): Map<String, Any> {
-        val uri = FileProvider.getUriForFile(activity, authority(), file)
+        val uri = cache.contentUri(file)
         val intent = Intent(Intent.ACTION_SEND)
             .setType(activity.contentResolver.getType(uri) ?: "image/*")
             .putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         return launch(intent)
-    }
-
-    private fun cacheFile(fileName: String): File {
-        val directory = File(activity.cacheDir, SHARE_DIRECTORY)
-        directory.mkdirs()
-        directory.listFiles()?.forEach { it.delete() }
-        return File(directory, fileName)
     }
 
     private fun launch(intent: Intent): Map<String, Any> {
@@ -70,8 +56,6 @@ class WallpaperSharing(private val activity: Activity) {
         activity.startActivity(chooser)
         return mapOf("success" to true)
     }
-
-    private fun authority(): String = "${activity.packageName}.fileprovider"
 
     private fun failure(code: String): Map<String, Any> =
         mapOf("success" to false, "errorCode" to code)

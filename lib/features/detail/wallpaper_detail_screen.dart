@@ -16,12 +16,14 @@ import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
 import 'package:tela/core/ui/wallpaper_share_sheet.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
+import 'package:tela/domain/models/bitmap_export_rule.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/share_option.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_adjust_failure.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
@@ -78,6 +80,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   bool _isApplying = false;
   bool _isDownloading = false;
   bool _isSharing = false;
+  bool _isAdjusting = false;
 
   Wallpaper get _wallpaper => _gallery.selectedItem;
 
@@ -122,6 +125,34 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     } finally {
       if (mounted) setState(() => _isApplying = false);
     }
+  }
+
+  /// Hands the wallpaper to Android's own editor, which frames it and applies
+  /// it itself. The long way round beside [_apply], which stays the shortest
+  /// path — Wave 1's "≤3 taps" is a promise about that button, not this one.
+  ///
+  /// Deliberately silent on success: tela launches the editor and never hears
+  /// what the user did there, so it has no outcome it could honestly report.
+  /// The editor appearing is the feedback.
+  Future<void> _adjust() async {
+    setState(() => _isAdjusting = true);
+    try {
+      await ref.read(adjustWallpaperProvider)(_wallpaper);
+    } on WallpaperAdjustFailure catch (failure) {
+      if (mounted) _showResult(_adjustFailureText(failure));
+    } finally {
+      if (mounted) setState(() => _isAdjusting = false);
+    }
+  }
+
+  /// A device with no editor at all is told so plainly: it is not a failure the
+  /// user can retry their way out of, and "couldn't open" would invite them to.
+  String _adjustFailureText(WallpaperAdjustFailure failure) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return switch (failure.problem) {
+      WallpaperAdjustProblem.unavailable => l10n.detailAdjustUnavailable,
+      _ => l10n.detailAdjustFailure,
+    };
   }
 
   Future<void> _chooseDownloadTier() async {
@@ -287,6 +318,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   List<Widget> _compactActions(AppLocalizations l10n) {
     return <Widget>[
       FavoriteButton(wallpaper: _wallpaper),
+      if (mayExportBitmap(_wallpaper.purity)) _adjustButton(l10n),
       _shareButton(l10n),
       _downloadButton(l10n),
     ];
@@ -424,6 +456,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
         children: <Widget>[
           FavoriteButton(wallpaper: _wallpaper),
           const Spacer(),
+          if (mayExportBitmap(_wallpaper.purity)) _adjustButton(l10n),
           _shareButton(l10n),
           _downloadButton(l10n),
         ],
@@ -473,6 +506,24 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
           label: Text(l10n.detailSetWallpaper),
         ),
       ),
+    );
+  }
+
+  /// Withheld for explicit wallpapers by the same rule that withholds the image
+  /// share: the editor is a separate app, holding a wallpaper history tela does
+  /// not control (see [mayExportBitmap]). `AdjustWallpaper` refuses it too, so
+  /// hiding the button is the courtesy and the guard is the rule.
+  Widget _adjustButton(AppLocalizations l10n) {
+    return IconButton(
+      key: const Key('detail-adjust'),
+      onPressed: _isAdjusting ? null : _adjust,
+      tooltip: l10n.detailAdjust,
+      icon: _isAdjusting
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.crop_outlined),
     );
   }
 

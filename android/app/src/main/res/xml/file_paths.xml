@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The one folder the share FileProvider may expose: a subdirectory of the
-     app's cache. WallpaperSharing empties it before each share, so it only ever
-     holds the single image being shared right now. -->
+<!-- The folders the FileProvider may expose, each a subdirectory of the app's
+     cache. Both are emptied before each use, so each only ever holds the single
+     image being handed out right now.
+
+     They are separate on purpose: WallpaperSharing and SystemWallpaperEditing
+     each wipe their own folder, and sharing one would make a share and an
+     adjust delete the file out from under each other. -->
 <paths>
     <cache-path name="shared" path="shared/" />
+    <cache-path name="adjusted" path="adjusted/" />
 </paths>

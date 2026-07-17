@@ -13,6 +13,7 @@ import 'package:tela/data/storage/method_channel_local_preview_cache.dart';
 import 'package:tela/data/storage/method_channel_screen_guard.dart';
 import 'package:tela/data/tag_blocklist/drift_tag_blocklist_repository.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
+import 'package:tela/data/wallpaper/method_channel_system_wallpaper_editor.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_sharer.dart';
 import 'package:tela/domain/ports/app_lock.dart';
@@ -24,10 +25,12 @@ import 'package:tela/domain/ports/local_preview_cache.dart';
 import 'package:tela/domain/ports/screen_guard.dart';
 import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
+import 'package:tela/domain/ports/system_wallpaper_editor.dart';
 import 'package:tela/domain/ports/tag_blocklist_repository.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
 import 'package:tela/domain/ports/wallpaper_sharer.dart';
+import 'package:tela/domain/use_cases/adjust_wallpaper.dart';
 import 'package:tela/domain/use_cases/apply_download.dart';
 import 'package:tela/domain/use_cases/apply_private_image.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
@@ -71,6 +74,12 @@ final Provider<WallpaperApplier> wallpaperApplierProvider =
 final Provider<WallpaperSharer> wallpaperSharerProvider =
     Provider<WallpaperSharer>(
       (Ref ref) => MethodChannelWallpaperSharer(),
+    );
+
+/// The system-editor port, bound to Android's own crop-and-set activity.
+final Provider<SystemWallpaperEditor> systemWallpaperEditorProvider =
+    Provider<SystemWallpaperEditor>(
+      (Ref ref) => MethodChannelSystemWallpaperEditor(),
     );
 
 /// The three-tier image-storage port, bound to Android's scoped-storage API.
@@ -209,6 +218,13 @@ final Provider<ApplyPrivateImage> applyPrivateImageProvider =
 final Provider<ShareWallpaper> shareWallpaperProvider =
     Provider<ShareWallpaper>(
       (Ref ref) => ShareWallpaper(sharer: ref.watch(wallpaperSharerProvider)),
+    );
+
+/// Opens one wallpaper in Android's own editor, to frame before setting.
+final Provider<AdjustWallpaper> adjustWallpaperProvider =
+    Provider<AdjustWallpaper>(
+      (Ref ref) =>
+          AdjustWallpaper(editor: ref.watch(systemWallpaperEditorProvider)),
     );
 
 /// The search use case, the only thing the browse feature actually calls.

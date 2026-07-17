@@ -236,7 +236,39 @@ The filters Wave 2 named but did not finish, plus the two ways *into* a listing 
 *Exit:* the filter sheet answers everything wallhaven.cc's own filter bar does, and a wallpaper is a place you can navigate *from* — its tags and its uploader lead somewhere. **Met** (`7510500`, 2026-07-16). Both halves of the contract are proven: Wallhaven's side by `curl` (the evidence lives in `ratio_choice.dart` and `resolution_filter.dart`'s docstrings, dated, with the totals), and **tela's side on the wire** — `dio_wallhaven_api_test.dart` fakes Dio's `HttpClientAdapter`, *below* query serialization, and asserts on the literal URI. That seam is the one `FakeWallhavenApi` structurally cannot see: it records a `SearchQuery`, so it sits above the encoding. The two were joined by curling the exact URIs the test captures — a phone's cold-launch URI answers with 2575 wallpapers, all at ratio 0.56, none below the screen.
 
 **Wave 4 — Nice-to-haves** — *share sheet built and verified on hardware*
-Crop/reposition editor before apply, daily auto-rotate (WorkManager), collections browser, ~~share sheet~~ **built**, **Omarchy sync** (export favorites to an Aether-consumable format — closes the desktop↔mobile loop).
+Crop/reposition editor before apply (**system-editor half built and verified on hardware** — see below), daily auto-rotate (WorkManager), collections browser, ~~share sheet~~ **built**, **Omarchy sync** (export favorites to an Aether-consumable format — closes the desktop↔mobile loop).
+- **Crop/reposition, the SFW half: built and verified on the SM-X730** (2026-07-17).
+  Detail's *Adjust & set* hands the image to Android's own crop-and-set editor —
+  on the tablet, Samsung's "Wallpaper and style" picker, opened on the right
+  image with the Lock/Home previews and reposition. That editor owns the crop,
+  the Home/Lock/Both choice **and** the apply, so tela hears no result back and
+  says nothing on success; only failures speak. It is an *optional* branch beside
+  the direct apply, which is untouched — Wave 1's "≤3 taps" is a promise about
+  that button and this must not tax it.
+- **The hand-off is two intents, because the AOSP one is dead on One UI.**
+  `WallpaperManager.getCropAndSetWallpaperIntent` pins the intent to the launcher
+  and a configured cropper package, and Samsung ships neither — it *threw* on the
+  tablet. `SystemWallpaperEditing` tries it first (a clean one-tap cropper on
+  stock Android) and falls back to an **`ACTION_ATTACH_DATA` chooser** ("Use
+  image as…"), which is what actually reaches the OEM editor. The chooser, not a
+  bare launch, so a stale ATTACH_DATA default can't hijack it; the system
+  resolver enumerates handlers out-of-process, so no `<queries>` and no API-30
+  visibility trap. Cost the owner accepted: WhatsApp/Contacts show beside the
+  wallpaper app in the list. Targeting the OEM component directly was tried and
+  rejected — it bounced back to the launcher, and picking the wallpaper app by
+  heuristic is per-brand-fragile.
+- **It is SFW-only, and that is the same rule as the share sheet, not a new one.**
+  The intent needs a `content://` URI, so the pixels reach a separate app that
+  keeps its own wallpaper history — the ungated index the private tier exists to
+  prevent. `mayExportBitmap` is now the one home for "explicit pixels never leave
+  the app"; `shareOptionsFor` asks it too, so the two cannot drift. Enforced in
+  the domain (`AdjustWallpaper`) and again in the UI that withholds the button.
+- **Still owed: our own editor**, for the NSFW/private path and as the fallback
+  when no system editor resolves. Decided shape: `BitmapRegionDecoder.decodeRegion`
+  → `setBitmap`, which is deterministic where `visibleCropHint` is only a *hint*
+  OEMs may reinterpret, and which decodes just the chosen sub-rect and so dodges
+  §15's 6K OOM risk. `MainActivity`'s `setStream(..., null, ...)` crop hint stays
+  null until then.
 - ~~**Share sheet.**~~ **Built and verified on hardware** (2026-07-15). A wallpaper's detail screen shares its public Wallhaven link (any purity) or the image file itself. The image is **refused for explicit content** — the bitmap must not leave the device — the same rule as `StorageSettings.choicesFor`, enforced in `shareOptionsFor` and again in `ShareWallpaper.image`. Native `ACTION_SEND` behind a `WallpaperSharer` port, with a `FileProvider` one-shot grant for the image.
 *Exit:* opt-in extras; none block Wave 1/2/3.
 

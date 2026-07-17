@@ -1,5 +1,6 @@
 import 'package:tela/domain/models/share_option.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_file_name.dart';
 import 'package:tela/domain/ports/wallpaper_sharer.dart';
 
 /// Shares a [Wallpaper] out through Android's share sheet, as a link or a file.
@@ -30,22 +31,12 @@ class ShareWallpaper {
     }
     return _sharer.shareImage(
       source: Uri.parse(wallpaper.fullImageUrl),
-      fileName: _fileNameOf(wallpaper),
+      fileName: wallpaperFileName(wallpaper),
     );
   }
 
   /// The wallpaper's page on wallhaven.cc, e.g. `https://wallhaven.cc/w/e7jvjd`.
   Uri _pageOf(Wallpaper wallpaper) {
     return Uri.parse('https://wallhaven.cc/w/${wallpaper.id}');
-  }
-
-  /// The image's own file name, taken from [Wallpaper.fullImageUrl] so the
-  /// extension matches the real type (`.jpg` vs `.png`) rather than a guess.
-  String _fileNameOf(Wallpaper wallpaper) {
-    final Uri image = Uri.parse(wallpaper.fullImageUrl);
-    if (image.pathSegments.isEmpty || image.pathSegments.last.isEmpty) {
-      return 'wallhaven-${wallpaper.id}';
-    }
-    return image.pathSegments.last;
   }
 }

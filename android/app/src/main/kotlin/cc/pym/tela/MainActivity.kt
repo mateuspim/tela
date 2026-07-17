@@ -117,10 +117,14 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun handleWallpaperCall(call: MethodCall, result: MethodChannel.Result) {
-        if (call.method != "applyWallpaper") {
-            result.notImplemented()
-            return
+        when (call.method) {
+            "applyWallpaper" -> handleApplyWallpaper(call, result)
+            "adjustWallpaper" -> handleAdjustWallpaper(call, result)
+            else -> result.notImplemented()
         }
+    }
+
+    private fun handleApplyWallpaper(call: MethodCall, result: MethodChannel.Result) {
         val source = call.argument<String>("source")
         val target = call.argument<String>("target")
         if (source == null || target == null) {
@@ -130,6 +134,33 @@ class MainActivity : FlutterFragmentActivity() {
         wallpaperExecutor.execute {
             val response = applyWallpaper(Uri.parse(source), target)
             runOnUiThread { result.success(response) }
+        }
+    }
+
+    /**
+     * Hands the image to Android's own crop-and-set editor.
+     *
+     * Same shape as handleShareImage, and for the same reason: the download
+     * must leave the UI thread and starting the activity must return to it.
+     */
+    private fun handleAdjustWallpaper(call: MethodCall, result: MethodChannel.Result) {
+        val source = call.argument<String>("source")
+        val fileName = call.argument<String>("fileName")
+        if (source == null || fileName == null) {
+            result.success(failure("downloadFailed"))
+            return
+        }
+        wallpaperExecutor.execute {
+            val editing = SystemWallpaperEditing(this)
+            val file = editing.downloadToCache(source, fileName)
+            runOnUiThread {
+                val response = if (file == null) {
+                    failure("downloadFailed")
+                } else {
+                    editing.openEditorOn(file)
+                }
+                result.success(response)
+            }
         }
     }
 

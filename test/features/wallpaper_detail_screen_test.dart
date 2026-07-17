@@ -24,6 +24,7 @@ import '../fakes/fake_image_store.dart';
 import '../fakes/fake_immersive_system_ui.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
+import '../fakes/fake_system_wallpaper_editor.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
 import '../fakes/fake_wallpaper_applier.dart';
@@ -485,6 +486,10 @@ Future<void> _pumpDetail(
         // The share button would otherwise reach the real method channel.
         wallpaperSharerProvider.overrideWithValue(
           sharer ?? FakeWallpaperSharer(),
+        ),
+        // So would the adjust button beside it.
+        systemWallpaperEditorProvider.overrideWithValue(
+          FakeSystemWallpaperEditor(),
         ),
         // Blocking a tag reaches the database too.
         tagBlocklistRepositoryProvider.overrideWithValue(
