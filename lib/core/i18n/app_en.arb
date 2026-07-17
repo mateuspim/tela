@@ -549,9 +549,14 @@
     "description": "Safe fallback when the system wallpaper editor cannot be opened."
   },
 
-  "detailAdjustUnavailable": "This device has no wallpaper editor.",
-  "@detailAdjustUnavailable": {
-    "description": "Shown when the device ships no crop-and-set wallpaper activity at all. Not a failure the user can act on, so it says what is true rather than suggesting a retry."
+  "detailCropTitle": "Position wallpaper",
+  "@detailCropTitle": {
+    "description": "App-bar title of tela's own crop editor, where the user pans and zooms the image inside the screen frame before setting it."
+  },
+
+  "detailCropReset": "Reset",
+  "@detailCropReset": {
+    "description": "Button in tela's crop editor that returns the image to its opening centred framing."
   },
 
   "detailPreviewLabel": "Wallpaper {wallpaperId}",

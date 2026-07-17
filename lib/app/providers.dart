@@ -31,6 +31,7 @@ import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
 import 'package:tela/domain/ports/wallpaper_sharer.dart';
 import 'package:tela/domain/use_cases/adjust_wallpaper.dart';
+import 'package:tela/domain/use_cases/apply_cropped_wallpaper.dart';
 import 'package:tela/domain/use_cases/apply_download.dart';
 import 'package:tela/domain/use_cases/apply_private_image.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
@@ -225,6 +226,14 @@ final Provider<AdjustWallpaper> adjustWallpaperProvider =
     Provider<AdjustWallpaper>(
       (Ref ref) =>
           AdjustWallpaper(editor: ref.watch(systemWallpaperEditorProvider)),
+    );
+
+/// Applies a crop the user framed in tela's own editor — the in-app path that,
+/// unlike [adjustWallpaperProvider], keeps explicit pixels inside the app.
+final Provider<ApplyCroppedWallpaper> applyCroppedWallpaperProvider =
+    Provider<ApplyCroppedWallpaper>(
+      (Ref ref) =>
+          ApplyCroppedWallpaper(applier: ref.watch(wallpaperApplierProvider)),
     );
 
 /// The search use case, the only thing the browse feature actually calls.

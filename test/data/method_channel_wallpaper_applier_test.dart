@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
+import 'package:tela/domain/models/crop_region.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 
@@ -75,6 +76,55 @@ void main() {
 
     await expectLater(
       applier.apply(source: Uri.parse(_imageUrl), target: WallpaperTarget.lock),
+      throwsA(_failureWith(WallpaperApplyProblem.rejected)),
+    );
+  });
+
+  test(
+    'applyRegion sends the crop rect and target to the native method',
+    () async {
+      final _FakeWallpaperChannel fake = _FakeWallpaperChannel();
+      final MethodChannelWallpaperApplier applier =
+          MethodChannelWallpaperApplier(
+            invokeMethod: fake.call,
+          );
+
+      await applier.applyRegion(
+        source: Uri.parse(_imageUrl),
+        target: WallpaperTarget.both,
+        region: const CropRegion(left: 12, top: 240, width: 1080, height: 1920),
+      );
+
+      expect(fake.receivedMethods, <String>['applyCroppedWallpaper']);
+      expect(fake.receivedArguments.single, <String, String>{
+        'source': _imageUrl,
+        'target': 'both',
+        'left': '12',
+        'top': '240',
+        'width': '1080',
+        'height': '1920',
+      });
+    },
+  );
+
+  test('applyRegion maps a native failure without retaining the URL', () async {
+    final _FakeWallpaperChannel fake = _FakeWallpaperChannel(
+      response: <Object?, Object?>{
+        'success': false,
+        'errorCode': 'applyFailed',
+        'unsafeDebugValue': _imageUrl,
+      },
+    );
+    final MethodChannelWallpaperApplier applier = MethodChannelWallpaperApplier(
+      invokeMethod: fake.call,
+    );
+
+    await expectLater(
+      applier.applyRegion(
+        source: Uri.parse(_imageUrl),
+        target: WallpaperTarget.home,
+        region: const CropRegion(left: 0, top: 0, width: 100, height: 100),
+      ),
       throwsA(_failureWith(WallpaperApplyProblem.rejected)),
     );
   });

@@ -1,3 +1,4 @@
+import 'package:tela/domain/models/crop_region.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 
@@ -19,5 +20,24 @@ abstract interface class WallpaperApplier {
   Future<void> apply({
     required Uri source,
     required WallpaperTarget target,
+  });
+
+  /// Reads [source], crops it to [region], and applies that crop to [target].
+  ///
+  /// [region] is in [source]'s own pixel space — the sub-rect tela's crop
+  /// editor framed. The adapter decodes only that region (never the whole 6K
+  /// image) and sets it deterministically, unlike [apply], which hands the full
+  /// image to the platform and lets it choose the crop.
+  ///
+  /// The pixels never leave the app — decode and set happen in tela's own
+  /// process — so this path serves explicit wallpapers too, which `apply`'s
+  /// export-refusing siblings (the system editor, the image share) may not.
+  ///
+  /// Throws [WallpaperApplyFailure] for every operational failure and never
+  /// includes [source] in the thrown value.
+  Future<void> applyRegion({
+    required Uri source,
+    required WallpaperTarget target,
+    required CropRegion region,
   });
 }

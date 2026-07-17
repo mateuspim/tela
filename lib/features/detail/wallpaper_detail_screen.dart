@@ -31,6 +31,7 @@ import 'package:tela/domain/models/wallpaper_share_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/use_cases/share_wallpaper.dart';
+import 'package:tela/features/detail/crop_wallpaper_screen.dart';
 import 'package:tela/features/detail/progressive_wallpaper_preview.dart';
 import 'package:tela/features/detail/wallpaper_immersive_session.dart';
 import 'package:tela/features/detail/wallpaper_metadata.dart';
@@ -127,32 +128,54 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     }
   }
 
-  /// Hands the wallpaper to Android's own editor, which frames it and applies
-  /// it itself. The long way round beside [_apply], which stays the shortest
-  /// path — Wave 1's "≤3 taps" is a promise about that button, not this one.
+  /// Frames the wallpaper before setting it — the long way round beside
+  /// [_apply], which stays the shortest path (Wave 1's "≤3 taps").
   ///
-  /// Deliberately silent on success: tela launches the editor and never hears
-  /// what the user did there, so it has no outcome it could honestly report.
-  /// The editor appearing is the feedback.
+  /// Two editors behind one button. An explicit wallpaper's pixels may not
+  /// reach the OEM's editor (a separate app, [mayExportBitmap]), so it goes
+  /// straight to tela's own in-app cropper. A safe one prefers the OEM editor —
+  /// the same screen the gallery opens — and falls back to tela's cropper only
+  /// where the device has none.
   Future<void> _adjust() async {
+    if (!mayExportBitmap(_wallpaper.purity)) {
+      _openCropEditor();
+      return;
+    }
     setState(() => _isAdjusting = true);
-    try {
-      await ref.read(adjustWallpaperProvider)(_wallpaper);
-    } on WallpaperAdjustFailure catch (failure) {
-      if (mounted) _showResult(_adjustFailureText(failure));
-    } finally {
-      if (mounted) setState(() => _isAdjusting = false);
+    final WallpaperAdjustFailure? failure = await _tryOpenSystemEditor();
+    if (mounted) setState(() => _isAdjusting = false);
+    if (failure == null || !mounted) return;
+    if (failure.problem == WallpaperAdjustProblem.unavailable) {
+      _openCropEditor();
+    } else {
+      _showResult(AppLocalizations.of(context).detailAdjustFailure);
     }
   }
 
-  /// A device with no editor at all is told so plainly: it is not a failure the
-  /// user can retry their way out of, and "couldn't open" would invite them to.
-  String _adjustFailureText(WallpaperAdjustFailure failure) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    return switch (failure.problem) {
-      WallpaperAdjustProblem.unavailable => l10n.detailAdjustUnavailable,
-      _ => l10n.detailAdjustFailure,
-    };
+  /// Opens the OEM editor; returns null on success, or the failure to route on.
+  ///
+  /// Deliberately silent on success: tela launches the editor and never hears
+  /// what the user did there, so it has no outcome it could honestly report.
+  Future<WallpaperAdjustFailure?> _tryOpenSystemEditor() async {
+    try {
+      await ref.read(adjustWallpaperProvider)(_wallpaper);
+      return null;
+    } on WallpaperAdjustFailure catch (failure) {
+      return failure;
+    }
+  }
+
+  /// Pushes tela's own cropper. It applies and pops itself, so nothing is
+  /// awaited here — the detail screen simply returns to view when it closes.
+  void _openCropEditor() {
+    unawaited(
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (BuildContext context) =>
+              CropWallpaperScreen(wallpaper: _wallpaper),
+        ),
+      ),
+    );
   }
 
   Future<void> _chooseDownloadTier() async {
@@ -318,7 +341,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   List<Widget> _compactActions(AppLocalizations l10n) {
     return <Widget>[
       FavoriteButton(wallpaper: _wallpaper),
-      if (mayExportBitmap(_wallpaper.purity)) _adjustButton(l10n),
+      _adjustButton(l10n),
       _shareButton(l10n),
       _downloadButton(l10n),
     ];
@@ -456,7 +479,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
         children: <Widget>[
           FavoriteButton(wallpaper: _wallpaper),
           const Spacer(),
-          if (mayExportBitmap(_wallpaper.purity)) _adjustButton(l10n),
+          _adjustButton(l10n),
           _shareButton(l10n),
           _downloadButton(l10n),
         ],
@@ -509,10 +532,9 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
   }
 
-  /// Withheld for explicit wallpapers by the same rule that withholds the image
-  /// share: the editor is a separate app, holding a wallpaper history tela does
-  /// not control (see [mayExportBitmap]). `AdjustWallpaper` refuses it too, so
-  /// hiding the button is the courtesy and the guard is the rule.
+  /// Shown for every purity now that tela has its own in-app cropper: [_adjust]
+  /// routes explicit wallpapers there rather than to the OEM editor, so the
+  /// button no longer needs to be withheld to honour [mayExportBitmap].
   Widget _adjustButton(AppLocalizations l10n) {
     return IconButton(
       key: const Key('detail-adjust'),

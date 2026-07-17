@@ -11,6 +11,7 @@ import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_adjust_failure.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
+import 'package:tela/features/detail/crop_wallpaper_screen.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 
 import '../fakes/fake_download_history.dart';
@@ -40,18 +41,25 @@ void main() {
     expect(find.byKey(const Key('detail-adjust')), findsOneWidget);
   });
 
-  testWidgets('an explicit wallpaper does not offer it at all', (
+  testWidgets('an explicit wallpaper adjusts in the cropper, not the OEM', (
     WidgetTester tester,
   ) async {
-    await _pumpDetail(tester, purity: Purity.nsfw);
+    // The OEM editor is a separate app with its own wallpaper history, so
+    // explicit pixels may not reach it — the same rule as the image share. But
+    // tela's own cropper keeps them in-process, so the button now shows and
+    // routes there instead of being withheld.
+    final FakeSystemWallpaperEditor editor = FakeSystemWallpaperEditor();
+    await _pumpDetail(tester, purity: Purity.nsfw, editor: editor);
 
-    // The editor is a separate app with its own wallpaper history, so this is
-    // the same withholding as the image share. The use case refuses it anyway;
-    // this is the half the user sees.
-    expect(find.byKey(const Key('detail-adjust')), findsNothing);
+    expect(find.byKey(const Key('detail-adjust')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('detail-adjust')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CropWallpaperScreen), findsOneWidget);
+    expect(editor.opened, isEmpty);
   });
 
-  testWidgets('tapping it hands the full image to the editor', (
+  testWidgets('tapping a safe one hands the full image to the OEM editor', (
     WidgetTester tester,
   ) async {
     final FakeSystemWallpaperEditor editor = FakeSystemWallpaperEditor();
@@ -65,6 +73,7 @@ void main() {
       editor.opened.single.source,
       Uri.parse('https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg'),
     );
+    expect(find.byType(CropWallpaperScreen), findsNothing);
   });
 
   testWidgets('a successful hand-off says nothing', (
@@ -81,22 +90,22 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
-  testWidgets('a device with no editor is told so, not asked to retry', (
+  testWidgets('a device with no OEM editor falls back to the cropper', (
     WidgetTester tester,
   ) async {
-    await _pumpDetail(
-      tester,
-      editor: FakeSystemWallpaperEditor(
-        failure: const WallpaperAdjustFailure(
-          WallpaperAdjustProblem.unavailable,
-        ),
+    final FakeSystemWallpaperEditor editor = FakeSystemWallpaperEditor(
+      failure: const WallpaperAdjustFailure(
+        WallpaperAdjustProblem.unavailable,
       ),
     );
+    await _pumpDetail(tester, editor: editor);
 
     await tester.tap(find.byKey(const Key('detail-adjust')));
     await tester.pumpAndSettle();
 
-    expect(find.text('This device has no wallpaper editor.'), findsOneWidget);
+    // It tried the OEM editor, then opened tela's own rather than dead-ending.
+    expect(editor.opened, hasLength(1));
+    expect(find.byType(CropWallpaperScreen), findsOneWidget);
   });
 
   testWidgets('any other failure reads as a failure to open', (

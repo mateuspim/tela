@@ -1,3 +1,4 @@
+import 'package:tela/domain/models/crop_region.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
@@ -27,10 +28,13 @@ class FakeWallpaperApplier implements WallpaperApplier {
   /// Source from the latest call.
   Uri? get receivedSource => receivedSources.lastOrNull;
 
-  /// Android surface from the latest call.
+  /// Android surface from the latest call, whether [apply] or [applyRegion].
   WallpaperTarget? receivedTarget;
 
-  /// Number of apply attempts.
+  /// Region from the latest [applyRegion] call, null until one is made.
+  CropRegion? receivedRegion;
+
+  /// Number of apply attempts, across both [apply] and [applyRegion].
   int get callCount => receivedSources.length;
 
   @override
@@ -40,6 +44,22 @@ class FakeWallpaperApplier implements WallpaperApplier {
   }) async {
     receivedSources.add(source);
     receivedTarget = target;
+    _throwIfFailing(source);
+  }
+
+  @override
+  Future<void> applyRegion({
+    required Uri source,
+    required WallpaperTarget target,
+    required CropRegion region,
+  }) async {
+    receivedSources.add(source);
+    receivedTarget = target;
+    receivedRegion = region;
+    _throwIfFailing(source);
+  }
+
+  void _throwIfFailing(Uri source) {
     if (_unreadableSources.contains(source)) {
       throw const WallpaperApplyFailure(WallpaperApplyProblem.source);
     }

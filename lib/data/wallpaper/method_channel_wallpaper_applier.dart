@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:tela/domain/models/crop_region.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
@@ -36,6 +37,31 @@ class MethodChannelWallpaperApplier implements WallpaperApplier {
         <String, String>{
           'source': source.toString(),
           'target': target.name,
+        },
+      );
+      final WallpaperApplyFailure? failure = _failureFrom(raw);
+      if (failure != null) throw failure;
+    } on PlatformException catch (error) {
+      throw WallpaperApplyFailure(_problemFor(error.code));
+    }
+  }
+
+  @override
+  Future<void> applyRegion({
+    required Uri source,
+    required WallpaperTarget target,
+    required CropRegion region,
+  }) async {
+    try {
+      final Object? raw = await _invokeMethod(
+        'applyCroppedWallpaper',
+        <String, String>{
+          'source': source.toString(),
+          'target': target.name,
+          'left': region.left.toString(),
+          'top': region.top.toString(),
+          'width': region.width.toString(),
+          'height': region.height.toString(),
         },
       );
       final WallpaperApplyFailure? failure = _failureFrom(raw);

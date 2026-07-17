@@ -1,6 +1,7 @@
 package cc.pym.tela
 
 import android.content.Intent
+import android.graphics.Rect
 import android.net.Uri
 import android.app.WallpaperManager
 import android.view.WindowManager
@@ -119,6 +120,7 @@ class MainActivity : FlutterFragmentActivity() {
     private fun handleWallpaperCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "applyWallpaper" -> handleApplyWallpaper(call, result)
+            "applyCroppedWallpaper" -> handleApplyCroppedWallpaper(call, result)
             "adjustWallpaper" -> handleAdjustWallpaper(call, result)
             else -> result.notImplemented()
         }
@@ -134,6 +136,52 @@ class MainActivity : FlutterFragmentActivity() {
         wallpaperExecutor.execute {
             val response = applyWallpaper(Uri.parse(source), target)
             runOnUiThread { result.success(response) }
+        }
+    }
+
+    /**
+     * Applies a crop the user framed in tela's own editor.
+     *
+     * Same fetch-then-apply shape as [handleApplyWallpaper], off the UI thread;
+     * only the apply differs — a region decode rather than a whole-image stream.
+     */
+    private fun handleApplyCroppedWallpaper(call: MethodCall, result: MethodChannel.Result) {
+        val source = call.argument<String>("source")
+        val target = call.argument<String>("target")
+        val region = cropRectFrom(call)
+        if (source == null || target == null || region == null) {
+            result.success(failure("unsupported"))
+            return
+        }
+        wallpaperExecutor.execute {
+            val response = applyCroppedWallpaper(Uri.parse(source), target, region)
+            runOnUiThread { result.success(response) }
+        }
+    }
+
+    private fun cropRectFrom(call: MethodCall): Rect? {
+        val left = call.argument<String>("left")?.toIntOrNull() ?: return null
+        val top = call.argument<String>("top")?.toIntOrNull() ?: return null
+        val width = call.argument<String>("width")?.toIntOrNull() ?: return null
+        val height = call.argument<String>("height")?.toIntOrNull() ?: return null
+        if (width <= 0 || height <= 0) return null
+        return Rect(left, top, left + width, top + height)
+    }
+
+    private fun applyCroppedWallpaper(source: Uri, target: String, region: Rect): Map<String, Any> {
+        val remote = source.scheme == "http" || source.scheme == "https"
+        val cachedImage = try {
+            if (remote) downloadToCache(source.toString()) else copyLocalToCache(source)
+        } catch (_: Exception) {
+            return failure(if (remote) "downloadFailed" else "sourceUnreadable")
+        }
+        return try {
+            WallpaperCropApplying(this).apply(cachedImage, region, target)
+            mapOf("success" to true)
+        } catch (_: Exception) {
+            failure("applyFailed")
+        } finally {
+            cachedImage.delete()
         }
     }
 
