@@ -225,7 +225,7 @@ Detail screen (preview + pinch-zoom + metadata), **apply wallpaper** (home/lock/
 Favorites (Drift), download history + "set again," **private-library screen with `FLAG_SECURE` + app-lock**, `/settings` sync from your Wallhaven account, color/resolution/ratio filters, error/empty/offline states, hero-transition polish, Material You (`dynamic_color`).
 *Exit:* app feels like *yours* — favorites persist, your settings apply, private library is locked, offline browsing of cached favorites works.
 
-**Wave 3 — Search & discovery** — *all four slices built; the two filters are not yet on hardware*
+**Wave 3 — Search & discovery** — *complete; all four slices built and proven against the real server*
 The filters Wave 2 named but did not finish, plus the two ways *into* a listing that tela prints on screen and does not let you follow.
 
 - ~~**Resolution filter.**~~ **Built** (`1c90b86`). `atleast` was imposed by the browse screen from the device screen and could not be changed. It is now *Automatic* (the screen you are holding — still the default), *At least*, or *Exactly* (the `resolutions` param, which tela never sent), over buckets grouped by ratio plus a custom W×H. The three modes are a **sealed type**, because Wallhaven's two size params conflict: sent together, `atleast` wins and `resolutions` is silently ignored. Retired `SearchQuery.atLeast`'s `copyWith`-cannot-clear trap on the way past.
@@ -233,7 +233,7 @@ The filters Wave 2 named but did not finish, plus the two ways *into* a listing 
 - ~~**Every sorting reachable.**~~ **Built and verified on hardware** (`eb2af8a`).
 - ~~**Tags and the uploader become links.**~~ **Built and verified on hardware** (`984b546`).
 
-*Exit:* the filter sheet answers everything wallhaven.cc's own filter bar does, and a wallpaper is a place you can navigate *from* — its tags and its uploader lead somewhere. **The first half is now true in code and not yet on a device**: the ratio and resolution filters have only ever met `FakeWallhavenApi`, so tela has never actually *sent* a `ratios=9x20` or a `resolutions=` to the real server. Wallhaven's side of that contract is proven (see the handoff); tela's is not.
+*Exit:* the filter sheet answers everything wallhaven.cc's own filter bar does, and a wallpaper is a place you can navigate *from* — its tags and its uploader lead somewhere. **Met** (`7510500`, 2026-07-16). Both halves of the contract are proven: Wallhaven's side by `curl` (the evidence lives in `ratio_choice.dart` and `resolution_filter.dart`'s docstrings, dated, with the totals), and **tela's side on the wire** — `dio_wallhaven_api_test.dart` fakes Dio's `HttpClientAdapter`, *below* query serialization, and asserts on the literal URI. That seam is the one `FakeWallhavenApi` structurally cannot see: it records a `SearchQuery`, so it sits above the encoding. The two were joined by curling the exact URIs the test captures — a phone's cold-launch URI answers with 2575 wallpapers, all at ratio 0.56, none below the screen.
 
 **Wave 4 — Nice-to-haves** — *share sheet built and verified on hardware*
 Crop/reposition editor before apply, daily auto-rotate (WorkManager), collections browser, ~~share sheet~~ **built**, **Omarchy sync** (export favorites to an Aether-consumable format — closes the desktop↔mobile loop).

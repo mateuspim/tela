@@ -2,47 +2,19 @@
 
 Updated: 2026-07-16
 
-## START HERE — the debts are paid; the next work is new
+## START HERE — Wave 3 is closed; the next work is Wave 4
 
 Everything that was owed at a desk is done. The cold-launch hang is fixed and
-verified on the tablet, the Drift test seam is closed (`3a09f67`), and the
-tablet is **carrying a fresh release build of exactly this code** (see "Device
-state"). The suite is **561 tests** green, `analyze` and `format` clean.
+verified on the tablet, the Drift test seam is closed (`3a09f67`), **Wave 3's
+exit criterion is met** (`7510500`, below), and the tablet is **carrying a fresh
+release build of the cold-launch fix** (see "Device state" — it predates
+`7510500`, which is tests only and changes no shipped code). The suite is
+**573 tests** green, `analyze` and `format` clean.
 
-So the next agent is not picking up a repair. It is picking up **Wave 3's
-unclosed exit criterion, and then Wave 4** — see `PLAN.md` §12.
+So the next agent is not picking up a repair, and no longer a verification
+either. It is picking up **Wave 4** — see `PLAN.md` §12.
 
-### 1. Wave 3's exit is not met, and this is the real next thing
-
-`PLAN.md` says it plainly, and it is easy to miss because all four slices are
-built:
-
-> the ratio and resolution filters have only ever met `FakeWallhavenApi`, so
-> tela has never actually *sent* a `ratios=9x20` or a `resolutions=` to the real
-> server.
-
-**This project has been burned by exactly this before.** `-id:` exclude is
-silently ignored by Wallhaven — the response is identical to no filter at all —
-and no unit test could ever have caught it, because the fake answered. The same
-hole is open under `ratios` and `resolutions` right now: a filter that visibly
-does nothing is the `ratios=bogus` trap the fix list already warned about once.
-
-Verify it **live**, not by test. Both halves need proving and they are different
-claims:
-
-- **Wallhaven's side** — that the param does what we think — can be checked with
-  `curl` from any machine, and is the cheap half.
-- **tela's side** — that tela *sends* what it thinks it sends — cannot. It needs
-  the app to make the request. Note the release build does not log URLs (by
-  rule), so plan for how you will observe it before you start: a debug build
-  against a proxy, or an assertion at the Dio interceptor, beats squinting at a
-  grid and guessing whether the results "look 9x20".
-
-The device already has a filter badge showing **1** active filter on a fresh
-launch (the *Automatic* resolution, folding the screen in) — which is itself the
-resolution path reaching the real server on every single cold launch, unproven.
-
-### 2. Then Wave 4, which is where the product goes next
+### 1. Wave 4, which is where the product goes next
 
 Unbuilt, in `PLAN.md`'s own order: crop/reposition editor before apply, daily
 auto-rotate (WorkManager), collections browser, and **Omarchy sync** — export
@@ -64,6 +36,70 @@ Both worktrees are **spent and fully merged** — `master..image-viewer-ux` and
 `master..ui-ux-polish` are both empty, and both trees are clean. They are dead
 weight, and a leaked container in one is exactly what produces the phantom
 apk-missing errors. Safe to `git worktree remove` both.
+
+## SOLVED — Wave 3's exit: the filters are proven on the wire (`7510500`)
+
+**tela sends what it thinks it sends, and Wallhaven honours it.** Proven end to
+end on 2026-07-16, and the exit criterion `PLAN.md` §12 set for Wave 3 is met.
+
+**The old handoff's framing was wrong in a way worth naming, so the next agent
+does not redo the work.** It said both halves were open. Wallhaven's half had in
+fact been done on 2026-07-14 and written down where it belonged — in the
+docstrings of `ratio_choice.dart` and `resolution_filter.dart`, dated, with the
+numbers. The handoff simply did not know. **Read those two files before probing
+the API; the comment convention is doing its job and the evidence is in them.**
+Re-run live on 2026-07-16, every claim still holds:
+
+| probe | real server says |
+|---|---|
+| `ratios=9x20` | all ratio 0.45 — arbitrary `WxH` is honoured |
+| `ratios=9x19` / `9x21` | honoured — 268 / 80 total, all 0.47 / 0.43 |
+| `ratios=bogus` | **identical listing to no filter** (same ids) — the trap |
+| `ratios=portrait` | 0.49→0.85, not a synonym for any exact ratio |
+| `atleast=1920x1080` | nothing below the floor |
+| `atleast` **+** `resolutions` | identical to `atleast` alone — `resolutions` dropped |
+| `resolutions=2560x1440` alone | exact, one distinct size |
+
+**The real gap was narrower than described, and one layer lower.**
+`SearchQuery.toQueryParameters()` returns a param *map* and
+`search_query_test.dart` covers that map well. What nothing could see was **Dio
+encoding that map into a URI**: `FakeWallhavenApi` records a `SearchQuery`, so it
+sits *above* the encoding, and so do the map tests. `test/data/dio_wallhaven_api_test.dart`
+(12 tests) closes it over `FakeWallhavenTransport`, a fake at Dio's
+`HttpClientAdapter` — below serialization — capturing the literal URI. Both
+claims unique to that file are mutation-checked (break the base URL → 2 fail;
+union separator `,`→`|` → 2 fail).
+
+**The one thing that nearly bit**: Dart's `Uri.encodeQueryComponent` escapes
+commas, so tela's `ratios=16x9,9x16` leaves the device as `ratios=16x9%2C9x16`.
+Wallhaven decodes it — both forms answer identically (total 10619) — so it is
+**not** a bug, but nothing in the codebase knew that, and a server that stopped
+decoding it would cost the union filter with no error. Pinned by test now.
+
+**How the loop was actually closed**, and the trick is reusable: have the test
+print the URI tela emits, then `curl` *those exact bytes*. The test proves
+emission, the curl proves the server honours it; neither alone is the claim.
+
+```
+phone  1080x2400 → …&atleast=1080x2400&ratios=9x16&page=1  → 2575 results, all 0.56, none below screen
+tablet 1600x2560 → …&atleast=1600x2560&ratios=9x16&page=1  → 2035 results, all 0.56
+q+union → q=sunset+%2B%22city+lights%22&ratios=16x9%2C9x16 → identical to the hand-written form
+```
+
+So the filter badge showing **1** on a fresh launch (the *Automatic* resolution
+folding the screen in) is now understood rather than merely observed: that is
+`atleast=<screen>` reaching the real server, and it works.
+
+### Two product observations, neither a bug — judgement calls, not defects
+
+- **Exotic ratios are honoured but thinly stocked**: 9x20 has 339 wallpapers,
+  9x19 has 268, 9x21 just **80**. `ExactRatio.ofScreen` is correct, but on an
+  unusual phone it can hand the user a near-empty grid. **A sparse grid and a
+  broken filter look alike** — worth remembering on the device pass.
+- **The default `ratios: [ExactRatio(9, 16)]` is not the shape of a modern
+  phone.** A 1080x2400 screen is 9x20, so the default browse returns 9x16 images
+  that will always be cropped. This looks deliberate — 9x16 is by far the
+  best-stocked portrait shape — and was left alone, but nobody stated it.
 
 ## SOLVED — the Drift test seam (`3a09f67`)
 
@@ -1366,9 +1402,11 @@ from Wallhaven rather than reading a stored file.
 
 ## The two filters, and what the real server actually said (Wave 3, slices 1–2)
 
-The newest work, and the one to read first. **Wave 3's last two slices are built,
-and they are the first thing in tela that was designed against the live Wallhaven
-API rather than against its docs** — the docs 403 from here, so the vocabulary was
+**Historical, and still the record of what the live API says** — re-confirmed
+probe by probe on 2026-07-16 (see "SOLVED — Wave 3's exit"), so it is evidence
+rather than a memory. **Wave 3's last two slices are built, and they are the
+first thing in tela that was designed against the live Wallhaven API rather than
+against its docs** — the docs 403 from here, so the vocabulary was
 settled by `curl`ing the real `/search` and reading back what came out. That is
 worth knowing because *four* of the design decisions below exist only because the
 server was asked, and every one of them contradicts what a reasonable person would
@@ -1524,11 +1562,22 @@ restart.
 see the top of this file). It is the first of Wave 4's opt-in extras — the rest
 (crop/reposition, daily auto-rotate, collections, Omarchy sync) are still open.
 
-**Wave 3 is code-complete**, and its four slices are: the tag/uploader links
-(`984b546`), every sorting reachable (`eb2af8a`), the ratio filter (`7f41d13`) and
-the resolution filter (`1c90b86`). The first two ran on the tablet; **the two
-filters have not run on hardware at all** — read the top of this file, and then
-"Start of next session".
+**Wave 3 is complete and its exit criterion is met** (`7510500`). Its four slices
+are: the tag/uploader links (`984b546`), every sorting reachable (`eb2af8a`), the
+ratio filter (`7f41d13`) and the resolution filter (`1c90b86`). The first two ran
+on the tablet.
+
+The two filters are proven, though **not by a hand-driven pass over the filter
+sheet on the tablet** — be precise about what was shown, because it is a
+different and in one way stronger claim. tela's emission is pinned by test at the
+wire (`dio_wallhaven_api_test.dart`, below Dio's serialization), Wallhaven's
+behaviour by `curl`, and the two are joined by curling the exact URIs the test
+captures. The tablet contributes the end-to-end half without anyone touching it:
+it **cold-launches to a loaded grid**, and that query *is*
+`atleast=<screen>&ratios=9x16` — so the resolution path reaching the real server
+and answering with images is observed on hardware every launch. What no one has
+done is drive the sheet by hand and watch a *chosen* filter narrow the grid; that
+is a UI check, not a contract one, and the contract is what was open.
 
 Wave 0 is complete at `209101c`. Wave 1 landed slice by slice: the apply core
 loop is `bcba151`, detail metadata is `36ec9f9`, three-tier downloads are
@@ -2573,24 +2622,27 @@ hardware — see below.
 
 ## Start of next session
 
-### 1. Put Wave 3's two filters on a phone
+### 1. Put Wave 3's two filters on a phone — *the contract half is now closed*
 
-**Wave 3 is code-complete.** All four slices are built. Slices 3 and 4 ran on the
-tablet; **slices 1 and 2 — the ratio and resolution filters — have never run on
-hardware at all.** Closing that is the single most valuable thing the next session
-can do, and it is cheap: the design is done, the tests are green, and the device
-pass of 2026-07-14 found four bugs in Wave 2 that a green test suite could not.
+**Superseded in part, 2026-07-16 (`7510500`).** Items 1 and 2 below asked whether
+the params *reach Wallhaven*, and that is answered — by a wire-level test plus
+`curl` of the exact URIs it emits, without a device. See "SOLVED — Wave 3's
+exit". **Wave 3's exit criterion is met and it is no longer the next work.**
 
-What to check, in the order it would bite:
+Items 3 and 4 are untouched and still want a real phone: they are **UI** claims,
+which no amount of wire proof can reach. They ride along with the rest of the
+phone list rather than justifying a trip of their own.
 
-1. **A `ratios=9x20` request, sent by tela and answered by Wallhaven.** The
-   server's half is proven by real `curl`s; tela's half has only ever met
-   `FakeWallhavenApi`. Open the filter sheet, tap the "· your screen" chip, and
-   confirm the grid comes back full of phone-shaped wallpapers rather than empty.
-2. **The Exactly mode against the real server.** Pick the device's own size and
-   confirm the grid is *short but not empty* — 1080x2400 had ~66 wallpapers on
-   2026-07-14 — then pick a 16×9 desktop size and confirm it fills. An empty grid
-   would mean `resolutions` is not reaching Wallhaven the way the probe says.
+1. ~~**A `ratios=9x20` request, sent by tela and answered by Wallhaven.**~~
+   **Proven** — pinned below Dio's serialization and curled live. Still worth a
+   glance if the sheet is open anyway: tap the "· your screen" chip and confirm
+   the grid comes back full rather than empty. Note that on an unusual phone an
+   *honest* near-empty grid is possible (9x21 has only 80 wallpapers on the whole
+   site) — a sparse grid and a broken filter look alike.
+2. ~~**The Exactly mode against the real server.**~~ **Proven** — `resolutions`
+   travels, and never beside `atleast`. The device-side question that remains is
+   only how it *reads*: 1080x2400 had ~66 wallpapers on 2026-07-14, so expect
+   short-but-not-empty, and that is the filter working, not failing.
 3. **The sheet's height, one-handed.** The ratio group added ~15 chips and the
    resolution group a mode switch plus several ladders, on top of a palette that
    was already 29 swatches. **The filter sheet is now by far the tallest thing in
