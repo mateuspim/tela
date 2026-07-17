@@ -30,12 +30,20 @@ Unchanged, and it does not block the above:
 3. The cache figure after a real browse.
 4. **The keystore**, whenever shipping matters. The only part of item 7 left.
 
-### Housekeeping, whenever
+### Housekeeping — done
 
-Both worktrees are **spent and fully merged** — `master..image-viewer-ux` and
-`master..ui-ux-polish` are both empty, and both trees are clean. They are dead
-weight, and a leaked container in one is exactly what produces the phantom
-apk-missing errors. Safe to `git worktree remove` both.
+**Both worktrees are removed** (2026-07-16), along with the now-empty
+`.worktrees/`. Each was verified spent before it went: no uncommitted changes, no
+untracked files, no stashes, and zero commits not already on `master`. No
+toolchain container had leaked, so there was nothing to `docker rm -f` this time
+— that remains the thing to check first if phantom apk-missing errors ever
+reappear.
+
+The two **branch pointers survive** — `image-viewer-ux` (`ea9a7f9`) and
+`ui-ux-polish` (`2d2a153`) — fully merged, costing nothing, and kept as history
+rather than deleted on someone else's behalf. `git branch -d` takes them whenever
+they stop being useful; it refuses if they are ever somehow unmerged, so it is
+the safe way to ask.
 
 ## SOLVED — Wave 3's exit: the filters are proven on the wire (`7510500`)
 
