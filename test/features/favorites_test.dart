@@ -13,14 +13,14 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
-import 'package:tela/features/favorites/favorites_screen.dart';
+import 'package:tela/features/favorites/favorites_grid.dart';
 
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_wallhaven_api.dart';
 
 void main() {
-  group('FavoritesScreen', () {
+  group('FavoritesGrid', () {
     testWidgets('invites the first favorite when nothing is saved', (
       WidgetTester tester,
     ) async {
@@ -110,7 +110,7 @@ void main() {
   });
 }
 
-/// Boots the real FavoritesScreen over [favorites], with no API bound at all.
+/// Boots the real FavoritesGrid over [favorites], with no API bound at all.
 Future<void> _pumpFavorites(
   WidgetTester tester,
   FakeFavoritesRepository favorites,
@@ -120,7 +120,7 @@ Future<void> _pumpFavorites(
       overrides: <Override>[
         favoritesRepositoryProvider.overrideWithValue(favorites),
       ],
-      child: _app(const FavoritesScreen()),
+      child: _app(const Scaffold(body: FavoritesGrid())),
     ),
   );
   await tester.pumpAndSettle();

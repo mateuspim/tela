@@ -699,7 +699,17 @@
 
   "favoritesTitle": "Favorites",
   "@favoritesTitle": {
-    "description": "Title of the favorites screen. These are local to this device, not the Wallhaven account's favorites."
+    "description": "Title of the favorites section inside the Library. These are local to this device, not the Wallhaven account's favorites."
+  },
+
+  "navigationLibrary": "Library",
+  "@navigationLibrary": {
+    "description": "Bottom-navigation / rail label for the Library destination, which hubs favorites, download history, and the private library."
+  },
+
+  "libraryTitle": "Library",
+  "@libraryTitle": {
+    "description": "App bar title of the Library screen: everything kept on this device — favorites, downloads, and the private library."
   },
 
   "favoritesOpen": "Open favorites",

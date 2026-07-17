@@ -17,7 +17,7 @@ import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/wallpaper_grid.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/detail/wallpaper_detail_args.dart';
-import 'package:tela/features/favorites/favorites_screen.dart';
+import 'package:tela/features/favorites/favorites_grid.dart';
 
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
@@ -85,7 +85,7 @@ void main() {
     );
     GallerySessionController<Wallpaper>? captured;
     final GoRouter router = _router(
-      home: const FavoritesScreen(),
+      home: const Scaffold(body: FavoritesGrid()),
       onDetail: (GallerySessionController<Wallpaper> session) {
         captured = session;
       },
@@ -145,7 +145,7 @@ void main() {
     router.pop();
     await tester.pumpAndSettle();
 
-    expect(find.byType(FavoritesScreen), findsOneWidget);
+    expect(find.byType(FavoritesGrid), findsOneWidget);
     expect(scrollable.position.pixels, before);
   });
 }

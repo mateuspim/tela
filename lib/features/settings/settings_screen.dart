@@ -9,6 +9,7 @@ import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/features/library/library_destination_tile.dart';
 import 'package:tela/features/settings/api_key_section.dart';
 import 'package:tela/features/settings/app_lock_switch.dart';
 import 'package:tela/features/settings/browse_defaults_section.dart';
@@ -145,7 +146,15 @@ class _SettingsList extends StatelessWidget {
       title: l10n.settingsDownloadsSection,
       description: l10n.settingsDownloadsDescription,
       children: <Widget>[
-        const _DownloadHistoryTile(),
+        // Above the destination pickers because it is what they produce: the
+        // wallpapers already on this device, each ready to be set again. Also
+        // reachable straight from the Library tab now.
+        LibraryDestinationTile(
+          icon: Icons.history_outlined,
+          title: l10n.downloadHistoryTitle,
+          subtitle: l10n.downloadHistoryOpenDetail,
+          routeName: TelaRoutes.downloadHistoryName,
+        ),
         const Divider(),
         _TierPicker(
           title: l10n.settingsDownloadsSfw,
@@ -180,52 +189,19 @@ class _SettingsList extends StatelessWidget {
       icon: Icons.shield_outlined,
       title: l10n.settingsPrivacySection,
       description: l10n.settingsPrivacyDescription,
-      children: const <Widget>[
-        _PrivateLibraryTile(),
-        Divider(),
-        AppLockSwitch(),
+      children: <Widget>[
+        // Here beside the app-lock as well as on the Library tab: this is where
+        // explicit downloads land, and both entries stay a plain locked row
+        // rather than a thumbnailed shortcut over a shoulder.
+        LibraryDestinationTile(
+          icon: Icons.lock_outline,
+          title: l10n.privateLibraryTitle,
+          subtitle: l10n.privateLibraryOpenDetail,
+          routeName: TelaRoutes.privateLibraryName,
+        ),
+        const Divider(),
+        const AppLockSwitch(),
       ],
-    );
-  }
-}
-
-/// The way into the download history.
-///
-/// It sits above the destination pickers because it is what they produce: the
-/// wallpapers already on this device, each one ready to be set again.
-class _DownloadHistoryTile extends StatelessWidget {
-  const _DownloadHistoryTile();
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    return ListTile(
-      leading: const Icon(Icons.history_outlined),
-      title: Text(l10n.downloadHistoryTitle),
-      subtitle: Text(l10n.downloadHistoryOpenDetail),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () => context.pushNamed(TelaRoutes.downloadHistoryName),
-    );
-  }
-}
-
-/// The way into the private library.
-///
-/// It lives here rather than in the browse app bar on purpose: this is where
-/// explicit downloads land, and a heart-shaped shortcut to them on the app's
-/// front page is not what anyone wants over a shoulder.
-class _PrivateLibraryTile extends StatelessWidget {
-  const _PrivateLibraryTile();
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    return ListTile(
-      leading: const Icon(Icons.lock_outline),
-      title: Text(l10n.privateLibraryTitle),
-      subtitle: Text(l10n.privateLibraryOpenDetail),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () => context.pushNamed(TelaRoutes.privateLibraryName),
     );
   }
 }

@@ -15,7 +15,7 @@ import 'package:tela/features/detail/wallpaper_detail_args.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/downloads/download_history_screen.dart';
 import 'package:tela/features/downloads/download_immersive_session.dart';
-import 'package:tela/features/favorites/favorites_screen.dart';
+import 'package:tela/features/library/library_screen.dart';
 import 'package:tela/features/private_library/private_immersive_session.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
 import 'package:tela/features/settings/blocked_tags_screen.dart';
@@ -47,9 +47,9 @@ abstract final class TelaRouter {
             StatefulShellBranch(
               routes: <RouteBase>[
                 GoRoute(
-                  path: TelaRoutes.favoritesPath,
-                  name: TelaRoutes.favoritesName,
-                  builder: (_, _) => const FavoritesScreen(),
+                  path: TelaRoutes.libraryPath,
+                  name: TelaRoutes.libraryName,
+                  builder: (_, _) => const LibraryScreen(),
                 ),
               ],
             ),

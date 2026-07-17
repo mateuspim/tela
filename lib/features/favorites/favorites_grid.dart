@@ -12,38 +12,31 @@ import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
+import 'package:tela/features/detail/wallpaper_detail_args.dart';
 import 'package:tela/features/detail/wallpaper_gallery_session.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 
-/// The wallpapers the user kept, read from SQLite.
+/// The wallpapers the user kept, read from SQLite, as an embeddable grid.
 ///
 /// Unpaged on purpose: favorites are a hand-curated shelf, not a Wallhaven
 /// listing, so there is no next page to fetch and nothing here needs the
-/// network — this screen works in airplane mode.
-class FavoritesScreen extends ConsumerWidget {
-  /// Creates the favorites screen.
-  const FavoritesScreen({super.key});
+/// network — this works in airplane mode. It carries no app bar of its own, so
+/// the Library screen sits it beneath the shelves reaching the other tiers.
+class FavoritesGrid extends ConsumerWidget {
+  /// Creates the favorites grid.
+  const FavoritesGrid({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final AsyncValue<List<Wallpaper>> favorites = ref.watch(favoritesProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: Text(
-          l10n.favoritesTitle,
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-      ),
-      body: favorites.when(
-        data: (List<Wallpaper> saved) => _grid(context, l10n, saved),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
-          icon: Icons.error_outline,
-          message: l10n.errorUnexpected,
-        ),
+    return favorites.when(
+      data: (List<Wallpaper> saved) => _grid(context, l10n, saved),
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
+        icon: Icons.error_outline,
+        message: l10n.errorUnexpected,
       ),
     );
   }
@@ -99,7 +92,9 @@ class FavoritesScreen extends ConsumerWidget {
         pathParameters: <String, String>{
           'wallpaperId': session.selectedItem.id,
         },
-        extra: session,
+        // No origin filters: a curated shelf has no browse query to inherit, so
+        // a tag followed from here falls back to Browse's own (see B1).
+        extra: WallpaperDetailArgs(session: session),
       );
     } finally {
       session.dispose();

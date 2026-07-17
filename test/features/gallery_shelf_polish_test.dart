@@ -16,7 +16,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
-import 'package:tela/features/favorites/favorites_screen.dart';
+import 'package:tela/features/favorites/favorites_grid.dart';
 
 import '../fakes/fake_favorites_repository.dart';
 
@@ -205,7 +205,7 @@ void main() {
       WidgetTester tester,
     ) async {
       final GoRouter router = _router(
-        home: const FavoritesScreen(),
+        home: const Scaffold(body: FavoritesGrid()),
         includeDetail: true,
       );
       addTearDown(router.dispose);
@@ -239,7 +239,7 @@ void main() {
       router.pop();
       await tester.pumpAndSettle();
 
-      expect(find.byType(FavoritesScreen), findsOneWidget);
+      expect(find.byType(FavoritesGrid), findsOneWidget);
       expect(scrollable.position.pixels, before);
     });
   });
@@ -348,7 +348,7 @@ Future<void> _pumpFavorites(
       overrides: <Override>[
         favoritesRepositoryProvider.overrideWithValue(favorites),
       ],
-      child: _app(const FavoritesScreen()),
+      child: _app(const Scaffold(body: FavoritesGrid())),
     ),
   );
   await tester.pumpAndSettle();

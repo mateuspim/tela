@@ -18,11 +18,11 @@ abstract final class TelaRoutes {
   /// Settings route name.
   static const String settingsName = 'settings';
 
-  /// Favorites path.
-  static const String favoritesPath = '/favorites';
+  /// Library path — the tab hubbing favorites, history, and the private tier.
+  static const String libraryPath = '/library';
 
-  /// Favorites route name.
-  static const String favoritesName = 'favorites';
+  /// Library route name.
+  static const String libraryName = 'library';
 
   /// Private library path.
   static const String privateLibraryPath = '/private';

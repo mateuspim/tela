@@ -86,9 +86,9 @@ class TelaShell extends StatelessWidget {
         label: l10n.navigationBrowse,
       ),
       NavigationDestination(
-        icon: const Icon(Icons.favorite_border),
-        selectedIcon: const Icon(Icons.favorite),
-        label: l10n.favoritesTitle,
+        icon: const Icon(Icons.photo_library_outlined),
+        selectedIcon: const Icon(Icons.photo_library),
+        label: l10n.navigationLibrary,
       ),
       NavigationDestination(
         icon: const Icon(Icons.settings_outlined),
@@ -107,9 +107,9 @@ class TelaShell extends StatelessWidget {
         label: Text(l10n.navigationBrowse),
       ),
       NavigationRailDestination(
-        icon: const Icon(Icons.favorite_border),
-        selectedIcon: const Icon(Icons.favorite),
-        label: Text(l10n.favoritesTitle),
+        icon: const Icon(Icons.photo_library_outlined),
+        selectedIcon: const Icon(Icons.photo_library),
+        label: Text(l10n.navigationLibrary),
       ),
       NavigationRailDestination(
         icon: const Icon(Icons.settings_outlined),

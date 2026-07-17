@@ -21,13 +21,14 @@ void main() {
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
 
-    final Finder favorites = find.descendant(
+    final Finder library = find.descendant(
       of: find.byType(NavigationBar),
-      matching: find.text('Favorites'),
+      matching: find.text('Library'),
     );
-    await tester.tap(favorites);
+    await tester.tap(library);
     await tester.pumpAndSettle();
 
+    // The Library tab opens on its favorites shelf, empty here.
     expect(find.textContaining('Nothing saved yet'), findsOneWidget);
   });
 
