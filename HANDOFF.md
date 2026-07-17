@@ -2,14 +2,17 @@
 
 Updated: 2026-07-17
 
-## START HERE — Wave 4 is open; its first slice is built and verified on device
+## START HERE — Wave 4's crop item is complete; the rest of Wave 4 is open
 
-Wave 3 is closed. **Wave 4's crop item — the system-editor half — is done and
-run on the SM-X730.** Detail's *Adjust & set* hands the wallpaper to Android's
-own crop-and-set editor: on the tablet it opens Samsung's "Wallpaper and style"
-picker on the right image, with the Lock/Home previews and reposition. The suite
-is **598 tests** green (from 573), `analyze` and `format` clean, and both
-`build apk --debug` and `--release` succeed.
+Wave 3 is closed. **Wave 4's crop item is done, both halves.** The
+system-editor half shipped first (`266a0d7`) and ran on the SM-X730: Detail's
+*Adjust & set* hands a safe wallpaper to Android's own crop-and-set editor —
+Samsung's "Wallpaper and style" picker on the right image, with Lock/Home
+previews and reposition. **tela's own crop editor is now built too (`6a67ac3`)**,
+for the two paths the OEM editor cannot serve. The suite is **614 tests** green
+(from 598), `analyze` and `format` clean, and both `build apk --debug` and
+`--release` succeed. There is also a new one-command deploy — `make deploy` — see
+**The install rule**.
 
 ### The device taught us the AOSP path is dead on One UI — read this before touching it
 
@@ -71,14 +74,42 @@ Three things that are deliberate, not oversights:
   adjust delete each other's file. `ImageHandoffCache` now owns that wipe for
   both — it is a privacy rule, and it earns one home.
 
-### Still owed on Wave 4's crop item
+### tela's own crop editor — built (`6a67ac3`); on-device apply still owner-owed
 
-**Our own editor**, for the NSFW/private path and as the fallback when no system
-editor resolves. The shape is already decided: `BitmapRegionDecoder.decodeRegion`
-→ `setBitmap`, which is deterministic where `visibleCropHint` is only a *hint*
-OEMs may reinterpret, and which decodes just the chosen sub-rect and so dodges
-`PLAN.md` §15's 6K OOM risk. `MainActivity`'s `setStream(..., null, ...)` crop
-hint stays null until then.
+The other half of the crop item, and the fulfilment of what this section used to
+say was owed. It decodes only the framed sub-rect
+(`BitmapRegionDecoder.decodeRegion` → `setBitmap(bitmap, null, …)`) inside tela's
+own process, so the pixels never leave the app — as safe for NSFW as
+`ApplyWallpaper` already is, and deterministic where `setStream`'s
+`visibleCropHint` is only a *hint* OEMs may reinterpret. Decoding just the region
+also dodges `PLAN.md` §15's 6K OOM. The native class is `WallpaperCropApplying`;
+`MainActivity` reaches it through `applyCroppedWallpaper` on the wallpaper channel.
+
+**Routing, decided:** SFW keeps the OEM editor, falling back to tela's cropper
+only where no editor resolves; NSFW's Adjust *is* the cropper, unconditionally.
+The button shows for every purity now — `AdjustWallpaper` still refuses to route
+explicit pixels to the OEM editor, but the cropper is a separate use case
+(`ApplyCroppedWallpaper`) with **no purity gate**, because it never exports.
+Enforced the usual two ways: the domain use case, and the detail-screen routing.
+
+**One bug found and fixed in the same commit** (owner, on device): the preview
+flashed to black on every pinch. It sized the decoded widget to `image × scale`,
+so each zoom frame re-decoded at a new resolution and drew the black placeholder.
+It now decodes **once** at cover scale and zooms via a paint-time `Transform`;
+pinned by a regression test asserting the layer's layout size stays constant
+while its on-screen rect grows, mutation-checked. Trade-off left in on purpose:
+the preview softens at high zoom (a cover-scale decode upscaled), but the
+*applied* wallpaper is full-res via the native region decode, so output is
+unaffected. If that softening ever bothers someone, raise the decode base scale
+in `crop_wallpaper_screen.dart`'s `_imageLayer` — the maths already divides it out.
+
+The crop geometry is a pure `crop_geometry.dart` (cover scale, offset clamp,
+source-rect mapping), unit-pinned and mutation-checked without a widget.
+
+**Still owner-owed on device:** the native `BitmapRegionDecoder` → `setBitmap`
+round trip. It changes the real wallpaper, so it is theirs to run — exactly like
+the existing `applyWallpaper` round trip, and nothing here can unit-test it.
+`make deploy` puts a release build on the tablet safely.
 
 ### The rest of Wave 4
 
@@ -109,12 +140,14 @@ URLs belong in a plaintext desktop config. Note a link is not an export under
    confirmed. The one thing still unseen by choice: pressing "Next" through to an
    actual apply (that would change the owner's wallpaper) — but the editor owns
    that step and hears nothing back either way.
-2. The wallpaper-apply round trip (it changes the owner's wallpaper).
+2. The wallpaper-apply round trip — now **two** native paths, `applyWallpaper`
+   and the crop editor's `applyCroppedWallpaper` (`BitmapRegionDecoder` →
+   `setBitmap`). Both change the owner's wallpaper, so both are theirs to run.
 3. The real biometric prompt (adb cannot pass `FLAG_SECURE`).
 4. The cache figure after a real browse.
 5. **The keystore**, whenever shipping matters. The only part of item 7 left.
 
-Items 2–5 are unchanged and none of them block the above.
+Items 2–5 are unchanged in spirit and none of them block the above.
 
 ### Housekeeping — done
 
@@ -311,6 +344,13 @@ still hold:
   **not an error state**.
 
 ## The install rule — read this before touching the device
+
+**Since `0cdf0a1`, `make deploy` (or `./tool/tela deploy [host:port]`) does the
+right thing by construction:** it builds the *universal* release APK
+(versionCode 1) and installs it with `adb install -r`, which can only update in
+place — never a downgrade, never an uninstall. Prefer it. The rest of this
+section is *why* that command is shaped the way it is, and it still governs any
+hand-rolled install.
 
 **A `--split-per-abi` release APK bumps the versionCode. Installing one arms a
 trap that wipes the device's data on the next debug build.**
