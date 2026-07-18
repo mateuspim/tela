@@ -77,16 +77,37 @@ interactions** (built below).
 3. A general look at B1–B4 on real hardware: the colour drilldown, the detail
    swipe/chevrons, and the new Library nav.
 
-### What the beauty thread (A) is, when it resumes
+### The beauty thread (A) — most of A1 and A2 are built; A2's app bar and A3 remain
 
 Agreed direction: **expressive chrome, but keep Material You** — borrow the
 device palette for surfaces, add a fixed tela accent (the `0xFF7772E5` seed
-family, today only a *fallback*) for brand moments, harmonised alongside Monet so
-identity survives on every device. Slices sketched but unbuilt: **A1** brand
-accent + a real `tela` logo mark (the rail's brand slot is still
-`appTitle.substring(0,1)`) + stronger selected states; **A2** a glass/gradient
-app bar + editorial shelf headers (the new Library tab is the natural first
-canvas); **A3** tile treatment + richer per-shelf empty/loading states.
+family) for brand moments, harmonised alongside Monet so identity survives on
+every device. The slices, updated as they land:
+
+| slice | piece | state |
+|---|---|---|
+| A1 | brand accent — *pick any accent, or follow the wallpaper* | ✅ `e6967cb` |
+| A1 | a real `tela` wordmark + a display face (Bricolage Grotesque) | ✅ `21f75bc` |
+| A1 | **stronger selected states** | ✅ (this session) |
+| A2 | editorial shelf headers / plaques | ✅ `21f75bc` |
+| A2 | a glass/gradient app bar (Browse is still a plain `AppBar`) | ⬜ open |
+| A3 | tile treatment + richer per-shelf empty/loading states | ⬜ open |
+
+**A1's stronger selected states, decided.** All selection — bottom nav, rail,
+Browse sorting tabs — rode Material's default `secondaryContainer`, so even under
+a fixed accent the brand barely read in "you are here." Moved every selected
+indicator to **`primaryContainer`** (the theme docstring already named "the
+selected tab, the nav indicator" as accent moments) and added a **selected-label
+weight bump** (w600 vs w500), so selection survives for anyone who can't split the
+two container tones by hue. It is a single theme-level change in `theme.dart` —
+three named helpers (`_navigationBarTheme`, `_navigationRailTheme`,
+`_tabBarTheme`) that also retire the over-long inline `_themeFrom`. Pinned in
+`test/app/theme_test.dart` (5 new tests, incl. the identity claim: under a fixed
+accent the nav indicator resolves to *that accent's* `primaryContainer`),
+mutation-checked. Filter-sheet `FilterChip`s and the `SegmentedButton` were left
+on the default tone deliberately — they live in a transient modal, rarely beside
+the nav; unify them in a follow-up if the split ever shows. **Not yet on the
+device** — like all the beauty work, it wants an owner's eye on real hardware.
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 

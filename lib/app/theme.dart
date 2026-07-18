@@ -91,33 +91,9 @@ abstract final class TelaTheme {
         enabledBorder: _inputBorder(),
         focusedBorder: _inputBorder(color: scheme.primary),
       ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: scheme.surfaceContainer,
-        indicatorColor: scheme.secondaryContainer,
-        height: 72,
-        elevation: 0,
-      ),
-      navigationRailTheme: NavigationRailThemeData(
-        backgroundColor: scheme.surfaceContainerLow,
-        indicatorColor: scheme.secondaryContainer,
-        minWidth: 88,
-        minExtendedWidth: 88,
-        useIndicator: true,
-      ),
-      tabBarTheme: TabBarThemeData(
-        dividerColor: Colors.transparent,
-        indicator: ShapeDecoration(
-          color: scheme.secondaryContainer,
-          shape: const StadiumBorder(),
-        ),
-        indicatorSize: TabBarIndicatorSize.tab,
-        labelColor: scheme.onSecondaryContainer,
-        unselectedLabelColor: scheme.onSurfaceVariant,
-        labelPadding: const EdgeInsets.symmetric(horizontal: 18),
-        overlayColor: WidgetStatePropertyAll<Color>(
-          scheme.primary.withValues(alpha: .08),
-        ),
-      ),
+      navigationBarTheme: _navigationBarTheme(scheme),
+      navigationRailTheme: _navigationRailTheme(scheme),
+      tabBarTheme: _tabBarTheme(scheme),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size(64, 52),
@@ -168,6 +144,88 @@ abstract final class TelaTheme {
       onTertiaryContainer: a.onTertiaryContainer,
       inversePrimary: a.inversePrimary,
     );
+  }
+
+  /// The bottom navigation bar, with selection carried on the brand accent.
+  ///
+  /// The indicator moves off Material's default `secondaryContainer` onto
+  /// [ColorScheme.primaryContainer] so the destination you are on wears tela's
+  /// own colour, not a muted grey-tint — one of the accent moments this theme
+  /// spends on deliberately. The selected label also gains weight, so selection
+  /// survives for a user who cannot separate the two container tones by hue.
+  static NavigationBarThemeData _navigationBarTheme(ColorScheme scheme) {
+    return NavigationBarThemeData(
+      backgroundColor: scheme.surfaceContainer,
+      indicatorColor: scheme.primaryContainer,
+      height: 72,
+      elevation: 0,
+      iconTheme: _selectedIconColor(scheme),
+      labelTextStyle: _selectedLabelStyle(scheme),
+    );
+  }
+
+  /// The wide-screen navigation rail, matching the bar's selected language.
+  static NavigationRailThemeData _navigationRailTheme(ColorScheme scheme) {
+    return NavigationRailThemeData(
+      backgroundColor: scheme.surfaceContainerLow,
+      indicatorColor: scheme.primaryContainer,
+      minWidth: 88,
+      minExtendedWidth: 88,
+      useIndicator: true,
+      selectedIconTheme: IconThemeData(color: scheme.onPrimaryContainer),
+      unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant),
+      selectedLabelTextStyle: TextStyle(
+        color: scheme.onSurface,
+        fontWeight: FontWeight.w600,
+      ),
+      unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant),
+    );
+  }
+
+  /// The Browse sorting tabs, selected on the same accent pill as the nav.
+  static TabBarThemeData _tabBarTheme(ColorScheme scheme) {
+    return TabBarThemeData(
+      dividerColor: Colors.transparent,
+      indicator: ShapeDecoration(
+        color: scheme.primaryContainer,
+        shape: const StadiumBorder(),
+      ),
+      indicatorSize: TabBarIndicatorSize.tab,
+      labelColor: scheme.onPrimaryContainer,
+      unselectedLabelColor: scheme.onSurfaceVariant,
+      labelStyle: const TextStyle(fontWeight: FontWeight.w600),
+      unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 18),
+      overlayColor: WidgetStatePropertyAll<Color>(
+        scheme.primary.withValues(alpha: .08),
+      ),
+    );
+  }
+
+  /// Icon colour that reads on the accent indicator when selected, quiet when
+  /// not — for [NavigationBar], whose icon theme is state-resolved.
+  static WidgetStateProperty<IconThemeData> _selectedIconColor(
+    ColorScheme scheme,
+  ) {
+    return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      final bool selected = states.contains(WidgetState.selected);
+      return IconThemeData(
+        color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+      );
+    });
+  }
+
+  /// Label style that weights the selected destination, for [NavigationBar].
+  static WidgetStateProperty<TextStyle> _selectedLabelStyle(
+    ColorScheme scheme,
+  ) {
+    return WidgetStateProperty.resolveWith((Set<WidgetState> states) {
+      final bool selected = states.contains(WidgetState.selected);
+      return TextStyle(
+        color: selected ? scheme.onSurface : scheme.onSurfaceVariant,
+        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+      );
+    });
   }
 
   /// The display face — [brandFontFamily] — on the display and headline roles,

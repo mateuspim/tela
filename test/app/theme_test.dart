@@ -61,8 +61,69 @@ void main() {
       expect(theme.appBarTheme.backgroundColor, theme.colorScheme.surface);
     });
 
+    group('stronger selected states', () {
+      final ThemeData theme = TelaTheme.dark(_devicePalette(Brightness.dark));
+      final ColorScheme scheme = theme.colorScheme;
+
+      test('the nav bar indicator wears the brand primary', () {
+        // Off Material's default secondaryContainer: selection is tela's.
+        expect(
+          theme.navigationBarTheme.indicatorColor,
+          scheme.primaryContainer,
+        );
+        expect(
+          theme.navigationBarTheme.indicatorColor,
+          isNot(scheme.secondaryContainer),
+        );
+      });
+
+      test('the rail and the sorting tabs select on the same accent pill', () {
+        final ShapeDecoration tab =
+            theme.tabBarTheme.indicator! as ShapeDecoration;
+
+        expect(
+          theme.navigationRailTheme.indicatorColor,
+          scheme.primaryContainer,
+        );
+        expect(tab.color, scheme.primaryContainer);
+      });
+
+      test('the selected destination gains weight, not only colour', () {
+        // A user who cannot split the two container tones by hue still sees it.
+        final TextStyle selected = theme.navigationBarTheme.labelTextStyle!
+            .resolve(<WidgetState>{WidgetState.selected})!;
+        final TextStyle idle = theme.navigationBarTheme.labelTextStyle!.resolve(
+          <WidgetState>{},
+        )!;
+
+        expect(selected.fontWeight, FontWeight.w600);
+        expect(idle.fontWeight, FontWeight.w500);
+      });
+
+      test('the selected icon reads on the accent indicator', () {
+        final IconThemeData selected = theme.navigationBarTheme.iconTheme!
+            .resolve(<WidgetState>{WidgetState.selected})!;
+
+        expect(selected.color, scheme.onPrimaryContainer);
+      });
+    });
+
     group('accent override', () {
       const Color accent = Color(0xFF2C63E0);
+
+      test('is what the nav selection carries', () {
+        // The whole point of the splice: selection is where the brand shows.
+        final ThemeData theme = TelaTheme.dark(
+          _devicePalette(Brightness.dark),
+          accent: accent,
+        );
+        final Color fromAccent = ColorScheme.fromSeed(
+          seedColor: accent,
+          brightness: Brightness.dark,
+        ).primaryContainer;
+
+        expect(theme.navigationBarTheme.indicatorColor, fromAccent);
+      });
 
       test('paints the brand roles from the chosen accent, used as-is', () {
         // Grown straight from the accent, not harmonized toward the device —
