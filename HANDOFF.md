@@ -2,15 +2,16 @@
 
 Updated: 2026-07-17
 
-## START HERE — a UI/UX pass landed five slices; beauty thread and one device item remain
+## START HERE — the UI/UX pass is code-complete (both threads); only the owner's device pass remains
 
 The owner asked for a UI/UX pass — "make it more beautiful" **and** fix some
-core-loop interactions. This session did the **interaction half**: five slices,
-`f662ba4` → `163c414`, all on `master`. The suite is **632 tests** green (from
-614), `analyze` and `dart format` clean, every new behaviour mutation-checked
-(revert the fix, watch the new test fail with the real symptom, restore). None
-of it has been on the device yet — that pass is owed (see the end of this
-section).
+core-loop interactions. **Both threads are now built.** The interaction half (B)
+was five slices, `f662ba4` → `163c414`; the beauty half (A) is A1/A2/A3, ending
+at **A3 (`2e7034c`)** — the skeleton wall and tile edge (see *The beauty thread*
+below). The suite is **670 tests** green, `analyze` and `dart format` clean,
+every new behaviour mutation-checked (revert the fix, watch the new test fail
+with the real symptom, restore). **None of the visual work has been on the
+device yet — that pass is the one thing owed** (see the end of this section).
 
 The pass was **planned first, then sliced**, at the owner's request, with the
 two open threads split: **A = beauty** (expressive chrome — a branded accent, a
@@ -77,7 +78,32 @@ interactions** (built below).
 3. A general look at B1–B4 on real hardware: the colour drilldown, the detail
    swipe/chevrons, and the new Library nav.
 
-### The beauty thread (A) — most of A1 and A2 are built; A2's app bar and A3 remain
+### The beauty thread (A) — A1, A2 and A3 are built; only an owner's device pass remains
+
+**A3 landed (`2e7034c`).** Two pieces, both owner-eye-owed on the SM-X730 like
+the rest of the beauty work:
+
+- **`WallpaperGridSkeleton`** (`core/ui/wallpaper_grid_skeleton.dart`) replaces
+  the lone centred spinner on every shelf — Browse's first page, Favorites,
+  Download History, Private Library — with a masonry of placeholder tiles under
+  a slow shimmer, in the *exact* grid rhythm (columns, 12dp gutters, safe-area
+  inset, 16dp corners) the real wall lands in, so nothing jumps when images
+  arrive. **Do not give it a scroll view of its own:** the pager hosts a
+  first-page indicator in `SliverFillRemaining(hasScrollBody: false)`, which
+  content-sizes its child, and a nested `ScrollView` there throws "does not
+  support returning intrinsic dimensions". It lays tiles out as clipped columns
+  and honours reduced motion (sweep dropped, tiles static, no controller left
+  repeating). Pinned by `test/core/ui/wallpaper_grid_skeleton_test.dart`.
+- **`wallpaperTileEdge`** (`core/ui/wallpaper_grid_columns.dart`) — one shared
+  hairline (`outlineVariant @ .22`) drawn *over* every thumbnail as a
+  `foregroundDecoration`, inside the tile's clip, so a near-white/near-black
+  wallpaper does not melt into the surface. Shared by the browse tile and the
+  private tile so they cannot drift.
+
+The knobs owed a device look: the shimmer tone (`surfaceContainerHigh` glint on
+`surfaceContainerHighest`), the 1200ms sweep, and the `.22` edge alpha.
+
+*(Historical, from before A3 — the direction and the earlier slices:)*
 
 Agreed direction: **expressive chrome, but keep Material You** — borrow the
 device palette for surfaces, add a fixed tela accent (the `0xFF7772E5` seed
@@ -91,7 +117,7 @@ every device. The slices, updated as they land:
 | A1 | **stronger selected states** | ✅ (this session) |
 | A2 | editorial shelf headers / plaques | ✅ `21f75bc` |
 | A2 | **an opaque gradient app bar** (`GradientAppBar`) | ✅ (this session) |
-| A3 | tile treatment + richer per-shelf empty/loading states | ⬜ open |
+| A3 | **a shimmering skeleton wall + a hairline tile edge** | ✅ `2e7034c` |
 
 **A2's app bar: frosted glass was built, rejected on device, and replaced with
 an opaque gradient band — do not rebuild the frosted one.** First cut was frosted
