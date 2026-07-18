@@ -32,19 +32,20 @@ class DownloadHistoryScreen extends ConsumerWidget {
     final AsyncValue<List<DownloadRecord>> downloads = ref.watch(
       recentDownloadsProvider,
     );
-    final GlassAppBar bar = GlassAppBar(
-      toolbarHeight: 72,
-      title: Text(
-        l10n.downloadHistoryTitle,
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
-    );
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: bar,
-      body: GlassBody(
-        barHeight: bar.preferredSize.height,
-        child: downloads.when(
+      appBar: GlassAppBar(
+        toolbarHeight: 72,
+        title: Text(
+          l10n.downloadHistoryTitle,
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+      ),
+      // A Builder so the grid reads its top inset from a context *inside* the
+      // Scaffold body, where extendBodyBehindAppBar has folded in the bar's
+      // height — the outer build context sits above it and misses the inset.
+      body: Builder(
+        builder: (BuildContext context) => downloads.when(
           data: (List<DownloadRecord> recent) =>
               _grid(context, ref, l10n, recent),
           loading: () => const Center(child: CircularProgressIndicator()),

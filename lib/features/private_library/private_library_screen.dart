@@ -51,19 +51,19 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final GlassAppBar bar = GlassAppBar(
-      toolbarHeight: 72,
-      title: Text(
-        l10n.privateLibraryTitle,
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
-    );
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: bar,
-      body: GlassBody(
-        barHeight: bar.preferredSize.height,
-        child: _body(context, l10n),
+      appBar: GlassAppBar(
+        toolbarHeight: 72,
+        title: Text(
+          l10n.privateLibraryTitle,
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+      ),
+      // A Builder so the grid reads its top inset from a context inside the
+      // Scaffold body, where the bar's height is folded into the padding.
+      body: Builder(
+        builder: (BuildContext context) => _body(context, l10n),
       ),
     );
   }

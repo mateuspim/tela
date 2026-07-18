@@ -90,20 +90,16 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
         .narrow(_filters)
         .forScreen(screenResolution(context));
 
-    final GlassAppBar bar = GlassAppBar(
-      title: _title(context),
-      actions: <Widget>[
-        BrowseFilterButton(filters: _filters, scope: this),
-        const SizedBox(width: 8),
-      ],
-    );
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: bar,
-      body: GlassBody(
-        barHeight: bar.preferredSize.height,
-        child: WallpaperGrid(query: query, galleryIdentity: identity),
+      appBar: GlassAppBar(
+        title: _title(context),
+        actions: <Widget>[
+          BrowseFilterButton(filters: _filters, scope: this),
+          const SizedBox(width: 8),
+        ],
       ),
+      body: WallpaperGrid(query: query, galleryIdentity: identity),
     );
   }
 

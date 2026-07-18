@@ -34,10 +34,11 @@ int wallpaperGridColumns(BuildContext context) {
 /// reads back as zero) when surrounding chrome has already reserved that space.
 ///
 /// The top matters under a `GlassAppBar`: with `extendBodyBehindAppBar` the
-/// grid scrolls beneath the frosted bar, and a `GlassBody` injects the bar's
-/// height into the top inset so the first row starts clear of it. Under an
-/// opaque app bar the Scaffold has already consumed that inset, so the top
-/// reads back as the bare rhythm — the behaviour every non-glass shelf had.
+/// grid scrolls beneath the frosted bar, and the Scaffold folds the bar's
+/// height into `MediaQuery.padding.top` for its body, so reading it here starts
+/// the first row clear of the bar. Under an opaque app bar the Scaffold has
+/// instead consumed that inset, so the top reads back as the bare rhythm — the
+/// behaviour every non-glass shelf had.
 ///
 /// ```dart
 /// MasonryGridView.count(padding: wallpaperGridPadding(context));

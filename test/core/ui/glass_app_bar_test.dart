@@ -40,42 +40,34 @@ void main() {
       expect(bar.elevation, 0);
     });
 
-    test('a bottom widget counts toward the height a GlassBody must clear', () {
-      final GlassAppBar plain = GlassAppBar(title: const Text('x'));
-      final GlassAppBar withTabs = GlassAppBar(
-        title: const Text('x'),
-        bottom: const TabBar(tabs: <Widget>[Tab(text: 'a'), Tab(text: 'b')]),
-      );
-
-      expect(
-        withTabs.preferredSize.height,
-        greaterThan(plain.preferredSize.height),
-      );
-    });
-  });
-
-  group('GlassBody', () {
-    testWidgets('adds the bar height onto the top inset its child sees', (
+    testWidgets('under extendBodyBehindAppBar, the body inset clears the bar', (
       WidgetTester tester,
     ) async {
-      late double topInset;
+      // The layout contract the grids depend on: Scaffold folds the bar's
+      // height into the body's top padding, so a grid reading that inset (via
+      // wallpaperGridPadding) starts below the bar instead of under it. Break
+      // this — drop extendBodyBehindAppBar, or read the inset from a context
+      // above the body — and the first row hides beneath the frost.
+      late double bodyTopInset;
       await tester.pumpWidget(
-        MediaQuery(
-          data: const MediaQueryData(padding: EdgeInsets.only(top: 24)),
-          child: GlassBody(
-            barHeight: 100,
-            child: Builder(
+        MaterialApp(
+          home: Scaffold(
+            extendBodyBehindAppBar: true,
+            appBar: GlassAppBar(
+              toolbarHeight: 72,
+              title: const Text('Browse'),
+            ),
+            body: Builder(
               builder: (BuildContext context) {
-                topInset = MediaQuery.paddingOf(context).top;
-                return const SizedBox();
+                bodyTopInset = MediaQuery.paddingOf(context).top;
+                return const SizedBox.expand();
               },
             ),
           ),
         ),
       );
 
-      // The status bar (24) plus the frosted bar (100): the first row clears it.
-      expect(topInset, 124);
+      expect(bodyTopInset, greaterThanOrEqualTo(72));
     });
   });
 }

@@ -67,37 +67,35 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
     );
     final TabController tabs = _controllerFor(sortings);
 
-    final GlassAppBar bar = GlassAppBar(
-      toolbarHeight: 72,
-      titleSpacing: 16,
-      title: const BrowseSearchField(),
-      actions: <Widget>[
-        BrowseFilterButton(
-          filters: query,
-          scope: ref.read(browseQueryProvider.notifier),
-        ),
-        const SizedBox(width: 8),
-      ],
-      bottom: _tabBar(l10n, tabs, sortings),
-    );
     return Scaffold(
+      // The grid scrolls under the frosted bar; Scaffold folds the bar's height
+      // into the body's MediaQuery inset, which wallpaperGridPadding honours.
       extendBodyBehindAppBar: true,
-      appBar: bar,
-      body: GlassBody(
-        barHeight: bar.preferredSize.height,
-        child: TabBarView(
-          controller: tabs,
-          children: <Widget>[
-            for (final Sorting sorting in sortings)
-              // Keyed by the sorting, not by slot: Relevance appearing shifts
-              // every grid one place right, and an unkeyed one would inherit
-              // the paging state of the listing that used to sit there.
-              WallpaperGrid(
-                key: ValueKey<Sorting>(sorting),
-                query: base.copyWith(sorting: sorting),
-              ),
-          ],
-        ),
+      appBar: GlassAppBar(
+        toolbarHeight: 72,
+        titleSpacing: 16,
+        title: const BrowseSearchField(),
+        actions: <Widget>[
+          BrowseFilterButton(
+            filters: query,
+            scope: ref.read(browseQueryProvider.notifier),
+          ),
+          const SizedBox(width: 8),
+        ],
+        bottom: _tabBar(l10n, tabs, sortings),
+      ),
+      body: TabBarView(
+        controller: tabs,
+        children: <Widget>[
+          for (final Sorting sorting in sortings)
+            // Keyed by the sorting, not by slot: Relevance appearing shifts
+            // every grid one place right, and an unkeyed one would inherit the
+            // paging state of the listing that used to sit there.
+            WallpaperGrid(
+              key: ValueKey<Sorting>(sorting),
+              query: base.copyWith(sorting: sorting),
+            ),
+        ],
       ),
     );
   }

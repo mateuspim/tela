@@ -93,19 +93,30 @@ every device. The slices, updated as they land:
 | A2 | **a frosted-glass app bar** | ✅ (this session) |
 | A3 | tile treatment + richer per-shelf empty/loading states | ⬜ open |
 
-**A2's frosted-glass app bar, decided.** The owner picked frosted glass (content
-blurs *under* the bar) over a flat gradient band. Two new design-system pieces in
-`core/ui/glass_app_bar.dart`: **`GlassAppBar`** — an `AppBar` subclass whose
-`flexibleSpace` is a `ClipRect` + `BackdropFilter` blur over a translucent,
-faintly accent-washed pane with a hairline bottom edge (the bar itself paints
-transparent, so the frost shows) — and **`GlassBody`**, which adds the bar's
-height onto the scroll body's top inset so the first row clears it. Applied to
-the four wallpaper-grid canvases (**Browse, LinkedListing, Download History,
-Private Library**) via `extendBodyBehindAppBar: true` + `GlassBody`; the shared
-`wallpaperGridPadding` now folds in `safeArea.top`, which is a **no-op on opaque
-screens** (the Scaffold already consumed that inset) and live under glass. Pinned
-by `test/core/ui/glass_app_bar_test.dart` (4 tests), the `GlassBody` inset
-mutation-checked (drop the bar height → first row hides, inset 24 not 124).
+**A2's frosted-glass app bar, decided — and verified on the SM-X730 (2026-07-18).**
+The owner picked frosted glass (content blurs *under* the bar) over a flat
+gradient band. One new design-system piece in `core/ui/glass_app_bar.dart`:
+**`GlassAppBar`** — an `AppBar` subclass whose `flexibleSpace` is a `ClipRect` +
+`BackdropFilter` blur over a translucent, faintly accent-washed pane with a
+hairline bottom edge (the bar itself paints transparent, so the frost shows).
+Applied to the four wallpaper-grid canvases (**Browse, LinkedListing, Download
+History, Private Library**) via `extendBodyBehindAppBar: true`. The shared
+`wallpaperGridPadding` folds in `safeArea.top`, a **no-op on opaque screens**
+(the Scaffold already consumed that inset) and live under glass.
+
+**The inset trap, and why there is no `GlassBody`.** A first cut added a
+`GlassBody` wrapper that pushed the bar's height onto the body's top inset — but
+`extendBodyBehindAppBar: true` *already* makes Scaffold fold the bar height into
+`MediaQuery.padding.top` for the body. So on Browse the inset landed **twice**
+(a fat gap above the grid), while Download History and Private Library — whose
+grids read `wallpaperGridPadding` from the *outer* `build` context, above the
+Scaffold body — got **neither** inset and slid the first row under the bar. The
+fix: delete `GlassBody`, lean on Scaffold's own injection, and wrap the two
+outer-context bodies in a **`Builder`** so their grids read the inset from inside
+the body. Pinned by `test/core/ui/glass_app_bar_test.dart` (3 tests), including
+one asserting the body inset clears the bar under `extendBodyBehindAppBar` —
+break that and the first row hides. Confirmed on device: Browse gap gone,
+Download History overlap gone, frost legible as the grid scrolls under it.
 
 Two things left deliberately: **`Library`** (a fixed `Column` of tiles above the
 favorites grid, not a single scroll body — its header rows wouldn't scroll under
