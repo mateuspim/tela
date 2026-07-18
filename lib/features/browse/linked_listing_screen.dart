@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
-import 'package:tela/core/ui/glass_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
 import 'package:tela/core/ui/wallpaper_swatch.dart';
 import 'package:tela/domain/models/search_query.dart';
@@ -91,8 +90,7 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
         .forScreen(screenResolution(context));
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: GlassAppBar(
+      appBar: AppBar(
         title: _title(context),
         actions: <Widget>[
           BrowseFilterButton(filters: _filters, scope: this),

@@ -9,7 +9,6 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
-import 'package:tela/core/ui/glass_app_bar.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
@@ -33,26 +32,20 @@ class DownloadHistoryScreen extends ConsumerWidget {
       recentDownloadsProvider,
     );
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: GlassAppBar(
+      appBar: AppBar(
         toolbarHeight: 72,
         title: Text(
           l10n.downloadHistoryTitle,
           style: Theme.of(context).textTheme.headlineSmall,
         ),
       ),
-      // A Builder so the grid reads its top inset from a context *inside* the
-      // Scaffold body, where extendBodyBehindAppBar has folded in the bar's
-      // height — the outer build context sits above it and misses the inset.
-      body: Builder(
-        builder: (BuildContext context) => downloads.when(
-          data: (List<DownloadRecord> recent) =>
-              _grid(context, ref, l10n, recent),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
-            icon: Icons.error_outline,
-            message: l10n.errorUnexpected,
-          ),
+      body: downloads.when(
+        data: (List<DownloadRecord> recent) =>
+            _grid(context, ref, l10n, recent),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
+          icon: Icons.error_outline,
+          message: l10n.errorUnexpected,
         ),
       ),
     );

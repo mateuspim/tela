@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/browse_filter_text.dart';
-import 'package:tela/core/ui/glass_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/features/browse/browse_filter_button.dart';
@@ -68,10 +67,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
     final TabController tabs = _controllerFor(sortings);
 
     return Scaffold(
-      // The grid scrolls under the frosted bar; Scaffold folds the bar's height
-      // into the body's MediaQuery inset, which wallpaperGridPadding honours.
-      extendBodyBehindAppBar: true,
-      appBar: GlassAppBar(
+      appBar: AppBar(
         toolbarHeight: 72,
         titleSpacing: 16,
         title: const BrowseSearchField(),

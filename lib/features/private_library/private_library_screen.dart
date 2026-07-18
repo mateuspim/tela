@@ -10,7 +10,6 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
-import 'package:tela/core/ui/glass_app_bar.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
@@ -52,19 +51,14 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: GlassAppBar(
+      appBar: AppBar(
         toolbarHeight: 72,
         title: Text(
           l10n.privateLibraryTitle,
           style: Theme.of(context).textTheme.headlineSmall,
         ),
       ),
-      // A Builder so the grid reads its top inset from a context inside the
-      // Scaffold body, where the bar's height is folded into the padding.
-      body: Builder(
-        builder: (BuildContext context) => _body(context, l10n),
-      ),
+      body: _body(context, l10n),
     );
   }
 
