@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/shelf_header.dart';
 import 'package:tela/features/favorites/favorites_grid.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
@@ -27,7 +28,7 @@ class LibraryScreen extends ConsumerWidget {
     // until the local read returns, which leaves the count off for one frame.
     final int? count = ref.watch(favoritesProvider).value?.length;
     return Scaffold(
-      appBar: AppBar(
+      appBar: GradientAppBar(
         toolbarHeight: 72,
         title: Text(l10n.libraryTitle, style: text.headlineSmall),
       ),

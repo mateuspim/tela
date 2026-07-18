@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/browse_filter_text.dart';
+import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/features/browse/browse_filter_button.dart';
@@ -67,7 +68,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
     final TabController tabs = _controllerFor(sortings);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: GradientAppBar(
         toolbarHeight: 72,
         titleSpacing: 16,
         title: const BrowseSearchField(),

@@ -9,6 +9,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
@@ -32,7 +33,7 @@ class DownloadHistoryScreen extends ConsumerWidget {
       recentDownloadsProvider,
     );
     return Scaffold(
-      appBar: AppBar(
+      appBar: GradientAppBar(
         toolbarHeight: 72,
         title: Text(
           l10n.downloadHistoryTitle,

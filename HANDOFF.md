@@ -90,22 +90,31 @@ every device. The slices, updated as they land:
 | A1 | a real `tela` wordmark + a display face (Bricolage Grotesque) | ✅ `21f75bc` |
 | A1 | **stronger selected states** | ✅ (this session) |
 | A2 | editorial shelf headers / plaques | ✅ `21f75bc` |
-| A2 | a glass app bar | ❌ built, then **reverted** (see below) |
+| A2 | **an opaque gradient app bar** (`GradientAppBar`) | ✅ (this session) |
 | A3 | tile treatment + richer per-shelf empty/loading states | ⬜ open |
 
-**A2's frosted-glass app bar was built and reverted — do not rebuild it.** The
-owner picked frosted glass (`GlassAppBar` + `extendBodyBehindAppBar`, so the grid
-scrolled *under* a translucent, blurred bar). On the SM-X730 it read as broken:
-the bar is see-through, so the wall of thumbnails showed *through* the search bar
-and bled up into the status-bar strip above it — busy and unclean, fighting the
-"photos lead, chrome stays quiet" principle. The owner's words: "the wallpapers
-still show up behind the search bar." Reverted to the plain opaque `AppBar`
-(commits `8855eda` + its inset-fix `400f6f3`, both undone). **The lesson for A2:
-an opaque bar, not a see-through one** — if it resumes, the *gradient band
-(opaque)* option is the one that survives a wall of wallpaper behind it. (An
-aside worth keeping from the frosted work: `extendBodyBehindAppBar: true` makes
-Scaffold fold the bar height into the body's `MediaQuery.padding.top` itself —
-adding your own inset double-counts it.)
+**A2's app bar: frosted glass was built, rejected on device, and replaced with
+an opaque gradient band — do not rebuild the frosted one.** First cut was frosted
+glass (`GlassAppBar` + `extendBodyBehindAppBar`, grid scrolling *under* a
+translucent blurred bar). On the SM-X730 it read as broken: the bar is
+see-through, so the wall of thumbnails showed *through* the search bar and bled
+into the status-bar strip above it — busy, fighting "photos lead, chrome stays
+quiet." Owner's words: "the wallpapers still show up behind the search bar."
+Reverted (`8855eda` + inset-fix `400f6f3`, both undone).
+
+The replacement is **`GradientAppBar`** (`core/ui/gradient_app_bar.dart`): a plain
+`AppBar` on an **opaque** vertical wash — a brand-warmed `surfaceContainerHighest`
+top settling to `surface`, with a hairline bottom edge. No
+`extendBodyBehindAppBar`, so the grid stops cleanly beneath it and nothing shows
+through; grid padding is untouched. Applied to **Browse, Library, LinkedListing,
+Download History, Private Library**. Pinned by `gradient_app_bar_test.dart`, whose
+load-bearing test asserts **every gradient stop is opaque** (drop one below 1 and
+the wall leaks — the exact bug that killed the frosted bar). The tint strength is
+one knob, `_accentWash` (`.10`); verified on device. Settings/Detail/crop keep a
+plain `AppBar` — they adopt `GradientAppBar` trivially if consistency is wanted.
+(Aside kept from the frosted work: `extendBodyBehindAppBar: true` makes Scaffold
+fold the bar height into the body's `MediaQuery.padding.top` itself — adding your
+own inset double-counts it.)
 
 **A1's stronger selected states, decided.** All selection — bottom nav, rail,
 Browse sorting tabs — rode Material's default `secondaryContainer`, so even under
