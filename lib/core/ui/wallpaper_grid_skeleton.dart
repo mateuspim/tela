@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/justified_rows.dart';
+import 'package:tela/core/ui/tile_density_scope.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
+import 'package:tela/domain/models/tile_density.dart';
 
 /// The placeholder wall a shelf shows while its first wallpapers are still
 /// loading: tiles under a slow shimmer, packed by the very same `justifiedRows`
@@ -85,12 +87,13 @@ class _WallpaperGridSkeletonState extends State<WallpaperGridSkeleton>
       builder: (BuildContext context, BoxConstraints constraints) {
         final double width = constraints.maxWidth;
         if (width <= 0) return const SizedBox.shrink();
+        final TileDensity density = TileDensityScope.of(context);
         final List<JustifiedRow> rows = justifiedRows(
           aspectRatios: _skeletonRatios,
           availableWidth: width,
-          targetRowHeight: wallpaperRowHeight(width),
+          targetRowHeight: wallpaperRowHeight(width, density),
           spacing: wallpaperGridSpacing,
-          maxPerRow: wallpaperRowTileCap(width),
+          maxPerRow: wallpaperRowTileCap(width, density),
         );
         return OverflowBox(
           alignment: Alignment.topCenter,

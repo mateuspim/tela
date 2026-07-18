@@ -1121,9 +1121,29 @@
     "description": "Settings group heading for how tela looks."
   },
 
-  "settingsAppearanceDescription": "The accent tela uses for its own moments.",
+  "settingsAppearanceDescription": "The accent tela uses for its own moments, and how large the wall draws.",
   "@settingsAppearanceDescription": {
     "description": "Sub-heading under the Appearance settings group."
+  },
+
+  "settingsTileDensityTitle": "Wallpaper size",
+  "@settingsTileDensityTitle": {
+    "description": "Label above the small/medium/large tile-size choice in settings."
+  },
+
+  "settingsTileDensitySmall": "Small",
+  "@settingsTileDensitySmall": {
+    "description": "Tile size choice: more, smaller wallpapers per row."
+  },
+
+  "settingsTileDensityMedium": "Medium",
+  "@settingsTileDensityMedium": {
+    "description": "Tile size choice: the default size tela draws at."
+  },
+
+  "settingsTileDensityLarge": "Large",
+  "@settingsTileDensityLarge": {
+    "description": "Tile size choice: fewer, larger wallpapers per row."
   },
 
   "settingsAccentTitle": "Accent color",

@@ -16,6 +16,7 @@ import 'package:tela/features/settings/app_lock_switch.dart';
 import 'package:tela/features/settings/browse_defaults_section.dart';
 import 'package:tela/features/settings/clear_cache_tile.dart';
 import 'package:tela/features/settings/storage_settings_controller.dart';
+import 'package:tela/features/settings/tile_density_section.dart';
 
 /// Where downloads go, configured for safe and explicit content separately.
 class SettingsScreen extends ConsumerWidget {
@@ -137,7 +138,7 @@ class _SettingsList extends StatelessWidget {
       icon: Icons.palette_outlined,
       title: l10n.settingsAppearanceSection,
       description: l10n.settingsAppearanceDescription,
-      children: const <Widget>[AccentColorSection()],
+      children: const <Widget>[AccentColorSection(), TileDensitySection()],
     );
   }
 

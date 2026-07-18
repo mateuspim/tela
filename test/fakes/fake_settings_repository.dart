@@ -2,6 +2,7 @@ import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/storage_settings.dart';
+import 'package:tela/domain/models/tile_density.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 
 /// In-memory [SettingsRepository] holding one set of settings.
@@ -14,12 +15,14 @@ class FakeSettingsRepository implements SettingsRepository {
     BrowseDefaultsSource source = BrowseDefaultsSource.account,
     BrowseDefaults? deviceDefaults,
     AccentColor? accent,
+    TileDensity density = TileDensity.medium,
   }) : _settings = settings ?? StorageSettings.defaults,
        _privateLibraryLocked = privateLibraryLocked,
        _accountDefaults = accountDefaults,
        _source = source,
        _deviceDefaults = deviceDefaults,
-       _accent = accent;
+       _accent = accent,
+       _density = density;
 
   StorageSettings _settings;
   bool _privateLibraryLocked;
@@ -27,6 +30,7 @@ class FakeSettingsRepository implements SettingsRepository {
   BrowseDefaultsSource _source;
   BrowseDefaults? _deviceDefaults;
   AccentColor? _accent;
+  TileDensity _density;
 
   /// The settings a save last wrote, readable by assertions.
   StorageSettings get saved => _settings;
@@ -102,5 +106,13 @@ class FakeSettingsRepository implements SettingsRepository {
   @override
   Future<void> clearAccentColor() async {
     _accent = null;
+  }
+
+  @override
+  Future<TileDensity> loadTileDensity() async => _density;
+
+  @override
+  Future<void> saveTileDensity(TileDensity density) async {
+    _density = density;
   }
 }

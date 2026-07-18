@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/ui/justified_rows.dart';
+import 'package:tela/core/ui/tile_density_scope.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
+import 'package:tela/domain/models/tile_density.dart';
 
 /// Builds the tile at [index], already sized to [width] by [height].
 ///
@@ -75,12 +77,13 @@ class JustifiedWallpaperGrid extends StatelessWidget {
   }
 
   Widget _rows(BuildContext context, double width, EdgeInsets padding) {
+    final TileDensity density = TileDensityScope.of(context);
     final List<JustifiedRow> rows = justifiedRows(
       aspectRatios: List<double>.generate(itemCount, aspectRatioOf),
       availableWidth: width,
-      targetRowHeight: wallpaperRowHeight(width),
+      targetRowHeight: wallpaperRowHeight(width, density),
       spacing: wallpaperGridSpacing,
-      maxPerRow: wallpaperRowTileCap(width),
+      maxPerRow: wallpaperRowTileCap(width, density),
     );
     final Widget? trailing = footer;
     return ListView.builder(

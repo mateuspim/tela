@@ -5,6 +5,7 @@ import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tile_density.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 
@@ -65,6 +66,11 @@ class DriftSettingsRepository implements SettingsRepository {
   /// The user's brand accent, stored as a `#rrggbb` literal — the same form the
   /// picker and a `sqlite3` shell read. Absent means follow the device palette.
   static const String _accentKey = 'appearance.accent';
+
+  /// How large the shelves draw their tiles, stored as the [TileDensity]
+  /// constant name — so a renamed constant reads back as unset (medium) rather
+  /// than as some other density. Absent means medium.
+  static const String _densityKey = 'appearance.tileDensity';
 
   final TelaDatabase _db;
 
@@ -196,6 +202,19 @@ class DriftSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> clearAccentColor() => _db.deleteSettings(<String>[_accentKey]);
+
+  @override
+  Future<TileDensity> loadTileDensity() async {
+    // An absent or unreadable row costs the preference, not the wall: medium is
+    // the density every build before this setting drew.
+    return TileDensity.tryFromName(await _db.settingValue(_densityKey)) ??
+        TileDensity.medium;
+  }
+
+  @override
+  Future<void> saveTileDensity(TileDensity density) {
+    return _db.putSetting(_densityKey, density.name);
+  }
 
   /// Reads one tier, treating an absent, unrecognised, or forbidden row as
   /// [fallback].

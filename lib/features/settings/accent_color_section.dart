@@ -6,6 +6,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/features/settings/accent_color_controller.dart';
 import 'package:tela/features/settings/accent_picker_sheet.dart';
+import 'package:tela/features/settings/settings_section_label.dart';
 
 /// Picks the brand accent: follow the wallpaper, a curated preset, or any
 /// colour at all.
@@ -39,7 +40,7 @@ class AccentColorSection extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(l10n.settingsAccentTitle, style: _labelStyle(context)),
+          SettingsSectionLabel(text: l10n.settingsAccentTitle),
           const SizedBox(height: 12),
           Wrap(
             spacing: 12,
@@ -134,11 +135,6 @@ class AccentColorSection extends ConsumerWidget {
   /// Readable ink for an icon sitting on [color].
   Color _onColor(Color color, ColorScheme scheme) =>
       color.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
-
-  TextStyle? _labelStyle(BuildContext context) => Theme.of(context)
-      .textTheme
-      .titleSmall
-      ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant);
 
   static int _rgb(Color color) => color.toARGB32() & 0xFFFFFF;
 }

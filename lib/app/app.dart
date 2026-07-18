@@ -6,8 +6,11 @@ import 'package:go_router/go_router.dart';
 import 'package:tela/app/router.dart';
 import 'package:tela/app/theme.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/tile_density_scope.dart';
 import 'package:tela/domain/models/accent_color.dart';
+import 'package:tela/domain/models/tile_density.dart';
 import 'package:tela/features/settings/accent_color_controller.dart';
+import 'package:tela/features/settings/tile_density_controller.dart';
 
 /// The root widget.
 class TelaApp extends ConsumerStatefulWidget {
@@ -32,6 +35,10 @@ class _TelaAppState extends ConsumerState<TelaApp> {
   @override
   Widget build(BuildContext context) {
     final Color? accent = _accentColor(ref.watch(accentColorProvider));
+    // Published above the router so all four shelves resize together; a shelf
+    // that read the provider itself would be a fourth place to forget.
+    final TileDensity density =
+        ref.watch(tileDensityProvider).value ?? TileDensity.medium;
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDevice, ColorScheme? darkDevice) =>
           MaterialApp.router(
@@ -42,6 +49,12 @@ class _TelaAppState extends ConsumerState<TelaApp> {
             onGenerateTitle: (BuildContext context) =>
                 AppLocalizations.of(context).appTitle,
             routerConfig: _router,
+            // Wraps the navigator, so every route — not just the shelf that
+            // happens to be on screen — sits under the same density.
+            builder: (BuildContext context, Widget? child) => TileDensityScope(
+              density: density,
+              child: child ?? const SizedBox.shrink(),
+            ),
             theme: TelaTheme.light(lightDevice, accent: accent),
             darkTheme: TelaTheme.dark(darkDevice, accent: accent),
             localizationsDelegates: const <LocalizationsDelegate<Object>>[

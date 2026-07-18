@@ -12,6 +12,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tile_density.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/features/settings/settings_screen.dart';
@@ -70,6 +71,32 @@ void main() {
 
     expect(settings.saved.sfwTier, StorageTier.filesOutsideGallery);
     expect(settings.saved.nsfwTier, StorageTier.appPrivate);
+  });
+
+  testWidgets('opens on the density the wall is already drawing at', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(density: TileDensity.small),
+    );
+
+    expect(_selectedDensity(tester), TileDensity.small);
+  });
+
+  testWidgets('persists a chosen tile density immediately', (
+    WidgetTester tester,
+  ) async {
+    // There is no save button on this screen: a density that lit up but did
+    // not save would be a wall size the user believes is set.
+    final FakeSettingsRepository settings = FakeSettingsRepository();
+    await _pumpSettings(tester, settings);
+
+    await tester.tap(find.text('Large'));
+    await tester.pumpAndSettle();
+
+    expect(await settings.loadTileDensity(), TileDensity.large);
+    expect(_selectedDensity(tester), TileDensity.large);
   });
 
   testWidgets('offers a way to the blocked-tags screen', (
@@ -508,6 +535,16 @@ List<StorageTier?> _selectedTiers(WidgetTester tester) {
       .widgetList<RadioGroup<StorageTier>>(find.byType(RadioGroup<StorageTier>))
       .map((RadioGroup<StorageTier> group) => group.groupValue)
       .toList();
+}
+
+/// The tile size the density picker currently shows as on.
+TileDensity _selectedDensity(WidgetTester tester) {
+  return tester
+      .widget<SegmentedButton<TileDensity>>(
+        find.byType(SegmentedButton<TileDensity>),
+      )
+      .selected
+      .single;
 }
 
 Future<void> _pumpSettings(

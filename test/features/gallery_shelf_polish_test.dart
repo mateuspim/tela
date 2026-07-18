@@ -14,6 +14,7 @@ import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/tile_density.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/favorites/favorites_grid.dart';
@@ -29,7 +30,7 @@ void main() {
     ];
 
     for (final (String name, Size size, int columns) in surfaces) {
-      testWidgets('$name gives $columns columns with a 12dp inset', (
+      testWidgets('$name caps rows at $columns tiles with a 12dp inset', (
         WidgetTester tester,
       ) async {
         late int actualColumns;
@@ -39,7 +40,10 @@ void main() {
             data: MediaQueryData(size: size),
             child: Builder(
               builder: (BuildContext context) {
-                actualColumns = wallpaperGridColumns(context);
+                actualColumns = wallpaperRowTileCap(
+                  size.width,
+                  TileDensity.medium,
+                );
                 actualPadding = wallpaperGridPadding(context);
                 return const SizedBox.shrink();
               },

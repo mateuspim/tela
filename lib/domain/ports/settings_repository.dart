@@ -2,6 +2,7 @@ import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/storage_settings.dart';
+import 'package:tela/domain/models/tile_density.dart';
 
 /// Reads and writes the user's persisted preferences.
 ///
@@ -77,4 +78,16 @@ abstract interface class SettingsRepository {
   /// The absence of the row *is* follow-system, so this deletes rather than
   /// writes a sentinel — see the device-colour filter for the same rule.
   Future<void> clearAccentColor();
+
+  /// How large the wallpaper shelves draw their tiles, or
+  /// [TileDensity.medium] when unset — the density every build before this
+  /// setting drew, so an upgrade does not resize somebody's wall.
+  ///
+  /// Never throws: an unreadable row answers the same default. Unlike the
+  /// accent there is no absent-means-follow-system state, so this returns a
+  /// value rather than a nullable one.
+  Future<TileDensity> loadTileDensity();
+
+  /// Persists [density] as the size the shelves draw at.
+  Future<void> saveTileDensity(TileDensity density);
 }

@@ -12,6 +12,7 @@ import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tile_density.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 
 void main() {
@@ -345,6 +346,34 @@ void main() {
     test('a corrupt row costs the accent, not the app', () async {
       await db.putSetting('appearance.accent', 'not-a-colour');
       expect(await settings.loadAccentColor(), isNull);
+    });
+  });
+
+  group('tile density', () {
+    test('draws at medium before anything is chosen', () async {
+      // An upgrade must not silently resize somebody's wall.
+      expect(await settings.loadTileDensity(), TileDensity.medium);
+    });
+
+    test('round-trips a chosen density', () async {
+      await settings.saveTileDensity(TileDensity.large);
+      expect(await settings.loadTileDensity(), TileDensity.large);
+    });
+
+    test('stores the constant name, readable in a sqlite3 shell', () async {
+      await settings.saveTileDensity(TileDensity.small);
+      expect(await db.settingValue('appearance.tileDensity'), 'small');
+    });
+
+    test('re-choosing upserts rather than stacking rows', () async {
+      await settings.saveTileDensity(TileDensity.small);
+      await settings.saveTileDensity(TileDensity.large);
+      expect(await settings.loadTileDensity(), TileDensity.large);
+    });
+
+    test('a corrupt row costs the density, not the app', () async {
+      await db.putSetting('appearance.tileDensity', 'enormous');
+      expect(await settings.loadTileDensity(), TileDensity.medium);
     });
   });
 }
