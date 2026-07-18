@@ -44,6 +44,42 @@ int wallpaperGridColumns(BuildContext context) {
   return (width / _targetTileWidth).round().clamp(2, 6);
 }
 
+/// The height a justified shelf aims its rows at, for a shelf [availableWidth]
+/// dips wide.
+///
+/// Derived from the same [_targetTileWidth] the column count uses, so a
+/// justified row holds roughly as many landscape wallpapers as the old masonry
+/// had columns, and the wall keeps its density on both a phone and the tablet.
+/// The 1.5 divisor is the compromise shape between a 16:9 landscape and a
+/// square: rows of wide wallpapers come out a little shorter than the target,
+/// rows carrying portraits a little taller, which is exactly the give that lets
+/// mixed orientations share a row without anyone being cropped.
+///
+/// ```dart
+/// justifiedRows(targetRowHeight: wallpaperRowHeight(width), ...);
+/// ```
+double wallpaperRowHeight(double availableWidth) {
+  final int columns = wallpaperRowTileCap(availableWidth);
+  final double columnWidth =
+      (availableWidth - wallpaperGridSpacing * (columns - 1)) / columns;
+  return columnWidth / 1.5;
+}
+
+/// The most wallpapers one justified row may hold on a shelf [availableWidth]
+/// dips wide.
+///
+/// The same count the masonry used as columns, reused as a cap so a row of
+/// portrait wallpapers stays as large as a column of them used to be. Without
+/// it a wide shelf packs phone-shaped thumbs a dozen to the row before the row
+/// is short enough to close, and none of them is big enough to judge.
+///
+/// ```dart
+/// justifiedRows(maxPerRow: wallpaperRowTileCap(width), ...);
+/// ```
+int wallpaperRowTileCap(double availableWidth) {
+  return (availableWidth / _targetTileWidth).round().clamp(2, 6);
+}
+
 /// Edge padding for a wallpaper shelf: the 12dp rhythm, plus whatever system
 /// safe area is not already consumed by the surrounding chrome.
 ///

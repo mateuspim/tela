@@ -63,6 +63,9 @@ class Resolution {
   /// True when the image is taller than it is wide — the phone-shaped ones.
   bool get isPortrait => height > width;
 
+  /// Width over height: the shape a justified shelf lays this wallpaper out at.
+  double get aspectRatio => width / height;
+
   @override
   bool operator ==(Object other) =>
       other is Resolution && other.width == width && other.height == height;
