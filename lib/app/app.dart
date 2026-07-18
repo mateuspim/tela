@@ -35,6 +35,10 @@ class _TelaAppState extends ConsumerState<TelaApp> {
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDevice, ColorScheme? darkDevice) =>
           MaterialApp.router(
+            // Flutter stamps a red "DEBUG" ribbon on every debug build; a
+            // wallpaper browser is judged on the wall, so keep the corner clean
+            // in every build. Release never draws it anyway.
+            debugShowCheckedModeBanner: false,
             onGenerateTitle: (BuildContext context) =>
                 AppLocalizations.of(context).appTitle,
             routerConfig: _router,
