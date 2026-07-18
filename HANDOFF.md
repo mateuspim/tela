@@ -90,8 +90,31 @@ every device. The slices, updated as they land:
 | A1 | a real `tela` wordmark + a display face (Bricolage Grotesque) | ✅ `21f75bc` |
 | A1 | **stronger selected states** | ✅ (this session) |
 | A2 | editorial shelf headers / plaques | ✅ `21f75bc` |
-| A2 | a glass/gradient app bar (Browse is still a plain `AppBar`) | ⬜ open |
+| A2 | **a frosted-glass app bar** | ✅ (this session) |
 | A3 | tile treatment + richer per-shelf empty/loading states | ⬜ open |
+
+**A2's frosted-glass app bar, decided.** The owner picked frosted glass (content
+blurs *under* the bar) over a flat gradient band. Two new design-system pieces in
+`core/ui/glass_app_bar.dart`: **`GlassAppBar`** — an `AppBar` subclass whose
+`flexibleSpace` is a `ClipRect` + `BackdropFilter` blur over a translucent,
+faintly accent-washed pane with a hairline bottom edge (the bar itself paints
+transparent, so the frost shows) — and **`GlassBody`**, which adds the bar's
+height onto the scroll body's top inset so the first row clears it. Applied to
+the four wallpaper-grid canvases (**Browse, LinkedListing, Download History,
+Private Library**) via `extendBodyBehindAppBar: true` + `GlassBody`; the shared
+`wallpaperGridPadding` now folds in `safeArea.top`, which is a **no-op on opaque
+screens** (the Scaffold already consumed that inset) and live under glass. Pinned
+by `test/core/ui/glass_app_bar_test.dart` (4 tests), the `GlassBody` inset
+mutation-checked (drop the bar height → first row hides, inset 24 not 124).
+
+Two things left deliberately: **`Library`** (a fixed `Column` of tiles above the
+favorites grid, not a single scroll body — its header rows wouldn't scroll under
+the bar anyway) and **Settings/Detail/crop/blocked-tags** keep a plain `AppBar`;
+they adopt `GlassAppBar` trivially later if wanted. **Device-owed:** the blur
+sigma and the two surface-alpha knobs (`_blurSigma`, `_topAlpha`, `_bottomAlpha`
+in `glass_app_bar.dart`) are set by feel and want an owner's eye — a frosted bar
+over a wall of thumbnails is exactly the kind of thing that reads differently on
+glass than in a headless test.
 
 **A1's stronger selected states, decided.** All selection — bottom nav, rail,
 Browse sorting tabs — rode Material's default `secondaryContainer`, so even under

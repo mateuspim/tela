@@ -10,6 +10,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/glass_app_bar.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
@@ -50,15 +51,20 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 72,
-        title: Text(
-          l10n.privateLibraryTitle,
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
+    final GlassAppBar bar = GlassAppBar(
+      toolbarHeight: 72,
+      title: Text(
+        l10n.privateLibraryTitle,
+        style: Theme.of(context).textTheme.headlineSmall,
       ),
-      body: _body(context, l10n),
+    );
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: bar,
+      body: GlassBody(
+        barHeight: bar.preferredSize.height,
+        child: _body(context, l10n),
+      ),
     );
   }
 

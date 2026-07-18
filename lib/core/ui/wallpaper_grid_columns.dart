@@ -29,10 +29,15 @@ int wallpaperGridColumns(BuildContext context) {
 /// Edge padding for a wallpaper shelf: the 12dp rhythm, plus whatever system
 /// safe area is not already consumed by the surrounding chrome.
 ///
-/// The top is left to the shelf's app bar. The sides and bottom add the live
-/// [MediaQueryData.padding] so a landscape notch or a full-screen gesture bar
-/// never clips the last row — and add nothing (the inset reads back as zero)
-/// when a bottom navigation bar or rail has already reserved that space.
+/// Every edge adds the live [MediaQueryData.padding] so a landscape notch or a
+/// full-screen gesture bar never clips a row — and adds nothing (the inset
+/// reads back as zero) when surrounding chrome has already reserved that space.
+///
+/// The top matters under a `GlassAppBar`: with `extendBodyBehindAppBar` the
+/// grid scrolls beneath the frosted bar, and a `GlassBody` injects the bar's
+/// height into the top inset so the first row starts clear of it. Under an
+/// opaque app bar the Scaffold has already consumed that inset, so the top
+/// reads back as the bare rhythm — the behaviour every non-glass shelf had.
 ///
 /// ```dart
 /// MasonryGridView.count(padding: wallpaperGridPadding(context));
@@ -41,7 +46,7 @@ EdgeInsets wallpaperGridPadding(BuildContext context) {
   final EdgeInsets safeArea = MediaQuery.paddingOf(context);
   return EdgeInsets.fromLTRB(
     wallpaperGridSpacing + safeArea.left,
-    wallpaperGridSpacing,
+    wallpaperGridSpacing + safeArea.top,
     wallpaperGridSpacing + safeArea.right,
     wallpaperGridSpacing + safeArea.bottom,
   );
