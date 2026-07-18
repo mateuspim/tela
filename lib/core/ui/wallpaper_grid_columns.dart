@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 /// Logical width each wallpaper tile aims at, in dips.
 const double _targetTileWidth = 220;
@@ -11,6 +11,24 @@ const double wallpaperGridSpacing = 12;
 
 /// The 16dp corner every wallpaper tile is clipped to, across all four shelves.
 const double wallpaperTileRadius = 16;
+
+/// A hairline drawn *over* a thumbnail's edge so a near-white or near-black
+/// wallpaper does not melt into the surface it sits on.
+///
+/// The gutter alone cannot separate a pale image from a pale background; this
+/// gives every tile a faint containing edge in the same `outlineVariant`
+/// language the theme's cards already use, kept low enough not to box the wall
+/// in. Applied as a `foregroundDecoration` so it rides on top of the image,
+/// inside the tile's clip, on every shelf — Browse, Favorites, History, and the
+/// private library — through one definition they cannot drift apart from.
+///
+/// ```dart
+/// Container(foregroundDecoration: wallpaperTileEdge(scheme), child: thumb);
+/// ```
+BoxDecoration wallpaperTileEdge(ColorScheme scheme) => BoxDecoration(
+  borderRadius: BorderRadius.circular(wallpaperTileRadius),
+  border: Border.all(color: scheme.outlineVariant.withValues(alpha: .22)),
+);
 
 /// Columns for a masonry wallpaper grid, sized by available width.
 ///

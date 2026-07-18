@@ -9,6 +9,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
+import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
@@ -33,7 +34,7 @@ class FavoritesGrid extends ConsumerWidget {
 
     return favorites.when(
       data: (List<Wallpaper> saved) => _grid(context, l10n, saved),
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const WallpaperGridSkeleton(),
       error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
         icon: Icons.error_outline,
         message: l10n.errorUnexpected,

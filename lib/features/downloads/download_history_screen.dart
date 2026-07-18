@@ -12,6 +12,7 @@ import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
+import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
@@ -43,7 +44,7 @@ class DownloadHistoryScreen extends ConsumerWidget {
       body: downloads.when(
         data: (List<DownloadRecord> recent) =>
             _grid(context, ref, l10n, recent),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const WallpaperGridSkeleton(),
         error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
           icon: Icons.error_outline,
           message: l10n.errorUnexpected,

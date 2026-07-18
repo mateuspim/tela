@@ -13,6 +13,7 @@ import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
+import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
@@ -70,7 +71,7 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
         .watch(privateImagesProvider)
         .when(
           data: (List<PrivateImage> stored) => _grid(context, l10n, stored),
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const WallpaperGridSkeleton(),
           error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
             icon: Icons.error_outline,
             message: l10n.privateLibraryUnavailable,
@@ -231,12 +232,16 @@ class _PrivateTile extends StatelessWidget {
     final double devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     return Hero(
       tag: shelfHeroTag('private-library', image.id, position),
-      child: Image.file(
-        File.fromUri(image.location),
-        fit: BoxFit.cover,
-        cacheWidth: (_tileWidthDip * devicePixelRatio).round(),
-        errorBuilder: (BuildContext context, Object error, StackTrace? trace) =>
-            const Center(child: Icon(Icons.broken_image_outlined)),
+      child: Container(
+        foregroundDecoration: wallpaperTileEdge(Theme.of(context).colorScheme),
+        child: Image.file(
+          File.fromUri(image.location),
+          fit: BoxFit.cover,
+          cacheWidth: (_tileWidthDip * devicePixelRatio).round(),
+          errorBuilder:
+              (BuildContext context, Object error, StackTrace? trace) =>
+                  const Center(child: Icon(Icons.broken_image_outlined)),
+        ),
       ),
     );
   }

@@ -173,6 +173,34 @@ void main() {
     });
   });
 
+  group('tile edge', () {
+    testWidgets('a tile frames its thumbnail with a hairline border', (
+      WidgetTester tester,
+    ) async {
+      // A pale wallpaper on a pale surface needs a containing edge, or it melts
+      // into the gutter. Every tile draws one over the image.
+      await tester.pumpWidget(
+        _app(
+          Center(
+            child: SizedBox(
+              width: 200,
+              child: WallpaperTile(wallpaper: _wallpaper('edge')),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final Iterable<Container> framed = tester
+          .widgetList<Container>(find.byType(Container))
+          .where((Container box) => box.foregroundDecoration is BoxDecoration);
+      expect(framed, isNotEmpty);
+      final BoxDecoration edge =
+          framed.first.foregroundDecoration! as BoxDecoration;
+      expect(edge.border, isNotNull);
+    });
+  });
+
   group('decode budget', () {
     testWidgets('a tile decodes the thumbnail at a bounded display size', (
       WidgetTester tester,

@@ -76,9 +76,15 @@ class WallpaperTile extends StatelessWidget {
       errorWidget: (BuildContext context, String url, Object error) =>
           const Center(child: Icon(Icons.broken_image_outlined)),
     );
+    final Widget framed = Container(
+      foregroundDecoration: wallpaperTileEdge(
+        Theme.of(context).colorScheme,
+      ),
+      child: image,
+    );
     final Object? tag = heroTag;
-    if (tag == null) return image;
-    return Hero(tag: tag, child: image);
+    if (tag == null) return framed;
+    return Hero(tag: tag, child: framed);
   }
 
   /// Half a phone's logical width, matching the 2-column grid.

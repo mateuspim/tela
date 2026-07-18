@@ -409,6 +409,11 @@
     "description": "Shown when a search returns zero results."
   },
 
+  "gridLoading": "Loading wallpapers",
+  "@gridLoading": {
+    "description": "Screen-reader label for the placeholder grid shown while a shelf's first wallpapers are still loading."
+  },
+
   "listingTagged": "Wallpapers with this tag",
   "@listingTagged": {
     "description": "Says what a listing followed from a tag chip is, under the tag's own name."
