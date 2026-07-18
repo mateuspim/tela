@@ -1,17 +1,20 @@
 # tela handoff
 
-Updated: 2026-07-17
+Updated: 2026-07-18
 
-## START HERE — the UI/UX pass is code-complete (both threads); only the owner's device pass remains
+## START HERE — the UI/UX pass is done and device-verified; the wall is now justified rows, not masonry
 
 The owner asked for a UI/UX pass — "make it more beautiful" **and** fix some
 core-loop interactions. **Both threads are now built.** The interaction half (B)
 was five slices, `f662ba4` → `163c414`; the beauty half (A) is A1/A2/A3, ending
 at **A3 (`2e7034c`)** — the skeleton wall and tile edge (see *The beauty thread*
-below). The suite is **670 tests** green, `analyze` and `dart format` clean,
+below). The suite is **687 tests** green, `analyze` and `dart format` clean,
 every new behaviour mutation-checked (revert the fix, watch the new test fail
-with the real symptom, restore). **None of the visual work has been on the
-device yet — that pass is the one thing owed** (see the end of this section).
+with the real symptom, restore).
+
+**The device pass has since been done (2026-07-18)**, and it found one real
+defect — which turned out to be B5. Every shelf now lays out in **justified
+rows**, not masonry; read *The layout change* below before touching any grid.
 
 The pass was **planned first, then sliced**, at the owner's request, with the
 two open threads split: **A = beauty** (expressive chrome — a branded accent, a
@@ -67,14 +70,64 @@ interactions** (built below).
   a thumbnailed shortcut. `FavoritesScreen` was extracted to `FavoritesGrid` and
   retired; the favorites shell branch is now `/library`.
 
+
+### The layout change — justified rows replaced the masonry (2026-07-18)
+
+**The symptom the owner reported:** swiping in the detail pager did not move
+where the eye expected. From a tile, *Next* would land on something a row above
+or below, and coming back felt like arriving somewhere else entirely.
+
+**The wrong diagnosis, recorded so nobody repeats it.** The obvious theory is
+that the pager walks list order while the grid displays some other order, so you
+"just" reorder the pager to match the eye. That is **provably a no-op**, and a
+reordering function was written, property-tested, and deleted on the spot:
+masonry always drops a tile into the *minimum-extent* column, and adding to the
+minimum can only raise it — so the minimum is non-decreasing, every tile's top
+edge is >= the previous tile's, and **ordering by top edge is already exactly
+the source order**. A property test over 20,000 random grids found 0
+reorderings. The pager was never out of order.
+
+**The actual cause:** a human reads in **rows**, and a ragged masonry has none.
+The tile visually to the right of another usually has a top edge a few pixels
+*higher*, so it comes *earlier* in the listing. `Next` was correct and still
+looked like it skipped.
+
+**The fix:** `core/ui/justified_rows.dart` — fill a row, then scale it to one
+shared height spanning the full width (the Flickr/Google Photos layout). Both
+orientations, nothing cropped, and rows that genuinely exist, so **reading order
+is list order by construction**. The pager, `GallerySessionController`, and the
+index-keyed Hero tags needed **zero** changes; the mismatch stopped existing
+rather than being compensated for. `core/ui/justified_wallpaper_grid.dart` is
+the shared widget; all four shelves use it.
+
+Three things that bit during the conversion, all of them load-bearing:
+
+- **`PagedMasonryGridView` was silently making the opening fetch.** Removing it
+  left Browse reporting "no results" for a search it never ran. `WallpaperGrid`
+  now calls `_paging.fetchNextPage()` in `initState` — same reasoning as
+  `_retry`, and it does not double-fetch.
+- **Height alone is the wrong stop for portraits.** They are narrow, so a wide
+  shelf packed ~14 sliver-thin thumbs before a row was short enough to close.
+  `maxPerRow` (the old column count, via `wallpaperRowTileCap`) caps the count
+  instead, so a row of portraits is simply tall — as its column used to be.
+- **The trailing partial row is capped at the height of the row above.** Filling
+  the width and keeping the true ratio are the same knob: a lone portrait
+  stretched across the tablet would stand several screens tall.
+
+`WallpaperTile` no longer sizes itself — the row assigns every tile the row's
+shared height, and a self-measuring tile fights that. The skeleton packs through
+the same `justifiedRows`, so the preview cannot drift from what arrives.
+
 ### Owed on the device (only the owner can), for this pass
 
 1. **B2b's browser hand-off** — `launchUrl` is a real platform round trip, like
    the wallpaper-apply ones; it can't be unit-tested. Tap *View on Wallhaven* and
    a source link on the tablet.
-2. **B5 — "the history gallery is finnicky."** The owner reported this but it was
-   never pinned to a symptom; it needs eyes on the device to diagnose before it
-   can be fixed. **Not started.**
+2. ~~**B5 — "the history gallery is finnicky."**~~ **Diagnosed and fixed
+   (2026-07-18).** It was the masonry: Download History and Favorites are
+   unfiltered, so mixed shapes packed raggedly and stranded a tall tile beside a
+   large void — and the same layout is what made the detail swipe feel wrong.
+   Both went away with justified rows; see *The layout change* above.
 3. A general look at B1–B4 on real hardware: the colour drilldown, the detail
    swipe/chevrons, and the new Library nav.
 
@@ -85,10 +138,10 @@ the rest of the beauty work:
 
 - **`WallpaperGridSkeleton`** (`core/ui/wallpaper_grid_skeleton.dart`) replaces
   the lone centred spinner on every shelf — Browse's first page, Favorites,
-  Download History, Private Library — with a masonry of placeholder tiles under
-  a slow shimmer, in the *exact* grid rhythm (columns, 12dp gutters, safe-area
-  inset, 16dp corners) the real wall lands in, so nothing jumps when images
-  arrive. **Do not give it a scroll view of its own:** the pager hosts a
+  Download History, Private Library — with placeholder tiles under a slow
+  shimmer, packed by the very same `justifiedRows` the real wall uses (12dp
+  gutters, safe-area inset, 16dp corners), so the preview cannot promise a shape
+  the wall then fails to deliver and nothing jumps when images arrive. **Do not give it a scroll view of its own:** the pager hosts a
   first-page indicator in `SliverFillRemaining(hasScrollBody: false)`, which
   content-sizes its child, and a nested `ScrollView` there throws "does not
   support returning intrinsic dimensions". It lays tiles out as clipped columns
@@ -1066,7 +1119,7 @@ and privacy model untouched (delivery-order step 5):
   landscape notch or a full-screen gesture bar never clips the last row, while a
   bottom nav bar or rail that already reserved the space reads back as zero and
   is not double-counted. The top is left to each shelf's app bar. Browse (paged)
-  and Favorites, History, and Private (all `MasonryGridView`) now draw from this
+  and Favorites, History, and Private (all `JustifiedWallpaperGrid`) draw from this
   one source, so they read as the same system. No important action hides behind
   a long press only: History's "remove from history" is in the viewer overflow
   and Private's delete is a viewer button; the long press is a shortcut, not the
@@ -1150,7 +1203,7 @@ Set-from-private flow (delivery-order step 4):
   returns pixel `width`/`height`; a corrupt file reads back as `-1`.
   `MethodChannelImageStore` maps those to `PrivateImage.width/height` as `int?`
   (null for absent or non-positive), and `PrivateImage.aspectRatio` is null when
-  either is unknown. The grid is now `MasonryGridView` with each tile shaped to
+  either is unknown. The grid is now `JustifiedWallpaperGrid` with each tile shaped to
   its `aspectRatio`, falling back to a square for a corrupt file; the viewer uses
   the same ratio, or a square canvas for an unknown one.
 - **Secure viewer.** `features/private_library/private_immersive_session.dart`
@@ -1298,7 +1351,7 @@ Slice 4 connects the public viewer to Wallhaven pagination:
   page rethrows the paging error so the session marks it for retry.
 - `WallpaperGrid` builds a `GalleryPagingBridge` and hands each session a
   `requestMore` closure bound to that session, plus an `itemKey` of the
-  wallpaper id. Favorites (a plain `MasonryGridView`, no `WallpaperGrid`) passes
+  wallpaper id. Favorites (a plain `JustifiedWallpaperGrid`, no `WallpaperGrid`) passes
   no `requestMore`, so `canRequestMore` is false and it never pages — the
   complete-local-snapshot invariant holds structurally, not by convention.
 - `WallpaperImmersiveSession` now resets zoom only when the *selected index*
@@ -1327,8 +1380,9 @@ isolation (`canRequestMore` false, never pages), position + Next after append,
 and the existing selected-item/scroll-restoration-across-viewer-exit coverage.
 
 One test-shape note for the next agent: a widget test that taps a tile and
-expects only page 1 loaded is unreliable — `PagedMasonryGridView` eagerly
-fetches page 2 to fill the viewport. Test the bridge's append/dedup directly
+expects only page 1 loaded is unreliable — the shelf fetches the next page to
+fill the viewport (that was `PagedMasonryGridView`'s doing; since 2026-07-18 it
+is `WallpaperGrid`'s own scroll trigger). Test the bridge's append/dedup directly
 against a hand-driven `PagingController` (see
 `gallery_paging_bridge_test.dart`), and assert seed/query preservation via the
 page-2 request the grid records.
@@ -2231,7 +2285,8 @@ re-verified on the phone:
 - `flutter_staggered_grid_view` became a **direct** dependency. The favorites
   grid is unpaged, so it cannot use `infinite_scroll_pagination`'s
   `PagedMasonryGridView`, and importing a transitive dependency is both a lint
-  error and a version-resolution trap.
+  error and a version-resolution trap. *(Superseded 2026-07-18: every shelf moved
+  to justified rows and the package was dropped from `pubspec.yaml` entirely.)*
 - A Material You palette whose brightness disagrees with the one requested is
   **refused**, not adapted: a light scheme rendered in dark mode is how you get
   white-on-white text. Quiet-but-wrong beats unreadable. The seed is not dead
