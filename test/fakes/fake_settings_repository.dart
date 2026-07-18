@@ -1,3 +1,4 @@
+import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -12,17 +13,20 @@ class FakeSettingsRepository implements SettingsRepository {
     AccountSettings? accountDefaults,
     BrowseDefaultsSource source = BrowseDefaultsSource.account,
     BrowseDefaults? deviceDefaults,
+    AccentColor? accent,
   }) : _settings = settings ?? StorageSettings.defaults,
        _privateLibraryLocked = privateLibraryLocked,
        _accountDefaults = accountDefaults,
        _source = source,
-       _deviceDefaults = deviceDefaults;
+       _deviceDefaults = deviceDefaults,
+       _accent = accent;
 
   StorageSettings _settings;
   bool _privateLibraryLocked;
   AccountSettings? _accountDefaults;
   BrowseDefaultsSource _source;
   BrowseDefaults? _deviceDefaults;
+  AccentColor? _accent;
 
   /// The settings a save last wrote, readable by assertions.
   StorageSettings get saved => _settings;
@@ -38,6 +42,9 @@ class FakeSettingsRepository implements SettingsRepository {
 
   /// The device snapshot currently stored, if any.
   BrowseDefaults? get deviceSaved => _deviceDefaults;
+
+  /// The accent currently stored, or null when following the device palette.
+  AccentColor? get accentSaved => _accent;
 
   @override
   Future<StorageSettings> loadStorageSettings() async => _settings;
@@ -82,5 +89,18 @@ class FakeSettingsRepository implements SettingsRepository {
   @override
   Future<void> saveDeviceDefaults(BrowseDefaults defaults) async {
     _deviceDefaults = defaults;
+  }
+
+  @override
+  Future<AccentColor?> loadAccentColor() async => _accent;
+
+  @override
+  Future<void> saveAccentColor(AccentColor accent) async {
+    _accent = accent;
+  }
+
+  @override
+  Future<void> clearAccentColor() async {
+    _accent = null;
   }
 }

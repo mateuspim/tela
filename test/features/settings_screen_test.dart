@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
@@ -21,13 +22,14 @@ import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
 
 void main() {
-  testWidgets('groups related settings into five scannable sections', (
+  testWidgets('groups related settings into six scannable sections', (
     WidgetTester tester,
   ) async {
     await _pumpSettings(tester, FakeSettingsRepository());
 
-    expect(find.byType(Card), findsNWidgets(5));
+    expect(find.byType(Card), findsNWidgets(6));
     expect(find.text('Wallhaven account'), findsWidgets);
+    expect(find.text('Appearance'), findsOneWidget);
     expect(find.text('Browse defaults'), findsOneWidget);
     expect(find.text('Downloads'), findsOneWidget);
     // Its own section, not a line under Downloads: a download is a file the
@@ -295,6 +297,47 @@ void main() {
     // about a key.
     expect(settings.accountSaved, _account);
     expect(find.textContaining('Anime'), findsOneWidget);
+  });
+
+  group('accent color', () {
+    testWidgets('follows the wallpaper until a colour is picked', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository();
+      await _pumpSettings(tester, settings);
+
+      expect(find.text('Accent color'), findsOneWidget);
+      expect(find.bySemanticsLabel('Follow wallpaper'), findsOneWidget);
+      expect(settings.accentSaved, isNull);
+    });
+
+    testWidgets('picking a preset persists it immediately', (
+      WidgetTester tester,
+    ) async {
+      // No save button, like every other setting here: a screen that can be
+      // closed mid-edit must not be able to lose the edit.
+      final FakeSettingsRepository settings = FakeSettingsRepository();
+      await _pumpSettings(tester, settings);
+
+      await tester.tap(find.bySemanticsLabel('Accent #2c63e0'));
+      await tester.pumpAndSettle();
+
+      expect(settings.accentSaved, AccentColor(0x2c63e0));
+    });
+
+    testWidgets('going back to follow wallpaper clears the accent', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository(
+        accent: AccentColor(0x2c63e0),
+      );
+      await _pumpSettings(tester, settings);
+
+      await tester.tap(find.bySemanticsLabel('Follow wallpaper'));
+      await tester.pumpAndSettle();
+
+      expect(settings.accentSaved, isNull);
+    });
   });
 
   group('app-lock switch', () {

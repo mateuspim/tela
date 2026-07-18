@@ -1109,5 +1109,60 @@
   "settingsAppLockLockedOut": "Too many attempts. Wait a moment, then try again.",
   "@settingsAppLockLockedOut": {
     "description": "Shown when the app-lock cannot be switched off because the sensor is locked out. Deliberately refused rather than waved through: a lockout is the lock working, and letting it through would make five failed fingerprints the way past it."
+  },
+
+  "settingsAppearanceSection": "Appearance",
+  "@settingsAppearanceSection": {
+    "description": "Settings group heading for how tela looks."
+  },
+
+  "settingsAppearanceDescription": "The accent tela uses for its own moments.",
+  "@settingsAppearanceDescription": {
+    "description": "Sub-heading under the Appearance settings group."
+  },
+
+  "settingsAccentTitle": "Accent color",
+  "@settingsAccentTitle": {
+    "description": "Label above the accent-color swatches in settings."
+  },
+
+  "settingsAccentFollowSystem": "Follow wallpaper",
+  "@settingsAccentFollowSystem": {
+    "description": "The default accent choice: take the color from the device palette (Material You) instead of a fixed one. Selected when no accent has been picked."
+  },
+
+  "settingsAccentCustom": "Custom",
+  "@settingsAccentCustom": {
+    "description": "Opens the color picker to choose any accent. Selected when the current accent is not one of the presets."
+  },
+
+  "settingsAccentSwatchLabel": "Accent {color}",
+  "@settingsAccentSwatchLabel": {
+    "description": "Accessibility label for one preset accent swatch. Reads out the hex, which is the only name these colors have.",
+    "placeholders": {
+      "color": {
+        "type": "String"
+      }
+    }
+  },
+
+  "accentPickerTitle": "Pick an accent",
+  "@accentPickerTitle": {
+    "description": "Title of the custom accent-color picker sheet."
+  },
+
+  "accentPickerConfirm": "Use this color",
+  "@accentPickerConfirm": {
+    "description": "Confirms the picked accent color and closes the picker."
+  },
+
+  "accentPickerSaturation": "Saturation and brightness",
+  "@accentPickerSaturation": {
+    "description": "Accessibility label for the saturation/brightness panel of the color picker."
+  },
+
+  "accentPickerHue": "Hue",
+  "@accentPickerHue": {
+    "description": "Accessibility label for the hue slider of the color picker."
   }
 }

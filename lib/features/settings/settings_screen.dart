@@ -10,6 +10,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/features/library/library_destination_tile.dart';
+import 'package:tela/features/settings/accent_color_section.dart';
 import 'package:tela/features/settings/api_key_section.dart';
 import 'package:tela/features/settings/app_lock_switch.dart';
 import 'package:tela/features/settings/browse_defaults_section.dart';
@@ -78,6 +79,8 @@ class _SettingsList extends StatelessWidget {
       children: <Widget>[
         _accountGroup(l10n),
         const SizedBox(height: 16),
+        _appearanceGroup(l10n),
+        const SizedBox(height: 16),
         _browseGroup(l10n),
         const SizedBox(height: 16),
         _downloadsGroup(l10n),
@@ -97,6 +100,8 @@ class _SettingsList extends StatelessWidget {
           child: Column(
             children: <Widget>[
               _accountGroup(l10n),
+              const SizedBox(height: 16),
+              _appearanceGroup(l10n),
               const SizedBox(height: 16),
               _browseGroup(l10n),
             ],
@@ -124,6 +129,15 @@ class _SettingsList extends StatelessWidget {
       title: l10n.settingsAccountSection,
       description: l10n.settingsAccountDescription,
       children: const <Widget>[ApiKeySection()],
+    );
+  }
+
+  Widget _appearanceGroup(AppLocalizations l10n) {
+    return _SettingsGroup(
+      icon: Icons.palette_outlined,
+      title: l10n.settingsAppearanceSection,
+      description: l10n.settingsAppearanceDescription,
+      children: const <Widget>[AccentColorSection()],
     );
   }
 

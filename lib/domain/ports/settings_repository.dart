@@ -1,3 +1,4 @@
+import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -60,4 +61,20 @@ abstract interface class SettingsRepository {
 
   /// Persists [defaults] as the snapshot the device browses on.
   Future<void> saveDeviceDefaults(BrowseDefaults defaults);
+
+  /// The brand accent the user chose, or null to follow the device palette
+  /// (Material You), which is what tela ships on.
+  ///
+  /// Never throws: a row it cannot parse answers null, and null is already the
+  /// safe reading — an unreadable accent falls back to the device's own.
+  Future<AccentColor?> loadAccentColor();
+
+  /// Persists [accent] as the brand colour used for tela's own moments.
+  Future<void> saveAccentColor(AccentColor accent);
+
+  /// Drops the chosen accent, which is what "follow wallpaper" does.
+  ///
+  /// The absence of the row *is* follow-system, so this deletes rather than
+  /// writes a sentinel — see the device-colour filter for the same rule.
+  Future<void> clearAccentColor();
 }

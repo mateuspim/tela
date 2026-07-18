@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
+import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
@@ -311,6 +312,39 @@ void main() {
 
       expect(await settings.isPrivateLibraryLocked(), isTrue);
       expect(await settings.loadAccountDefaults(), _account);
+    });
+  });
+
+  group('accent colour', () {
+    test('follows the device palette before anything is chosen', () async {
+      expect(await settings.loadAccentColor(), isNull);
+    });
+
+    test('round-trips a chosen accent', () async {
+      await settings.saveAccentColor(AccentColor(0x2c63e0));
+      expect(await settings.loadAccentColor(), AccentColor(0x2c63e0));
+    });
+
+    test('stores a #rrggbb literal, readable in a sqlite3 shell', () async {
+      await settings.saveAccentColor(AccentColor(0x2c63e0));
+      expect(await db.settingValue('appearance.accent'), '#2c63e0');
+    });
+
+    test('re-choosing upserts rather than stacking rows', () async {
+      await settings.saveAccentColor(AccentColor(0x2c63e0));
+      await settings.saveAccentColor(AccentColor(0xcf5a18));
+      expect(await settings.loadAccentColor(), AccentColor(0xcf5a18));
+    });
+
+    test('clearing deletes the row, so it follows the palette again', () async {
+      await settings.saveAccentColor(AccentColor(0x2c63e0));
+      await settings.clearAccentColor();
+      expect(await settings.loadAccentColor(), isNull);
+    });
+
+    test('a corrupt row costs the accent, not the app', () async {
+      await db.putSetting('appearance.accent', 'not-a-colour');
+      expect(await settings.loadAccentColor(), isNull);
     });
   });
 }

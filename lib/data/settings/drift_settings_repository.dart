@@ -1,4 +1,5 @@
 import 'package:tela/data/db/tela_database.dart';
+import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -60,6 +61,10 @@ class DriftSettingsRepository implements SettingsRepository {
   static const String _deviceOrderKey = 'device.order';
   static const String _deviceColorKey = 'device.color';
   static const String _deviceResolutionKey = 'device.resolution';
+
+  /// The user's brand accent, stored as a `#rrggbb` literal — the same form the
+  /// picker and a `sqlite3` shell read. Absent means follow the device palette.
+  static const String _accentKey = 'appearance.accent';
 
   final TelaDatabase _db;
 
@@ -178,6 +183,19 @@ class DriftSettingsRepository implements SettingsRepository {
     }
     await _db.putSetting(_deviceColorKey, color.hex);
   }
+
+  @override
+  Future<AccentColor?> loadAccentColor() async {
+    return AccentColor.tryFromHex(await _db.settingValue(_accentKey));
+  }
+
+  @override
+  Future<void> saveAccentColor(AccentColor accent) {
+    return _db.putSetting(_accentKey, accent.hex);
+  }
+
+  @override
+  Future<void> clearAccentColor() => _db.deleteSettings(<String>[_accentKey]);
 
   /// Reads one tier, treating an absent, unrecognised, or forbidden row as
   /// [fallback].
