@@ -224,28 +224,52 @@ chose all four of these. They are ordered by cost, and each is independently
 shippable — take them one at a time, in this order, and stop wherever the
 session ends.
 
+**C1 is built (`46ec6c2`); C2 is next.** C1's own section below now records what
+it decided rather than what to do.
+
 Every one of them is *observable*: none can be called done on a green suite
 alone, because all four are things the owner looks at. `make deploy` and a
 screenshot pass belongs in each slice.
 
-### C1 — tile density (small / medium / large)
+### C1 — tile density — **built (`46ec6c2`); owner's eye still owed**
 
-The cheapest and the one that most changes how the tablet feels. Justified rows
-made `targetRowHeight` the single knob controlling tile size, so this is a
-setting wired to a number that already exists.
+Settings → Appearance → *Wallpaper size* (Small/Medium/Large), persisted through
+`SettingsRepository`, redrawing all four shelves. 701 tests (from 687), analyze
+and format clean, every new claim mutation-checked.
 
-- `wallpaperRowHeight(width)` in `core/ui/wallpaper_grid_columns.dart` is the
-  seam — it currently derives the height from `_targetTileWidth / 1.5`. Density
-  scales that, and `wallpaperRowTileCap` should move with it or a "large" tablet
-  row still crams six tiles.
-- Persist through `SettingsRepository`, which already has the exact shape to
-  copy: `loadAccentColor` / `saveAccentColor` / `clearAccentColor`, backed by a
-  `TileDensity` enum in `domain/models/` (**not** a stringly-typed value — see
-  CLAUDE.md's domain-state rule). `AccentColor` is the model to imitate.
-- The Settings screen already has a preset-picking control for the accent; reuse
-  that pattern rather than inventing a second one.
-- Watch: the shelves are `StatelessWidget`s reading the height at build, so the
-  provider has to be watched somewhere that rebuilds all four.
+**Two quantisation traps, both of which silently eat the knob** — this is the
+part worth not re-deriving:
+
+- **The target height divides by a *fractional* column count.** Rounding it
+  collapses the setting wherever two densities round to the same count: a 500dip
+  shelf (unfolded foldable, small tablet in portrait) rounds to two columns at
+  both medium and large, so a rounded divisor hands them the identical height
+  and *Large* visibly does nothing there. **The first version of that test was
+  vacuous** — pinned at the 390dip phone, where the counts round to two and one
+  and differ *by accident*, so it passed against the mutation. It measures
+  something now; if you move the width, check the counts still collide.
+- **The per-row cap's ceiling moves with the density.** Under the old fixed six,
+  small on the tablet clamps straight back to the row medium already drew.
+
+Medium is the 220dip the wall has always packed to, and an unset row reads back
+as medium, so the upgrade is not a silent resize.
+
+**The wiring is a `TileDensityScope`, not four watches.** `core/ui` packs the
+wall and may not reach up into a feature's Riverpod provider, so the app root
+watches `tileDensityProvider` once and publishes it through `MaterialApp`'s
+`builder`. One wiring point is what keeps Browse, Favorites, History and the
+private library the same size. `TileDensityScope.of` answers medium with no
+scope above it, which is why no existing shelf test needed touching.
+
+Also retires `wallpaperGridColumns`, dead since the masonry went, whose
+docstring still told the next reader to build a `MasonryGridView`.
+
+**Owed:** the density is a thing you look at, and nobody has. `make deploy` ran
+and the release build is on the tablet (running clean, no fatals), but the
+device was keyguarded and `screencap` returned the ~19KB black frame the whole
+time — unlock it and look at all three steps, on the wall and in the skeleton.
+The knobs to judge are the three target widths (150 / 220 / 320 dip) and the
+row caps (9 / 6 / 4), both in `core/ui/wallpaper_grid_columns.dart`.
 
 ### C2 — blurred-fill detail preview
 
