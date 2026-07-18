@@ -2,6 +2,11 @@
 
 Updated: 2026-07-18
 
+> **Picking up cold?** The work to *do* is **NEXT SESSION STARTS HERE** (C1–C4,
+> a second UI pass). The section below is what just *happened* and why the
+> layout changed — read it first if you are going to touch any grid, since
+> masonry is gone and the reason it went is easy to re-litigate wrongly.
+
 ## START HERE — the UI/UX pass is done and device-verified; the wall is now justified rows, not masonry
 
 The owner asked for a UI/UX pass — "make it more beautiful" **and** fix some
@@ -210,6 +215,91 @@ mutation-checked. Filter-sheet `FilterChip`s and the `SegmentedButton` were left
 on the default tone deliberately — they live in a transient modal, rarely beside
 the nav; unify them in a follow-up if the split ever shows. **Not yet on the
 device** — like all the beauty work, it wants an owner's eye on real hardware.
+
+
+## NEXT SESSION STARTS HERE — a second UI pass, four slices
+
+The owner asked for more UI work after the justified-rows change landed and
+chose all four of these. They are ordered by cost, and each is independently
+shippable — take them one at a time, in this order, and stop wherever the
+session ends.
+
+Every one of them is *observable*: none can be called done on a green suite
+alone, because all four are things the owner looks at. `make deploy` and a
+screenshot pass belongs in each slice.
+
+### C1 — tile density (small / medium / large)
+
+The cheapest and the one that most changes how the tablet feels. Justified rows
+made `targetRowHeight` the single knob controlling tile size, so this is a
+setting wired to a number that already exists.
+
+- `wallpaperRowHeight(width)` in `core/ui/wallpaper_grid_columns.dart` is the
+  seam — it currently derives the height from `_targetTileWidth / 1.5`. Density
+  scales that, and `wallpaperRowTileCap` should move with it or a "large" tablet
+  row still crams six tiles.
+- Persist through `SettingsRepository`, which already has the exact shape to
+  copy: `loadAccentColor` / `saveAccentColor` / `clearAccentColor`, backed by a
+  `TileDensity` enum in `domain/models/` (**not** a stringly-typed value — see
+  CLAUDE.md's domain-state rule). `AccentColor` is the model to imitate.
+- The Settings screen already has a preset-picking control for the accent; reuse
+  that pattern rather than inventing a second one.
+- Watch: the shelves are `StatelessWidget`s reading the height at build, so the
+  provider has to be watched somewhere that rebuilds all four.
+
+### C2 — blurred-fill detail preview
+
+The detail pane letterboxes hard: a 2560x1600 wallpaper leaves ~160dip of dead
+black above and below (visible in any Detail screenshot). Fill it with a
+blurred, darkened copy of the wallpaper behind the fitted preview — the trick
+every wallpaper app uses, and it needs no extra fetch because the image is
+already decoded.
+
+- `features/detail/progressive_wallpaper_preview.dart` is the whole surface.
+- Use the *thumbnail* as the blur source, not the full-res one: it is already in
+  `thumbnailImageCache`, and a blur destroys the detail anyway. Blurring a 6K
+  bitmap to paint 160dip of background would be a real cost for nothing.
+- Honour `MediaQuery.disableAnimationsOf` if any crossfade is added.
+- **Check the NSFW path before shipping**: a blurred backdrop is still the
+  image. Confirm it changes nothing about `FLAG_SECURE` or `mayExportBitmap` —
+  it should not, since nothing leaves the app, but say so out loud in the commit.
+
+### C3 — unify the detail panel, and un-strand the Colors row
+
+Two jobs, one screen, because they are the same edit.
+
+- The panel speaks two visual languages for one kind of data: Resolution, File
+  size, Category and Purity are cards; File type, Ratio, Views, Favorites,
+  Uploader and Source are a plain key-value list. Pick one. `wallpaper_metadata.dart`
+  owns this.
+- The **Colors** row sits at the panel's clipped bottom edge. This is a real
+  reachability defect, not a nitpick: the 2026-07-18 device pass could not verify
+  B2a's colour drilldown at all because the tap landed in the gutter below the
+  swatches. Moving it up the panel is what makes that testable.
+- So this slice closes the one B2a item still marked unverified further down.
+
+### C4 — tile state indicators
+
+Browse cannot tell you what you already have. A discreet corner mark for
+already-favorited and already-downloaded closes that loop.
+
+- The providers exist: `isFavoriteProvider(id)` in
+  `features/favorites/favorites_providers.dart`, and `recentDownloadsProvider` /
+  `missingDownloadsProvider` in `app/library_listings.dart`.
+- It lands in the shared `WallpaperTile`, so it appears on **all four** shelves
+  at once — which is the point, but also means the marks must not fight the
+  history shelf's existing `_missingBadge` (cloud icon, top-right). Pick a
+  different corner or fold the two into one badge vocabulary.
+- Per-tile `isFavoriteProvider` watches across a long grid are the risk here.
+  Prefer one set-shaped provider the tile reads from, the way the history shelf
+  already does with `missingDownloadsProvider`, over a family watch per tile.
+
+### What is *not* in this pass
+
+Wave 4's product work (auto-rotate, collections, Omarchy sync) is untouched and
+still described below. The owner-owed hardware items are also unchanged — the
+wallpaper-apply round trip, the real biometric prompt, the cache figure, and the
+release keystore.
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 
