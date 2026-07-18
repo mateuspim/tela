@@ -6,15 +6,40 @@ import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 
 void main() {
   group('WallpaperGridSkeleton', () {
-    testWidgets('previews the wall as a masonry, not a lone spinner', (
+    testWidgets('previews the wall as justified rows, not a lone spinner', (
       WidgetTester tester,
     ) async {
       await _pump(tester);
 
       // A packed placeholder wall, laid out ahead of the real images.
-      expect(find.byType(AspectRatio), findsNWidgets(12));
+      final Finder tiles = find.byType(WallpaperSkeletonTile);
+      expect(tiles, findsWidgets);
       // The whole point of the slice: no centred spinner over an empty screen.
       expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
+
+    testWidgets('packs its placeholders into rows of a shared height', (
+      WidgetTester tester,
+    ) async {
+      await _pump(tester);
+
+      // The preview is only worth drawing if it previews the real shape: rows
+      // where everything shares one height, which is what the wall will do.
+      final List<Size> sizes = tester
+          .widgetList<WallpaperSkeletonTile>(
+            find.byType(WallpaperSkeletonTile),
+          )
+          .map((WallpaperSkeletonTile tile) => Size(tile.width, tile.height))
+          .toList();
+      expect(sizes.length, greaterThan(1));
+
+      final Map<double, int> byHeight = <double, int>{};
+      for (final Size size in sizes) {
+        byHeight[size.height] = (byHeight[size.height] ?? 0) + 1;
+      }
+      // Several tiles share each row height, and no tile is a sliver.
+      expect(byHeight.values.any((int count) => count > 1), isTrue);
+      expect(sizes.every((Size size) => size.width > 20), isTrue);
     });
 
     testWidgets('carries the loading label but hides the placeholder tiles', (
