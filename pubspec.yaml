@@ -85,6 +85,22 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # tela's display face — brand moments only (the wordmark, shelf plaques,
+  # screen titles), never body or controls, which stay on the device font so
+  # Material You reads native. Bricolage Grotesque, SIL OFL 1.1; the licence
+  # ships beside it at assets/fonts/OFL-BricolageGrotesque.txt. Three static
+  # weights rather than the variable font: the weights we set are the only ones
+  # we use, and static keeps the APK's font tables small.
+  fonts:
+    - family: Bricolage
+      fonts:
+        - asset: assets/fonts/BricolageGrotesque-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/BricolageGrotesque-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/BricolageGrotesque-Bold.ttf
+          weight: 700
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

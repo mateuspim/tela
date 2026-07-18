@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/tela_wordmark.dart';
 
 /// The adaptive frame around tela's three primary destinations.
 ///
@@ -41,31 +42,15 @@ class TelaShell extends StatelessWidget {
   }
 
   Widget _expandedFrame(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
     return Scaffold(
       body: Row(
         children: <Widget>[
           NavigationRail(
             selectedIndex: navigationShell.currentIndex,
             labelType: NavigationRailLabelType.all,
-            leading: Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  l10n.appTitle.substring(0, 1),
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+            leading: const Padding(
+              padding: EdgeInsets.only(top: 8, bottom: 28),
+              child: TelaWordmark(fontSize: 22),
             ),
             destinations: _railDestinations(context),
             onDestinationSelected: _openDestination,

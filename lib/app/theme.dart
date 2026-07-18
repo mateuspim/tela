@@ -57,6 +57,7 @@ abstract final class TelaTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
+      textTheme: _brandText(brightness),
       scaffoldBackgroundColor: scheme.surface,
       dividerTheme: DividerThemeData(
         color: scheme.outlineVariant.withValues(alpha: .55),
@@ -168,6 +169,40 @@ abstract final class TelaTheme {
       inversePrimary: a.inversePrimary,
     );
   }
+
+  /// The display face — [brandFontFamily] — on the display and headline roles,
+  /// leaving title, body and label on the device font.
+  ///
+  /// The split is the whole design: tela speaks in Bricolage Grotesque for its
+  /// own moments (a screen title, the wordmark, a shelf plaque) and in the
+  /// user's own font everywhere they are reading or operating, so the chrome
+  /// keeps an identity without turning paragraphs into a typeface demo. The
+  /// tighter tracking is what a grotesque display face wants at size; the body
+  /// roles keep Material's own metrics.
+  static TextTheme _brandText(Brightness brightness) {
+    final TextTheme base = brightness == Brightness.dark
+        ? Typography.material2021().white
+        : Typography.material2021().black;
+    return base.copyWith(
+      displayLarge: _display(base.displayLarge, -1.5),
+      displayMedium: _display(base.displayMedium, -1),
+      displaySmall: _display(base.displaySmall, -0.5),
+      headlineLarge: _display(base.headlineLarge, -0.5),
+      headlineMedium: _display(base.headlineMedium, -0.4),
+      headlineSmall: _display(base.headlineSmall, -0.3),
+    );
+  }
+
+  /// One display/headline slot in [brandFontFamily], at [letterSpacing].
+  static TextStyle? _display(TextStyle? base, double letterSpacing) =>
+      base?.copyWith(
+        fontFamily: brandFontFamily,
+        fontWeight: FontWeight.w600,
+        letterSpacing: letterSpacing,
+      );
+
+  /// The bundled display family (see `pubspec.yaml`). Brand moments only.
+  static const String brandFontFamily = 'Bricolage';
 
   static OutlineInputBorder _inputBorder({Color color = Colors.transparent}) {
     return OutlineInputBorder(
