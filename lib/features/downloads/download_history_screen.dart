@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
@@ -10,8 +9,8 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
+import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
-import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/download_record.dart';
@@ -65,13 +64,11 @@ class DownloadHistoryScreen extends ConsumerWidget {
         message: l10n.downloadHistoryEmpty,
       );
     }
-    return MasonryGridView.count(
-      crossAxisCount: wallpaperGridColumns(context),
-      mainAxisSpacing: wallpaperGridSpacing,
-      crossAxisSpacing: wallpaperGridSpacing,
-      padding: wallpaperGridPadding(context),
+    return JustifiedWallpaperGrid(
       itemCount: recent.length,
-      itemBuilder: (BuildContext context, int index) =>
+      aspectRatioOf: (int index) =>
+          recent[index].wallpaper.resolution.aspectRatio,
+      itemBuilder: (BuildContext context, int index, double _, double _) =>
           _tile(context, ref, l10n, recent, index),
     );
   }

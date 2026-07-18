@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
@@ -11,6 +10,7 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
+import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
@@ -101,20 +101,18 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
         message: l10n.privateLibraryEmpty,
       );
     }
-    // Masonry keyed to each file's real aspect ratio now that the native
-    // listing decodes its bounds; a corrupt file with none falls back square.
-    return MasonryGridView.count(
-      crossAxisCount: wallpaperGridColumns(context),
-      mainAxisSpacing: wallpaperGridSpacing,
-      crossAxisSpacing: wallpaperGridSpacing,
-      padding: wallpaperGridPadding(context),
+    // Rows keyed to each file's real aspect ratio now that the native listing
+    // decodes its bounds; a corrupt file with none falls back square.
+    return JustifiedWallpaperGrid(
       itemCount: stored.length,
-      itemBuilder: (BuildContext context, int index) => _PrivateTile(
-        image: stored[index],
-        position: index,
-        onTap: () => _open(context, stored, index),
-        onDelete: () => _confirmDelete(stored[index]),
-      ),
+      aspectRatioOf: (int index) => stored[index].aspectRatio ?? 1,
+      itemBuilder: (BuildContext context, int index, double _, double _) =>
+          _PrivateTile(
+            image: stored[index],
+            position: index,
+            onTap: () => _open(context, stored, index),
+            onDelete: () => _confirmDelete(stored[index]),
+          ),
     );
   }
 
@@ -213,14 +211,13 @@ class _PrivateTile extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         borderRadius: BorderRadius.circular(wallpaperTileRadius),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        // Sized by the justified row, not here: the row already derived its
+        // height from this same ratio (a corrupt file's missing one falls back
+        // square there too), and a self-measuring tile would fight it.
         child: InkWell(
           onTap: onTap,
           onLongPress: onDelete,
-          // A corrupt file has no known ratio; a square keeps the grid rhythm.
-          child: AspectRatio(
-            aspectRatio: image.aspectRatio ?? 1,
-            child: _thumbnail(context),
-          ),
+          child: _thumbnail(context),
         ),
       ),
     );

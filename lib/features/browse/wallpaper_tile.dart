@@ -7,8 +7,10 @@ import 'package:tela/domain/models/wallpaper.dart';
 
 /// One wallpaper in the browse grid.
 ///
-/// Sized to the image's own aspect ratio so a masonry grid can pack portrait
-/// and landscape thumbs without letterboxing either.
+/// Deliberately does **not** size itself: the justified row it sits in assigns
+/// every tile the row's shared height, and a tile that measured itself from its
+/// own aspect ratio would fight that. The row derives its heights from the same
+/// ratio, so the thumb still shows uncropped — see `justifiedRows`.
 class WallpaperTile extends StatelessWidget {
   /// Creates a tile for [wallpaper].
   const WallpaperTile({
@@ -40,17 +42,14 @@ class WallpaperTile extends StatelessWidget {
       image: true,
       button: onTap != null,
       label: AppLocalizations.of(context).detailPreviewLabel(wallpaper.id),
-      child: AspectRatio(
-        aspectRatio: wallpaper.resolution.width / wallpaper.resolution.height,
-        child: Material(
-          clipBehavior: Clip.antiAlias,
-          borderRadius: BorderRadius.circular(wallpaperTileRadius),
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: InkWell(
-            onTap: onTap,
-            onLongPress: onLongPress,
-            child: _thumbnail(context),
-          ),
+      child: Material(
+        clipBehavior: Clip.antiAlias,
+        borderRadius: BorderRadius.circular(wallpaperTileRadius),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: _thumbnail(context),
         ),
       ),
     );

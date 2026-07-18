@@ -100,12 +100,12 @@ void main() {
     // Ask for the next page the way scrolling to the end does. A grid holding a
     // stale `hasMore: false` answers "there is no next page" — and once that is
     // recorded it is never revisited, so the listing simply stops at page one.
-    _gridView(tester).fetchNextPage();
+    _paging(tester).fetchNextPage();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
-      _gridView(tester).state.hasNextPage,
+      _paging(tester).value.hasNextPage,
       isTrue,
       reason: 'the new listing has five pages, and must know it',
     );
@@ -215,12 +215,18 @@ const SearchQuery _anime = SearchQuery(
 
 bool _isAnime(SearchQuery query) => query.categories == _anime.categories;
 
-/// The paged grid itself, which is both what the layout hands its own
-/// `fetchNextPage` to and where the paging state can be read back.
-PagedMasonryGridView<int, Wallpaper> _gridView(WidgetTester tester) {
-  return tester.widget<PagedMasonryGridView<int, Wallpaper>>(
-    find.byType(PagedMasonryGridView<int, Wallpaper>),
-  );
+/// The grid's paging controller: what drives its fetches and where the paging
+/// state can be read back.
+///
+/// Read off the [PagingListener] the grid builds with. The wall itself is laid
+/// out by hand now (justified rows, not a paged grid widget), so there is no
+/// paged-view widget left to interrogate — the controller is the seam.
+PagingController<int, Wallpaper> _paging(WidgetTester tester) {
+  return tester
+      .widget<PagingListener<int, Wallpaper>>(
+        find.byType(PagingListener<int, Wallpaper>),
+      )
+      .controller;
 }
 
 /// Mounts the grid on [query], reusing [api] and [blocklist] so that pumping a

@@ -2,13 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
-import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -53,17 +52,15 @@ class FavoritesGrid extends ConsumerWidget {
         message: l10n.favoritesEmpty,
       );
     }
-    return MasonryGridView.count(
-      crossAxisCount: wallpaperGridColumns(context),
-      mainAxisSpacing: wallpaperGridSpacing,
-      crossAxisSpacing: wallpaperGridSpacing,
-      padding: wallpaperGridPadding(context),
+    return JustifiedWallpaperGrid(
       itemCount: saved.length,
-      itemBuilder: (BuildContext context, int index) => WallpaperTile(
-        wallpaper: saved[index],
-        heroTag: shelfHeroTag('favorites', saved[index].id, index),
-        onTap: () => _openDetail(context, saved, index),
-      ),
+      aspectRatioOf: (int index) => saved[index].resolution.aspectRatio,
+      itemBuilder: (BuildContext context, int index, double _, double _) =>
+          WallpaperTile(
+            wallpaper: saved[index],
+            heroTag: shelfHeroTag('favorites', saved[index].id, index),
+            onTap: () => _openDetail(context, saved, index),
+          ),
     );
   }
 

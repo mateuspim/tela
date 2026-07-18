@@ -9,8 +9,8 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
-import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/search_query.dart';
@@ -25,7 +25,7 @@ import 'package:tela/features/detail/wallpaper_detail_args.dart';
 import 'package:tela/features/detail/wallpaper_gallery_session.dart';
 import 'package:tela/features/settings/blocked_tags_providers.dart';
 
-/// An infinite, masonry-packed grid of wallpapers for one [query].
+/// An infinite wall of wallpapers for one [query], in justified rows.
 ///
 /// Owns its paging state, so each browse tab scrolls independently and keeps
 /// its position when you switch away and back.
@@ -74,6 +74,13 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
       fetchPage: _fetchPage,
     );
     _bridge = GalleryPagingBridge(_paging);
+    // The opening fetch is ours to make. `PagedLayoutBuilder` used to schedule
+    // it as a side effect of its first build, and nothing else ever did — with
+    // the wall now laid out by hand, a grid that did not ask here would sit on
+    // an empty listing forever, reporting "no results" for a search it never
+    // ran. Same reasoning as [_retry]: asking directly does not depend on any
+    // build-timing window.
+    _paging.fetchNextPage();
   }
 
   /// Reloads from page 1 when the term or the filters change.
@@ -247,33 +254,107 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     );
     return RefreshIndicator(
       onRefresh: () async => _retry(),
-      child: PagedMasonryGridView<int, Wallpaper>.count(
-        state: state,
-        fetchNextPage: fetchNextPage,
-        crossAxisCount: wallpaperGridColumns(context),
-        mainAxisSpacing: wallpaperGridSpacing,
-        crossAxisSpacing: wallpaperGridSpacing,
-        padding: wallpaperGridPadding(context),
-        builderDelegate: PagedChildBuilderDelegate<Wallpaper>(
-          itemBuilder: (BuildContext context, Wallpaper wallpaper, int index) =>
-              WallpaperTile(
-                wallpaper: wallpaper,
-                heroTag: shelfHeroTag(identity, wallpaper.id, index),
-                onTap: () => _openDetail(context, loaded, index),
-              ),
-          firstPageProgressIndicatorBuilder: (BuildContext context) =>
-              const WallpaperGridSkeleton(),
-          firstPageErrorIndicatorBuilder: (BuildContext context) =>
-              _failure(l10n, state.error),
-          newPageErrorIndicatorBuilder: (BuildContext context) =>
-              _failure(l10n, state.error),
-          noItemsFoundIndicatorBuilder: (BuildContext context) =>
-              WallpaperStatusView(
-                icon: Icons.search_off,
-                message: l10n.browseEmpty,
-              ),
-        ),
+      child: loaded.isEmpty
+          ? _firstPage(context, l10n, state)
+          : _wall(context, l10n, state, fetchNextPage, loaded, identity),
+    );
+  }
+
+  /// The wall itself, in justified rows, watching its own tail for the next
+  /// page.
+  ///
+  /// Rows rather than masonry because masonry has no rows to read: it drops
+  /// each tile into the shortest column, so the tile beside another is often
+  /// the one *before* it, and the detail pager — which walks the list by index
+  /// — looked like it skipped around. Here reading order is list order, so the
+  /// pager, the session, and the index-keyed Hero tags all need no
+  /// compensation.
+  Widget _wall(
+    BuildContext context,
+    AppLocalizations l10n,
+    PagingState<int, Wallpaper> state,
+    NextPageCallback fetchNextPage,
+    List<Wallpaper> loaded,
+    String identity,
+  ) {
+    return NotificationListener<ScrollNotification>(
+      onNotification: (ScrollNotification notification) =>
+          _maybeFetchNext(notification, state, fetchNextPage),
+      child: JustifiedWallpaperGrid(
+        itemCount: loaded.length,
+        aspectRatioOf: (int index) => loaded[index].resolution.aspectRatio,
+        itemBuilder: (BuildContext context, int index, double _, double _) =>
+            WallpaperTile(
+              wallpaper: loaded[index],
+              heroTag: shelfHeroTag(identity, loaded[index].id, index),
+              onTap: () => _openDetail(context, loaded, index),
+            ),
+        footer: _footer(l10n, state),
       ),
+    );
+  }
+
+  /// Asks for the next page once the user is within a screen of the end.
+  ///
+  /// Replaces the paged grid widget's own end-of-list trigger. Guarded on
+  /// [PagingState.isLoading] as well as [PagingState.hasNextPage], or every
+  /// scroll frame inside the threshold would fire another request.
+  bool _maybeFetchNext(
+    ScrollNotification notification,
+    PagingState<int, Wallpaper> state,
+    NextPageCallback fetchNextPage,
+  ) {
+    if (!state.hasNextPage || state.isLoading || state.error != null) {
+      return false;
+    }
+    final ScrollMetrics metrics = notification.metrics;
+    final double remaining = metrics.maxScrollExtent - metrics.pixels;
+    if (remaining > metrics.viewportDimension) return false;
+    fetchNextPage();
+    return false;
+  }
+
+  /// What sits below the last row: nothing, a next-page spinner, or a retry.
+  Widget? _footer(AppLocalizations l10n, PagingState<int, Wallpaper> state) {
+    if (state.error != null) return _failure(l10n, state.error);
+    if (!state.isLoading) return null;
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 24),
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  /// The whole-screen state before any wallpaper has arrived.
+  ///
+  /// Kept scrollable so pull-to-refresh still works when there is nothing to
+  /// scroll — a listing that came back empty or failed is exactly when the user
+  /// reaches for it, and [RefreshIndicator] ignores a non-scrolling child.
+  Widget _firstPage(
+    BuildContext context,
+    AppLocalizations l10n,
+    PagingState<int, Wallpaper> state,
+  ) {
+    final Widget body = switch (state) {
+      PagingState<int, Wallpaper>(error: final Object error?) => _failure(
+        l10n,
+        error,
+      ),
+      PagingState<int, Wallpaper>(isLoading: true) =>
+        const WallpaperGridSkeleton(),
+      _ => WallpaperStatusView(
+        icon: Icons.search_off,
+        message: l10n.browseEmpty,
+      ),
+    };
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) =>
+          SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            // Exactly the viewport's height, not a minimum: the skeleton packs
+            // its rows against a bounded box and overruns it deliberately, so
+            // an unbounded child here makes it size to infinity and throw.
+            child: SizedBox(height: constraints.maxHeight, child: body),
+          ),
     );
   }
 
