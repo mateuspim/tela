@@ -2,11 +2,11 @@
 
 Updated: 2026-07-19
 
-> **Picking up cold?** The second UI pass (C1–C4) is **finished and verified on
-> hardware** — see *NEXT SESSION STARTS HERE* for what each slice decided, and
-> *What is left after this pass* at its end for the small loose threads. The
-> next real work is **Wave 4's product items** (auto-rotate, collections,
-> Omarchy sync), further down.
+> **Picking up cold?** The work to *do* is **THE NEXT PASS — D1–D4**, chosen by
+> the owner on 2026-07-19 and not started. The second UI pass (C1–C4) before it
+> is finished and verified on hardware; see *NEXT SESSION STARTS HERE* for what
+> each of those slices decided. Wave 4's product items (auto-rotate,
+> collections, Omarchy sync) sit behind D.
 >
 > The section immediately below is why the layout changed — read it first if you
 > are going to touch any grid, since masonry is gone and the reason it went is
@@ -577,10 +577,103 @@ The pass is done. Four cosmetic threads survive it, none blocking:
 4. **A history tile that is both marked and missing** (C4) — different corners,
    nothing suspected.
 
+The owner-owed hardware items are unchanged except one: **the cache figure is
+now observed — 173.9 MB** of thumbnails and previews after a real browse, read
+off Settings → Storage on the SM-X730 (2026-07-19). That closes item 4 of *Still
+owed on hardware*. The wallpaper-apply round trip, the real biometric prompt and
+the release keystore are still owed.
+
 Wave 4's product work (auto-rotate, collections, Omarchy sync) is untouched and
-still described below, and is the next real work. The owner-owed hardware items
-are also unchanged — the wallpaper-apply round trip, the real biometric prompt,
-the cache figure, and the release keystore.
+described below. **The owner chose a third UI pass (D1–D4) ahead of it** — see
+the next section.
+
+## THE NEXT PASS — D1–D4, chosen 2026-07-19, none started
+
+The owner asked what else the UI needs after C closed, and chose **all four** of
+these. They came out of a screenshot sweep of the SM-X730 in both orientations,
+so each one is *observed*, not speculative. Ordered by cost; each is
+independently shippable; take them one at a time.
+
+**One candidate was investigated and dropped**, so nobody re-raises it: the
+Browse sorting tabs were suspected of clipping on a phone, but
+`browse_screen.dart:109` already sets `isScrollable: true`. Not a problem.
+
+### D1 — long-press quick actions on a browse tile
+
+`WallpaperTile`'s own docstring records the gap: *"Null in the browse grid, where
+a tile has no second action."* So favoriting or downloading anything costs a full
+round trip through the detail screen, and on a 7-tiles-per-row tablet wall that
+is the slowest part of collecting.
+
+**C4 is what makes this worth doing now.** The wall now *tells* you what you
+already have, which invites acting on it in place — and there is nowhere to act.
+
+A long-press should open a quick sheet: favorite, download, set as wallpaper,
+open details. `onLongPress` is already a `WallpaperTile` parameter and already
+used by Download History to forget a row, so the plumbing exists — **check that
+the history's existing long-press is not silently taken over.**
+
+### D2 — sparse shelves leave a wall of dead space
+
+Observed: Library with 2 favorites, and Download History with 1 tile, both render
+a couple of small tiles above roughly a screen and a half of black. On a
+2560x1600 panel that reads as *broken*, not as *empty*. The existing
+`WallpaperStatusView` covers the genuinely-empty case; this is the **nearly**
+empty case, which nothing covers.
+
+Two directions, not yet chosen: constrain the shelf's max width so few tiles
+still look composed, or make Library a real hub (a recent-downloads strip plus a
+favorites preview) instead of two rows over a void.
+
+### D3 — Settings' two columns are a static split
+
+`settings_screen.dart:96` `_wideGroups` hardcodes account/appearance/browse into
+the left column and downloads/privacy/storage into the right. The right is much
+taller, and both sit in **one shared scroll view**, so the left ends less than
+halfway down and you scroll past dead space to read the right column's tail.
+Seen on the tablet in landscape.
+
+Balance by measured height, or give each column its own scroll. Note the split is
+static *by group*, so simply reordering groups is a cheaper first attempt than
+measuring — but it re-breaks the moment a group's height changes.
+
+### D4 — multi-select batch actions
+
+Select several wallpapers on the wall and favorite or download them in one go.
+The biggest tablet payoff and the largest slice. Likely builds on D1's gesture
+work, so **do D1 first** — a long-press that opens a sheet and a long-press that
+enters selection mode are the same gesture, and deciding that twice is how they
+end up fighting.
+
+### The filter badge anomaly — observed, unexplained, probe defined
+
+**Do not treat this as understood.** Browse's filter badge read **1** in
+landscape right after launch, and **3** in portrait a few minutes later. The
+obvious reading is "rotation refolds screen-derived filters", but the arithmetic
+does not support *either* number, which is why this is written down rather than
+fixed.
+
+`activeBrowseFilterCount` (`core/ui/browse_filter_text.dart`) counts eight
+difference-classes against a baseline `const SearchQuery()`, whose defaults are
+`categories: all`, `topRange: oneMonth`, `resolution: AutomaticResolution()`,
+`ratios: [ExactRatio(9, 16)]`. The device defaults Settings displays are
+*General, Anime, People · Last month · 16x10 · Automatic* — categories and
+topRange therefore **match** the baseline and are not counted. That leaves
+ratios (16x10 ≠ 9x16) and the `forScreen`-substituted resolution, so the steady
+state should be **2**, in either orientation.
+
+Observed 1, then 3. **Neither is 2.** So either the badge counts something not
+traced here, or it is being sampled at two different points in a load sequence —
+and `browseDefaultsProvider` resolving after first paint is a documented
+behaviour in this codebase (see the cold-launch-hang section, where late-arriving
+defaults are named as a trigger through the same hole).
+
+**The decisive probe, which takes about a minute:** with defaults settled, rotate
+back to landscape and read the badge again. **If it stays 3, rotation is
+exonerated** and this is defaults landing late; if it drops to 1, rotation really
+is rewriting the active query and that is a defect worth its own slice. This
+session tried exactly that and the tablet dropped off the USB bus mid-probe
+before the reading came back.
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 
