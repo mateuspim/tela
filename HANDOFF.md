@@ -238,13 +238,18 @@ on **USB** (serial `RXGL602SQ0K`), and the stale `192.168.50.191:5555` in this
 file is long dead — that address goes ARP-FAILED and nothing on the subnet
 listens on 5555, so chasing it is a dead end.
 
-The trap is that an agent's sandboxed shell **can use a running adb server but
-cannot start one.** Its startup fails three ways at once: `failed to register
-inotify watch on '/dev/bus/usb/001/'` (restricted `/dev`), `failed to write
-server path to /usr/bin/adb: Read-only file system`, and finally
-`RXGL602SQ0K: connection terminated: failed to open device` — adb *sees* the
-device by serial through libusb and cannot open it. Net result: `ADB server
-didn't ACK`. The owner's own shell has none of these limits and starts it fine.
+The trap is that **the whole Claude Code session runs in a mount namespace whose
+`/dev` is a tmpfs** (`mode=755,uid=1000`), not the real devtmpfs — so
+`/dev/bus/usb` does not exist and adb cannot open a USB device from inside it.
+The daemon fails with `failed to register inotify watch on '/dev/bus/usb/001/'`,
+`failed to write server path to /usr/bin/adb: Read-only file system`, and
+`RXGL602SQ0K: connection terminated: failed to open device` — it *sees* the
+tablet by serial through libusb and cannot open it. Net: `ADB server didn't ACK`.
+
+**The `!` prefix does not escape this** — it shares the same namespace and fails
+identically. Only a terminal started *outside* Claude Code (a desktop terminal,
+another tty) has the real `/dev` and can start a working daemon. Once it is
+running there, this session can use it normally.
 
 So: if `adb devices` is empty, **ask the owner to run it from their shell**.
 Never `kill-server`, never `start-server`, and target the serial explicitly
