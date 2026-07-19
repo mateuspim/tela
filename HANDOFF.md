@@ -1,6 +1,6 @@
 # tela handoff
 
-Updated: 2026-07-18
+Updated: 2026-07-19
 
 > **Picking up cold?** The work to *do* is **NEXT SESSION STARTS HERE** (C1–C4,
 > a second UI pass). The section below is what just *happened* and why the
@@ -225,10 +225,15 @@ shippable — take them one at a time, in this order, and stop wherever the
 session ends.
 
 **C1 is built (`46ec6c2`) and C2 is built (`f1e34cd`); C3 is next.** Their own
-sections below now record what they decided rather than what to do. **Both are
-owed an owner's eye** — the tablet was unreachable (`no route to host` on
-`192.168.50.191:5555`) at the end of the C2 session, so neither has been looked
-at on hardware. Two slices of unseen visual work is the debt to clear first.
+sections below now record what they decided rather than what to do.
+
+**Both have now had a device pass** (C2 on 2026-07-19, C1 on 2026-07-19 — the
+tablet turned up on *USB*, awake and unlocked, when the network address was
+still dead). Each found one real defect and each is fixed: C2's melt-through
+edge (`732d88e`) and C1's under-filled wall (`184c96e`). **What is still owed is
+small and specific** — see the two sections below — but note that C1's own fix
+has not itself been seen on hardware, because the tablet dropped off USB between
+the build and the install.
 
 Every one of them is *observable*: none can be called done on a green suite
 alone, because all four are things the owner looks at. `make deploy` and a
@@ -337,6 +342,67 @@ which case uploader search is broken from the search bar. Do not assume; probe
 the wire the way the ratios work did.
 
 **The remaining knob:** `sigma` (28) in `blurred_image_backdrop.dart`.
+
+### C1's device pass (2026-07-19) — the knob is right; it exposed a paging bug (`184c96e`)
+
+**The three steps work and the range reads well** on the SM-X730, seen on the
+wall at all three settings: **Small 7 tiles/row, Medium 5, Large 3**, every step
+plainly distinct. The quantisation traps C1 documented are avoided at this
+width. The knobs (150 / 220 / 320 dip, caps 9 / 6 / 4) want no change from what
+this session could see. **Still unseen: the skeleton at each density** — the
+shelves loaded too fast on a warm cache to catch it.
+
+**But Small found a real defect, and it was not a density bug.** At Small the
+24-item page leaves rows to spare on this tablet, and the wall sat half-empty
+under a large dead void. Page 2 never arrived — until a swipe at nothing filled
+it, which is the tell.
+
+`_maybeFetchNext` only ever runs off a `ScrollNotification`, and a shelf shorter
+than its viewport emits none: nothing scrolls. The check that would have passed
+never ran. A *drag* emits a notification even with no scroll extent, which is
+why swiping at the void was the only way out. This is the third instance of the
+lesson `initState` and `_retry` already carry — **ask for the page, do not hope
+a side effect notices** — and the fix is `_topUpIfUnderfilled`, guarded exactly
+as the scroll trigger is.
+
+**The half worth not re-deriving, because the first cut did not fix the device.**
+Density is read one layer *down*, inside `JustifiedWallpaperGrid`, so changing
+it re-packs the wall **without rebuilding `_wall`** — and the top-up is
+registered while building. Large → Small is exactly that transition: the page
+that overflowed now strands rows and nothing re-registers the check. Subscribing
+to `TileDensityScope` up in the grid is what keeps it alive. If you ever move
+that subscription, the setting silently stops topping up.
+
+**And the test fixtures are load-bearing: they must be landscape.** Portrait
+tiles pack tall enough to overflow at *every* density, so a portrait wall cannot
+reproduce this at all — the first version of that test failed for exactly that
+reason. Pinned at the tablet's real geometry (2560x1600 @ 2.125) in
+`test/features/browse_underfilled_wall_test.dart`; both halves mutation-checked
+independently. 716 tests.
+
+**Owed:** the fixed build is committed but **was never seen on the device** — the
+tablet dropped off USB (and stayed unreachable at `192.168.50.191:5555`) between
+the build and the install. `make deploy`, set Small, and confirm the wall fills
+itself with no swipe. That is a two-minute check and it is the only thing left
+on C1.
+
+### The `@uploader` search question is closed — tela is not at fault
+
+C2's device pass left this open: `@ranvijay` returned nothing, and the worry was
+that tela quotes the term the way `SearchTag.token` quotes tag names, which
+would break uploader search from the search bar. **Probed live, both halves, and
+it does not.**
+
+- `SearchQuery` passes `term` into `q` **untouched** (`search_query.dart:337`);
+  only [tags] and blocked names get the quoting treatment.
+- The operator works on the wire: `q=@Ramces` → **174** results, while a bare
+  `q=Ramces` → **0**. So `@` is doing exactly what it should.
+
+`@ranvijay` returns 0 **unfiltered**, with no `atleast` and no `ratios` — that
+username simply has nothing to return. Not a filter problem, not a tela problem.
+**The pale-studio melt case from C2 therefore still has no test subject**, and
+finding one is still owed; look for a near-white wallpaper by eye rather than by
+chasing that uploader.
 
 ### C3 — unify the detail panel, and un-strand the Colors row
 
