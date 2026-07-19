@@ -2,7 +2,16 @@
 
 Updated: 2026-07-19
 
-> **Picking up cold?** **The D pass is done, D1 through D7**, all built and
+> **Picking up cold?** **The E pass — tela's visual identity — is done and
+> device-verified**: the mark, an adaptive launcher icon with a Material You
+> monochrome layer, a branded splash on both the pre-31 and 31+ paths, an
+> in-app `TelaMark`, and `docs/BRAND.md`. **788 tests green.** See *E — the
+> visual identity* below; read `docs/BRAND.md` before touching any of it, and
+> do not re-derive the two constraints that fixed the geometry. One item is
+> owed and only the owner can do it: **look at the themed icon** with Samsung's
+> icon theming turned on.
+>
+> **The D pass is done, D1 through D7**, all built and
 > device-verified: D1 (`bdefc1d`), D2a (`af092cd`), D2b (`b24b15b`), D3
 > (`c0e43b0`), D4 (`42b6c67`), D5 (`fdd89eb` + `73bdbb4`), D6 the fullscreen
 > viewer (`e008ab9`), D7 the toast (`da2a206`). A native download bug was fixed
@@ -1229,6 +1238,117 @@ exonerated** and this is defaults landing late; if it drops to 1, rotation reall
 is rewriting the active query and that is a defect worth its own slice. This
 session tried exactly that and the tablet dropped off the USB bus mid-probe
 before the reading came back.
+
+## E — the visual identity, chosen 2026-07-19; built and device-verified
+
+The owner asked for tela's identity to be settled before the leftover cosmetic
+threads, "so we can have a good foundation" — and specifically wanted the icon
+to *show up*. It did not: the launcher was still Flutter's default blue "F",
+untouched since `flutter create`, with **no adaptive icon at all** and therefore
+no Material You monochrome layer, and the splash was `@android:color/white` in
+both light and dark. The only brand asset that existed was `TelaWordmark`, used
+in exactly one place. A1 had promised "a real logo mark"; only the wordmark ever
+landed.
+
+788 tests (from 778), analyze and format clean, all new claims
+mutation-checked. `docs/BRAND.md` is the written identity and is the thing to
+read before touching any of this.
+
+### The mark, and the two constraints that shaped it
+
+**It is an interlocking frame**: four bands, each crossing over one neighbour
+and under the next. *Tela* is the canvas, and a canvas is cloth on a stretcher —
+four bars locked at the corners, which is also the simplest true weave.
+
+**Both constraints were settled by rendering and looking, not by argument, and
+each has a test that fails first if it is broken.**
+
+1. **The interlace is a cut, never a shade.** Material You's themed icon
+   discards our colours and tints one flat silhouette, so over-under has to
+   survive with no tone difference at all. Each band is physically *shortened*
+   at the end that passes under. Express the crossings as two tones instead and
+   the themed icon collapses into a closed square.
+2. **It must fit the circular launcher mask, which is tighter than the 72dp safe
+   square.** A round mask is a circle of radius 36 about the canvas centre, and
+   a square inscribed in it has a half-extent of only 36/√2 ≈ 25.45. Drawn at
+   the safe square's full size the band ends are sliced clean off and the
+   interlace stops reading — checked under both a circle and a squircle before
+   the size was chosen.
+
+**Two false starts, recorded so nobody re-derives them:**
+
+- **The first mark was a 2×2 plain weave of pill segments. Rendered, it was
+  Slack's logo** — near enough to be embarrassing. That construction is theirs.
+- **A 3×3 weave and a tighter 2×2 were both tried and both failed the same
+  way:** cuts wide enough to read detach the segments into loose lozenges, and
+  nothing reads as woven. The frame works because each band stays long enough
+  for the eye to follow it.
+
+### The colour rule
+
+**One fixed colour, `#7772E5`.** The old private `TelaTheme._seed` is now the
+public `TelaTheme.brandSeed`, doing two jobs: the fallback palette's seed, and
+the marks' ink. It is spelled again in
+`android/app/src/main/res/values/tela_brand.xml`, because the launcher and
+splash are painted before Dart exists.
+
+**The mark is deliberately not `ColorScheme.primary`.** tela lets the user pick
+any accent or follow their wallpaper, and a logo that moves with a user setting
+is not an identity. Material You users still get a themed icon — that is the
+monochrome layer's job, and it is the system's business, not ours. The identity
+claim is pinned by a test that pumps the mark under an accent far from the seed.
+
+### What shipped
+
+- `assets/brand/tela_mark.svg` — **the normative geometry**, on the 108 canvas
+  so every renderer uses its numbers verbatim. Design source only: not in
+  `pubspec.yaml`'s asset bundle, so it never ships in the APK.
+- `mipmap-anydpi-v26/ic_launcher.xml` — adaptive icon, **with the monochrome
+  layer**. minSdk 29, so this always wins; the five PNG mipmaps were regenerated
+  from the SVG anyway so Flutter's blue "F" cannot resurface.
+- `drawable/ic_launcher_foreground.xml` and `ic_launcher_monochrome.xml`.
+- Splash on both paths: `drawable-v21/launch_background.xml` for API 29–30, and
+  **`values-v31/styles.xml`**, which is the one that actually runs on anything
+  modern — from API 31 the system splash screen takes over and
+  `windowBackground` stops governing, so branding only the layer-list would have
+  left the tablet on the platform default.
+- `lib/core/ui/tela_mark.dart` — `TelaMark` + `TelaMarkPainter`, drawn with
+  `CustomPainter` rather than pulling in a vector package for four rounded rects.
+- The rail now leads with a lockup (mark over wordmark), private to
+  `tela_shell.dart` because that is the one place both belong.
+
+### The defect the device found — `size` was the icon canvas, not the mark
+
+The first build's rail lockup looked visibly undersized, and the cause is worth
+not re-deriving: **the design grid's outer margin is clearance for a launcher
+mask, and a widget has no mask.** Scaling the whole 108 grid onto the box drew
+the mark at 46% of the size asked for. `TelaMarkPainter` maps
+`TelaMark.frameExtent` onto its box instead, so `TelaMark(size: 30)` means
+thirty logical pixels of mark. Pinned by *fills the box it is given*.
+
+### The device pass (2026-07-19) — SM-X730, one defect, fixed
+
+Note the tablet answered on **`192.168.50.151:5555`** this session, not USB and
+not the long-dead `.191`. It is on **API 36**, so the v31 splash path is the
+live one.
+
+- **The launcher icon renders under One UI's squircle with every band end
+  intact** — the safe-zone sizing did its job, nothing clipped.
+- **The splash lands on the brand ground with the mark centred, no white
+  flash.** Caught with `screenrecord` over a cold launch, which is the reliable
+  way to see it — a `screencap` will almost always miss it.
+- **The rail lockup reads correctly** after the sizing fix above.
+- **The A3 skeleton wall was caught incidentally** in the same recording, at
+  Small density — which partly closes the first of the four leftover cosmetic
+  threads. Medium and Large are still unseen.
+
+**Owed, and only the owner can:** the **themed-icon appearance**. Turning
+Samsung's icon theming on changes the tablet's own system appearance, so this
+session did not flip it. The monochrome layer is verified *present and correctly
+wired* (dumped out of the built APK with `aapt2`: all three layers resolve, and
+the v31 splash attributes are there), and the silhouette was rendered locally
+under a circular mask and reads correctly. What is unverified is only how One UI
+tints it. Settings → Wallpaper and style → apply the palette to app icons.
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 
