@@ -227,13 +227,22 @@ session ends.
 **C1 is built (`46ec6c2`) and C2 is built (`f1e34cd`); C3 is next.** Their own
 sections below now record what they decided rather than what to do.
 
-**Both have now had a device pass** (C2 on 2026-07-19, C1 on 2026-07-19 — the
-tablet turned up on *USB*, awake and unlocked, when the network address was
-still dead). Each found one real defect and each is fixed: C2's melt-through
-edge (`732d88e`) and C1's under-filled wall (`184c96e`). **What is still owed is
-small and specific** — see the two sections below — but note that C1's own fix
-has not itself been seen on hardware, because the tablet dropped off USB between
-the build and the install.
+**Both have now had a device pass** (2026-07-19). Each found one real defect,
+each is fixed, and **both fixes have been seen working on the tablet**: C2's
+melt-through edge (`732d88e`) and C1's under-filled wall (`184c96e`). What is
+still owed is small and specific — see the two sections below.
+
+**One hard-won piece of tooling knowledge, because it cost this session the
+device for an hour: never run `adb kill-server` here.** This host has **no
+`/dev/bus/usb`**, so adb can never claim the tablet over USB even though it
+enumerates in `lsusb` (`04e8:6860`) and genuinely exposes an adb interface
+(vendor class 255, subclass 66, protocol 1). Every working connection is
+*network* adb held by the running server; killing it drops the tablet for good,
+and it does not come back on `192.168.50.191:5555` (that address goes ARP-FAILED
+and nothing on the subnet listens on 5555 after a reboot). Recovery is Wireless
+debugging on the device — `adb pair <ip>:<pairPort>`, then
+`adb connect <ip>:<port>` — which only the owner can do. If `adb devices` is
+empty, ask; do not restart the server.
 
 Every one of them is *observable*: none can be called done on a green suite
 alone, because all four are things the owner looks at. `make deploy` and a
@@ -380,11 +389,15 @@ reason. Pinned at the tablet's real geometry (2560x1600 @ 2.125) in
 `test/features/browse_underfilled_wall_test.dart`; both halves mutation-checked
 independently. 716 tests.
 
-**Owed:** the fixed build is committed but **was never seen on the device** — the
-tablet dropped off USB (and stayed unreachable at `192.168.50.191:5555`) between
-the build and the install. `make deploy`, set Small, and confirm the wall fills
-itself with no swipe. That is a two-minute check and it is the only thing left
-on C1.
+**The fix is verified on the tablet (2026-07-19), both cases:** a cold launch at
+Small now fills the wall past the bottom edge with no swipe (it used to stop at
+24 tiles under a void), and stepping **Large → Small** on an already-built wall
+tops up too — that second one is the half the first cut missed, so it is the one
+worth re-checking if this code is ever touched.
+
+**C1 is done.** The only loose thread left is cosmetic and minor: **the skeleton
+at each density is still unseen**, because the shelves load too fast on a warm
+cache to catch it.
 
 ### The `@uploader` search question is closed — tela is not at fault
 
