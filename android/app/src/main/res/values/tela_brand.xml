@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  tela's fixed brand colours, for the surfaces Android paints before Flutter
+  has drawn a frame: the launcher icon and the splash.
+
+  These are deliberately NOT the in-app accent. The user can pick any accent or
+  follow their wallpaper (TelaTheme._withAccent), but a launcher icon that
+  shifts with an in-app setting is not an identity — and Material You users
+  already get a themed version for free through ic_launcher_monochrome.
+
+  telaBrandGround matches the ground in assets/brand/tela_mark.svg, and
+  telaBrandSeed is the same 0xFF7772E5 as TelaTheme.brandSeed in
+  lib/app/theme.dart. Three files name this colour; docs/BRAND.md says so.
+-->
+<resources>
+    <color name="telaBrandGround">#14122E</color>
+    <color name="telaBrandSeed">#7772E5</color>
+</resources>

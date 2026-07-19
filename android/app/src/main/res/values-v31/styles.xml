@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ takes the splash over. From API 31 the system draws it from these
+  attributes and android:windowBackground no longer governs, so branding
+  launch_background.xml alone would leave the tablet (and every modern phone)
+  on the platform default.
+
+  Only LaunchTheme is redefined here; resource qualifiers merge per name, so
+  NormalTheme still comes from values/styles.xml.
+
+  Note the system splash icon has its OWN framing, not the adaptive icon's: it
+  is masked to a circle and only the inner two thirds of the canvas is
+  reliably visible. The mark sits well inside that here — it spans 29..79 of a
+  108 viewport, under half the width — so it is safe, and if anything reads
+  small on device that is the knob to turn.
+-->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/telaBrandGround</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+    </style>
+</resources>

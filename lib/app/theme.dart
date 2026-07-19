@@ -14,12 +14,25 @@ import 'package:flutter/material.dart';
 /// surfaces stay Material You — so identity survives on every device without
 /// repainting the gallery wall. That splice is [_withAccent].
 abstract final class TelaTheme {
-  /// Seed colour used when the device has no palette to offer.
+  /// tela's own colour: the seed for the fallback palette, and the fixed ink
+  /// of the brand marks.
   ///
-  /// Not dead code and not a placeholder: Monet is Android 12+, tela's minSdk
-  /// is 29, and `dynamic_color` also yields nothing on a device whose OEM
-  /// dropped the API. Roughly a tenth of supported devices land here.
-  static const Color _seed = Color(0xFF7772E5);
+  /// Two jobs, one constant. As a *seed* it is not dead code and not a
+  /// placeholder: Monet is Android 12+, tela's minSdk is 29, and
+  /// `dynamic_color` also yields nothing on a device whose OEM dropped the
+  /// API. Roughly a tenth of supported devices land here.
+  ///
+  /// As *ink* it is what `TelaMark` draws in, and it is deliberately not
+  /// `ColorScheme.primary`: the accent belongs to the user (see [_withAccent])
+  /// and identity must not move with it. The same value is spelled again in
+  /// `android/app/src/main/res/values/tela_brand.xml`, for the launcher icon
+  /// and the splash — surfaces Android paints before Dart exists. `docs/BRAND.md`
+  /// records that those two must stay in step.
+  ///
+  /// ```dart
+  /// const TelaMark(size: 24, color: TelaTheme.brandSeed);
+  /// ```
+  static const Color brandSeed = Color(0xFF7772E5);
 
   /// Light theme, from [device] when Android supplied a palette.
   ///
@@ -50,7 +63,7 @@ abstract final class TelaTheme {
   ) {
     final ColorScheme base = _isUsable(device, brightness)
         ? device!.harmonized()
-        : ColorScheme.fromSeed(seedColor: _seed, brightness: brightness);
+        : ColorScheme.fromSeed(seedColor: brandSeed, brightness: brightness);
     final ColorScheme scheme = accent == null
         ? base
         : _withAccent(base, accent, brightness);

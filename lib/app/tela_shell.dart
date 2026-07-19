@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/tela_mark.dart';
 import 'package:tela/core/ui/tela_wordmark.dart';
 
 /// The adaptive frame around tela's three primary destinations.
@@ -50,7 +51,7 @@ class TelaShell extends StatelessWidget {
             labelType: NavigationRailLabelType.all,
             leading: const Padding(
               padding: EdgeInsets.only(top: 8, bottom: 28),
-              child: TelaWordmark(fontSize: 22),
+              child: _RailBrand(),
             ),
             destinations: _railDestinations(context),
             onDestinationSelected: _openDestination,
@@ -108,6 +109,31 @@ class TelaShell extends StatelessWidget {
     navigationShell.goBranch(
       index,
       initialLocation: index == navigationShell.currentIndex,
+    );
+  }
+}
+
+/// The rail's brand lockup: the mark stacked over the wordmark.
+///
+/// Stacked rather than side by side because the rail is narrow — a horizontal
+/// lockup would either shrink the wordmark below reading size or push the rail
+/// wider, and the rail exists to give width back to the wall.
+///
+/// The lockup is private to the rail: it is the only place in the app that
+/// shows both, so a shared widget would be speculative. [TelaMark] and
+/// [TelaWordmark] are the shared pieces.
+class _RailBrand extends StatelessWidget {
+  const _RailBrand();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        TelaMark(size: 30),
+        SizedBox(height: 10),
+        TelaWordmark(fontSize: 20),
+      ],
     );
   }
 }

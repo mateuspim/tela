@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/app.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/tela_shell.dart';
+import 'package:tela/core/ui/tela_mark.dart';
+import 'package:tela/core/ui/tela_wordmark.dart';
 
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_secret_store.dart';
@@ -45,6 +47,34 @@ void main() {
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
     expect(TelaShell.expandedNavigationWidth, 840);
+  });
+
+  testWidgets('the rail leads with the brand lockup: mark over wordmark', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpShell(tester);
+
+    final Finder rail = find.byType(NavigationRail);
+    expect(
+      find.descendant(of: rail, matching: find.byType(TelaMark)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: rail, matching: find.byType(TelaWordmark)),
+      findsOneWidget,
+    );
+    // Stacked, not side by side — the rail is narrow, and a horizontal lockup
+    // would either shrink the wordmark below reading size or widen the rail
+    // at the wall's expense.
+    expect(
+      tester.getCenter(find.byType(TelaMark)).dy,
+      lessThan(tester.getCenter(find.byType(TelaWordmark)).dy),
+    );
   });
 }
 

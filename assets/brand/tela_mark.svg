@@ -1,0 +1,54 @@
+<!--
+  tela's mark: an interlocking frame. Portuguese *tela* is the canvas, and a
+  canvas is cloth pulled over a stretcher — four bars, each crossing over one
+  neighbour and under the next, which is also the simplest true weave (Latin
+  *tela*, the web on a loom). Four bands, one per side, in a cyclic interlace:
+  top over left, left over bottom, bottom over right, right over top.
+
+  THIS FILE IS THE NORMATIVE GEOMETRY. The Android vector drawables, the PNG
+  mipmaps and Dart's TelaMark are all derived from it — see docs/BRAND.md for
+  the regeneration procedure. It is a design source only: deliberately absent
+  from pubspec.yaml's asset bundle, so it never ships in the APK.
+
+  The canvas is 108x108 — the adaptive-icon canvas — so these numbers are the
+  ones the Android drawables use verbatim, with nothing to re-derive.
+
+    frame outer extent  29..79   (50 wide, centred on 54)
+    band width          12       (pill ends, radius 6 = half the width)
+    cut margin          2.75     (clearance around the band passing over)
+
+  Two constraints fixed those numbers, and both were verified by rendering
+  rather than argued:
+
+  1. THE INTERLACE IS CUT, NOT SHADED. Material You's monochrome layer discards
+     our colours and tints one flat silhouette, so over-under has to survive in
+     a single colour. Each band is shortened at the end that passes under. If
+     the cuts ever become a tone difference, the themed icon collapses into a
+     closed square.
+
+  2. IT MUST FIT THE CIRCULAR MASK, WHICH IS TIGHTER THAN THE 72dp SAFE SQUARE.
+     A launcher's round mask is a circle of radius 36 about (54,54); a square
+     inscribed in it has a half-extent of only 36/sqrt(2) = 25.45. At the safe
+     square's full 72dp the frame's band ends are sliced clean off and the
+     interlace is destroyed — checked under both a circle and a squircle. Hence
+     the 25 half-extent here, which clears both with a hair to spare. Do not
+     grow the frame without re-running that check.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <rect width="108" height="108" fill="#14122E"/>
+
+  <!-- Weft (top and bottom), on the brand seed. Top is cut where the right
+       band crosses it; bottom where the left band does. -->
+  <g fill="#7772E5">
+    <path d="M35.00,29.00 H58.25 A6.00,6.00 0 0 1 58.25,41.00 H35.00 A6.00,6.00 0 0 1 35.00,29.00 Z"/>
+    <path d="M49.75,67.00 H73.00 A6.00,6.00 0 0 1 73.00,79.00 H49.75 A6.00,6.00 0 0 1 49.75,67.00 Z"/>
+  </g>
+
+  <!-- Warp (left and right), on a light tint of the seed. The two tones tell
+       warp from weft; they do not carry the over-under, which is the cuts'
+       job — see constraint 1 above. -->
+  <g fill="#B0ADF2">
+    <path d="M41.00,49.75 V73.00 A6.00,6.00 0 0 1 29.00,73.00 V49.75 A6.00,6.00 0 0 1 41.00,49.75 Z"/>
+    <path d="M79.00,35.00 V58.25 A6.00,6.00 0 0 1 67.00,58.25 V35.00 A6.00,6.00 0 0 1 79.00,35.00 Z"/>
+  </g>
+</svg>

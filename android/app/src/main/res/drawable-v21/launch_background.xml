@@ -1,12 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
+<!--
+  The window Android paints before Flutter draws its first frame. Was
+  ?android:colorBackground here and @android:color/white in drawable/, so a
+  launch of a dark-first app could flash pale.
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+  The ground is the icon's ground, NOT a theme surface, and it is deliberately
+  the same in light and dark: tapping the icon should land on the thing you
+  tapped. A theme-following splash would need a second, darker mark to keep the
+  light warp tint legible on a pale ground — two marks to keep in step, for a
+  band that shows for a few hundred milliseconds.
+
+  minSdk is 29, so this copy is the one that actually runs and drawable/ is
+  kept only in step with it. On API 31+ both are superseded by the system
+  splash screen; see values-v31/styles.xml.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/telaBrandGround" />
+
+    <item
+        android:width="192dp"
+        android:height="192dp"
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:gravity="center" />
 </layer-list>

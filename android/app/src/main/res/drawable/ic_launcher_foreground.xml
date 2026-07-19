@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The tela mark, two-tone, on the adaptive-icon foreground layer.
+
+  Transcribed verbatim from assets/brand/tela_mark.svg, which is the normative
+  geometry — the viewport is 108 there too, so there is nothing to re-derive.
+  Change one, change both, and see docs/BRAND.md.
+
+  The band ends sit inside a circle of radius 36 about (54,54), which is a
+  tighter bound than the 72dp safe square: a round launcher mask slices the
+  ends off anything larger and the interlace stops reading.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Weft: top, cut where the right band crosses over it. -->
+    <path
+        android:fillColor="#7772E5"
+        android:pathData="M35.00,29.00 H58.25 A6.00,6.00 0 0 1 58.25,41.00 H35.00 A6.00,6.00 0 0 1 35.00,29.00 Z" />
+    <!-- Weft: bottom, cut where the left band crosses over it. -->
+    <path
+        android:fillColor="#7772E5"
+        android:pathData="M49.75,67.00 H73.00 A6.00,6.00 0 0 1 73.00,79.00 H49.75 A6.00,6.00 0 0 1 49.75,67.00 Z" />
+
+    <!-- Warp: left, cut under the top band. -->
+    <path
+        android:fillColor="#B0ADF2"
+        android:pathData="M41.00,49.75 V73.00 A6.00,6.00 0 0 1 29.00,73.00 V49.75 A6.00,6.00 0 0 1 41.00,49.75 Z" />
+    <!-- Warp: right, cut under the bottom band. -->
+    <path
+        android:fillColor="#B0ADF2"
+        android:pathData="M79.00,35.00 V58.25 A6.00,6.00 0 0 1 67.00,58.25 V35.00 A6.00,6.00 0 0 1 79.00,35.00 Z" />
+</vector>
