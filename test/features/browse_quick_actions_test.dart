@@ -1,0 +1,238 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+// Riverpod 3 keeps `Override` out of the default export surface.
+import 'package:flutter_riverpod/misc.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:tela/app/app.dart';
+import 'package:tela/app/providers.dart';
+import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_page.dart';
+import 'package:tela/domain/models/wallpaper_target.dart';
+import 'package:tela/features/browse/wallpaper_tile.dart';
+import 'package:tela/features/detail/wallpaper_detail_screen.dart';
+
+import '../fakes/fake_download_history.dart';
+import '../fakes/fake_favorites_repository.dart';
+import '../fakes/fake_image_store.dart';
+import '../fakes/fake_secret_store.dart';
+import '../fakes/fake_settings_repository.dart';
+import '../fakes/fake_tag_blocklist_repository.dart';
+import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_applier.dart';
+
+/// D1 — the wall's long-press quick actions: favorite, download or set a
+/// wallpaper without the round trip through the detail screen that collecting
+/// used to cost on every tile.
+void main() {
+  testWidgets('a long press offers the four quick actions', (
+    WidgetTester tester,
+  ) async {
+    await _pumpWall(tester);
+
+    await _longPressTile(tester);
+
+    expect(find.text('Add to favorites'), findsOneWidget);
+    expect(find.text('Download'), findsOneWidget);
+    expect(find.text('Set wallpaper'), findsOneWidget);
+    expect(find.text('Open details'), findsOneWidget);
+    // The sheet names the wallpaper: a long press that landed on the wrong tile
+    // of a dense wall should be obvious before anything has been done to it.
+    expect(find.text('Wallpaper e7jvjd'), findsOneWidget);
+  });
+
+  testWidgets('the sheet scrolls rather than clipping a short viewport', (
+    WidgetTester tester,
+  ) async {
+    // A phone in landscape. A modal sheet is capped at a fraction of the screen
+    // height, and five rows do not fit that cap — the first cut overflowed by
+    // 31px, which is an action the user can see but not reach.
+    await _pumpWall(tester, size: const Size(2400, 1080));
+
+    await _longPressTile(tester);
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(Scrollable).hitTestable(), findsWidgets);
+    await tester.dragUntilVisible(
+      find.text('Open details'),
+      find.byType(SingleChildScrollView).last,
+      const Offset(0, -50),
+    );
+    expect(find.text('Open details'), findsOneWidget);
+  });
+
+  testWidgets('a plain tap still opens the detail screen', (
+    WidgetTester tester,
+  ) async {
+    // The gesture the quick sheet is bolted onto must not have eaten the one
+    // the whole core loop runs through.
+    await _pumpWall(tester);
+
+    await tester.tap(find.byType(WallpaperTile).first);
+    await _settle(tester);
+
+    expect(find.byType(WallpaperDetailScreen), findsOneWidget);
+  });
+
+  testWidgets('favoriting from the sheet saves the wallpaper', (
+    WidgetTester tester,
+  ) async {
+    final FakeFavoritesRepository favorites = FakeFavoritesRepository();
+    await _pumpWall(tester, favorites: favorites);
+
+    await _longPressTile(tester);
+    await tester.tap(find.text('Add to favorites'));
+    await _settle(tester);
+
+    expect(await favorites.isFavorite('e7jvjd'), isTrue);
+    // And the tile says so straight away. The mark is the only feedback this
+    // action gives — it shows no snackbar — so a stale wall would leave the
+    // user unable to tell whether the press landed.
+    expect(find.byIcon(Icons.favorite), findsOneWidget);
+  });
+
+  testWidgets('the sheet offers to remove one already favorited', (
+    WidgetTester tester,
+  ) async {
+    // Reads the live state rather than assuming the tile is new, the same way
+    // the detail screen's heart does.
+    await _pumpWall(
+      tester,
+      favorites: FakeFavoritesRepository(
+        initial: <Wallpaper>[_wallpaper()],
+      ),
+    );
+
+    await _longPressTile(tester);
+
+    expect(find.text('Remove from favorites'), findsOneWidget);
+    expect(find.text('Add to favorites'), findsNothing);
+  });
+
+  testWidgets('downloading from the sheet stores and records the wallpaper', (
+    WidgetTester tester,
+  ) async {
+    final FakeImageStore images = FakeImageStore();
+    final FakeDownloadHistory history = FakeDownloadHistory();
+    await _pumpWall(tester, images: images, history: history);
+
+    await _longPressTile(tester);
+    await tester.tap(find.text('Download'));
+    await _settle(tester);
+
+    expect(images.receivedId, 'e7jvjd');
+    expect(history.recorded.single.wallpaper.id, 'e7jvjd');
+    expect(find.text('Wallpaper downloaded.'), findsOneWidget);
+    // `refreshDownloads` reaching the tile marks, without a relaunch.
+    expect(find.byIcon(Icons.download_done), findsOneWidget);
+  });
+
+  testWidgets('setting a wallpaper asks which surface before applying', (
+    WidgetTester tester,
+  ) async {
+    // Not a shortcut past the Home/Lock/Both question — the quick sheet saves
+    // the trip to the detail screen, not the choice the apply needs.
+    final FakeWallpaperApplier applier = FakeWallpaperApplier();
+    await _pumpWall(tester, applier: applier);
+
+    await _longPressTile(tester);
+    await tester.tap(find.text('Set wallpaper'));
+    await _settle(tester);
+    expect(applier.callCount, 0);
+    expect(find.text('Set wallpaper on'), findsOneWidget);
+
+    await tester.tap(find.text('Lock screen'));
+    await _settle(tester);
+
+    expect(applier.callCount, 1);
+    expect(applier.receivedTarget, WallpaperTarget.lock);
+    expect(find.text('Wallpaper set.'), findsOneWidget);
+  });
+
+  testWidgets('"Open details" opens the screen the tap would have', (
+    WidgetTester tester,
+  ) async {
+    await _pumpWall(tester);
+
+    await _longPressTile(tester);
+    await tester.tap(find.text('Open details'));
+    await _settle(tester);
+
+    expect(find.byType(WallpaperDetailScreen), findsOneWidget);
+  });
+}
+
+Future<void> _longPressTile(WidgetTester tester) async {
+  await tester.longPress(find.byType(WallpaperTile).first);
+  await _settle(tester);
+}
+
+Future<void> _pumpWall(
+  WidgetTester tester, {
+  FakeFavoritesRepository? favorites,
+  FakeDownloadHistory? history,
+  FakeImageStore? images,
+  FakeWallpaperApplier? applier,
+  Size size = const Size(1080, 2400),
+}) async {
+  // A real phone's geometry, not the 800x600 default. It is load-bearing: a
+  // modal sheet is capped at a fraction of the screen, and on the short default
+  // the last row sits below that cap — where a tap aimed at it lands on the
+  // bottom navigation bar instead and quietly switches tabs.
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
+  final FakeWallhavenApi api = FakeWallhavenApi(
+    page: WallpaperPage(
+      wallpapers: <Wallpaper>[_wallpaper()],
+      currentPage: 1,
+      lastPage: 1,
+    ),
+  );
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: <Override>[
+        wallhavenApiProvider.overrideWithValue(api),
+        secretStoreProvider.overrideWithValue(FakeSecretStore()),
+        settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+        tagBlocklistRepositoryProvider.overrideWithValue(
+          FakeTagBlocklistRepository(),
+        ),
+        favoritesRepositoryProvider.overrideWithValue(
+          favorites ?? FakeFavoritesRepository(),
+        ),
+        downloadHistoryProvider.overrideWithValue(
+          history ?? FakeDownloadHistory(),
+        ),
+        imageStoreProvider.overrideWithValue(images ?? FakeImageStore()),
+        wallpaperApplierProvider.overrideWithValue(
+          applier ?? FakeWallpaperApplier(),
+        ),
+      ],
+      child: const TelaApp(),
+    ),
+  );
+  await _settle(tester);
+}
+
+/// The full-resolution network image keeps a progress indicator alive in widget
+/// tests, so `pumpAndSettle` can never reach quiescence here.
+Future<void> _settle(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 500));
+}
+
+Wallpaper _wallpaper() => const Wallpaper(
+  id: 'e7jvjd',
+  fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
+  thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
+  thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
+  thumbOriginalUrl: 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg',
+  resolution: Resolution(1440, 3200),
+  fileSizeBytes: 2048,
+  purity: Purity.sfw,
+  category: Category.general,
+  colors: <String>[],
+);

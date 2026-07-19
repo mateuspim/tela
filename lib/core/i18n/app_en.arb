@@ -1199,5 +1199,10 @@
   "accentPickerHue": "Hue",
   "@accentPickerHue": {
     "description": "Accessibility label for the hue slider of the color picker."
+  },
+
+  "quickActionOpenDetail": "Open details",
+  "@quickActionOpenDetail": {
+    "description": "Leaves the long-press quick-action sheet and opens the wallpaper's full detail screen."
   }
 }

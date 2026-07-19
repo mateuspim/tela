@@ -21,6 +21,7 @@ import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/ports/tag_blocklist_repository.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
 import 'package:tela/features/browse/gallery_paging_bridge.dart';
+import 'package:tela/features/browse/wallpaper_quick_sheet.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/detail/wallpaper_detail_args.dart';
 import 'package:tela/features/detail/wallpaper_gallery_session.dart';
@@ -307,6 +308,7 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
               wallpaper: loaded[index],
               heroTag: shelfHeroTag(identity, loaded[index].id, index),
               onTap: () => _openDetail(context, loaded, index),
+              onLongPress: () => _openQuickActions(context, loaded, index),
             ),
         footer: _footer(l10n, state),
       ),
@@ -416,6 +418,41 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     int selectedIndex,
   ) {
     unawaited(_pushDetail(context, loaded, selectedIndex));
+  }
+
+  /// Favorite, download or set the pressed wallpaper without opening it.
+  ///
+  /// Only this wall has the gesture free. The download history's tiles spend
+  /// their long press on "forget this row", and taking it over would cost a
+  /// destructive action its confirmation step; Favorites is left alone for now
+  /// because the same sheet there would offer to favorite what is already
+  /// favorited.
+  void _openQuickActions(
+    BuildContext context,
+    List<Wallpaper> loaded,
+    int index,
+  ) {
+    unawaited(_runQuickAction(context, loaded, index));
+  }
+
+  Future<void> _runQuickAction(
+    BuildContext context,
+    List<Wallpaper> loaded,
+    int index,
+  ) async {
+    final Wallpaper wallpaper = loaded[index];
+    final WallpaperQuickAction? action = await chooseWallpaperQuickAction(
+      context,
+      wallpaper,
+    );
+    if (action == null || !context.mounted) return;
+    await runWallpaperQuickAction(
+      context: context,
+      ref: ref,
+      wallpaper: wallpaper,
+      action: action,
+      openDetail: () => _openDetail(context, loaded, index),
+    );
   }
 
   Future<void> _pushDetail(

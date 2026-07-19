@@ -70,6 +70,25 @@ final FutureProvider<Set<String>> downloadedIdsProvider =
       return <String>{for (final DownloadRecord d in recent) d.wallpaper.id};
     });
 
+/// Re-reads every listing a finished download may have changed.
+///
+/// The counterpart to `refreshFavorites`, and it exists for the same reason:
+/// which of these is stale depends on the wallpaper's purity, so dropping all
+/// of them beats asking each caller to work it out. They are plain
+/// (non-autoDispose) futures, so each resolves once per process and then
+/// caches — without this a download lands on disk and in the database while the
+/// screens that exist to show it keep rendering the world as it looked when
+/// they were first opened. It presented as "the download did not save", and
+/// only a relaunch made it appear (found on hardware, 2026-07-14).
+///
+/// [downloadedIdsProvider] needs no mention: it derives from
+/// [recentDownloadsProvider], so the tile marks re-draw for free.
+void refreshDownloads(WidgetRef ref) {
+  ref
+    ..invalidate(recentDownloadsProvider)
+    ..invalidate(privateImagesProvider);
+}
+
 /// The ids in [recentDownloadsProvider] whose downloaded file is gone.
 ///
 /// The history calls itself "wallpapers already on this device", and for a row

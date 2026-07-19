@@ -241,21 +241,14 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
 
   /// Downloads to [tier], or to the configured destination when it is null.
   ///
-  /// Invalidates both listings the download may have just changed. They are
-  /// plain (non-autoDispose) futures, so each resolves once per process and
-  /// then caches — without this a download lands on disk and in the database
-  /// while the screens that exist to show it keep rendering the world as it
-  /// looked when they were first opened. It presented as "the download did not
-  /// save", and only a relaunch made it appear (found on hardware, 2026-07-14).
-  /// Which of the two is stale depends on the wallpaper's purity, so both are
-  /// dropped rather than the caller guessing.
+  /// [refreshDownloads] is what makes the new file visible to the screens that
+  /// exist to show it; see its docstring for why skipping it looked like the
+  /// download never saved.
   Future<void> _download([StorageTier? tier]) async {
     setState(() => _isDownloading = true);
     try {
       await ref.read(downloadWallpaperProvider)(_wallpaper, tier: tier);
-      ref
-        ..invalidate(recentDownloadsProvider)
-        ..invalidate(privateImagesProvider);
+      refreshDownloads(ref);
       if (mounted) {
         _showResult(AppLocalizations.of(context).detailDownloadSuccess);
       }
