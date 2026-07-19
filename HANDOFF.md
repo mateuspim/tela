@@ -2,8 +2,8 @@
 
 Updated: 2026-07-19
 
-> **Picking up cold?** The work to *do* is **THE NEXT PASS — D1–D4**, chosen by
-> the owner on 2026-07-19 and not started. The second UI pass (C1–C4) before it
+> **Picking up cold?** The work to *do* is **D2**, in *THE CURRENT PASS — D1–D4*.
+> D1 is built and device-verified (`bdefc1d`); D2–D4 are not started. The second UI pass (C1–C4) before it
 > is finished and verified on hardware; see *NEXT SESSION STARTS HERE* for what
 > each of those slices decided. Wave 4's product items (auto-rotate,
 > collections, Omarchy sync) sit behind D.
@@ -587,7 +587,7 @@ Wave 4's product work (auto-rotate, collections, Omarchy sync) is untouched and
 described below. **The owner chose a third UI pass (D1–D4) ahead of it** — see
 the next section.
 
-## THE NEXT PASS — D1–D4, chosen 2026-07-19, none started
+## THE CURRENT PASS — D1–D4, chosen 2026-07-19; D1 done, D2 next
 
 The owner asked what else the UI needs after C closed, and chose **all four** of
 these. They came out of a screenshot sweep of the SM-X730 in both orientations,
@@ -598,20 +598,67 @@ independently shippable; take them one at a time.
 Browse sorting tabs were suspected of clipping on a phone, but
 `browse_screen.dart:109` already sets `isScrollable: true`. Not a problem.
 
-### D1 — long-press quick actions on a browse tile
+### D1 — long-press quick actions — **built (`bdefc1d`) and device-verified**
 
-`WallpaperTile`'s own docstring records the gap: *"Null in the browse grid, where
-a tile has no second action."* So favoriting or downloading anything costs a full
-round trip through the detail screen, and on a 7-tiles-per-row tablet wall that
-is the slowest part of collecting.
+A long press on a browse tile opens a quick sheet: favorite, download, set
+wallpaper, open details. 734 tests (from 726), analyze and format clean, every
+new claim mutation-checked. `features/browse/wallpaper_quick_sheet.dart` holds
+the enum, the chooser and the runner.
 
-**C4 is what makes this worth doing now.** The wall now *tells* you what you
-already have, which invites acting on it in place — and there is nowhere to act.
+**The structural decision worth not re-deriving: the sheet returns a choice, the
+caller runs it.** Every action outlives the sheet — the Home/Lock/Both chooser
+and the result snackbar both need a context still mounted once this one has
+popped — so `chooseWallpaperQuickAction` resolves to a
+`WallpaperQuickAction` and `runWallpaperQuickAction` acts on the wall's own
+context. `openDetail` is a caller callback rather than a push from inside,
+because the wall opens Detail on a gallery *session* seeded at the pressed
+index, and only the grid knows the listing that session walks.
 
-A long-press should open a quick sheet: favorite, download, set as wallpaper,
-open details. `onLongPress` is already a `WallpaperTile` parameter and already
-used by Download History to forget a row, so the plumbing exists — **check that
-the history's existing long-press is not silently taken over.**
+Three more, decided:
+
+- **Favoriting shows no snackbar on purpose.** The tile's own C4 mark appears
+  under your finger. `refreshDownloads` was extracted beside `refreshFavorites`
+  for the download half, and the detail screen's `_download` now calls it rather
+  than carrying its own copy of the two invalidations.
+- **Sharing is deliberately absent.** It is the one action with a purity rule
+  (`shareOptionsFor`), and a menu that has to grow a condition is the wrong
+  place for it — the detail screen still offers it.
+- **Only this wall gets the gesture**, and the history's long press is *not*
+  taken over (its "forget this row" test still passes). Favorites is left alone
+  too: the same sheet there would offer to favorite what is already favorited.
+
+**Two defects the tests found before the device could, both fixed and pinned:**
+
+1. **Five rows overflow a modal sheet's height cap** — 31px, i.e. a phone in
+   landscape, an action you can see but not reach. The sheet scrolls now.
+2. **The widget-test default of 800x600 was actively misleading.** With the last
+   row below the cap, a tap aimed at *Open details* landed on the **bottom
+   navigation bar** and switched to Library — the wall went blank of tiles and
+   **no exception was raised**, so the failure said only "no detail screen". If
+   a sheet test ever fails that way again, suspect the geometry first.
+   `_pumpWall` pins a real phone's 1080x2400 @3.0 and says why.
+
+#### D1's device pass (2026-07-19) — no defects
+
+Driven live on the SM-X730 at Small density, wallpaper `k8lvqm`:
+
+- The sheet opens on long press; **favoriting re-marks the tile with no
+  restart**, and a second long press then reads *Remove from favorites* with a
+  filled heart — live state, both directions.
+- **A download draws both icons in one pill** beside its snackbar, which is
+  `refreshDownloads` reaching C4's marks on hardware.
+- The Home/Lock/Both chooser opens from the sheet. **The apply itself was not
+  run** — it changes the owner's wallpaper, like every other apply round trip.
+- *Open details* lands on the right wallpaper, heart already filled.
+
+**The one thing the device made honest, and the natural follow-up:** the sheet's
+title is a bare *"Wallpaper k8lvqm"*. Nobody recognises a Wallhaven id by eye, so
+it cannot do what a title there should — tell you the press landed on the tile
+you aimed at. **A thumbnail would.** Left out rather than widened into D1; the
+comment in the sheet no longer claims otherwise.
+
+**Device data note:** this pass left `k8lvqm` (a cloudscape) favorited *and*
+downloaded, on top of C4's 2 favorites and 1 download.
 
 ### D2 — sparse shelves leave a wall of dead space
 
