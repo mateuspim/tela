@@ -105,7 +105,7 @@ class _DownloadImmersiveSessionState
           record.wallpaper.id,
           session.selectedIndex,
         ),
-        primaryAction: _setButton(l10n),
+        barActions: <Widget>[_setButton(l10n)],
         actions: <Widget>[_overflow(l10n)],
         statusOverlay: missing ? _missingBadge(l10n) : null,
         // pop(), never maybePop(): the viewer's own PopScope defers to

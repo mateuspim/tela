@@ -26,13 +26,13 @@ void main() {
     await tester.pump();
 
     expect(zoomController.isZoomed, isTrue);
-    expect(find.text('Reset zoom'), findsOneWidget);
+    expect(find.bySemanticsLabel('Reset zoom'), findsOneWidget);
 
     await _doubleTap(tester, find.byType(GalleryViewport));
     await tester.pump();
 
     expect(zoomController.isZoomed, isFalse);
-    expect(find.text('Zoom in'), findsOneWidget);
+    expect(find.bySemanticsLabel('Zoom in'), findsOneWidget);
   });
 
   testWidgets('visible control zooms and resets without a gesture', (
@@ -46,11 +46,11 @@ void main() {
       disableAnimations: true,
     );
 
-    await tester.tap(find.text('Zoom in'));
+    await tester.tap(find.byKey(const Key('immersive-viewer-zoom')));
     await tester.pump();
     expect(zoomController.isZoomed, isTrue);
 
-    await tester.tap(find.text('Reset zoom'));
+    await tester.tap(find.byKey(const Key('immersive-viewer-zoom')));
     await tester.pump();
     expect(zoomController.isZoomed, isFalse);
   });
@@ -156,7 +156,18 @@ void main() {
     final SemanticsHandle semantics = tester.ensureSemantics();
     await _pumpViewer(tester);
 
-    expect(find.bySemanticsLabel('Hide viewer controls'), findsOneWidget);
+    // Scoped to the button. The canvas carries the same label — tapping the
+    // image is the other way to hide the chrome — so an unscoped finder
+    // matched *it* and passed even while the button itself was unlabelled,
+    // which is exactly what it was silently doing before the chrome was
+    // quietened (2026-07-19).
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('immersive-viewer-hide-chrome')),
+        matching: find.bySemanticsLabel('Hide viewer controls'),
+      ),
+      findsOneWidget,
+    );
     final Size target = tester.getSize(
       find.byKey(const Key('immersive-viewer-hide-chrome')),
     );
@@ -181,7 +192,7 @@ void main() {
     );
     expect(chrome.duration, Duration.zero);
 
-    await tester.tap(find.text('Zoom in'));
+    await tester.tap(find.byKey(const Key('immersive-viewer-zoom')));
     expect(zoomController.isZoomed, isTrue);
     expect(
       zoomController.transformationController.value.getMaxScaleOnAxis(),
@@ -223,12 +234,15 @@ void main() {
     );
 
     expect(find.bySemanticsLabel('1 of 3'), findsOneWidget);
-    expect(find.text('Previous'), findsOneWidget);
-    expect(find.text('Next'), findsOneWidget);
-    final ButtonStyleButton previous = tester.widget<ButtonStyleButton>(
+    // Icon-only since the chrome was quietened, so the names live in
+    // semantics rather than in visible text — the paging controls still
+    // exist, because a swipe is not reachable by screen reader or switch.
+    expect(find.bySemanticsLabel('Previous'), findsOneWidget);
+    expect(find.bySemanticsLabel('Next'), findsOneWidget);
+    final IconButton previous = tester.widget<IconButton>(
       find.byKey(const Key('immersive-viewer-previous')),
     );
-    final ButtonStyleButton next = tester.widget<ButtonStyleButton>(
+    final IconButton next = tester.widget<IconButton>(
       find.byKey(const Key('immersive-viewer-next')),
     );
     expect(previous.onPressed, isNull);
@@ -285,7 +299,7 @@ void main() {
       itemCount: 2,
       onNext: () => next++,
     );
-    await tester.tap(find.text('Zoom in'));
+    await tester.tap(find.byKey(const Key('immersive-viewer-zoom')));
     await tester.pump();
     final double before = zoomController.transformationController.value.entry(
       0,
@@ -315,7 +329,7 @@ void main() {
       itemCount: 2,
       onNext: () => next++,
     );
-    await tester.tap(find.text('Zoom in'));
+    await tester.tap(find.byKey(const Key('immersive-viewer-zoom')));
     await tester.pump();
     final double before = zoomController.transformationController.value.entry(
       0,
@@ -323,7 +337,7 @@ void main() {
     );
 
     tester
-        .widget<ButtonStyleButton>(
+        .widget<IconButton>(
           find.byKey(const Key('immersive-viewer-next')),
         )
         .onPressed!();
@@ -347,7 +361,7 @@ void main() {
     );
 
     expect(systemUi.events, <String>['enter']);
-    await tester.tap(find.text('Close'));
+    await tester.tap(find.byKey(const Key('immersive-viewer-close')));
     await tester.pump();
 
     expect(systemUi.events, <String>['enter', 'restore', 'close']);

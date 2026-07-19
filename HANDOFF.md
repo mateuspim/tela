@@ -829,6 +829,54 @@ height in both states and the answer falls out; the remaining question is only
 **Still not understood, so still do not "fix" it by changing
 `soleWallpaperRowHeight`.**
 
+### D6 — the fullscreen viewer: quieter chrome, and actions at last
+
+**The gap the owner named: it was the only viewer in the app you could not act
+from.** The download history and the private library both pass a *Set wallpaper*
+primary action; the browse/detail immersive session passed **nothing**. So you
+looked at a wallpaper full-bleed, decided you wanted it, and had to close out to
+Detail to say so.
+
+773 tests (from 770). The viewer now carries **favorite, download and Set
+wallpaper** in its bottom bar, each running through D1's
+`runWallpaperQuickAction` rather than growing a second copy — the target
+chooser, the snackbars and the `refreshFavorites`/`refreshDownloads`
+invalidations are all decided there, and two implementations of "download this
+wallpaper" would drift. *Open details* is deliberately absent: from here,
+closing **is** that action.
+
+**The chrome was six labelled pills in four corners** — *Zoom in*, hide,
+*Close*, *Previous*, *Next* and a counter — all at the same visual weight, on
+the one screen whose whole job is showing a wallpaper. Now: close leads the top
+row (the only filled control, because it is the way out), the count is quiet
+text, the view utilities are unlabelled icons beside it, and everything you came
+to *do* sits in a single bar along the bottom.
+
+**Paging kept its buttons, against the first plan.** They are icons inside that
+bar rather than two large pills, but deleting them in favour of the swipe would
+have traded chrome for access: a swipe is not reachable by screen reader or
+switch. Five existing tests depend on them too.
+
+#### The accessibility trap this pass uncovered — do not use `tooltip` as a label
+
+Making the controls icon-only nearly shipped a silent screen-reader regression,
+and the mechanism is worth knowing: **a `tooltip:` on an `IconButton` is not a
+dependable accessible name.** Measured on this codebase, it exposed *no*
+semantics node on one button and a *duplicate* on another. Every icon-only
+control here now carries `Icon(semanticLabel:)` as the single source of its
+name, and the tooltips were dropped rather than left to imply one.
+
+Worse, the old test named *"the hide-chrome button is reachable and labelled"*
+**was passing by accident**: the canvas carries the same
+`galleryHideControls` label — tapping the image is the other way to hide the
+chrome — so an unscoped `find.bySemanticsLabel` matched *the canvas* while the
+button itself had no name at all. That test is now scoped to the button, so it
+pins the claim it always said it did.
+
+**Device pass (2026-07-19): no defects.** On the SM-X730 the bar reads as one
+piece of chrome over the wallpaper, and favoriting from the viewer fills the
+heart live, without leaving it.
+
 ### The duplicate-download bug — fixed (owner-reported, 2026-07-19)
 
 Re-downloading a wallpaper produced `wallhaven-abc123 (1).jpg` beside the

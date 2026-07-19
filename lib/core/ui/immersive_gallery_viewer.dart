@@ -22,7 +22,7 @@ class ImmersiveGalleryViewer extends StatefulWidget {
     this.onNext,
     this.zoomController,
     this.systemUi = const FlutterImmersiveSystemUi(),
-    this.primaryAction,
+    this.barActions = const <Widget>[],
     this.actions = const <Widget>[],
     this.statusOverlay,
     this.heroTag,
@@ -61,10 +61,11 @@ class ImmersiveGalleryViewer extends StatefulWidget {
   /// Injectable system-UI lifecycle used by Android and focused tests.
   final ImmersiveSystemUi systemUi;
 
-  /// A feature's primary action, shown in the transient chrome above the
-  /// navigation row. History passes its Set-wallpaper button here. The viewer
-  /// does not know what it does — feature actions stay outside the surface.
-  final Widget? primaryAction;
+  /// What this surface lets you do to the wallpaper on screen, seated in the
+  /// bottom bar between the paging arrows. Browse passes favorite and download,
+  /// History and the private library pass Set wallpaper. The viewer does not
+  /// know what any of them do — feature actions stay outside the surface.
+  final List<Widget> barActions;
 
   /// Feature actions shown in the top control row, before the close button.
   /// History passes its overflow menu here. Fades with the rest of the chrome.
@@ -348,7 +349,7 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
       // their boundary-disabled states.
       onPrevious: widget.onPrevious,
       onNext: widget.onNext,
-      primaryAction: widget.primaryAction,
+      barActions: widget.barActions,
       actions: widget.actions,
     );
   }

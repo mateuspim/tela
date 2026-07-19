@@ -119,7 +119,7 @@ class _PrivateImmersiveSessionState
           image.id,
           session.selectedIndex,
         ),
-        primaryAction: _setButton(l10n),
+        barActions: <Widget>[_setButton(l10n)],
         actions: <Widget>[_deleteButton(l10n)],
         // pop(), never maybePop(): the viewer's own PopScope defers to
         // _exitFullscreen, so consulting it from inside onClose is a cycle

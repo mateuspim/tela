@@ -73,6 +73,53 @@ void main() {
     },
   );
 
+  testWidgets('the fullscreen viewer can favorite, download and set', (
+    WidgetTester tester,
+  ) async {
+    // It was the only viewer in the app with no actions at all: you looked at
+    // a wallpaper full-bleed, decided you wanted it, and had to close out to
+    // Detail to say so (owner, 2026-07-19).
+    await _pumpDetail(tester, _details());
+
+    await tester.tap(find.byTooltip('View wallpaper full screen'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('immersive-viewer-favorite')), findsOneWidget);
+    expect(find.byKey(const Key('immersive-viewer-download')), findsOneWidget);
+    expect(find.byKey(const Key('immersive-viewer-set')), findsOneWidget);
+  });
+
+  testWidgets('favoriting from the fullscreen viewer saves and re-marks', (
+    WidgetTester tester,
+  ) async {
+    final FakeFavoritesRepository favorites = FakeFavoritesRepository();
+    await _pumpDetail(tester, _details(), favorites: favorites);
+
+    await tester.tap(find.byTooltip('View wallpaper full screen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('immersive-viewer-favorite')));
+    await tester.pumpAndSettle();
+
+    expect(await favorites.isFavorite('e7jvjd'), isTrue);
+    // And the heart fills without leaving the viewer, which is the half a
+    // repository assertion cannot show.
+    expect(find.bySemanticsLabel('Remove from favorites'), findsOneWidget);
+  });
+
+  testWidgets('downloading from the fullscreen viewer stores the wallpaper', (
+    WidgetTester tester,
+  ) async {
+    final FakeImageStore images = FakeImageStore();
+    await _pumpDetail(tester, _details(), imageStore: images);
+
+    await tester.tap(find.byTooltip('View wallpaper full screen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('immersive-viewer-download')));
+    await tester.pumpAndSettle();
+
+    expect(images.receivedId, 'e7jvjd');
+  });
+
   testWidgets('offers an immersive preview and a clear 48dp close control', (
     WidgetTester tester,
   ) async {
@@ -84,7 +131,7 @@ void main() {
 
     expect(find.byType(AppBar), findsNothing);
     expect(find.text('Set wallpaper'), findsNothing);
-    expect(find.text('Close'), findsOneWidget);
+    expect(find.bySemanticsLabel('Close'), findsOneWidget);
     final Size closeTarget = tester.getSize(
       find.byKey(const Key('immersive-viewer-close')),
     );
@@ -92,7 +139,7 @@ void main() {
     expect(closeTarget.height, greaterThanOrEqualTo(48));
     expect(systemUi.enterCalls, 1);
 
-    await tester.tap(find.text('Close'));
+    await tester.tap(find.byKey(const Key('immersive-viewer-close')));
     await tester.pumpAndSettle();
 
     expect(find.text('Set wallpaper'), findsOneWidget);
@@ -151,29 +198,29 @@ void main() {
       await tester.tap(find.byTooltip('View wallpaper full screen'));
       await tester.pumpAndSettle();
       tester
-          .widget<ButtonStyleButton>(
+          .widget<IconButton>(
             find.byKey(const Key('immersive-viewer-zoom')),
           )
           .onPressed!();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('Reset zoom'), findsOneWidget);
+      expect(find.bySemanticsLabel('Reset zoom'), findsOneWidget);
 
       tester
-          .widget<ButtonStyleButton>(
+          .widget<IconButton>(
             find.byKey(const Key('immersive-viewer-next')),
           )
           .onPressed!();
       await tester.pump();
 
       expect(gallery.selectedItem, second.wallpaper);
-      expect(find.text('Zoom in'), findsOneWidget);
+      expect(find.bySemanticsLabel('Zoom in'), findsOneWidget);
       expect(find.bySemanticsLabel('2 of 2'), findsOneWidget);
       expect(
         find.bySemanticsLabel('Wallpaper ${second.wallpaper.id}'),
         findsOneWidget,
       );
 
-      await tester.tap(find.text('Close'));
+      await tester.tap(find.byKey(const Key('immersive-viewer-close')));
       await tester.pumpAndSettle();
 
       final FavoriteButton favorite = tester.widget<FavoriteButton>(
@@ -657,6 +704,7 @@ Future<void> _pumpDetail(
   GallerySessionController<Wallpaper>? gallerySession,
   FakeWallpaperApplier? applier,
   FakeExternalLink? externalLink,
+  FakeFavoritesRepository? favorites,
   bool disableAnimations = false,
 }) async {
   await tester.pumpWidget(
@@ -672,7 +720,7 @@ Future<void> _pumpDetail(
         // The app bar now carries the favorites heart, so this screen reaches
         // the database. Left unbound, it opens the real one and leaks a timer.
         favoritesRepositoryProvider.overrideWithValue(
-          FakeFavoritesRepository(),
+          favorites ?? FakeFavoritesRepository(),
         ),
         // Downloading records where the file landed — the same database again.
         downloadHistoryProvider.overrideWithValue(FakeDownloadHistory()),

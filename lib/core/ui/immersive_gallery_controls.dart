@@ -2,6 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 
 /// Transient, accessible chrome for an immersive gallery surface.
+///
+/// **The layout is one quiet top row and one action bar, not six pills.** It
+/// used to scatter labelled buttons into all four corners — *Zoom in*, hide,
+/// *Close*, *Previous*, *Next*, and a counter — each with the same visual
+/// weight, on the one screen whose entire job is showing a wallpaper. Now the
+/// utilities are icons in the top row, the count is quiet text beside them, and
+/// everything a user came here to *do* sits in a single bar along the bottom.
+///
+/// Paging kept its buttons rather than deferring to the swipe. They are icons
+/// inside that bar now instead of two large pills, but they still exist:
+/// swiping is not reachable for someone driving the screen with a screen
+/// reader or a switch, so deleting them would trade chrome for access.
 class ImmersiveGalleryControls extends StatelessWidget {
   /// Creates zoom, close, position, and gallery navigation controls.
   const ImmersiveGalleryControls({
@@ -15,7 +27,7 @@ class ImmersiveGalleryControls extends StatelessWidget {
     required this.itemCount,
     required this.onPrevious,
     required this.onNext,
-    this.primaryAction,
+    this.barActions = const <Widget>[],
     this.actions = const <Widget>[],
     super.key,
   });
@@ -55,15 +67,14 @@ class ImmersiveGalleryControls extends StatelessWidget {
   /// Selects the next item, or null at the boundary.
   final VoidCallback? onNext;
 
-  /// A feature's primary action, shown above the navigation row, or null.
-  final Widget? primaryAction;
+  /// What this surface lets you *do*, seated in the bottom bar between the
+  /// paging arrows — favorite and download on the wall, *Set wallpaper* in the
+  /// download and private viewers.
+  final List<Widget> barActions;
 
-  /// Feature actions shown in the top row, before the close button.
+  /// Secondary or destructive actions, kept up in the top row and away from
+  /// the bar: the private viewer's delete, the history's overflow.
   final List<Widget> actions;
-
-  /// Below this the labelled buttons stop fitting side by side, and become
-  /// icons with the same words in their tooltips.
-  static const double _compactWidth = 560;
 
   @override
   Widget build(BuildContext context) {
@@ -82,20 +93,11 @@ class ImmersiveGalleryControls extends StatelessWidget {
               children: <Widget>[
                 Align(
                   alignment: Alignment.topCenter,
-                  child: _controlRow(l10n),
+                  child: _topRow(l10n),
                 ),
                 Align(
                   alignment: Alignment.bottomCenter,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      if (primaryAction != null) ...<Widget>[
-                        primaryAction!,
-                        const SizedBox(height: 12),
-                      ],
-                      _navigationRow(l10n),
-                    ],
-                  ),
+                  child: _actionBar(l10n),
                 ),
               ],
             ),
@@ -105,43 +107,120 @@ class ImmersiveGalleryControls extends StatelessWidget {
     );
   }
 
-  Widget _controlRow(AppLocalizations l10n) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool compact = constraints.maxWidth < _compactWidth;
-        return Row(
-          children: <Widget>[
-            _alignedControl(
-              Alignment.centerLeft,
-              _leadingControls(l10n, compact: compact),
-            ),
-            const SizedBox(width: 12),
-            _alignedControl(Alignment.centerRight, _trailingControls(l10n)),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _leadingControls(AppLocalizations l10n, {required bool compact}) {
+  /// Close on the left, the count and the utilities on the right.
+  ///
+  /// Close leads because it is the one control every viewer has and the one a
+  /// user reaches for most; it keeps a filled treatment where its neighbours
+  /// are quiet, so the way out stays obvious without being loud.
+  Widget _topRow(AppLocalizations l10n) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        _zoomButton(l10n, compact: compact),
+        _closeButton(l10n),
+        const Spacer(),
+        _positionLabel(l10n),
         const SizedBox(width: 8),
+        _zoomButton(l10n),
+        const SizedBox(width: 4),
         _hideChromeButton(l10n),
+        for (final Widget action in actions) ...<Widget>[
+          const SizedBox(width: 4),
+          action,
+        ],
       ],
     );
   }
 
-  /// Hides the chrome this button is part of.
+  /// "3 of 72", as text on a scrim rather than as another button.
   ///
-  /// Icon-only, unlike its neighbours: the row already carries a labelled zoom
-  /// button and a labelled close, and a third label is what tips it over on a
-  /// phone. The tooltip and the semantics label carry the words.
+  /// It states something instead of doing something, so giving it a button's
+  /// weight — which the old floating pill did — made the row read as one more
+  /// thing to press. The scrim stays: white text alone vanishes over a pale
+  /// wallpaper, the same legibility problem C2's blurred backdrop hit.
+  Widget _positionLabel(AppLocalizations l10n) {
+    final String label = l10n.galleryPosition(position, itemCount);
+    return Semantics(
+      liveRegion: true,
+      label: label,
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.black45,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Text(label, style: const TextStyle(color: Colors.white)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Everything actionable, in one container instead of scattered pills.
+  ///
+  /// Renders even with no [barActions] — the paging arrows live here too, and
+  /// a viewer of one image still shows them, disabled, rather than moving the
+  /// bar's contents around as a gallery grows.
+  Widget _actionBar(AppLocalizations l10n) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black45,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            _navigationButton(
+              key: const Key('immersive-viewer-previous'),
+              label: l10n.galleryPrevious,
+              icon: Icons.arrow_back,
+              onPressed: onPrevious,
+            ),
+            for (final Widget action in barActions) ...<Widget>[
+              const SizedBox(width: 4),
+              action,
+            ],
+            const SizedBox(width: 4),
+            _navigationButton(
+              key: const Key('immersive-viewer-next'),
+              label: l10n.galleryNext,
+              icon: Icons.arrow_forward,
+              onPressed: onNext,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Icon-only, on the bar's own scrim rather than carrying a second one.
+  Widget _navigationButton({
+    required Key key,
+    required String label,
+    required IconData icon,
+    required VoidCallback? onPressed,
+  }) {
+    return IconButton(
+      key: key,
+      onPressed: onPressed,
+      color: Colors.white,
+      disabledColor: Colors.white38,
+      constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+      // The Icon's `semanticLabel` is the single source of the accessible
+      // name. A `tooltip` is *not* a reliable one: measured on this codebase,
+      // it exposed no semantics node on one button and a duplicate on
+      // another. Icon-only chrome that leaned on tooltips would be silent to
+      // a screen reader — which is what the labelled buttons here used to
+      // avoid, and what the viewer's a11y test pins.
+      icon: Icon(icon, semanticLabel: label),
+    );
+  }
+
+  /// Hides the chrome this button is part of.
   Widget _hideChromeButton(AppLocalizations l10n) {
-    return _tonalControl(
-      compact: true,
+    return _utilityButton(
       key: const Key('immersive-viewer-hide-chrome'),
       label: l10n.galleryHideControls,
       icon: Icons.visibility_off_outlined,
@@ -149,122 +228,31 @@ class ImmersiveGalleryControls extends StatelessWidget {
     );
   }
 
-  Widget _trailingControls(AppLocalizations l10n) {
-    if (actions.isEmpty) return _closeButton(l10n);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        for (final Widget action in actions) ...<Widget>[
-          action,
-          const SizedBox(width: 8),
-        ],
-        _closeButton(l10n),
-      ],
-    );
-  }
-
-  Widget _navigationRow(AppLocalizations l10n) {
-    return SizedBox(
-      height: 48,
-      child: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final bool compact = constraints.maxWidth < _compactWidth;
-          final String positionLabel = l10n.galleryPosition(
-            position,
-            itemCount,
-          );
-          return Row(
-            children: <Widget>[
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: _tonalControl(
-                    compact: compact,
-                    key: const Key('immersive-viewer-previous'),
-                    label: l10n.galleryPrevious,
-                    icon: Icons.arrow_back,
-                    onPressed: onPrevious,
-                  ),
-                ),
-              ),
-              Semantics(
-                liveRegion: true,
-                label: positionLabel,
-                child: ExcludeSemantics(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: Text(
-                        positionLabel,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: _tonalControl(
-                    compact: compact,
-                    key: const Key('immersive-viewer-next'),
-                    label: l10n.galleryNext,
-                    icon: Icons.arrow_forward,
-                    onPressed: onNext,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  /// A tonal control that drops its label when the row is too narrow to seat
-  /// it — the same trade the navigation row makes, now that the top row has
-  /// three controls to fit rather than two.
-  Widget _tonalControl({
-    required bool compact,
+  /// A top-row utility: icon on a scrim, words in its semantic label.
+  ///
+  /// These are things you do *to the view* rather than to the wallpaper, so
+  /// they stay unlabelled and quiet — the labels were what made the old corner
+  /// pills compete with the image.
+  Widget _utilityButton({
     required Key key,
     required String label,
     required IconData icon,
     required VoidCallback? onPressed,
   }) {
-    if (compact) {
-      return IconButton.filledTonal(
-        key: key,
-        onPressed: onPressed,
-        tooltip: label,
-        constraints: const BoxConstraints.tightFor(width: 48, height: 48),
-        icon: Icon(icon),
-      );
-    }
-    return FilledButton.tonalIcon(
+    return IconButton.filledTonal(
       key: key,
       onPressed: onPressed,
-      style: _buttonStyle(),
-      icon: Icon(icon),
-      label: Text(label),
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.black45,
+        foregroundColor: Colors.white,
+      ),
+      constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+      icon: Icon(icon, semanticLabel: label),
     );
   }
 
-  Widget _alignedControl(Alignment alignment, Widget child) {
-    return Expanded(
-      child: Align(alignment: alignment, child: child),
-    );
-  }
-
-  Widget _zoomButton(AppLocalizations l10n, {required bool compact}) {
-    return _tonalControl(
-      compact: compact,
+  Widget _zoomButton(AppLocalizations l10n) {
+    return _utilityButton(
       key: const Key('immersive-viewer-zoom'),
       label: zoomed ? l10n.galleryResetZoom : l10n.galleryZoomIn,
       icon: zoomed ? Icons.zoom_out_map : Icons.zoom_in,
@@ -272,17 +260,14 @@ class ImmersiveGalleryControls extends StatelessWidget {
     );
   }
 
+  /// The one control that keeps a filled treatment: it is the way out, it is
+  /// on every viewer, and it is what a user reaches for most.
   Widget _closeButton(AppLocalizations l10n) {
-    return FilledButton.icon(
+    return IconButton.filled(
       key: const Key('immersive-viewer-close'),
       onPressed: onClose,
-      style: _buttonStyle(),
-      icon: const Icon(Icons.close),
-      label: Text(l10n.galleryClose),
+      constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+      icon: Icon(Icons.close, semanticLabel: l10n.galleryClose),
     );
-  }
-
-  ButtonStyle _buttonStyle() {
-    return FilledButton.styleFrom(minimumSize: const Size(48, 48));
   }
 }
