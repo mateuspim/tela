@@ -304,9 +304,39 @@ progressive layers now scopes to `GalleryViewport.imageFrameKey`, since the
 backdrop is a third `CachedNetworkImage` on the same thumbnail outside the frame.
 **If you add another image layer to that screen, scope your finder the same way.**
 
-**Owed:** the knobs are `sigma` (28) and `scrimOpacity` (.45) in
-`blurred_image_backdrop.dart`. Too little scrim and the backdrop competes with
-the preview; too much and it is the black band again. Nobody has seen either.
+### C2's device pass (2026-07-19) — three wallpapers, one defect, fixed (`732d88e`)
+
+**The backdrop works.** A dark wallpaper's letterbox carries its own surround
+out to the pane edges; a 2560x1600 one sits crisply on a soft red-grey wash
+pulled from its trash-can tones. Both read as one composition instead of a
+stamp on a void.
+
+**The defect: a portrait shot on a pale studio background had no visible
+boundary at all** — its own edge pixels and its blurred copy landed at the same
+luminance and the fitted image dissolved into its background.
+
+**The obvious fix is the wrong one, and this is the part worth not re-deriving.**
+Raising `scrimOpacity` dulls the two cases that are already right to fix one,
+*and does not guarantee anything*: whether an image melts depends on that
+image's edge pixels, not on how dark the wash is in general, so a mid-grey
+wallpaper lands in the same place at any scrim value. **The scrim is still .45
+and should stay there unless a case is found that it actually decides.**
+
+So the boundary is drawn: `wallpaperTileEdge` at `radius: 0` over the contained
+frame, gated on `backdrop != null` (nothing to melt into over flat black, and an
+edge there would box in the immersive viewer). The helper took a `radius`
+parameter to serve both — the tiles keep 16dp, the uncropped frame is square.
+
+**Still unverified: the melt case itself.** The redeployed build was only seen
+against a wallpaper that was already fine, where a .22 hairline is correctly
+invisible. Finding that pale-studio portrait again failed — `@ranvijay` returns
+"No wallpapers match these filters" in tela's search, with the resolution filter
+active. **Worth a look on its own**: either the active filter excludes them, or
+tela quotes the `@uploader` term the way `SearchTag.token` quotes tag names, in
+which case uploader search is broken from the search bar. Do not assume; probe
+the wire the way the ratios work did.
+
+**The remaining knob:** `sigma` (28) in `blurred_image_backdrop.dart`.
 
 ### C3 — unify the detail panel, and un-strand the Colors row
 
