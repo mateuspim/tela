@@ -11,6 +11,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
+import 'package:tela/core/ui/tile_density_scope.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/search_query.dart';
@@ -54,6 +55,10 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
   /// The most recent page, kept so the next fetch can inherit its shuffle seed.
   WallpaperPage? _lastPage;
 
+  /// The wall's own scroll position, read to tell an under-filled shelf from a
+  /// scrollable one. See [_topUpIfUnderfilled].
+  final ScrollController _scroll = ScrollController();
+
   /// Which listing [_lastPage] is allowed to describe.
   ///
   /// Bumped by [_retry], so a fetch that was superseded while in flight cannot
@@ -96,6 +101,7 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
 
   @override
   void dispose() {
+    _scroll.dispose();
     _paging.dispose();
     super.dispose();
   }
@@ -277,10 +283,23 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     List<Wallpaper> loaded,
     String identity,
   ) {
+    // Subscribing to the density is what keeps the top-up alive across a change
+    // to it. The packing reads it one layer down, inside
+    // `JustifiedWallpaperGrid`, so without a dependency here the wall re-packs
+    // without `_wall` rebuilding — and the callback below, registered only
+    // while building, would never be scheduled again. Going *Large → Small* is
+    // exactly that transition: the same page that overflowed now leaves rows to
+    // spare, which is how the device hit this with the scroll top-up already in
+    // place (2026-07-19).
+    TileDensityScope.of(context);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _topUpIfUnderfilled(state, fetchNextPage),
+    );
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification notification) =>
           _maybeFetchNext(notification, state, fetchNextPage),
       child: JustifiedWallpaperGrid(
+        controller: _scroll,
         itemCount: loaded.length,
         aspectRatioOf: (int index) => loaded[index].resolution.aspectRatio,
         itemBuilder: (BuildContext context, int index, double _, double _) =>
@@ -312,6 +331,31 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     if (remaining > metrics.viewportDimension) return false;
     fetchNextPage();
     return false;
+  }
+
+  /// Asks for the next page when the wall does not fill the viewport.
+  ///
+  /// [_maybeFetchNext] only ever runs off a [ScrollNotification], and a shelf
+  /// shorter than its viewport emits none — there is nothing to scroll — so the
+  /// check that would pass never runs and the listing stops at page one under a
+  /// dead void. Reachable for real since the tile-density setting landed: at
+  /// *Small* on a 2560x1600 tablet, Wallhaven's 24-item page leaves rows to
+  /// spare, and the wall sat half-empty until a swipe at nothing shook a
+  /// notification loose (device pass, 2026-07-19).
+  ///
+  /// Same lesson as the opening fetch in [initState] and as [_retry]: ask for
+  /// the page rather than hoping a side effect notices. Guarded exactly as
+  /// [_maybeFetchNext] is, so the two cannot both fire, and [PagingState
+  /// .isLoading] keeps it to one request in flight while pages accumulate until
+  /// the wall overflows or Wallhaven runs out.
+  void _topUpIfUnderfilled(
+    PagingState<int, Wallpaper> state,
+    NextPageCallback fetchNextPage,
+  ) {
+    if (!mounted || !_scroll.hasClients) return;
+    if (!state.hasNextPage || state.isLoading || state.error != null) return;
+    if (_scroll.position.maxScrollExtent > 0) return;
+    fetchNextPage();
   }
 
   /// What sits below the last row: nothing, a next-page spinner, or a retry.
