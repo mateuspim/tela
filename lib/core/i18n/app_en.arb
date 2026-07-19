@@ -927,6 +927,16 @@
     "description": "Tooltip on a history tile whose downloaded file is no longer on the device. The tile still works; it just costs a re-download and needs a network, which the other rows do not."
   },
 
+  "wallpaperMarkFavorited": "In your favorites",
+  "@wallpaperMarkFavorited": {
+    "description": "Corner mark on a grid tile for a wallpaper the user has already favorited, so browsing can tell you what you already have."
+  },
+
+  "wallpaperMarkDownloaded": "Already downloaded",
+  "@wallpaperMarkDownloaded": {
+    "description": "Corner mark on a grid tile for a wallpaper tela has already downloaded to this device."
+  },
+
   "downloadHistoryRedownload": "Download {wallpaperId} again and set it",
   "@downloadHistoryRedownload": {
     "description": "Accessibility label for a history tile whose file is gone. Deliberately different from downloadHistorySetAgain: the badge is visual, and a screen reader must hear the same distinction.",

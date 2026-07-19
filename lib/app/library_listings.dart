@@ -2,8 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/image_store.dart';
+import 'package:tela/features/favorites/favorites_providers.dart';
 
 /// The two listings of what tela has already put on this device.
 ///
@@ -28,6 +30,44 @@ final FutureProvider<List<PrivateImage>> privateImagesProvider =
     FutureProvider<List<PrivateImage>>((Ref ref) {
       final ImageStore images = ref.watch(imageStoreProvider);
       return images.privateImages();
+    });
+
+/// The ids of every favorited wallpaper, as a set a tile can ask in O(1).
+///
+/// Set-shaped on purpose. A tile mark needs "is this one of mine?" for every
+/// tile on a wall that can run to hundreds, and [isFavoriteProvider] answers
+/// that one id at a time — a family watch and a SQLite round trip per tile.
+/// This is the shape [missingDownloadsProvider] already uses for the same job.
+///
+/// Derived from [favoritesProvider] rather than querying separately, so the
+/// invalidation `refreshFavorites` already performs re-marks every shelf; a
+/// third provider queried in parallel would need remembering there.
+final FutureProvider<Set<String>> favoritedIdsProvider =
+    FutureProvider<Set<String>>((Ref ref) async {
+      final List<Wallpaper> saved = await ref.watch(favoritesProvider.future);
+      return <String>{for (final Wallpaper w in saved) w.id};
+    });
+
+/// The ids of every wallpaper tela has downloaded, as a set a tile can ask.
+///
+/// Two things it deliberately does not do:
+///
+/// - **It does not subtract [missingDownloadsProvider].** That probe opens
+///   every recorded file, and the browse wall must not wait on a filesystem
+///   sweep to draw a mark. The claim here is "you downloaded this", which stays
+///   true even once the file is gone; the history shelf is where a deleted file
+///   gets its own badge, because that is the screen where it changes what a tap
+///   actually costs.
+/// - **It does not include the private tier.** [recentDownloadsProvider]
+///   excludes explicit downloads, and that exclusion is load-bearing here: a
+///   mark fed from [privateImagesProvider] would let the browse grid — a screen
+///   with no app-lock in front of it — disclose what is in the private library.
+final FutureProvider<Set<String>> downloadedIdsProvider =
+    FutureProvider<Set<String>>((Ref ref) async {
+      final List<DownloadRecord> recent = await ref.watch(
+        recentDownloadsProvider.future,
+      );
+      return <String>{for (final DownloadRecord d in recent) d.wallpaper.id};
     });
 
 /// The ids in [recentDownloadsProvider] whose downloaded file is gone.

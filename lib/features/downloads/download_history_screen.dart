@@ -12,6 +12,7 @@ import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
+import 'package:tela/core/ui/wallpaper_marks_scope.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
@@ -112,6 +113,10 @@ class DownloadHistoryScreen extends ConsumerWidget {
               ),
               onTap: () => _open(context, recent, index),
               onLongPress: () => _confirmForget(context, ref, download),
+              // The mirror of Favorites: everything here is downloaded by
+              // definition, so only the heart carries information. It also
+              // keeps this shelf to one new mark beside the missing badge.
+              visibleMarks: const <WallpaperMark>{WallpaperMark.favorited},
             ),
           ),
           if (isMissing)

@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/router.dart';
 import 'package:tela/app/theme.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/tile_density_scope.dart';
+import 'package:tela/core/ui/wallpaper_marks_scope.dart';
 import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/tile_density.dart';
 import 'package:tela/features/settings/accent_color_controller.dart';
@@ -39,6 +41,15 @@ class _TelaAppState extends ConsumerState<TelaApp> {
     // that read the provider itself would be a fourth place to forget.
     final TileDensity density =
         ref.watch(tileDensityProvider).value ?? TileDensity.medium;
+    // Same one-wiring-point argument as the density, and here it is also what
+    // keeps the marks off the per-tile provider watch C4 was warned about.
+    // Either set reads empty until its SQLite listing resolves, so the opening
+    // frame is simply unmarked and marks appear a beat later — never an error,
+    // and never a wall that waits on the library to draw.
+    final Set<String> favorited =
+        ref.watch(favoritedIdsProvider).value ?? const <String>{};
+    final Set<String> downloaded =
+        ref.watch(downloadedIdsProvider).value ?? const <String>{};
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDevice, ColorScheme? darkDevice) =>
           MaterialApp.router(
@@ -53,7 +64,11 @@ class _TelaAppState extends ConsumerState<TelaApp> {
             // happens to be on screen — sits under the same density.
             builder: (BuildContext context, Widget? child) => TileDensityScope(
               density: density,
-              child: child ?? const SizedBox.shrink(),
+              child: WallpaperMarksScope(
+                favorited: favorited,
+                downloaded: downloaded,
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
             theme: TelaTheme.light(lightDevice, accent: accent),
             darkTheme: TelaTheme.dark(darkDevice, accent: accent),

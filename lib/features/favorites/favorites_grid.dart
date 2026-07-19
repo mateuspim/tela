@@ -9,6 +9,7 @@ import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
+import 'package:tela/core/ui/wallpaper_marks_scope.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
@@ -60,6 +61,10 @@ class FavoritesGrid extends ConsumerWidget {
             wallpaper: saved[index],
             heroTag: shelfHeroTag('favorites', saved[index].id, index),
             onTap: () => _openDetail(context, saved, index),
+            // Every tile here is favorited, so that mark would be decoration.
+            // Whether you also *downloaded* one is the open question on this
+            // shelf, and it is the only mark that answers anything.
+            visibleMarks: const <WallpaperMark>{WallpaperMark.downloaded},
           ),
     );
   }
