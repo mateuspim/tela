@@ -165,6 +165,58 @@ void main() {
       expect(rows.single.height, 200);
     });
 
+    test('a sole row grows to the ceiling the caller gives it', () {
+      // D2a. Without `soleRowMaxHeight` this lone favorite is drawn at the
+      // target — a measurement about a *full* wall — so the only thing on the
+      // shelf comes out the size of a tile among hundreds. On the tablet that
+      // was 93dip of a 753dip viewport, adrift above a screen and a half of
+      // black.
+      final List<JustifiedRow> rows = justifiedRows(
+        aspectRatios: <double>[1080 / 2400],
+        availableWidth: 1200,
+        targetRowHeight: 200,
+        spacing: 12,
+        maxPerRow: 4,
+        soleRowMaxHeight: 500,
+      );
+
+      expect(rows.single.height, 500);
+    });
+
+    test('a sole row fills the width before reaching for the ceiling', () {
+      // Three wide tiles fill 1200 at 129 tall, well under the 500 offered, so
+      // the ceiling never applies — growing them to it would crop or overflow.
+      final List<JustifiedRow> rows = justifiedRows(
+        aspectRatios: <double>[3, 3, 3],
+        availableWidth: 1200,
+        targetRowHeight: 60,
+        spacing: 12,
+        maxPerRow: 4,
+        soleRowMaxHeight: 500,
+      );
+
+      expect(rows, hasLength(1));
+      expect(_rowWidth(rows.single, 12), closeTo(1200, 1e-6));
+      expect(rows.single.height, lessThan(500));
+    });
+
+    test('the ceiling reaches only a shelf that never closed a row', () {
+      // Three of these close a row; the fourth trails it. A trailing row has a
+      // rhythm above it to match, and must not jump to two thirds of the
+      // screen just because the shelf happens to be short.
+      final List<JustifiedRow> rows = justifiedRows(
+        aspectRatios: <double>[2, 2, 2, 2],
+        availableWidth: 1200,
+        targetRowHeight: 200,
+        spacing: 12,
+        maxPerRow: 8,
+        soleRowMaxHeight: 500,
+      );
+
+      expect(rows, hasLength(2));
+      expect(rows.last.height, 200);
+    });
+
     test('a taller target row holds fewer wallpapers', () {
       final List<double> ratios = List<double>.filled(24, 16 / 9);
 

@@ -88,6 +88,28 @@ double wallpaperRowHeight(double availableWidth, TileDensity density) {
   return columnWidth / 1.5;
 }
 
+/// How tall the *only* row on a shelf may grow, given a [availableHeight] dip
+/// viewport.
+///
+/// A library holding one or two wallpapers never closes a row, and
+/// [wallpaperRowHeight] is the wrong ceiling for it: that is a measurement
+/// about a full wall, so it drew the single thing on screen at 93dip on a
+/// 753dip tablet viewport — a thumbnail adrift above a screen and a half of
+/// black, which reads as broken rather than as empty (device, 2026-07-19).
+///
+/// Two thirds of the viewport is generous enough that one wallpaper is the
+/// subject of its own screen, and still short enough to honour the reason the
+/// cap exists at all: filling the width and keeping the true aspect ratio
+/// are the same knob, so an uncapped lone portrait would stand several
+/// screens tall. A shelf narrow enough to fill at less than this — a phone —
+/// is unaffected, because the row simply fills the width first.
+///
+/// ```dart
+/// justifiedRows(soleRowMaxHeight: soleWallpaperRowHeight(height), ...);
+/// ```
+double soleWallpaperRowHeight(double availableHeight) =>
+    availableHeight * 2 / 3;
+
 /// The most wallpapers one justified row may hold on a shelf [availableWidth]
 /// dips wide, drawn at [density].
 ///

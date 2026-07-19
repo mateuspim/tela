@@ -54,6 +54,14 @@ class JustifiedRow {
 /// final row reaches for the full width too, capped at the height of the row
 /// above it — see [_trailingHeight] for why an uncapped fill is unusable.
 ///
+/// [soleRowMaxHeight] is the ceiling for a shelf so short that **no row ever
+/// closed** — a library holding one or two wallpapers. Without it such a shelf
+/// is capped at [targetRowHeight], which is the height the layout aims *rows of
+/// a full wall* at, so the only thing on screen is drawn as small as a tile
+/// among hundreds: one favorite came out 93dip tall on a 753dip tablet
+/// viewport, adrift above a screen and a half of black (device, 2026-07-19).
+/// Defaults to [targetRowHeight], which is exactly the old behaviour.
+///
 /// [maxPerRow] is what keeps portrait wallpapers usable. Height alone is the
 /// wrong stop for them: phone-shaped tiles are narrow, so a wide shelf can fit
 /// a dozen before the row is short enough to close, leaving a strip of
@@ -79,6 +87,7 @@ List<JustifiedRow> justifiedRows({
   required double targetRowHeight,
   required double spacing,
   required int maxPerRow,
+  double? soleRowMaxHeight,
 }) {
   _checkPositive(availableWidth, 'availableWidth');
   _checkPositive(targetRowHeight, 'targetRowHeight');
@@ -116,6 +125,7 @@ List<JustifiedRow> justifiedRows({
           rows: rows,
           availableWidth: availableWidth,
           targetRowHeight: targetRowHeight,
+          soleRowMaxHeight: soleRowMaxHeight,
           spacing: spacing,
         ),
       ),
@@ -137,6 +147,7 @@ double _trailingHeight({
   required List<JustifiedRow> rows,
   required double availableWidth,
   required double targetRowHeight,
+  required double? soleRowMaxHeight,
   required double spacing,
 }) {
   final double filling = _rowHeight(
@@ -145,9 +156,12 @@ double _trailingHeight({
     availableWidth: availableWidth,
     spacing: spacing,
   );
-  // A shelf too short to have closed a row has no rhythm to match yet.
+  // A shelf too short to have closed a row has no rhythm to match yet, so
+  // [targetRowHeight] — a measurement about a *full* wall — is the wrong
+  // ceiling for it: it shrinks the only content on screen to the size of a tile
+  // among hundreds. [soleRowMaxHeight] is the caller's answer for that shelf.
   final double ceiling = rows.isEmpty
-      ? targetRowHeight
+      ? (soleRowMaxHeight ?? targetRowHeight)
       : _larger(rows.last.height, targetRowHeight);
   return filling < ceiling ? filling : ceiling;
 }

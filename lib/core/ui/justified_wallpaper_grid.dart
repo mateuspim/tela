@@ -71,12 +71,17 @@ class JustifiedWallpaperGrid extends StatelessWidget {
         // A zero-width pass happens during some route transitions; packing
         // against it would throw rather than simply draw nothing yet.
         if (width <= 0) return const SizedBox.shrink();
-        return _rows(context, width, padding);
+        return _rows(context, width, constraints.maxHeight, padding);
       },
     );
   }
 
-  Widget _rows(BuildContext context, double width, EdgeInsets padding) {
+  Widget _rows(
+    BuildContext context,
+    double width,
+    double height,
+    EdgeInsets padding,
+  ) {
     final TileDensity density = TileDensityScope.of(context);
     final List<JustifiedRow> rows = justifiedRows(
       aspectRatios: List<double>.generate(itemCount, aspectRatioOf),
@@ -84,6 +89,11 @@ class JustifiedWallpaperGrid extends StatelessWidget {
       targetRowHeight: wallpaperRowHeight(width, density),
       spacing: wallpaperGridSpacing,
       maxPerRow: wallpaperRowTileCap(width, density),
+      // Only a shelf that never closed a row uses this, and it needs a real
+      // viewport to measure against. An unbounded height means nobody has told
+      // this shelf how tall it is, so there is nothing to take two thirds of —
+      // fall through to the packer's own ceiling rather than invent one.
+      soleRowMaxHeight: height.isFinite ? soleWallpaperRowHeight(height) : null,
     );
     final Widget? trailing = footer;
     return ListView.builder(
