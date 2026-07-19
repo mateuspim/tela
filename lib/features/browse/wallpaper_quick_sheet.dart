@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
@@ -121,7 +122,7 @@ Future<void> _download(
     refreshDownloads(ref);
     _say(messenger, l10n.detailDownloadSuccess);
   } on ImageStoreFailure {
-    _say(messenger, l10n.detailDownloadFailure);
+    _say(messenger, l10n.detailDownloadFailure, kind: ToastKind.failure);
   }
 }
 
@@ -140,12 +141,16 @@ Future<void> _setWallpaper(
     await ref.read(applyWallpaperProvider)(wallpaper, target);
     _say(messenger, l10n.detailApplySuccess);
   } on WallpaperApplyFailure {
-    _say(messenger, l10n.detailApplyFailure);
+    _say(messenger, l10n.detailApplyFailure, kind: ToastKind.failure);
   }
 }
 
-void _say(ScaffoldMessengerState messenger, String message) {
-  messenger.showSnackBar(SnackBar(content: Text(message)));
+void _say(
+  ScaffoldMessengerState messenger,
+  String message, {
+  ToastKind kind = ToastKind.success,
+}) {
+  showTelaToast(messenger, message, kind: kind);
 }
 
 class _QuickActionSheet extends ConsumerWidget {

@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
@@ -13,6 +12,7 @@ import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
+import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
 import 'package:tela/core/ui/wallpaper_share_sheet.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
@@ -148,7 +148,12 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       await ref.read(applyWallpaperProvider)(_wallpaper, target);
       if (mounted) _showResult(AppLocalizations.of(context).detailApplySuccess);
     } on WallpaperApplyFailure {
-      if (mounted) _showResult(AppLocalizations.of(context).detailApplyFailure);
+      if (mounted) {
+        _showResult(
+          AppLocalizations.of(context).detailApplyFailure,
+          kind: ToastKind.failure,
+        );
+      }
     } finally {
       if (mounted) setState(() => _isApplying = false);
     }
@@ -174,7 +179,10 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     if (failure.problem == WallpaperAdjustProblem.unavailable) {
       _openCropEditor();
     } else {
-      _showResult(AppLocalizations.of(context).detailAdjustFailure);
+      _showResult(
+        AppLocalizations.of(context).detailAdjustFailure,
+        kind: ToastKind.failure,
+      );
     }
   }
 
@@ -254,7 +262,10 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       }
     } on ImageStoreFailure {
       if (mounted) {
-        _showResult(AppLocalizations.of(context).detailDownloadFailure);
+        _showResult(
+          AppLocalizations.of(context).detailDownloadFailure,
+          kind: ToastKind.failure,
+        );
       }
     } finally {
       if (mounted) setState(() => _isDownloading = false);
@@ -282,7 +293,12 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
         ShareOption.image => share.image(_wallpaper),
       };
     } on WallpaperShareFailure {
-      if (mounted) _showResult(AppLocalizations.of(context).detailShareFailure);
+      if (mounted) {
+        _showResult(
+          AppLocalizations.of(context).detailShareFailure,
+          kind: ToastKind.failure,
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSharing = false);
     }
@@ -306,14 +322,17 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     try {
       await ref.read(externalLinkProvider).open(url);
     } on ExternalLinkFailure {
-      if (mounted) _showResult(AppLocalizations.of(context).detailLinkFailure);
+      if (mounted) {
+        _showResult(
+          AppLocalizations.of(context).detailLinkFailure,
+          kind: ToastKind.failure,
+        );
+      }
     }
   }
 
-  void _showResult(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+  void _showResult(String message, {ToastKind kind = ToastKind.success}) {
+    showTelaToast(ScaffoldMessenger.of(context), message, kind: kind);
   }
 
   /// Asks before blocking a tag — every future search silently excludes it,

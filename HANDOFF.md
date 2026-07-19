@@ -877,6 +877,47 @@ pins the claim it always said it did.
 piece of chrome over the wallpaper, and favoriting from the viewer fills the
 heart live, without leaving it.
 
+### D7 — one toast for the whole app
+
+Every message in tela was the bare Material default: `SnackBar(content:
+Text(message))`, in **16 places**. Edge-to-edge across a 1204dip tablet, no
+icon, and nothing whatever separating *"Wallpaper downloaded."* from *"Couldn't
+download."* — in an app that shows most of its messages **over a wallpaper**.
+
+`core/ui/tela_toast.dart` is now the only way any of them are shown. 778 tests
+(from 773), two claims mutation-checked.
+
+**The decisions worth not re-litigating:**
+
+- **Two kinds, not five.** Every message here is either "that worked" or "that
+  did not". A taxonomy with more rungs than the messages have only invites
+  arguing about which rung a message sits on.
+- **Kind is carried by glyph *and* colour, and the glyph is named.** Colour
+  alone fails anyone who cannot split the two hues, and a screen reader gets
+  nothing from either — so the icon carries `semanticLabel`, through l10n, not
+  a hardcoded English word.
+- **It replaces rather than queues.** Batch actions and the quick sheet fire
+  several in a row and Material queues them, leaving the user watching a
+  backlog of stale messages drain, the last of which is the only true one.
+- **A failure lingers longer** (6s vs 3s): the success usually confirms
+  something the screen already shows, while the failure is the only place that
+  news exists.
+- **Width-capped at 520dip, and null below that.** A full-width toast on the
+  tablet is a stripe; a *fixed* width on a phone would overflow instead of
+  shrinking, so there it falls back to the default insets.
+- **Opaque, never translucent** — the same lesson that killed the frosted app
+  bar (A2), and a toast lands over exactly the wall of thumbnails that taught
+  it.
+
+**The partial batch download is the one non-obvious kind assignment**: it reads
+as a failure, because some of the wallpapers are not on the device and that is
+the outcome the user has to act on.
+
+**Device pass (2026-07-19):** the download toast on the SM-X730 sits as a
+rounded, width-capped card with its check icon, clearly legible over the wall.
+**Unverified visually: the failure tone**, since making a real download fail on
+the device needs contrivance; it is covered by tests and mutation-checked.
+
 ### The duplicate-download bug — fixed (owner-reported, 2026-07-19)
 
 Re-downloading a wallpaper produced `wallhaven-abc123 (1).jpg` beside the

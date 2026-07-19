@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
@@ -166,7 +167,13 @@ void _sayDownloadOutcome(
     _say(messenger, l10n.batchDownloadDone(total));
     return;
   }
-  _say(messenger, l10n.batchDownloadPartial(saved, total, total - saved));
+  _say(
+    messenger,
+    l10n.batchDownloadPartial(saved, total, total - saved),
+    // Some of them are not on the device. That is the one batch outcome the
+    // user has to act on, so it does not get a success tick.
+    kind: ToastKind.failure,
+  );
 }
 
 Future<void> _forgetAll(WidgetRef ref, List<Wallpaper> wallpapers) async {
@@ -204,6 +211,10 @@ Future<bool> _confirmForget(BuildContext context, int count) async {
   return confirmed ?? false;
 }
 
-void _say(ScaffoldMessengerState messenger, String message) {
-  messenger.showSnackBar(SnackBar(content: Text(message)));
+void _say(
+  ScaffoldMessengerState messenger,
+  String message, {
+  ToastKind kind = ToastKind.success,
+}) {
+  showTelaToast(messenger, message, kind: kind);
 }

@@ -1,9 +1,9 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 
@@ -101,7 +101,7 @@ class _AppLockSwitchState extends ConsumerState<AppLockSwitch> {
           .read(appLockProvider)
           .authenticate(reason: l10n.settingsAppLockDisableReason);
       if (outcome == AppLockOutcome.lockedOut && mounted) {
-        _show(l10n.settingsAppLockLockedOut);
+        _show(l10n.settingsAppLockLockedOut, kind: ToastKind.failure);
       }
       return outcome == AppLockOutcome.passed ||
           outcome == AppLockOutcome.unavailable;
@@ -117,9 +117,7 @@ class _AppLockSwitchState extends ConsumerState<AppLockSwitch> {
     ref.invalidate(privateLibraryLockedProvider);
   }
 
-  void _show(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+  void _show(String message, {ToastKind kind = ToastKind.success}) {
+    showTelaToast(ScaffoldMessenger.of(context), message, kind: kind);
   }
 }

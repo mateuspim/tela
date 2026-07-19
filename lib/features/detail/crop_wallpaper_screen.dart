@@ -1,10 +1,10 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
+import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/crop_region.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -105,16 +105,19 @@ class _CropWallpaperScreenState extends ConsumerState<CropWallpaperScreen> {
       _showResult(AppLocalizations.of(context).detailApplySuccess);
       Navigator.of(context).pop();
     } on WallpaperApplyFailure {
-      if (mounted) _showResult(AppLocalizations.of(context).detailApplyFailure);
+      if (mounted) {
+        _showResult(
+          AppLocalizations.of(context).detailApplyFailure,
+          kind: ToastKind.failure,
+        );
+      }
     } finally {
       if (mounted) setState(() => _isApplying = false);
     }
   }
 
-  void _showResult(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+  void _showResult(String message, {ToastKind kind = ToastKind.success}) {
+    showTelaToast(ScaffoldMessenger.of(context), message, kind: kind);
   }
 
   @override

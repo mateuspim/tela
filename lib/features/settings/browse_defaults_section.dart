@@ -1,11 +1,11 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/account_defaults.dart';
 import 'package:tela/app/browse_defaults.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/browse_filter_text.dart';
+import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/account_settings.dart';
@@ -157,13 +157,15 @@ class _RefreshButtonState extends ConsumerState<_RefreshButton> {
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context);
     String message = l10n.browseDefaultsRefreshed;
+    ToastKind kind = ToastKind.success;
     try {
       await ref.read(browseDefaultsProvider.notifier).refreshFromAccount();
     } on WallhavenFailure catch (failure) {
       message = localizedFailure(l10n, failure);
+      kind = ToastKind.failure;
     }
     if (!mounted) return;
     setState(() => _busy = false);
-    messenger.showSnackBar(SnackBar(content: Text(message)));
+    showTelaToast(messenger, message, kind: kind);
   }
 }

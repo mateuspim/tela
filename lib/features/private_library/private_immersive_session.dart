@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/library_listings.dart';
@@ -10,6 +9,7 @@ import 'package:tela/core/ui/gallery_zoom_controller.dart';
 import 'package:tela/core/ui/immersive_gallery_viewer.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
+import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
@@ -180,7 +180,12 @@ class _PrivateImmersiveSessionState
       await ref.read(applyPrivateImageProvider)(image, target);
       if (mounted) _show(AppLocalizations.of(context).detailApplySuccess);
     } on WallpaperApplyFailure {
-      if (mounted) _show(AppLocalizations.of(context).detailApplyFailure);
+      if (mounted) {
+        _show(
+          AppLocalizations.of(context).detailApplyFailure,
+          kind: ToastKind.failure,
+        );
+      }
     } finally {
       if (mounted) setState(() => _isApplying = false);
     }
@@ -217,7 +222,9 @@ class _PrivateImmersiveSessionState
     try {
       await ref.read(imageStoreProvider).deletePrivateImage(image.id);
     } on ImageStoreFailure {
-      if (mounted) _show(l10n.privateLibraryDeleteFailure);
+      if (mounted) {
+        _show(l10n.privateLibraryDeleteFailure, kind: ToastKind.failure);
+      }
       return;
     }
     // The grid behind the viewer reads this provider; refresh it so it agrees
@@ -236,9 +243,7 @@ class _PrivateImmersiveSessionState
     setState(() {});
   }
 
-  void _show(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+  void _show(String message, {ToastKind kind = ToastKind.success}) {
+    showTelaToast(ScaffoldMessenger.of(context), message, kind: kind);
   }
 }
