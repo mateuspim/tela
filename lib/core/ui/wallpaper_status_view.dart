@@ -63,6 +63,30 @@ class WallpaperStatusView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Centred where there is room, scrollable where there is not. This is a
+    // whole-screen state on most shelves, but the Library hub gives its
+    // favorites shelf only what its fixed bands leave over, and on a phone that
+    // box is shorter than the icon-plus-sentence-plus-button drawn here — it
+    // overflowed by 19px (D2b). A status view that cannot be read is worse than
+    // one that scrolls, and a `Center` alone cannot do the second.
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) =>
+          SingleChildScrollView(
+            child: ConstrainedBox(
+              // An unbounded parent means nobody has said how tall this box
+              // is, so there is nothing to centre within — size to content.
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight.isFinite
+                    ? constraints.maxHeight
+                    : 0,
+              ),
+              child: _body(context),
+            ),
+          ),
+    );
+  }
+
+  Widget _body(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     return Center(
       child: Padding(

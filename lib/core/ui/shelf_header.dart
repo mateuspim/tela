@@ -10,6 +10,12 @@ import 'package:tela/app/theme.dart';
 /// rather than a control. Pass [count] only where a number is worth stating;
 /// most shelves are just a labelled rule.
 ///
+/// [trailing] is the section's own action, right-aligned on the plaque line —
+/// the Library hub's *See all* over its downloads preview. It sits outside the
+/// baseline-aligned label group on purpose: a button has no text baseline to
+/// align to, and putting one in that Row makes the whole header's alignment
+/// depend on the action's internals.
+///
 /// ```dart
 /// ShelfHeader(label: l10n.favoritesTitle, count: saved.length);
 /// ```
@@ -18,6 +24,7 @@ class ShelfHeader extends StatelessWidget {
   const ShelfHeader({
     required this.label,
     this.count,
+    this.trailing,
     this.padding = const EdgeInsets.fromLTRB(16, 20, 16, 8),
     super.key,
   });
@@ -27,6 +34,9 @@ class ShelfHeader extends StatelessWidget {
 
   /// How many items the shelf holds, or null to show no count.
   final int? count;
+
+  /// The section's action, right-aligned beside the label. Null shows none.
+  final Widget? trailing;
 
   /// Room around the header. The default matches the grid gutter beneath it.
   final EdgeInsetsGeometry padding;
@@ -42,14 +52,24 @@ class ShelfHeader extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
               children: <Widget>[
-                Text(label.toUpperCase(), style: _kicker(scheme.onSurface)),
-                if (count != null) ...<Widget>[
-                  const SizedBox(width: 8),
-                  Text('· $count', style: _kicker(scheme.primary)),
-                ],
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: <Widget>[
+                      Text(
+                        label.toUpperCase(),
+                        style: _kicker(scheme.onSurface),
+                      ),
+                      if (count != null) ...<Widget>[
+                        const SizedBox(width: 8),
+                        Text('· $count', style: _kicker(scheme.primary)),
+                      ],
+                    ],
+                  ),
+                ),
+                ?trailing,
               ],
             ),
             const SizedBox(height: 11),

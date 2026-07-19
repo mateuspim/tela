@@ -2,12 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
-import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
-import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
@@ -16,6 +13,7 @@ import 'package:tela/core/ui/wallpaper_marks_scope.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
+import 'package:tela/features/downloads/download_viewer_launch.dart';
 
 /// The wallpapers already on this device, each one tap away from being set.
 ///
@@ -111,7 +109,7 @@ class DownloadHistoryScreen extends ConsumerWidget {
                 download.wallpaper.id,
                 index,
               ),
-              onTap: () => _open(context, recent, index),
+              onTap: () => openDownloadViewer(context, recent, index),
               onLongPress: () => _confirmForget(context, ref, download),
               // The mirror of Favorites: everything here is downloaded by
               // definition, so only the heart carries information. It also
@@ -146,37 +144,6 @@ class DownloadHistoryScreen extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  /// Opens the whole history in the viewer, positioned on the tapped record.
-  ///
-  /// The session is the complete local list (newest first), so it never pages
-  /// — the same complete-local-snapshot invariant Favorites holds. Its creator
-  /// disposes it when the viewer returns; Back restores this grid and scroll.
-  void _open(BuildContext context, List<DownloadRecord> recent, int index) {
-    unawaited(_pushViewer(context, recent, index));
-  }
-
-  Future<void> _pushViewer(
-    BuildContext context,
-    List<DownloadRecord> recent,
-    int index,
-  ) async {
-    final GallerySessionController<DownloadRecord> session =
-        GallerySessionController<DownloadRecord>(
-          identity: 'download-history',
-          items: recent,
-          initialIndex: index,
-          itemKey: (DownloadRecord record) => record.wallpaper.id,
-        );
-    try {
-      await context.pushNamed<void>(
-        TelaRoutes.downloadViewerName,
-        extra: session,
-      );
-    } finally {
-      session.dispose();
-    }
   }
 
   /// Asks before forgetting a row — and the *wording* is the feature.

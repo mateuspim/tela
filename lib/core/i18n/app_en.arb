@@ -1201,6 +1201,16 @@
     "description": "Accessibility label for the hue slider of the color picker."
   },
 
+  "libraryRecentDownloads": "Recent downloads",
+  "@libraryRecentDownloads": {
+    "description": "Header of the Library hub's preview strip of the newest downloads."
+  },
+
+  "librarySeeAll": "See all",
+  "@librarySeeAll": {
+    "description": "Opens the full download history from the Library hub's preview strip."
+  },
+
   "quickActionOpenDetail": "Open details",
   "@quickActionOpenDetail": {
     "description": "Leaves the long-press quick-action sheet and opens the wallpaper's full detail screen."
