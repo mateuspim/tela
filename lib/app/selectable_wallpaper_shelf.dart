@@ -29,6 +29,7 @@ class SelectableWallpaperShelf extends ConsumerWidget {
     required this.wallpapers,
     required this.actions,
     required this.child,
+    this.expandChild = true,
     super.key,
   });
 
@@ -41,6 +42,10 @@ class SelectableWallpaperShelf extends ConsumerWidget {
   /// The shelf itself — normally a `JustifiedWallpaperGrid`.
   final Widget child;
 
+  /// Whether the contextual bar shortens [child] or stacks above it. See
+  /// [SelectionShelf.expandChild]; false is for the hub's fixed-height strip.
+  final bool expandChild;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -50,6 +55,7 @@ class SelectableWallpaperShelf extends ConsumerWidget {
         for (final WallpaperBatchAction action in actions)
           _actionFor(context, ref, l10n, action),
       ],
+      expandChild: expandChild,
       child: child,
     );
   }

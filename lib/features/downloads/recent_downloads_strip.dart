@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/library_listings.dart';
+import 'package:tela/app/selectable_wallpaper_shelf.dart';
+import 'package:tela/app/wallpaper_batch_actions.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_marks_scope.dart';
+import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/domain/models/download_record.dart';
+import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/downloads/download_viewer_launch.dart';
 
@@ -44,16 +48,31 @@ class RecentDownloadsStrip extends ConsumerWidget {
     final List<DownloadRecord> recent =
         ref.watch(recentDownloadsProvider).value ?? const <DownloadRecord>[];
     if (recent.isEmpty) return _empty(context, l10n);
-    return SizedBox(
-      height: stripHeight,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: recent.length,
-        separatorBuilder: (BuildContext context, int _) =>
-            const SizedBox(width: 12),
-        itemBuilder: (BuildContext context, int index) =>
-            _tile(context, recent, index),
+    return SelectableWallpaperShelf(
+      wallpapers: <Wallpaper>[
+        for (final DownloadRecord record in recent) record.wallpaper,
+      ],
+      // The same pair the history grid offers, because it is the same shelf
+      // seen through a smaller window — reaching *See all* first, only to make
+      // the identical selection there, is the trip this exists to save.
+      actions: const <WallpaperBatchAction>[
+        WallpaperBatchAction.favorite,
+        WallpaperBatchAction.forget,
+      ],
+      // The band is a fixed height inside the hub's unbounded column, so the
+      // bar stacks above it rather than taking flex that is not there.
+      expandChild: false,
+      child: SizedBox(
+        height: stripHeight,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: recent.length,
+          separatorBuilder: (BuildContext context, int _) =>
+              const SizedBox(width: 12),
+          itemBuilder: (BuildContext context, int index) =>
+              _tile(context, recent, index),
+        ),
       ),
     );
   }
@@ -67,6 +86,16 @@ class RecentDownloadsStrip extends ConsumerWidget {
   /// for not subtracting `missingDownloadsProvider` on the browse wall.
   Widget _tile(BuildContext context, List<DownloadRecord> recent, int index) {
     final DownloadRecord download = recent[index];
+    final gestures = selectableTileGestures(
+      context: context,
+      wallpaperId: download.wallpaper.id,
+      onOpen: () => openDownloadViewer(context, recent, index),
+      // The same rule every library shelf follows, and the reason this strip
+      // needed it: without a long press here the only way to batch your
+      // downloads was to reach *See all* first, while the favorites shelf a
+      // few dips below selected in place (owner, 2026-07-19).
+      longPressSelects: true,
+    );
     return SizedBox(
       width: stripHeight * download.wallpaper.resolution.aspectRatio,
       child: WallpaperTile(
@@ -76,7 +105,8 @@ class RecentDownloadsStrip extends ConsumerWidget {
           download.wallpaper.id,
           index,
         ),
-        onTap: () => openDownloadViewer(context, recent, index),
+        onTap: gestures.onTap,
+        onLongPress: gestures.onLongPress,
         // Everything here is downloaded by definition, so only the heart
         // carries information — the same narrowing the history shelf makes.
         visibleMarks: const <WallpaperMark>{WallpaperMark.favorited},

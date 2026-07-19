@@ -122,6 +122,7 @@ class SelectionShelf extends StatelessWidget {
     required this.itemIds,
     required this.actions,
     required this.child,
+    this.expandChild = true,
     super.key,
   });
 
@@ -135,18 +136,27 @@ class SelectionShelf extends StatelessWidget {
   /// The shelf itself — normally a `JustifiedWallpaperGrid`.
   final Widget child;
 
+  /// Whether the bar takes its height *from* [child] or adds to it.
+  ///
+  /// True for a grid that fills its viewport: the bar appears and the wall
+  /// shortens. False for a shelf that is already a fixed height and sits in an
+  /// unbounded column — the Library hub's downloads strip — where an `Expanded`
+  /// has no flex to take and would throw. There the bar simply stacks above.
+  final bool expandChild;
+
   @override
   Widget build(BuildContext context) {
     final WallpaperSelection? selection = WallpaperSelectionScope.of(context);
     if (selection == null || !selection.isActive) return child;
     return Column(
+      mainAxisSize: expandChild ? MainAxisSize.max : MainAxisSize.min,
       children: <Widget>[
         _SelectionBar(
           selection: selection,
           itemIds: itemIds,
           actions: actions,
         ),
-        Expanded(child: child),
+        if (expandChild) Expanded(child: child) else child,
       ],
     );
   }

@@ -38,6 +38,42 @@ void main() {
     expect(find.byType(FavoritesGrid), findsOneWidget);
   });
 
+  testWidgets('a long press on the downloads strip starts selecting there', (
+    WidgetTester tester,
+  ) async {
+    // The strip had no long press at all, so batching your downloads meant
+    // reaching *See all* first while the favorites shelf a few dips below
+    // selected in place (owner, 2026-07-19).
+    await _pumpLibrary(tester, downloads: <DownloadRecord>[_record('a')]);
+
+    await tester.longPress(find.byType(WallpaperTile).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 selected'), findsOneWidget);
+    expect(find.text('viewer-screen'), findsNothing);
+  });
+
+  testWidgets("the hub's two shelves select independently of each other", (
+    WidgetTester tester,
+  ) async {
+    // One selection for the whole screen would let a download and a favorite
+    // land in the same batch, over two shelves that offer different actions.
+    // So each section owns its own scope, and ticking in one leaves the other
+    // alone — including its *Select* button, which stays offered.
+    await _pumpLibrary(
+      tester,
+      downloads: <DownloadRecord>[_record('a')],
+      favorites: <Wallpaper>[_record('b').wallpaper],
+    );
+
+    await tester.longPress(find.byType(WallpaperTile).first);
+    await tester.pumpAndSettle();
+
+    // Exactly one bar, and the other shelf never entered the mode.
+    expect(find.text('1 selected'), findsOneWidget);
+    expect(find.byIcon(Icons.checklist), findsOneWidget);
+  });
+
   testWidgets('the strip replaced the history row, and See all leads there', (
     WidgetTester tester,
   ) async {
@@ -117,6 +153,7 @@ void main() {
 Future<void> _pumpLibrary(
   WidgetTester tester, {
   required List<DownloadRecord> downloads,
+  List<Wallpaper> favorites = const <Wallpaper>[],
 }) async {
   final GoRouter router = GoRouter(
     routes: <RouteBase>[
@@ -143,7 +180,7 @@ Future<void> _pumpLibrary(
     ProviderScope(
       overrides: <Override>[
         favoritesRepositoryProvider.overrideWithValue(
-          FakeFavoritesRepository(),
+          FakeFavoritesRepository(initial: favorites),
         ),
         downloadHistoryProvider.overrideWithValue(
           FakeDownloadHistory(initial: downloads),

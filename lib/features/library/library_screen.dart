@@ -39,51 +39,72 @@ class LibraryScreen extends ConsumerWidget {
     // holding the screen back.
     final int? downloads = ref.watch(recentDownloadsProvider).value?.length;
     final int? favorites = ref.watch(favoritesProvider).value?.length;
-    // The hub's only selectable shelf is Favorites, so the scope wraps the
-    // screen and the *Select* action rides in that shelf's own header rather
-    // than the app bar — an app-bar button here would look like it selected
-    // downloads and the private row too.
-    return SelectionShelfScope(
-      child: Scaffold(
-        appBar: GradientAppBar(
-          toolbarHeight: 72,
-          title: Text(l10n.libraryTitle, style: text.headlineSmall),
-        ),
-        body: Column(
-          children: <Widget>[
-            ShelfHeader(
-              label: l10n.libraryRecentDownloads,
-              count: downloads,
-              trailing: TextButton(
-                onPressed: () =>
-                    context.pushNamed(TelaRoutes.downloadHistoryName),
-                child: Text(l10n.librarySeeAll),
+    // **One scope per section, not one per screen.** Both shelves here select,
+    // over different listings and with different actions, so a single
+    // selection would let a download and a favorite land in the same batch —
+    // and, because each shelf draws its own bar from whatever scope it finds,
+    // one screen-wide scope literally renders the bar twice. Each *Select*
+    // therefore rides in its own header: an app-bar button would look like it
+    // selected the strip, the private row and the favorites all at once.
+    return Scaffold(
+      appBar: GradientAppBar(
+        toolbarHeight: 72,
+        title: Text(l10n.libraryTitle, style: text.headlineSmall),
+      ),
+      body: Column(
+        children: <Widget>[
+          SelectionShelfScope(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                ShelfHeader(
+                  label: l10n.libraryRecentDownloads,
+                  count: downloads,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      const SelectModeButton(),
+                      TextButton(
+                        onPressed: () =>
+                            context.pushNamed(TelaRoutes.downloadHistoryName),
+                        child: Text(l10n.librarySeeAll),
+                      ),
+                    ],
+                  ),
+                ),
+                const RecentDownloadsStrip(),
+              ],
+            ),
+          ),
+          // Detached from the strip above it. Every section here is delimited
+          // by its header's hairline rule, so a destination row flush against
+          // the preview reads as *part of* the downloads section rather than
+          // as its own door (device, 2026-07-19). It stays in this position
+          // because the private tier genuinely is the third download
+          // destination — explicit downloads land there — and it keeps its
+          // plain locked row rather than earning a plaque of its own.
+          const SizedBox(height: 20),
+          LibraryDestinationTile(
+            icon: Icons.lock_outline,
+            title: l10n.privateLibraryTitle,
+            subtitle: l10n.privateLibraryOpenDetail,
+            routeName: TelaRoutes.privateLibraryName,
+          ),
+          Expanded(
+            child: SelectionShelfScope(
+              child: Column(
+                children: <Widget>[
+                  ShelfHeader(
+                    label: l10n.favoritesTitle,
+                    count: favorites,
+                    trailing: const SelectModeButton(),
+                  ),
+                  const Expanded(child: FavoritesGrid()),
+                ],
               ),
             ),
-            const RecentDownloadsStrip(),
-            // Detached from the strip above it. Every section here is
-            // delimited by its header's hairline rule, so a destination row
-            // flush against the preview reads as *part of* the downloads
-            // section rather than as its own door (device, 2026-07-19). It
-            // stays in this position
-            // because the private tier genuinely is the third download
-            // destination — explicit downloads land there — and it keeps its
-            // plain locked row rather than earning a plaque of its own.
-            const SizedBox(height: 20),
-            LibraryDestinationTile(
-              icon: Icons.lock_outline,
-              title: l10n.privateLibraryTitle,
-              subtitle: l10n.privateLibraryOpenDetail,
-              routeName: TelaRoutes.privateLibraryName,
-            ),
-            ShelfHeader(
-              label: l10n.favoritesTitle,
-              count: favorites,
-              trailing: const SelectModeButton(),
-            ),
-            const Expanded(child: FavoritesGrid()),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

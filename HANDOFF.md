@@ -1018,6 +1018,44 @@ reason — nothing there can be seen, and deleting the owner's private files to
 watch it was not worth it. Its confirmation and partial-failure reporting are
 pinned by tests and mutation-checked.
 
+#### D5a — the hub's downloads strip selects too (owner-reported)
+
+The strip had **no long press at all**, so batching your own downloads meant
+reaching *See all* first, while the favorites shelf a few dips below selected in
+place. 770 tests (from 768). Reported and verified on hardware the same session.
+
+**The fix exposed a design fault in D5, which is the part worth keeping.** The
+hub had *one* screen-wide `SelectionShelfScope`, which was fine while Favorites
+was its only selectable shelf. With the strip selectable too, one scope means
+one selection across two shelves that offer **different actions over different
+listings** — a download and a favorite could land in the same batch — and,
+because each shelf draws its own bar from whatever scope it finds, it also
+**renders the contextual bar twice**. That is not theory: it is exactly how the
+new test failed before the fix, with two "1 selected" bars on screen.
+
+So the hub now runs **one scope per section**, each with its own *Select* in its
+own header. An app-bar button would have been wrong here anyway — it would look
+like it selected the strip, the private row and the favorites all at once.
+
+`SelectionShelf` gained **`expandChild`**. The default true is for a grid that
+fills its viewport: the bar appears and the wall shortens. The strip is a fixed
+132dip band inside the hub's unbounded column, where an `Expanded` has no flex
+to take and throws — there the bar stacks above instead.
+
+**Device pass (2026-07-19): no defects.** Long press on a strip thumbnail opens
+the bar inside the downloads section with select-all, favorite and forget, the
+ticked tile washed and checked, and the favorites shelf below untouched.
+
+**A data loss to know about, cause unexplained.** The `make deploy` for this
+slice **wiped the app's database** — 3 downloads and 2 favorites, including test
+subjects left by C4 and D1, were gone on relaunch. It was not an uninstall
+(`firstInstallTime` was unchanged) and the D5 deploy fifteen minutes earlier
+preserved everything, so `--split-per-abi`/versionCode downgrade — the known
+wipe in this project — does not explain it either. The database itself is
+healthy: re-downloading immediately repopulated it. **Treat device state as
+disposable across deploys until this is understood**, and re-seed test subjects
+rather than assuming yesterday's are still there.
+
 ### The filter badge anomaly — observed, unexplained, probe defined
 
 **Do not treat this as understood.** Browse's filter badge read **1** in
