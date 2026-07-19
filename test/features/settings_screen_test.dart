@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,6 +39,38 @@ void main() {
     // user kept, and the cache is a copy tela can fetch again.
     expect(find.text('Storage'), findsOneWidget);
     expect(find.text('Privacy'), findsOneWidget);
+  });
+
+  testWidgets('ends its two columns together on a landscape tablet', (
+    WidgetTester tester,
+  ) async {
+    // The SM-X730's landscape geometry, where the static split was seen: the
+    // left column ended less than halfway down and the rest was dead space.
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(),
+      viewport: const Size(2560, 1600),
+      pixelRatio: 2.125,
+    );
+
+    final List<Rect> cards = tester
+        .widgetList<Card>(find.byType(Card))
+        .map((Card card) => tester.getRect(find.byWidget(card)))
+        .toList();
+    final Set<double> lefts = cards.map((Rect card) => card.left).toSet();
+    expect(lefts, hasLength(2), reason: 'expected two columns');
+
+    final List<double> bottoms = lefts
+        .map(
+          (double left) => cards
+              .where((Rect card) => card.left == left)
+              .map((Rect card) => card.bottom)
+              .reduce(math.max),
+        )
+        .toList();
+    // A group is ~200dip tall, so anything under one group's worth of drift is
+    // as balanced as discrete blocks can be. The static split was ~2x apart.
+    expect((bottoms.first - bottoms.last).abs(), lessThan(200));
   });
 
   testWidgets('shows the saved destination for each purity', (
@@ -553,14 +587,17 @@ Future<void> _pumpSettings(
   FakeSecretStore? secrets,
   FakeWallhavenApi? api,
   FakeAppLock? lock,
+  Size viewport = const Size(1080, 5000),
+  double pixelRatio = 1,
 }) async {
   // Settings is a scrolling list, and it keeps growing — a download-history
   // tile, and now the browse-defaults switch. On a phone-sized test viewport
   // the pickers below the fold are never built, which reads as "the setting
   // vanished" rather than "scroll down". Every new section pushes this taller.
+  // A caller judging the *layout* rather than a control passes real geometry.
   tester.view
-    ..physicalSize = const Size(1080, 5000)
-    ..devicePixelRatio = 1;
+    ..physicalSize = viewport
+    ..devicePixelRatio = pixelRatio;
   addTearDown(tester.view.reset);
 
   await tester.pumpWidget(

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/balanced_columns.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -64,9 +65,11 @@ class _SettingsList extends StatelessWidget {
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1120),
-                child: constraints.maxWidth >= _twoColumnWidth
-                    ? _wideGroups(l10n)
-                    : _compactGroups(l10n),
+                child: BalancedColumns(
+                  columnCount: constraints.maxWidth >= _twoColumnWidth ? 2 : 1,
+                  spacing: 16,
+                  children: _groups(l10n),
+                ),
               ),
             ),
           ),
@@ -75,53 +78,19 @@ class _SettingsList extends StatelessWidget {
 
   static const double _twoColumnWidth = 900;
 
-  Widget _compactGroups(AppLocalizations l10n) {
-    return Column(
-      children: <Widget>[
-        _accountGroup(l10n),
-        const SizedBox(height: 16),
-        _appearanceGroup(l10n),
-        const SizedBox(height: 16),
-        _browseGroup(l10n),
-        const SizedBox(height: 16),
-        _downloadsGroup(l10n),
-        const SizedBox(height: 16),
-        _storageGroup(l10n),
-        const SizedBox(height: 16),
-        _privacyGroup(l10n),
-      ],
-    );
-  }
-
-  Widget _wideGroups(AppLocalizations l10n) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Expanded(
-          child: Column(
-            children: <Widget>[
-              _accountGroup(l10n),
-              const SizedBox(height: 16),
-              _appearanceGroup(l10n),
-              const SizedBox(height: 16),
-              _browseGroup(l10n),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            children: <Widget>[
-              _downloadsGroup(l10n),
-              const SizedBox(height: 16),
-              _privacyGroup(l10n),
-              const SizedBox(height: 16),
-              _storageGroup(l10n),
-            ],
-          ),
-        ),
-      ],
-    );
+  /// The groups in reading order.
+  ///
+  /// One list for both layouts: [BalancedColumns] measures and distributes, so
+  /// there is no second hand-assigned order to keep in step with this one.
+  List<Widget> _groups(AppLocalizations l10n) {
+    return <Widget>[
+      _accountGroup(l10n),
+      _appearanceGroup(l10n),
+      _browseGroup(l10n),
+      _downloadsGroup(l10n),
+      _storageGroup(l10n),
+      _privacyGroup(l10n),
+    ];
   }
 
   Widget _accountGroup(AppLocalizations l10n) {
