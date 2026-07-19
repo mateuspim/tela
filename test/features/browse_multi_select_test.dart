@@ -37,14 +37,16 @@ void main() {
     expect(find.text('Select wallpapers'), findsOneWidget);
   });
 
-  testWidgets('selecting from the sheet enters the mode with that tile ticked',
-      (WidgetTester tester) async {
-    await _pumpWall(tester);
+  testWidgets(
+    'selecting from the sheet enters the mode with that tile ticked',
+    (WidgetTester tester) async {
+      await _pumpWall(tester);
 
-    await _startSelecting(tester);
+      await _startSelecting(tester);
 
-    expect(find.text('1 selected'), findsOneWidget);
-  });
+      expect(find.text('1 selected'), findsOneWidget);
+    },
+  );
 
   testWidgets('while selecting, a tap ticks instead of opening the wallpaper', (
     WidgetTester tester,
@@ -62,7 +64,7 @@ void main() {
     expect(find.byType(WallpaperDetailScreen), findsNothing);
   });
 
-  testWidgets('tapping a ticked tile unticks it, and the last one exits', (
+  testWidgets('unticking the last tile keeps the mode, and X leaves it', (
     WidgetTester tester,
   ) async {
     await _pumpWall(tester);
@@ -71,11 +73,31 @@ void main() {
     await tester.tap(find.byType(WallpaperTile).first);
     await _settle(tester);
 
-    expect(find.text('1 selected'), findsNothing);
+    // Still selecting, just empty — the mode is explicit since the app-bar
+    // Select button landed, so a stray tap cannot end it.
+    expect(find.text('None selected'), findsOneWidget);
+    expect(find.byType(WallpaperDetailScreen), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.close));
+    await _settle(tester);
+
     // And the wall is a wall again: the next tap opens the wallpaper.
     await tester.tap(find.byType(WallpaperTile).first);
     await _settle(tester);
     expect(find.byType(WallpaperDetailScreen), findsOneWidget);
+  });
+
+  testWidgets('the app bar offers Select without any tile being pressed', (
+    WidgetTester tester,
+  ) async {
+    // The discoverable way in. The long press and the quick sheet's row are
+    // shortcuts for people who already know the mode exists.
+    await _pumpWall(tester);
+
+    await tester.tap(find.byIcon(Icons.checklist));
+    await _settle(tester);
+
+    expect(find.text('None selected'), findsOneWidget);
   });
 
   testWidgets('select all ticks every wallpaper on the shelf', (

@@ -6,6 +6,7 @@ import 'package:tela/app/wallpaper_batch_actions.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
+import 'package:tela/core/ui/selection_shelf.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 import 'package:tela/core/ui/wallpaper_marks_scope.dart';
@@ -37,21 +38,24 @@ class DownloadHistoryScreen extends ConsumerWidget {
     final AsyncValue<List<DownloadRecord>> downloads = ref.watch(
       recentDownloadsProvider,
     );
-    return Scaffold(
-      appBar: GradientAppBar(
-        toolbarHeight: 72,
-        title: Text(
-          l10n.downloadHistoryTitle,
-          style: Theme.of(context).textTheme.headlineSmall,
+    return SelectionShelfScope(
+      child: Scaffold(
+        appBar: GradientAppBar(
+          toolbarHeight: 72,
+          title: Text(
+            l10n.downloadHistoryTitle,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          actions: const <Widget>[SelectModeButton(), SizedBox(width: 8)],
         ),
-      ),
-      body: downloads.when(
-        data: (List<DownloadRecord> recent) =>
-            _grid(context, ref, l10n, recent),
-        loading: () => const WallpaperGridSkeleton(),
-        error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
-          icon: Icons.error_outline,
-          message: l10n.errorUnexpected,
+        body: downloads.when(
+          data: (List<DownloadRecord> recent) =>
+              _grid(context, ref, l10n, recent),
+          loading: () => const WallpaperGridSkeleton(),
+          error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
+            icon: Icons.error_outline,
+            message: l10n.errorUnexpected,
+          ),
         ),
       ),
     );
@@ -174,5 +178,4 @@ class DownloadHistoryScreen extends ConsumerWidget {
       ),
     );
   }
-
 }

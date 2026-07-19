@@ -5,6 +5,7 @@ import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
+import 'package:tela/core/ui/selection_shelf.dart';
 import 'package:tela/core/ui/shelf_header.dart';
 import 'package:tela/features/downloads/recent_downloads_strip.dart';
 import 'package:tela/features/favorites/favorites_grid.dart';
@@ -38,43 +39,51 @@ class LibraryScreen extends ConsumerWidget {
     // holding the screen back.
     final int? downloads = ref.watch(recentDownloadsProvider).value?.length;
     final int? favorites = ref.watch(favoritesProvider).value?.length;
-    return Scaffold(
-      appBar: GradientAppBar(
-        toolbarHeight: 72,
-        title: Text(l10n.libraryTitle, style: text.headlineSmall),
-      ),
-      body: Column(
-        children: <Widget>[
-          ShelfHeader(
-            label: l10n.libraryRecentDownloads,
-            count: downloads,
-            trailing: TextButton(
-              onPressed: () =>
-                  context.pushNamed(TelaRoutes.downloadHistoryName),
-              child: Text(l10n.librarySeeAll),
+    // The hub's only selectable shelf is Favorites, so the scope wraps the
+    // screen and the *Select* action rides in that shelf's own header rather
+    // than the app bar — an app-bar button here would look like it selected
+    // downloads and the private row too.
+    return SelectionShelfScope(
+      child: Scaffold(
+        appBar: GradientAppBar(
+          toolbarHeight: 72,
+          title: Text(l10n.libraryTitle, style: text.headlineSmall),
+        ),
+        body: Column(
+          children: <Widget>[
+            ShelfHeader(
+              label: l10n.libraryRecentDownloads,
+              count: downloads,
+              trailing: TextButton(
+                onPressed: () =>
+                    context.pushNamed(TelaRoutes.downloadHistoryName),
+                child: Text(l10n.librarySeeAll),
+              ),
             ),
-          ),
-          const RecentDownloadsStrip(),
-          // Detached from the strip above it. Every section here is delimited
-          // by its header's hairline rule, so a destination row flush against
-          // the preview reads as *part of* the downloads section rather than as
-          // its own door (device, 2026-07-19). It stays in this position
-          // because the private tier genuinely is the third download
-          // destination — explicit downloads land there — and it keeps its
-          // plain locked row rather than earning a plaque of its own.
-          const SizedBox(height: 20),
-          LibraryDestinationTile(
-            icon: Icons.lock_outline,
-            title: l10n.privateLibraryTitle,
-            subtitle: l10n.privateLibraryOpenDetail,
-            routeName: TelaRoutes.privateLibraryName,
-          ),
-          ShelfHeader(
-            label: l10n.favoritesTitle,
-            count: favorites,
-          ),
-          const Expanded(child: FavoritesGrid()),
-        ],
+            const RecentDownloadsStrip(),
+            // Detached from the strip above it. Every section here is
+            // delimited by its header's hairline rule, so a destination row
+            // flush against the preview reads as *part of* the downloads
+            // section rather than as its own door (device, 2026-07-19). It
+            // stays in this position
+            // because the private tier genuinely is the third download
+            // destination — explicit downloads land there — and it keeps its
+            // plain locked row rather than earning a plaque of its own.
+            const SizedBox(height: 20),
+            LibraryDestinationTile(
+              icon: Icons.lock_outline,
+              title: l10n.privateLibraryTitle,
+              subtitle: l10n.privateLibraryOpenDetail,
+              routeName: TelaRoutes.privateLibraryName,
+            ),
+            ShelfHeader(
+              label: l10n.favoritesTitle,
+              count: favorites,
+              trailing: const SelectModeButton(),
+            ),
+            const Expanded(child: FavoritesGrid()),
+          ],
+        ),
       ),
     );
   }

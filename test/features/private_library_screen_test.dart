@@ -151,22 +151,33 @@ void main() {
       expect(find.bySemanticsLabel('Private wallpaper older'), findsOneWidget);
     });
 
-    testWidgets('long-press deletes only after it is confirmed', (
+    testWidgets('deleting from a selection happens only once confirmed', (
       WidgetTester tester,
     ) async {
+      // A long press now enters multi-select rather than asking outright, so
+      // deleting one file is the batch delete at a count of one. The
+      // permanence warning is the thing that must survive that move — it is
+      // the only warning the user gets before a file is gone for good.
       final FakeImageStore store = FakeImageStore(
         privateLibrary: <PrivateImage>[_image('e7jvjd')],
       );
       await _pump(tester, store);
 
-      await tester.longPress(find.bySemanticsLabel('Private wallpaper e7jvjd'));
-      await tester.pumpAndSettle();
+      await _deleteSelected(tester);
+      expect(find.text('Delete this wallpaper?'), findsOneWidget);
+      expect(
+        find.textContaining('This cannot be undone'),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
       expect(store.deletedIds, isEmpty, reason: 'a deletion is not undoable');
+      // The cancelled dialog leaves the tick alone: the user cancelled the
+      // deletion, not the selection.
+      expect(find.text('1 selected'), findsOneWidget);
 
-      await tester.longPress(find.bySemanticsLabel('Private wallpaper e7jvjd'));
+      await tester.tap(find.byIcon(Icons.delete_outline));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();
@@ -227,3 +238,11 @@ PrivateImage _image(String id) => PrivateImage(
   savedAt: DateTime.utc(2026, 7, 14),
   sizeBytes: 2048,
 );
+
+/// Long-presses the private tile into selection, then asks to delete it.
+Future<void> _deleteSelected(WidgetTester tester) async {
+  await tester.longPress(find.bySemanticsLabel('Private wallpaper e7jvjd'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byIcon(Icons.delete_outline));
+  await tester.pumpAndSettle();
+}

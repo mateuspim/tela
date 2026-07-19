@@ -1,12 +1,19 @@
 import 'package:flutter/widgets.dart';
 
-/// Which wallpapers the user has ticked on one shelf, and whether any are.
+/// Which wallpapers the user has ticked on one shelf, and whether the shelf is
+/// selecting at all.
 ///
-/// Selection mode has **no flag of its own**: it is active exactly when
-/// something is selected. Deselecting the last tile therefore leaves the mode,
-/// which is the idiom every gallery on the device already uses, and it keeps
-/// this to one piece of state that cannot disagree with itself. Entry is always
-/// [selectOnly], so the count is never zero on the way in.
+/// **Selection mode is an explicit flag, and it has to be.** It was originally
+/// derived — active exactly when something was ticked, so unticking the last
+/// tile left the mode — which is tidier and was right while the only way in was
+/// a long press that ticked something. An app-bar *Select* button has no tile
+/// to tick, so under the derived rule pressing it did nothing at all. The flag
+/// is the cost of an entry point that does not depend on a wallpaper.
+///
+/// The consequence to know: **unticking everything keeps you in the mode**,
+/// showing an empty bar with its actions disabled, and only [clear] leaves.
+/// That is also the friendlier half of the trade — a mis-tap on your last
+/// ticked tile no longer throws away the mode along with the tick.
 ///
 /// One shelf owns one of these. It is deliberately not a Riverpod provider:
 /// selection is transient view state belonging to a screen, and a global holder
@@ -19,8 +26,11 @@ import 'package:flutter/widgets.dart';
 class WallpaperSelection extends ChangeNotifier {
   final Set<String> _ids = <String>{};
 
+  /// Whether the shelf is selecting, independently of anything being ticked.
+  bool _active = false;
+
   /// Whether the shelf is in selection mode.
-  bool get isActive => _ids.isNotEmpty;
+  bool get isActive => _active;
 
   /// How many wallpapers are ticked.
   int get count => _ids.length;
@@ -31,15 +41,23 @@ class WallpaperSelection extends ChangeNotifier {
   /// Whether [wallpaperId] is ticked.
   bool contains(String wallpaperId) => _ids.contains(wallpaperId);
 
+  /// Enters selection mode with nothing ticked — what a *Select* button does.
+  void enter() {
+    if (_active) return;
+    _active = true;
+    notifyListeners();
+  }
+
   /// Enters selection mode with [wallpaperId] as the only tick.
   void selectOnly(String wallpaperId) {
+    _active = true;
     _ids
       ..clear()
       ..add(wallpaperId);
     notifyListeners();
   }
 
-  /// Ticks or unticks [wallpaperId], leaving the mode if it was the last one.
+  /// Ticks or unticks [wallpaperId], staying in the mode either way.
   void toggle(String wallpaperId) {
     if (!_ids.remove(wallpaperId)) _ids.add(wallpaperId);
     notifyListeners();
@@ -52,9 +70,10 @@ class WallpaperSelection extends ChangeNotifier {
     if (_ids.length != before) notifyListeners();
   }
 
-  /// Leaves selection mode.
+  /// Leaves selection mode and drops every tick.
   void clear() {
-    if (_ids.isEmpty) return;
+    if (!_active && _ids.isEmpty) return;
+    _active = false;
     _ids.clear();
     notifyListeners();
   }

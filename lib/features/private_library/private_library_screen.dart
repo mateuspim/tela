@@ -11,9 +11,11 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
+import 'package:tela/core/ui/selection_shelf.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
+import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
@@ -24,8 +26,10 @@ import 'package:tela/features/private_library/private_secure_access.dart';
 /// Holds `FLAG_SECURE` while on screen and satisfies the app-lock before it
 /// lists anything — both through [PrivateSecureAccess], which the
 /// fullscreen viewer shares so the protection survives the whole private flow.
-/// Tapping a tile opens that image in the secure viewer; a long press still
-/// offers to delete the file.
+/// Tapping a tile opens that image in the secure viewer. A long press enters
+/// multi-select — the same rule the other library shelves follow — and deleting
+/// one file is the batch delete at a count of one, so the permanence warning is
+/// worded once and shown for both.
 class PrivateLibraryScreen extends ConsumerStatefulWidget {
   /// Creates the private library.
   const PrivateLibraryScreen({super.key});
@@ -52,15 +56,18 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: GradientAppBar(
-        toolbarHeight: 72,
-        title: Text(
-          l10n.privateLibraryTitle,
-          style: Theme.of(context).textTheme.headlineSmall,
+    return SelectionShelfScope(
+      child: Scaffold(
+        appBar: GradientAppBar(
+          toolbarHeight: 72,
+          title: Text(
+            l10n.privateLibraryTitle,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          actions: const <Widget>[SelectModeButton(), SizedBox(width: 8)],
         ),
+        body: _body(context, l10n),
       ),
-      body: _body(context, l10n),
     );
   }
 
@@ -103,16 +110,40 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     }
     // Rows keyed to each file's real aspect ratio now that the native listing
     // decodes its bounds; a corrupt file with none falls back square.
-    return JustifiedWallpaperGrid(
-      itemCount: stored.length,
-      aspectRatioOf: (int index) => stored[index].aspectRatio ?? 1,
-      itemBuilder: (BuildContext context, int index, double _, double _) =>
-          _PrivateTile(
-            image: stored[index],
-            position: index,
-            onTap: () => _open(context, stored, index),
-            onDelete: () => _confirmDelete(stored[index]),
-          ),
+    return SelectionShelf(
+      itemIds: <String>[for (final PrivateImage image in stored) image.id],
+      // Deleting is the only batch that means anything here. These files are
+      // already on the device, so there is nothing to download, and favoriting
+      // is a Wallhaven-wallpaper idea the private tier deliberately has no part
+      // in — a favorite would be a second, unlocked index of what is in here.
+      actions: <SelectionAction>[
+        SelectionAction(
+          icon: Icons.delete_outline,
+          label: l10n.privateLibraryDelete,
+          run: _deleteSelected,
+        ),
+      ],
+      child: JustifiedWallpaperGrid(
+        itemCount: stored.length,
+        aspectRatioOf: (int index) => stored[index].aspectRatio ?? 1,
+        itemBuilder: (BuildContext context, int index, double _, double _) =>
+            _tile(context, stored, index),
+      ),
+    );
+  }
+
+  Widget _tile(BuildContext context, List<PrivateImage> stored, int index) {
+    final gestures = selectableTileGestures(
+      context: context,
+      wallpaperId: stored[index].id,
+      onOpen: () => _open(context, stored, index),
+      longPressSelects: true,
+    );
+    return _PrivateTile(
+      image: stored[index],
+      position: index,
+      onTap: gestures.onTap,
+      onLongPress: gestures.onLongPress,
     );
   }
 
@@ -146,13 +177,48 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     }
   }
 
-  Future<void> _confirmDelete(PrivateImage image) async {
+  /// Confirms, then deletes every ticked file, reporting what actually went.
+  ///
+  /// Answers false on a declined confirmation so the ticks survive it — the
+  /// user cancelled the deletion, not the selection.
+  Future<bool> _deleteSelected(List<String> ids) async {
+    if (ids.isEmpty) return false;
+    if (!await _confirmDelete(ids.length)) return false;
+    if (!mounted) return false;
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final int deleted = await _deleteAll(ids);
+    ref.invalidate(privateImagesProvider);
+    if (mounted) _show(_deleteOutcome(l10n, deleted, ids.length));
+    return true;
+  }
+
+  /// One at a time, counting the ones that failed rather than hiding them:
+  /// "deleted 3 of 5" and "deleted 5" are different facts about the device.
+  Future<int> _deleteAll(List<String> ids) async {
+    int deleted = 0;
+    for (final String id in ids) {
+      try {
+        await ref.read(imageStoreProvider).deletePrivateImage(id);
+        deleted++;
+      } on ImageStoreFailure {
+        continue;
+      }
+    }
+    return deleted;
+  }
+
+  String _deleteOutcome(AppLocalizations l10n, int deleted, int total) {
+    if (deleted == total) return l10n.privateLibraryDeleteDone(total);
+    return l10n.privateLibraryDeletePartial(deleted, total, total - deleted);
+  }
+
+  Future<bool> _confirmDelete(int count) async {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
-        title: Text(l10n.privateLibraryDeleteTitle),
-        content: Text(l10n.privateLibraryDeleteBody),
+        title: Text(l10n.privateLibraryDeleteTitleMany(count)),
+        content: Text(l10n.privateLibraryDeleteBodyMany(count)),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -165,17 +231,7 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
         ],
       ),
     );
-    if (confirmed ?? false) await _delete(image);
-  }
-
-  Future<void> _delete(PrivateImage image) async {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    try {
-      await ref.read(imageStoreProvider).deletePrivateImage(image.id);
-      ref.invalidate(privateImagesProvider);
-    } on ImageStoreFailure {
-      if (mounted) _show(l10n.privateLibraryDeleteFailure);
-    }
+    return confirmed ?? false;
   }
 
   void _show(String message) {
@@ -191,13 +247,13 @@ class _PrivateTile extends StatelessWidget {
     required this.image,
     required this.position,
     required this.onTap,
-    required this.onDelete,
+    required this.onLongPress,
   });
 
   final PrivateImage image;
   final int position;
   final VoidCallback onTap;
-  final VoidCallback onDelete;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -216,7 +272,7 @@ class _PrivateTile extends StatelessWidget {
         // square there too), and a self-measuring tile would fight it.
         child: InkWell(
           onTap: onTap,
-          onLongPress: onDelete,
+          onLongPress: onLongPress,
           child: _thumbnail(context),
         ),
       ),

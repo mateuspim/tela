@@ -1,0 +1,213 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/wallpaper_selection.dart';
+
+/// One thing the contextual bar can do to every ticked item.
+///
+/// Deliberately domain-free — an icon, a label, and a callback taking ids — so
+/// this file stays in `core/ui`, which holds no Riverpod and no domain types.
+/// The wallpaper shelves and the private library each map their own batch
+/// actions onto these, which is what lets both share one bar.
+class SelectionAction {
+  /// Creates an action shown as one icon button in the bar.
+  const SelectionAction({
+    required this.icon,
+    required this.label,
+    required this.run,
+  });
+
+  /// The bar's icon for this action.
+  final IconData icon;
+
+  /// Tooltip and accessibility label.
+  final String label;
+
+  /// Performs the action, answering whether it ran — false when a confirmation
+  /// was declined, so the ticks survive a cancelled dialog.
+  final Future<bool> Function(List<String> selectedIds) run;
+}
+
+/// Owns one screen's selection and puts it above that screen's [Scaffold].
+///
+/// **The placement is the whole point.** The selection has to be readable both
+/// by the tiles (below the shelf) and by a *Select* button in the app bar
+/// (above the body), and an `InheritedWidget` only reaches downwards — so it
+/// has to sit above the `Scaffold` rather than around the grid. Wrapping only
+/// the grid is what made an app-bar entry impossible in the first version.
+///
+/// Also hosts the [PopScope]: back leaves selection before it leaves the
+/// screen, which is the first gesture anyone tries to undo a selection.
+///
+/// ```dart
+/// SelectionShelfScope(
+///   child: Scaffold(
+///     appBar: AppBar(actions: <Widget>[SelectModeButton()]),
+///     body: SelectionShelf(itemIds: ids, actions: actions, child: grid),
+///   ),
+/// );
+/// ```
+class SelectionShelfScope extends StatefulWidget {
+  /// Publishes a fresh selection to everything under [child].
+  const SelectionShelfScope({required this.child, super.key});
+
+  /// The screen this selection belongs to, `Scaffold` and all.
+  final Widget child;
+
+  @override
+  State<SelectionShelfScope> createState() => _SelectionShelfScopeState();
+}
+
+class _SelectionShelfScopeState extends State<SelectionShelfScope> {
+  final WallpaperSelection _selection = WallpaperSelection();
+
+  @override
+  void dispose() {
+    _selection.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WallpaperSelectionScope(
+      selection: _selection,
+      child: ListenableBuilder(
+        listenable: _selection,
+        builder: (BuildContext context, Widget? child) => PopScope(
+          canPop: !_selection.isActive,
+          onPopInvokedWithResult: (bool didPop, Object? result) {
+            if (!didPop) _selection.clear();
+          },
+          child: child!,
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// The app-bar action that starts selecting, with nothing ticked yet.
+///
+/// Hidden while already selecting: the contextual bar owns the screen then, and
+/// a second way in beside a *Cancel* reads as a second mode. Renders nothing at
+/// all with no [SelectionShelfScope] above it, so a screen that has not opted
+/// in cannot show a button that does nothing.
+class SelectModeButton extends StatelessWidget {
+  /// Creates the *Select* app-bar action.
+  const SelectModeButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final WallpaperSelection? selection = WallpaperSelectionScope.of(context);
+    if (selection == null || selection.isActive) return const SizedBox.shrink();
+    return IconButton(
+      icon: const Icon(Icons.checklist),
+      tooltip: AppLocalizations.of(context).quickActionSelect,
+      onPressed: selection.enter,
+    );
+  }
+}
+
+/// A shelf that grows a contextual bar above it while its screen is selecting.
+///
+/// The bar is a band above the grid rather than a floating bottom bar or a
+/// swapped app bar: some shelves are embedded widgets with no app bar of their
+/// own, and others sit above a bottom navigation bar a floating bar would
+/// fight, so the band is the one position that works everywhere without each
+/// shelf special-casing itself.
+class SelectionShelf extends StatelessWidget {
+  /// Wraps [child], offering [actions] over the ticked subset of [itemIds].
+  const SelectionShelf({
+    required this.itemIds,
+    required this.actions,
+    required this.child,
+    super.key,
+  });
+
+  /// Every item the shelf is showing, in the order it shows them. Selection is
+  /// resolved against this, so an id that leaves the listing stops counting.
+  final List<String> itemIds;
+
+  /// What the bar offers, left to right.
+  final List<SelectionAction> actions;
+
+  /// The shelf itself — normally a `JustifiedWallpaperGrid`.
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final WallpaperSelection? selection = WallpaperSelectionScope.of(context);
+    if (selection == null || !selection.isActive) return child;
+    return Column(
+      children: <Widget>[
+        _SelectionBar(
+          selection: selection,
+          itemIds: itemIds,
+          actions: actions,
+        ),
+        Expanded(child: child),
+      ],
+    );
+  }
+}
+
+class _SelectionBar extends StatelessWidget {
+  const _SelectionBar({
+    required this.selection,
+    required this.itemIds,
+    required this.actions,
+  });
+
+  final WallpaperSelection selection;
+  final List<String> itemIds;
+  final List<SelectionAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return Material(
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: SafeArea(
+        bottom: false,
+        child: Row(
+          children: <Widget>[
+            IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: l10n.batchCancel,
+              onPressed: selection.clear,
+            ),
+            Expanded(child: Text(l10n.batchSelectedCount(selection.count))),
+            IconButton(
+              icon: const Icon(Icons.select_all),
+              tooltip: l10n.batchSelectAll,
+              onPressed: () => selection.addAll(itemIds),
+            ),
+            for (final SelectionAction action in actions) _button(action),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Disabled at zero ticks rather than hidden.
+  ///
+  /// An explicit mode can sit at nothing selected — that is the trade the
+  /// *Select* button bought — so the bar has to say what it would do without
+  /// pretending it can do it yet. Hiding the actions would make the bar change
+  /// shape on every first and last tick.
+  Widget _button(SelectionAction action) {
+    return IconButton(
+      icon: Icon(action.icon),
+      tooltip: action.label,
+      onPressed: selection.count == 0 ? null : () => unawaited(_run(action)),
+    );
+  }
+
+  /// Resolves ids against the shelf's current list rather than acting on
+  /// whatever the selection remembers, then leaves the mode if it ran.
+  Future<void> _run(SelectionAction action) async {
+    final List<String> selected = itemIds.where(selection.contains).toList();
+    if (await action.run(selected)) selection.clear();
+  }
+}

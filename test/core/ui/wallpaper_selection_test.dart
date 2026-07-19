@@ -23,9 +23,12 @@ void main() {
     expect(selection.ids, <String>{'7j1mzo'});
   });
 
-  test('toggling the last tick leaves selection mode', () {
-    // The whole reason there is no separate `_active` flag: the mode and the
-    // ticks cannot disagree, because they are the same piece of state.
+  test('unticking everything stays in the mode, and only clear leaves', () {
+    // The trade the app-bar *Select* button bought. The mode used to be derived
+    // from the ticks, so unticking the last tile left it — but a Select button
+    // has no tile to tick, so under that rule pressing it did nothing at all.
+    // The friendlier half: a mis-tap on your last tick no longer throws the
+    // whole mode away with it.
     final WallpaperSelection selection = WallpaperSelection()
       ..selectOnly('e7jvjd')
       ..toggle('7j1mzo');
@@ -35,7 +38,19 @@ void main() {
       ..toggle('7j1mzo')
       ..toggle('e7jvjd');
 
+    expect(selection.count, 0);
+    expect(selection.isActive, isTrue);
+
+    selection.clear();
     expect(selection.isActive, isFalse);
+  });
+
+  test('enter starts the mode with nothing ticked', () {
+    // What the app-bar button does, and the case a derived mode cannot express.
+    final WallpaperSelection selection = WallpaperSelection()..enter();
+
+    expect(selection.isActive, isTrue);
+    expect(selection.count, 0);
   });
 
   test('addAll notifies once, and not at all when nothing is new', () {

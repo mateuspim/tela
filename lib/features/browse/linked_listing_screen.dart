@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
+import 'package:tela/core/ui/selection_shelf.dart';
 import 'package:tela/core/ui/wallpaper_swatch.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
@@ -90,15 +91,20 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
         .narrow(_filters)
         .forScreen(screenResolution(context));
 
-    return Scaffold(
-      appBar: GradientAppBar(
-        title: _title(context),
-        actions: <Widget>[
-          BrowseFilterButton(filters: _filters, scope: this),
-          const SizedBox(width: 8),
-        ],
+    // Above the Scaffold so the app bar's Select action can reach the same
+    // selection the tiles below use; see SelectionShelfScope.
+    return SelectionShelfScope(
+      child: Scaffold(
+        appBar: GradientAppBar(
+          title: _title(context),
+          actions: <Widget>[
+            const SelectModeButton(),
+            BrowseFilterButton(filters: _filters, scope: this),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: WallpaperGrid(query: query, galleryIdentity: identity),
       ),
-      body: WallpaperGrid(query: query, galleryIdentity: identity),
     );
   }
 

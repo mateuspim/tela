@@ -1058,6 +1058,52 @@
     "description": "Confirms deleting one app-private file."
   },
 
+  "privateLibraryDeleteTitleMany": "{count, plural, =1{Delete this wallpaper?} other{Delete {count} wallpapers?}}",
+  "@privateLibraryDeleteTitleMany": {
+    "description": "Confirmation title before deleting app-private files, one or many.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "privateLibraryDeleteBodyMany": "{count, plural, =1{It will be removed from this device. This cannot be undone.} other{They will be removed from this device. This cannot be undone.}}",
+  "@privateLibraryDeleteBodyMany": {
+    "description": "Explains that deleting app-private files is permanent, one or many.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "privateLibraryDeleteDone": "{count, plural, =1{Wallpaper deleted} other{{count} wallpapers deleted}}",
+  "@privateLibraryDeleteDone": {
+    "description": "Confirms a batch of app-private files was deleted.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "privateLibraryDeletePartial": "Deleted {done} of {total} — {failed} failed",
+  "@privateLibraryDeletePartial": {
+    "description": "Reports a batch delete where some app-private files could not be removed.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+
   "privateLibraryDeleteFailure": "Couldn't delete this wallpaper.",
   "@privateLibraryDeleteFailure": {
     "description": "Safe fallback when an app-private file cannot be deleted."
@@ -1221,7 +1267,7 @@
     "description": "Leaves the long-press quick-action sheet and puts the shelf into multi-select mode, with the pressed wallpaper already ticked."
   },
 
-  "batchSelectedCount": "{count, plural, =1{1 selected} other{{count} selected}}",
+  "batchSelectedCount": "{count, plural, =0{None selected} =1{1 selected} other{{count} selected}}",
   "@batchSelectedCount": {
     "description": "Title of the selection action bar, counting the ticked wallpapers.",
     "placeholders": {

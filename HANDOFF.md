@@ -2,8 +2,8 @@
 
 Updated: 2026-07-19
 
-> **Picking up cold?** **The D1–D4 pass is done** — D1 (`bdefc1d`), D2a
-> (`af092cd`), D2b (`b24b15b`), D3 (`c0e43b0`) and D4 are all built and
+> **Picking up cold?** **The D pass is done** — D1 (`bdefc1d`), D2a
+> (`af092cd`), D2b (`b24b15b`), D3 (`c0e43b0`), D4 and D5 are all built and
 > device-verified. The next work is **Wave 4's product items** (auto-rotate,
 > collections, Omarchy sync), described at the bottom, unless the owner calls
 > another UI pass. **One open anomaly rides along: the download-history shelf
@@ -592,7 +592,7 @@ Wave 4's product work (auto-rotate, collections, Omarchy sync) is untouched and
 described below. **The owner chose a third UI pass (D1–D4) ahead of it** — see
 the next section.
 
-## THE CURRENT PASS — D1–D4, chosen 2026-07-19; all four done
+## THE CURRENT PASS — D1–D4, chosen 2026-07-19, plus D5; all done
 
 The owner asked what else the UI needs after C closed, and chose **all four** of
 these. They came out of a screenshot sweep of the SM-X730 in both orientations,
@@ -946,6 +946,77 @@ gunman and a red creature). The download history is untouched at 1.
 (*"Downloaded 1 of 2 — 1 failed"*) has only been seen in a widget test, since
 making a real download fail on the device needs contrivance. *Select all* was
 likewise only exercised in tests on a 3-tile wall.
+
+### D5 — Select on every page — **built and device-verified**
+
+The owner asked for Select "on all pages", because D4's entry points were all
+hidden behind a long press or a sheet row and read as missing. 768 tests (from
+766), analyze and format clean, both new claims mutation-checked.
+
+**Every shelf now has a visible way in**, and the private library gained
+selection outright:
+
+| page | visible entry | batch actions |
+|---|---|---|
+| Browse | app-bar *Select* | favorite, download |
+| Linked listing | app-bar *Select* | favorite, download |
+| Download history | app-bar *Select* | favorite, forget |
+| Private library | app-bar *Select* | **delete** |
+| Favorites (in the hub) | *Select* in its `ShelfHeader.trailing` | download, un-favorite |
+
+The long press and the quick sheet's row still work — they are shortcuts for
+people who already know the mode exists.
+
+**The design change this forced, and it is the thing to not re-litigate:
+selection mode is now an explicit flag.** D4 derived it — active exactly when
+something was ticked, so unticking the last tile left the mode — which was
+tidier and correct while every entry point ticked something. **An app-bar
+*Select* button has no tile to tick, so under the derived rule pressing it did
+nothing at all.** The consequences, both pinned by tests:
+
+- Unticking everything **keeps** you in the mode, showing *None selected* with
+  the actions disabled rather than hidden (hiding them makes the bar change
+  shape on every first and last tick). The friendlier half of the trade: a
+  mis-tap on your last tick no longer throws the mode away with it.
+- Only *Cancel*, Back, or a completed batch leaves.
+
+**The other structural piece: `SelectionShelfScope` sits above the `Scaffold`,
+not around the grid.** An `InheritedWidget` only reaches downwards, and the
+selection has to be readable both by the tiles (below the body) and by the
+app-bar button (above it). Wrapping only the grid — which is what D4 did — is
+exactly what made an app-bar entry impossible. The mechanics moved into
+`core/ui/selection_shelf.dart` (`SelectionAction`, `SelectionShelf`,
+`SelectModeButton`), which is domain-free, so `SelectableWallpaperShelf` is now
+a thin mapper and the private library reuses the same bar with its own action.
+
+**The private library's delete is the batch delete at a count of one**, the same
+move the history's forget made in D4, so the permanence warning is worded once.
+It is the only batch there on purpose: those files are already on the device, so
+there is nothing to download, and a favorite would be a second, *unlocked* index
+of what the private tier exists to hide. The Library hub's *Select* rides in the
+Favorites header rather than the app bar, because an app-bar button there would
+look like it selected the downloads strip and the private row too.
+
+#### D5's device pass (2026-07-19) — no defects
+
+On the SM-X730, and zero Flutter exceptions or overflow warnings in logcat
+across the whole session:
+
+- Browse's app-bar *Select* enters straight to **None selected**, every tile
+  wearing an empty circle, **both actions correctly greyed out at zero**, and
+  the Select icon hides itself while the bar is up.
+- **The owner's actual ask works**: tick two, one tap on download, both land —
+  both tiles re-marked with the download check and *RECENT DOWNLOADS* went
+  1 → 3 in the hub.
+- The Favorites header carries its own *Select*, scoped to that shelf.
+- **The private library could not be screenshotted at all — which is the point.**
+  `FLAG_SECURE` returns a black frame, so this screen is verifiable only by
+  test and by it not crashing. It stayed resumed and error-free.
+
+**Unverified:** the private library's batch delete on real files, for the same
+reason — nothing there can be seen, and deleting the owner's private files to
+watch it was not worth it. Its confirmation and partial-failure reporting are
+pinned by tests and mutation-checked.
 
 ### The filter badge anomaly — observed, unexplained, probe defined
 
