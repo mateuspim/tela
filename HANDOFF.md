@@ -125,9 +125,10 @@ the same `justifiedRows`, so the preview cannot drift from what arrives.
 
 ### Owed on the device (only the owner can), for this pass
 
-1. **B2b's browser hand-off** — `launchUrl` is a real platform round trip, like
-   the wallpaper-apply ones; it can't be unit-tested. Tap *View on Wallhaven* and
-   a source link on the tablet.
+1. ~~**B2b's browser hand-off.**~~ **Done, verified on the SM-X730
+   (2026-07-19)** during C3's device pass: *View on Wallhaven* opened Brave on
+   `wallhaven.cc/w/k8lvqm`, the right wallpaper. It only became tappable once C3
+   restructured the panel, which is why it waited this long.
 2. ~~**B5 — "the history gallery is finnicky."**~~ **Diagnosed and fixed
    (2026-07-18).** It was the masonry: Download History and Favorites are
    unfiltered, so mixed shapes packed raggedly and stranded a tall tile beside a
@@ -224,13 +225,14 @@ chose all four of these. They are ordered by cost, and each is independently
 shippable — take them one at a time, in this order, and stop wherever the
 session ends.
 
-**C1 is built (`46ec6c2`) and C2 is built (`f1e34cd`); C3 is next.** Their own
-sections below now record what they decided rather than what to do.
+**C1 (`46ec6c2`), C2 (`f1e34cd`) and C3 (`4b38b55`) are built; C4 is next.**
+Their own sections below now record what they decided rather than what to do.
 
-**Both have now had a device pass** (2026-07-19). Each found one real defect,
-each is fixed, and **both fixes have been seen working on the tablet**: C2's
-melt-through edge (`732d88e`) and C1's under-filled wall (`184c96e`). What is
-still owed is small and specific — see the two sections below.
+**All three have had a device pass** (2026-07-19). C1 and C2 each found one real
+defect, each is fixed, and **both fixes have been seen working on the tablet**:
+C2's melt-through edge (`732d88e`) and C1's under-filled wall (`184c96e`). **C3
+found none** — and it closed two long-open verification items on its way past;
+see its section below. What is still owed is small and specific.
 
 **One hard-won piece of tooling knowledge, because it cost this session an hour
 of device time: an agent must never run `adb kill-server` here.** The tablet is
@@ -254,6 +256,13 @@ running there, this session can use it normally.
 So: if `adb devices` is empty, **ask the owner to run it from their shell**.
 Never `kill-server`, never `start-server`, and target the serial explicitly
 (`adb -s RXGL602SQ0K …`).
+
+**This works, and C3's device pass is the proof (2026-07-19).** The owner started
+a daemon from a terminal outside Claude Code; from that moment `adb devices` in
+this session listed `RXGL602SQ0K device`, and `make deploy` plus a full
+tap-and-screenshot pass ran normally from here. The namespace blocks *starting* a
+daemon that can open the USB device, not talking to one already running. Asking
+is the whole workaround — there is nothing else to try.
 
 Every one of them is *observable*: none can be called done on a green suite
 alone, because all four are things the owner looks at. `make deploy` and a
@@ -428,19 +437,51 @@ username simply has nothing to return. Not a filter problem, not a tela problem.
 finding one is still owed; look for a near-white wallpaper by eye rather than by
 chasing that uploader.
 
-### C3 — unify the detail panel, and un-strand the Colors row
+### C3 — unify the detail panel, and un-strand the Colors row — **built (`4b38b55`) and device-verified**
 
-Two jobs, one screen, because they are the same edit.
+Both jobs landed in one edit on `wallpaper_metadata.dart`. 718 tests (from 716),
+analyze and format clean, both new claims mutation-checked.
 
-- The panel speaks two visual languages for one kind of data: Resolution, File
-  size, Category and Purity are cards; File type, Ratio, Views, Favorites,
-  Uploader and Source are a plain key-value list. Pick one. `wallpaper_metadata.dart`
-  owns this.
-- The **Colors** row sits at the panel's clipped bottom edge. This is a real
-  reachability defect, not a nitpick: the 2026-07-18 device pass could not verify
-  B2a's colour drilldown at all because the tap landed in the gutter below the
-  swatches. Moving it up the panel is what makes that testable.
-- So this slice closes the one B2a item still marked unverified further down.
+**All eight scalar facts are tiles now.** File type, Ratio, Views and Favorites
+joined Resolution, File size, Category and Purity in the grid, so the panel
+stopped speaking two visual languages for one kind of data. Each tile carries
+`Key('metadata-fact-<label>')` — that key exists **only** so a test can prove the
+fact is a tile rather than a row, which is otherwise invisible from outside a
+private widget. Drop one from `_facts` and the test names it.
+
+**The decision worth not re-litigating: Uploader and Source left the grid rather
+than joining it.** They were never facts — each is somewhere you can *go* — and a
+free-text source URL sits badly in a half-width card. They group with *View on
+Wallhaven* as `_LinkAction`s instead, each carrying its kind as an icon. So the
+panel is one language for data and one for actions, which is honest, rather than
+two languages for the same thing. A non-URL source still stays plain selectable
+text (`_PlainCredit`), and that existing test passed untouched.
+
+**Colors moved up under the facts**, which was the reachability half.
+
+#### C3's device pass — no defects, and it closed two open items
+
+Seen on the SM-X730 in the expanded (440dp pane) layout:
+
+- **B2a's colour drilldown is verified at last.** Tapping a swatch opens
+  "Wallpapers in this color" with the swatch in the app bar, results genuinely
+  amber/tan dominant, and **the filter badge goes 1 → 2** — the inherited
+  resolution filter plus the colour riding as a separate param, exactly the B1
+  seed behaviour, confirmed on hardware rather than argued from the unit tests.
+  This is the item the 2026-07-18 pass could not reach at all.
+- **B2b's browser hand-off is verified**, and it was the first owed item of the
+  whole UI/UX pass. *View on Wallhaven* opened Brave on `wallhaven.cc/w/k8lvqm`
+   — the right wallpaper, matching resolution, uploader and palette. So
+  `launchUrl` resolves a browser under the Android 11+ `<queries>` entry B2b
+  added, on real hardware.
+- The attribution block sits **below the fold** on first paint, with the source
+  link clipped mid-text above the Set wallpaper button. **This was checked and is
+  not a defect** — the pane scrolls and both links are fully reachable. Do not
+  "fix" it by shrinking the fact grid without looking first.
+
+**Unjudged, and cheap to look at next time:** the compact (portrait) layout. The
+panel is the same widget under a `ListView` there, so nothing is suspected, but
+only the expanded pane has actually been seen.
 
 ### C4 — tile state indicators
 
