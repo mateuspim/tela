@@ -2,16 +2,32 @@
 
 Updated: 2026-07-19
 
-> **Picking up cold?** **The D pass is done** — D1 (`bdefc1d`), D2a
-> (`af092cd`), D2b (`b24b15b`), D3 (`c0e43b0`), D4 and D5 are all built and
-> device-verified. The next work is **Wave 4's product items** (auto-rotate,
-> collections, Omarchy sync), described at the bottom, unless the owner calls
-> another UI pass. **One open anomaly rides along: the download-history shelf
-> draws its lone tile far smaller than it should — see *The lone history tile
-> anomaly*, now narrowed to a height the grid is handed, with a hand-operable
-> toggle to reproduce it, but still not understood.** The second UI pass
-> (C1–C4) before it is finished and verified on hardware; see *NEXT SESSION
-> STARTS HERE* for what each of those slices decided.
+> **Picking up cold?** **The D pass is done, D1 through D7**, all built and
+> device-verified: D1 (`bdefc1d`), D2a (`af092cd`), D2b (`b24b15b`), D3
+> (`c0e43b0`), D4 (`42b6c67`), D5 (`fdd89eb` + `73bdbb4`), D6 the fullscreen
+> viewer (`e008ab9`), D7 the toast (`da2a206`). A native download bug was fixed
+> alongside them (`5783286`). **778 tests green.**
+>
+> The next work is **Wave 4's product items** (auto-rotate, collections,
+> Omarchy sync), described at the bottom, unless the owner calls another UI
+> pass. The second UI pass (C1–C4) before all this is finished and verified on
+> hardware; see *NEXT SESSION STARTS HERE* for what each of those slices
+> decided.
+>
+> **Three things ride along, none blocking:**
+>
+> 1. **The lone history tile anomaly** — the download-history shelf draws its
+>    lone tile far smaller than it should. Now narrowed to a height the grid is
+>    handed, with a hand-operable toggle to reproduce it, but still not
+>    understood. See its section.
+> 2. **A `make deploy` wiped the app database once, cause unexplained** (see
+>    D5a). Treat device state as disposable across deploys and re-seed test
+>    subjects rather than assuming yesterday's survived.
+> 3. **There is no Kotlin test infrastructure at all** — no `androidTest`, no
+>    JUnit dependency — so every native path (`ImageStorage`, the wallpaper
+>    applier, the crop editor) is verifiable only by hand on a device. The
+>    duplicate-download fix exposed this; standing it up is real work nobody
+>    has scheduled.
 >
 > The section immediately below is why the layout changed — read it first if you
 > are going to touch any grid, since masonry is gone and the reason it went is
@@ -592,7 +608,7 @@ Wave 4's product work (auto-rotate, collections, Omarchy sync) is untouched and
 described below. **The owner chose a third UI pass (D1–D4) ahead of it** — see
 the next section.
 
-## THE CURRENT PASS — D1–D4, chosen 2026-07-19, plus D5; all done
+## THE CURRENT PASS — D1–D4, chosen 2026-07-19, plus D5–D7; all done
 
 The owner asked what else the UI needs after C closed, and chose **all four** of
 these. They came out of a screenshot sweep of the SM-X730 in both orientations,
