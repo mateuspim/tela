@@ -2,9 +2,12 @@
 
 Updated: 2026-07-19
 
-> **Picking up cold?** The work to *do* is **D2b — the Library hub**, in *THE
-> CURRENT PASS — D1–D4*. D1 (`bdefc1d`) and D2a (`af092cd`) are built and
-> device-verified; D3 and D4 are not started. The second UI pass (C1–C4) before it
+> **Picking up cold?** The work to *do* is **D3**, in *THE CURRENT PASS —
+> D1–D4*. D1 (`bdefc1d`), D2a (`af092cd`) and D2b (`b24b15b`) are built and
+> device-verified; D3 and D4 are not started. **One open anomaly rides along:
+> the download-history shelf draws its lone tile far smaller than it should —
+> see *The lone history tile anomaly*, which has a defined probe and is not
+> understood.** The second UI pass (C1–C4) before it
 > is finished and verified on hardware; see *NEXT SESSION STARTS HERE* for what
 > each of those slices decided. Wave 4's product items (auto-rotate,
 > collections, Omarchy sync) sit behind D.
@@ -588,7 +591,7 @@ Wave 4's product work (auto-rotate, collections, Omarchy sync) is untouched and
 described below. **The owner chose a third UI pass (D1–D4) ahead of it** — see
 the next section.
 
-## THE CURRENT PASS — D1–D4, chosen 2026-07-19; D1 and D2a done, D2b next
+## THE CURRENT PASS — D1–D4, chosen 2026-07-19; D1 and D2 done, D3 next
 
 The owner asked what else the UI needs after C closed, and chose **all four** of
 these. They came out of a screenshot sweep of the SM-X730 in both orientations,
@@ -714,12 +717,91 @@ each now fill roughly half the panel instead of hiding in a corner.
    again once the hub sections are in** — centring a sole row is a small change
    if it still reads as unbalanced.
 
-#### D2b — Library as a real hub — **next, not started**
+#### D2b — Library as a real hub — **built (`b24b15b`) and device-verified**
 
-Instead of two destination rows over a void: a recent-downloads strip plus the
-favorites preview, each its own section. `library_screen.dart` is 55 lines and
-already a `Column`, so the sections are additive. `recentDownloadsProvider` and
-`favoritesProvider` both already exist at the composition root.
+743 tests (from 740), analyze and format clean, all three new claims
+mutation-checked. The hub is now: a **Recent downloads** plaque carrying *See
+all*, a tappable preview strip, the private row, then the **Favorites** plaque
+and shelf.
+
+**The strip replaced the Download history row rather than joining it** (owner's
+choice, of three offered). A row and a strip both meaning "downloads" is two
+affordances for one idea, and the strip is the one that also answers "what have
+I got?". `openDownloadViewer` is extracted so the strip and the history grid
+open the same viewer on the same session, with its ownership rules written once.
+
+**The private row gets no preview, deliberately** — a thumbnail strip on a
+screen with no app-lock in front of it would disclose what the tier exists to
+hide. `recentDownloadsProvider` excludes explicit downloads, load-bearing here
+for the same reason as C4's marks.
+
+Two supporting changes worth knowing about:
+
+- **`ShelfHeader` gained a `trailing` slot**, outside its baseline-aligned label
+  group — a button has no text baseline, and putting one in that Row makes the
+  header's alignment depend on the action's internals.
+- **`WallpaperStatusView` centres where there is room and scrolls where there is
+  not.** The hub gives its favorites shelf only what its fixed bands leave over,
+  and on a phone that box is shorter than the icon-plus-sentence it draws — it
+  overflowed by 19px. `tela_shell_test` caught it, not a device.
+
+**Device pass (2026-07-19):** the hub renders, a preview tap opens the viewer on
+that download ("1 of 1"), *See all* reaches the history, and the private row is
+legible. One defect found and fixed on the spot: the private row was flush
+against the strip and read as part of the downloads section, so it is detached
+now.
+
+### The lone history tile anomaly — observed, measured, UNEXPLAINED
+
+**Do not treat this as understood, and do not "fix" it by changing
+`soleWallpaperRowHeight`.** It is not known to be a D2 regression at all.
+
+**What is observed.** On the SM-X730 (2560x1600 @2.125, so 1204x753 dip), the
+Download History shelf holding **one** landscape wallpaper (`k8lvqm`, ratio 1.6)
+draws it at roughly **299 x 187 dip**. During D2a's device pass, the same screen
+with the same single record drew it at roughly **693 x 431 dip**. Screenshot
+measurement was validated against a known quantity — the hub strip's 132dip band
+measures back as 129dip — so the readings are good to a few percent.
+
+**What is ruled out**, each checked rather than assumed:
+
+- **Not the code.** A widget test mounting the real `DownloadHistoryScreen` at
+  that exact geometry with that exact record produces **726 x 454**, which is
+  the correct 2/3-of-viewport answer, and it is *identical at all three tile
+  densities*.
+- **Not a stale build.** `./tool/tela clean` plus a fresh `make deploy`
+  reproduces it.
+- **Not the density setting.** Settings reads *Small*, and the probe above shows
+  density cannot move this number anyway.
+- **Not the route taken.** Reached from the hub's *See all* and from Settings →
+  Download history, on a force-stopped fresh launch: identical.
+- **Not a transition artifact.** Reproduced on a settled screen minutes later.
+- **Not D2a being absent from the build.** The hub's favorites shelf *does* show
+  the D2a behaviour: its lone favorite measures ~295 x 181, which is exactly
+  2/3 of the ~272dip the hub's fixed bands leave that shelf.
+
+**The hypothesis that survived, and it reframes the bug.** Because a tile's
+width and height are one knob, 299 x 187 fits *two* readings and one screenshot
+cannot separate them:
+
+1. **Height-limited** — the ceiling applied against a viewport of only ~280dip,
+   meaning something is handing the history grid a short box.
+2. **Width-limited** — the row simply *filled* a shelf only ~299dip wide,
+   meaning something is handing the history grid a narrow box.
+
+Reading 2 is the newer suspicion and the more interesting one: it would make
+this a **width** defect that has nothing to do with D2, and possibly predates it.
+
+**The decisive probe, cheap:** rotate the tablet to portrait and measure again.
+Portrait changes width and height by different factors, so the two readings
+predict different sizes and one measurement separates them. Then find who is
+constraining that box — a `LayoutBuilder` dump inside
+`JustifiedWallpaperGrid.build` on a debug build is the direct route.
+
+**Why it stopped here:** the session had spent a lot of device time on
+inference, and guessing further was worse than writing down exactly what is
+known. The favorites shelf proves the D2a mechanism works on hardware, so this
+is a narrower question than "is D2a broken".
 
 ### D3 — Settings' two columns are a static split
 
