@@ -2,8 +2,9 @@
 
 Updated: 2026-07-19
 
-> **Picking up cold?** The work to *do* is **D2**, in *THE CURRENT PASS — D1–D4*.
-> D1 is built and device-verified (`bdefc1d`); D2–D4 are not started. The second UI pass (C1–C4) before it
+> **Picking up cold?** The work to *do* is **D2b — the Library hub**, in *THE
+> CURRENT PASS — D1–D4*. D1 (`bdefc1d`) and D2a (`af092cd`) are built and
+> device-verified; D3 and D4 are not started. The second UI pass (C1–C4) before it
 > is finished and verified on hardware; see *NEXT SESSION STARTS HERE* for what
 > each of those slices decided. Wave 4's product items (auto-rotate,
 > collections, Omarchy sync) sit behind D.
@@ -587,7 +588,7 @@ Wave 4's product work (auto-rotate, collections, Omarchy sync) is untouched and
 described below. **The owner chose a third UI pass (D1–D4) ahead of it** — see
 the next section.
 
-## THE CURRENT PASS — D1–D4, chosen 2026-07-19; D1 done, D2 next
+## THE CURRENT PASS — D1–D4, chosen 2026-07-19; D1 and D2a done, D2b next
 
 The owner asked what else the UI needs after C closed, and chose **all four** of
 these. They came out of a screenshot sweep of the SM-X730 in both orientations,
@@ -668,9 +669,57 @@ a couple of small tiles above roughly a screen and a half of black. On a
 `WallpaperStatusView` covers the genuinely-empty case; this is the **nearly**
 empty case, which nothing covers.
 
-Two directions, not yet chosen: constrain the shelf's max width so few tiles
-still look composed, or make Library a real hub (a recent-downloads strip plus a
-favorites preview) instead of two rows over a void.
+**The owner chose both directions, growing first** (2026-07-19), as two
+independently shippable slices: **D2a** grow the shelf, **D2b** make Library a
+hub.
+
+#### D2a — grow a nearly-empty shelf — **built (`af092cd`) and device-verified**
+
+740 tests (from 734), analyze and format clean, all three new claims
+mutation-checked.
+
+**It was not a "sparse shelf" problem, and that is the part worth not
+re-deriving. It was the trailing-row cap.** A shelf too short to close a single
+row has no row above to borrow a rhythm from, so `_trailingHeight` fell back to
+`targetRowHeight` — a measurement about a **full wall**. So the fewer wallpapers
+a shelf held, the *smaller* it drew them: one favorite came out 93dip tall on a
+753dip tablet viewport.
+
+`justifiedRows` takes a **`soleRowMaxHeight`** for that case, and
+`JustifiedWallpaperGrid` measures its own viewport to supply it —
+`soleWallpaperRowHeight`, two thirds of the height. Generous enough that one
+wallpaper is the subject of its own screen, and still short enough to honour why
+the cap exists: filling the width and keeping the true ratio are the same knob,
+so an uncapped lone portrait would stand several screens tall. Absent, it
+defaults to the old behaviour; an unbounded viewport falls through rather than
+inventing a number.
+
+**It reaches only a shelf that never closed a row.** A trailing partial row still
+matches the row above, so a wall is untouched — pinned by a test, and confirmed
+on hardware where Browse is unchanged tile for tile. That is also what keeps it
+clear of C1's `_topUpIfUnderfilled`: a 24-item page always closes rows, so the
+two cannot fight.
+
+**Device pass (2026-07-19): no defects.** The lone favorite and the lone download
+each now fill roughly half the panel instead of hiding in a corner.
+
+**Two things D2a does *not* fix, recorded rather than hidden:**
+
+1. **A shelf that closes one or two rows and still leaves most of the viewport
+   empty** — nine favorites at Small on the tablet. Out of reach of a sole-row
+   ceiling by construction. D2b is the better answer for Library, since it fills
+   the space with *content* rather than size.
+2. **The sole tile stays left-aligned**, so a gap remains to its right. Left
+   alone deliberately: D2b restructures that composition anyway. **Worth judging
+   again once the hub sections are in** — centring a sole row is a small change
+   if it still reads as unbalanced.
+
+#### D2b — Library as a real hub — **next, not started**
+
+Instead of two destination rows over a void: a recent-downloads strip plus the
+favorites preview, each its own section. `library_screen.dart` is 55 lines and
+already a `Column`, so the sections are additive. `recentDownloadsProvider` and
+`favoritesProvider` both already exist at the composition root.
 
 ### D3 — Settings' two columns are a static split
 
