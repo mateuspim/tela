@@ -232,17 +232,23 @@ each is fixed, and **both fixes have been seen working on the tablet**: C2's
 melt-through edge (`732d88e`) and C1's under-filled wall (`184c96e`). What is
 still owed is small and specific — see the two sections below.
 
-**One hard-won piece of tooling knowledge, because it cost this session the
-device for an hour: never run `adb kill-server` here.** This host has **no
-`/dev/bus/usb`**, so adb can never claim the tablet over USB even though it
-enumerates in `lsusb` (`04e8:6860`) and genuinely exposes an adb interface
-(vendor class 255, subclass 66, protocol 1). Every working connection is
-*network* adb held by the running server; killing it drops the tablet for good,
-and it does not come back on `192.168.50.191:5555` (that address goes ARP-FAILED
-and nothing on the subnet listens on 5555 after a reboot). Recovery is Wireless
-debugging on the device — `adb pair <ip>:<pairPort>`, then
-`adb connect <ip>:<port>` — which only the owner can do. If `adb devices` is
-empty, ask; do not restart the server.
+**One hard-won piece of tooling knowledge, because it cost this session an hour
+of device time: an agent must never run `adb kill-server` here.** The tablet is
+on **USB** (serial `RXGL602SQ0K`), and the stale `192.168.50.191:5555` in this
+file is long dead — that address goes ARP-FAILED and nothing on the subnet
+listens on 5555, so chasing it is a dead end.
+
+The trap is that an agent's sandboxed shell **can use a running adb server but
+cannot start one.** Its startup fails three ways at once: `failed to register
+inotify watch on '/dev/bus/usb/001/'` (restricted `/dev`), `failed to write
+server path to /usr/bin/adb: Read-only file system`, and finally
+`RXGL602SQ0K: connection terminated: failed to open device` — adb *sees* the
+device by serial through libusb and cannot open it. Net result: `ADB server
+didn't ACK`. The owner's own shell has none of these limits and starts it fine.
+
+So: if `adb devices` is empty, **ask the owner to run it from their shell**.
+Never `kill-server`, never `start-server`, and target the serial explicitly
+(`adb -s RXGL602SQ0K …`).
 
 Every one of them is *observable*: none can be called done on a green suite
 alone, because all four are things the owner looks at. `make deploy` and a
