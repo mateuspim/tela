@@ -1,5 +1,6 @@
 package cc.pym.tela
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.BitmapFactory
@@ -40,7 +41,19 @@ class ImageStorage(private val context: Context) {
         }
     }
 
+    /**
+     * Writes into the gallery, **reusing the row this wallpaper already owns**.
+     *
+     * [fileName] is derived from the Wallhaven id, so re-downloading the same
+     * wallpaper always wants the same name — and `insert` does not overwrite,
+     * it de-duplicates: MediaStore silently renames the second write to
+     * `wallhaven-abc123 (1).jpg`. Downloading a wallpaper twice therefore left
+     * the user with duplicates rather than one current file (owner, 2026-07-19).
+     * Looking the row up first makes a re-download idempotent.
+     */
     private fun storeInGallery(request: ImageStoreRequest): Map<String, Any> {
+        val existing = findGalleryImage(fileName(request))
+        if (existing != null) return rewriteGalleryImage(existing, request)
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName(request))
             put(MediaStore.MediaColumns.MIME_TYPE, mimeType(request))
@@ -53,14 +66,81 @@ class ImageStorage(private val context: Context) {
         return try {
             resolver.openOutputStream(uri)?.use { output -> copyRemote(request.imageUrl, output) }
                 ?: throw IllegalStateException("MediaStore output stream was null")
-            resolver.update(uri, ContentValues().apply {
-                put(MediaStore.MediaColumns.IS_PENDING, 0)
-            }, null, null)
+            markReady(uri)
             success(uri)
         } catch (error: Exception) {
             resolver.delete(uri, null, null)
             throw error
         }
+    }
+
+    /**
+     * Overwrites the file already at [uri], in place.
+     *
+     * Two things here are load-bearing:
+     *
+     * - The stream is opened `"wt"`, not the default `"w"`. Plain write does not
+     *   truncate, so replacing a large image with a smaller one would leave the
+     *   tail of the old file behind and produce a corrupt image.
+     * - A failure **must not delete [uri]**, unlike the insert path above. That
+     *   path removes a row it created moments earlier; this one would be
+     *   destroying a file the user already had, to no purpose — a failed
+     *   re-download should leave the existing copy exactly where it was.
+     */
+    private fun rewriteGalleryImage(uri: Uri, request: ImageStoreRequest): Map<String, Any> {
+        val resolver = context.contentResolver
+        // Hides the file from the gallery while it is half-written, the same
+        // courtesy the insert path extends.
+        resolver.update(uri, ContentValues().apply {
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }, null, null)
+        return try {
+            resolver.openOutputStream(uri, "wt")?.use { output ->
+                copyRemote(request.imageUrl, output)
+            } ?: throw IllegalStateException("MediaStore output stream was null")
+            markReady(uri)
+            success(uri)
+        } catch (error: Exception) {
+            markReady(uri)
+            throw error
+        }
+    }
+
+    private fun markReady(uri: Uri) {
+        context.contentResolver.update(uri, ContentValues().apply {
+            put(MediaStore.MediaColumns.IS_PENDING, 0)
+        }, null, null)
+    }
+
+    /**
+     * The row tela already wrote for [name] under `Pictures/tela`, if any.
+     *
+     * Scoped to that directory as well as the name: another app's
+     * `wallhaven-abc123.jpg` elsewhere on the device is not ours to overwrite.
+     * MediaStore stores `RELATIVE_PATH` with a trailing separator, so the
+     * comparison carries one.
+     */
+    private fun findGalleryImage(name: String): Uri? {
+        val projection = arrayOf(MediaStore.MediaColumns._ID)
+        val selection = "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND " +
+            "${MediaStore.MediaColumns.DISPLAY_NAME}=?"
+        val arguments = arrayOf("${Environment.DIRECTORY_PICTURES}/tela/", name)
+        context.contentResolver.query(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            arguments,
+            null,
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID))
+                return ContentUris.withAppendedId(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    id,
+                )
+            }
+        }
+        return null
     }
 
     private fun storeOutsideGallery(
@@ -72,6 +152,13 @@ class ImageStorage(private val context: Context) {
             ?: return failure("unavailable")
         if (!ensureNoMediaMarker(directory)) return failure("unavailable")
         val resolver = context.contentResolver
+        // Same duplicate trap as the gallery tier, through a different door:
+        // `createDocument` also renames rather than replacing, so a second
+        // download of one wallpaper produced `wallhaven-abc123 (1).jpg`. This is
+        // the desktop-sync path, where a directory quietly accumulating near
+        // copies of every wallpaper is worse still.
+        val existing = findChild(directory, fileName(request))
+        if (existing != null) return rewriteDocument(existing, request)
         val file = DocumentsContract.createDocument(
             resolver,
             directory,
@@ -86,6 +173,19 @@ class ImageStorage(private val context: Context) {
             resolver.delete(file, null, null)
             throw error
         }
+    }
+
+    /**
+     * Overwrites an existing document in place, truncating it first.
+     *
+     * `"wt"` and the absence of a delete-on-failure are load-bearing for the
+     * same reasons [rewriteGalleryImage] gives.
+     */
+    private fun rewriteDocument(file: Uri, request: ImageStoreRequest): Map<String, Any> {
+        context.contentResolver.openOutputStream(file, "wt")?.use { output ->
+            copyRemote(request.imageUrl, output)
+        } ?: throw IllegalStateException("document output stream was null")
+        return success(file)
     }
 
     private fun storePrivately(request: ImageStoreRequest): Map<String, Any> {

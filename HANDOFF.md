@@ -829,6 +829,45 @@ height in both states and the answer falls out; the remaining question is only
 **Still not understood, so still do not "fix" it by changing
 `soleWallpaperRowHeight`.**
 
+### The duplicate-download bug — fixed (owner-reported, 2026-07-19)
+
+Re-downloading a wallpaper produced `wallhaven-abc123 (1).jpg` beside the
+original instead of replacing it, so a library the user re-downloaded from
+slowly filled with near copies.
+
+**The cause is the same in two tiers, through different APIs, and neither
+overwrites by default.** `fileName()` is derived from the Wallhaven id, so the
+second download always asks for a name that already exists — and
+`ContentResolver.insert` (sharedGallery) and `DocumentsContract.createDocument`
+(filesOutsideGallery) both *de-duplicate* rather than replace, silently renaming
+the new file. `appPrivate` was never affected: it writes through
+`File.outputStream()`, which truncates.
+
+Both tiers now look the row up first and rewrite it in place — the gallery via a
+`RELATIVE_PATH` + `DISPLAY_NAME` query, the document tree via the `findChild`
+helper that was already there for `.nomedia`.
+
+**Three things in the fix worth not undoing:**
+
+- **The stream is opened `"wt"`, not `"w"`.** Plain write does not truncate, so
+  replacing a large image with a smaller one leaves the tail of the old file
+  behind and yields a corrupt image.
+- **A failed rewrite must not delete the file.** The insert path deletes the row
+  it just created, which is right; doing that to a pre-existing file would
+  destroy something the user already had because a *re*-download failed.
+- **The gallery lookup is scoped to `Pictures/tela/`**, not to the name alone —
+  another app's `wallhaven-abc123.jpg` is not ours to overwrite.
+
+**Verified on the SM-X730**: downloading `1qgogw` twice leaves exactly one file
+and one MediaStore row (`_id=97`), with the modified time advancing 05:39 →
+05:40, so it genuinely rewrote rather than skipped.
+
+**No test covers this, and none can here:** the project has *no* Kotlin test
+infrastructure (no `androidTest`, no JUnit dependency), and this is native
+`ImageStorage` behaviour that the Dart fake cannot observe. Standing up that
+infrastructure is a real gap, and it is the reason this needed a device to
+confirm at all.
+
 ### D3 — Settings' two columns — **built (`c0e43b0`) and device-verified**
 
 The old `_wideGroups` hardcoded account/appearance/browse left and
