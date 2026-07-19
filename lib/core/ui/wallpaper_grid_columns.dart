@@ -43,11 +43,20 @@ const double wallpaperTileRadius = 16;
 /// inside the tile's clip, on every shelf — Browse, Favorites, History, and the
 /// private library — through one definition they cannot drift apart from.
 ///
+/// Detail's letterbox-filling preview borrows the same edge against its own
+/// blurred backdrop, where the problem is identical and the source of the pale
+/// background is the wallpaper itself. It passes [radius] 0: that frame is an
+/// uncropped rectangle, not a tile, so a rounded hairline would trace a corner
+/// the image does not have.
+///
 /// ```dart
 /// Container(foregroundDecoration: wallpaperTileEdge(scheme), child: thumb);
 /// ```
-BoxDecoration wallpaperTileEdge(ColorScheme scheme) => BoxDecoration(
-  borderRadius: BorderRadius.circular(wallpaperTileRadius),
+BoxDecoration wallpaperTileEdge(
+  ColorScheme scheme, {
+  double radius = wallpaperTileRadius,
+}) => BoxDecoration(
+  borderRadius: BorderRadius.circular(radius),
   border: Border.all(color: scheme.outlineVariant.withValues(alpha: .22)),
 );
 

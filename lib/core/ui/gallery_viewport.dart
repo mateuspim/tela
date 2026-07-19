@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 
 /// The display-sized request a [GalleryImageSource] receives from a viewport.
 @immutable
@@ -120,7 +121,7 @@ class GalleryViewport extends StatelessWidget {
                   SizedBox.fromSize(
                     key: imageFrameKey,
                     size: imageSize,
-                    child: source.build(context, request),
+                    child: _edgedImage(context, source.build(context, request)),
                   ),
                 ),
               ),
@@ -144,6 +145,25 @@ class GalleryViewport extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+
+  /// Draws the shared hairline around the image, but only over a [backdrop].
+  ///
+  /// A blurred copy of the wallpaper can land at the same luminance as the
+  /// wallpaper's own edge pixels — a pale studio background beside its pale
+  /// blur — and the fitted image then has no visible boundary. No scrim value
+  /// rules that out, since it depends on the picture, so the edge is drawn
+  /// instead. Over the flat black canvas there is nothing to melt into, and a
+  /// hairline there would only box in an immersive viewer.
+  Widget _edgedImage(BuildContext context, Widget image) {
+    if (backdrop == null) return image;
+    return Container(
+      foregroundDecoration: wallpaperTileEdge(
+        Theme.of(context).colorScheme,
+        radius: 0,
+      ),
+      child: image,
     );
   }
 

@@ -135,6 +135,31 @@ void main() {
       expect(find.byKey(BlurredImageBackdrop.backdropKey), findsOneWidget);
     });
 
+    testWidgets('gives the fitted image a hairline it cannot melt through', (
+      WidgetTester tester,
+    ) async {
+      await _pumpViewport(tester, withBackdrop: true);
+
+      // A pale wallpaper beside its own pale blur has no visible boundary, and
+      // no scrim value rules that out — it depends on the picture. The shared
+      // tile hairline is what makes the edge structural.
+      final BoxDecoration edge = _frameEdge(tester)!;
+      expect(edge.border, isNotNull);
+      // Square: the frame is an uncropped rectangle, not a 16dp tile, so a
+      // rounded hairline would trace a corner the image does not have.
+      expect(edge.borderRadius, BorderRadius.zero);
+    });
+
+    testWidgets('draws no hairline over the flat canvas', (
+      WidgetTester tester,
+    ) async {
+      await _pumpViewport(tester);
+
+      // Nothing to melt into over black, and an immersive viewer must not be
+      // boxed in by a border it never asked for.
+      expect(_frameEdge(tester), isNull);
+    });
+
     testWidgets('is absent by default, leaving the calm flat canvas', (
       WidgetTester tester,
     ) async {
@@ -146,6 +171,21 @@ void main() {
       expect(find.byType(CachedNetworkImage), findsNWidgets(2));
     });
   });
+}
+
+/// The hairline drawn over the contained image, or null where there is none.
+BoxDecoration? _frameEdge(WidgetTester tester) {
+  final Iterable<Container> framed = tester.widgetList<Container>(
+    find.descendant(
+      of: find.byKey(GalleryViewport.imageFrameKey),
+      matching: find.byType(Container),
+    ),
+  );
+  for (final Container container in framed) {
+    final Decoration? edge = container.foregroundDecoration;
+    if (edge is BoxDecoration) return edge;
+  }
+  return null;
 }
 
 Future<void> _pumpBackdrop(
