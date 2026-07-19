@@ -224,8 +224,11 @@ chose all four of these. They are ordered by cost, and each is independently
 shippable — take them one at a time, in this order, and stop wherever the
 session ends.
 
-**C1 is built (`46ec6c2`); C2 is next.** C1's own section below now records what
-it decided rather than what to do.
+**C1 is built (`46ec6c2`) and C2 is built (`f1e34cd`); C3 is next.** Their own
+sections below now record what they decided rather than what to do. **Both are
+owed an owner's eye** — the tablet was unreachable (`no route to host` on
+`192.168.50.191:5555`) at the end of the C2 session, so neither has been looked
+at on hardware. Two slices of unseen visual work is the debt to clear first.
 
 Every one of them is *observable*: none can be called done on a green suite
 alone, because all four are things the owner looks at. `make deploy` and a
@@ -271,22 +274,39 @@ time — unlock it and look at all three steps, on the wall and in the skeleton.
 The knobs to judge are the three target widths (150 / 220 / 320 dip) and the
 row caps (9 / 6 / 4), both in `core/ui/wallpaper_grid_columns.dart`.
 
-### C2 — blurred-fill detail preview
+### C2 — blurred-fill detail preview — **built (`f1e34cd`); owner's eye owed**
 
-The detail pane letterboxes hard: a 2560x1600 wallpaper leaves ~160dip of dead
-black above and below (visible in any Detail screenshot). Fill it with a
-blurred, darkened copy of the wallpaper behind the fitted preview — the trick
-every wallpaper app uses, and it needs no extra fetch because the image is
-already decoded.
+The dead black band around Detail's fitted preview is now painted with a
+blurred, darkened copy of the wallpaper. 710 tests (from 701), analyze and
+format clean, both new claims mutation-checked. `core/ui/blurred_image_backdrop.dart`
+is the widget; `ProgressiveWallpaperPreview.fillLetterbox` opts a caller in.
 
-- `features/detail/progressive_wallpaper_preview.dart` is the whole surface.
-- Use the *thumbnail* as the blur source, not the full-res one: it is already in
-  `thumbnailImageCache`, and a blur destroys the detail anyway. Blurring a 6K
-  bitmap to paint 160dip of background would be a real cost for nothing.
-- Honour `MediaQuery.disableAnimationsOf` if any crossfade is added.
-- **Check the NSFW path before shipping**: a blurred backdrop is still the
-  image. Confirm it changes nothing about `FLAG_SECURE` or `mayExportBitmap` —
-  it should not, since nothing leaves the app, but say so out loud in the commit.
+**The one structural decision worth not re-deriving: the backdrop lives *under*
+the zoom viewport, not inside it.** `GalleryViewport` grew an optional
+`backdrop` painted between its `backgroundColor` and the `InteractiveViewer`.
+Inside the viewer a pinch drags the background along with the image and it stops
+being a background. A test asserts it is not a descendant of `InteractiveViewer`
+and fails if it moves in.
+
+It is **off by default**, which is why the immersive viewer and the crop editor
+needed no change and kept their calm flat canvas — there the frame's true bounds
+are the thing being judged. Source is `thumbOriginalUrl` at a 64px decode: the
+shelf tile and the preview's own progressive layer already pulled that exact URL
+into `thumbnailImageCache`, so the fill costs no request, and anything larger is
+memory spent on detail the blur destroys. No fade (a crossfade behind the real
+preview reads as a flicker), so there is nothing for reduced motion to honour.
+
+**NSFW was checked, not assumed**: nothing leaves the app, so `mayExportBitmap`
+and the private library's `FLAG_SECURE` are untouched.
+
+One existing detail test moved rather than broke — the one counting the two
+progressive layers now scopes to `GalleryViewport.imageFrameKey`, since the
+backdrop is a third `CachedNetworkImage` on the same thumbnail outside the frame.
+**If you add another image layer to that screen, scope your finder the same way.**
+
+**Owed:** the knobs are `sigma` (28) and `scrimOpacity` (.45) in
+`blurred_image_backdrop.dart`. Too little scrim and the backdrop competes with
+the preview; too much and it is the black band again. Nobody has seen either.
 
 ### C3 — unify the detail panel, and un-strand the Colors row
 
