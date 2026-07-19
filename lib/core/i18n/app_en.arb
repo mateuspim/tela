@@ -1214,5 +1214,106 @@
   "quickActionOpenDetail": "Open details",
   "@quickActionOpenDetail": {
     "description": "Leaves the long-press quick-action sheet and opens the wallpaper's full detail screen."
+  },
+
+  "quickActionSelect": "Select wallpapers",
+  "@quickActionSelect": {
+    "description": "Leaves the long-press quick-action sheet and puts the shelf into multi-select mode, with the pressed wallpaper already ticked."
+  },
+
+  "batchSelectedCount": "{count, plural, =1{1 selected} other{{count} selected}}",
+  "@batchSelectedCount": {
+    "description": "Title of the selection action bar, counting the ticked wallpapers.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "batchSelectAll": "Select all",
+  "@batchSelectAll": {
+    "description": "Ticks every wallpaper on the shelf from the selection action bar."
+  },
+
+  "batchCancel": "Cancel selection",
+  "@batchCancel": {
+    "description": "Leaves multi-select mode without acting on the ticked wallpapers."
+  },
+
+  "batchFavoriteDone": "{count, plural, =1{Added to favorites} other{{count} added to favorites}}",
+  "@batchFavoriteDone": {
+    "description": "Confirms a batch of wallpapers was saved to favorites.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "batchUnfavoriteDone": "{count, plural, =1{Removed from favorites} other{{count} removed from favorites}}",
+  "@batchUnfavoriteDone": {
+    "description": "Confirms a batch of wallpapers was dropped from favorites.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "batchDownloadDone": "{count, plural, =1{Downloaded 1 wallpaper} other{Downloaded {count} wallpapers}}",
+  "@batchDownloadDone": {
+    "description": "Confirms every wallpaper in a batch download was saved.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "batchDownloadPartial": "Downloaded {saved} of {total} — {failed} failed",
+  "@batchDownloadPartial": {
+    "description": "Reports a batch download where some wallpapers could not be saved. Never silently drops the failures.",
+    "placeholders": {
+      "saved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+
+  "batchForgetTitle": "{count, plural, =1{Remove from history?} other{Remove {count} from history?}}",
+  "@batchForgetTitle": {
+    "description": "Confirmation title before forgetting several download-history rows at once.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "batchForgetBody": "{count, plural, =1{This only removes it from the list. The wallpaper file stays where it was downloaded.} other{This only removes them from the list. The {count} wallpaper files stay where they were downloaded.}}",
+  "@batchForgetBody": {
+    "description": "Confirmation body before a batch forget, saying plainly that no file is deleted.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "batchForgetDone": "{count, plural, =1{Removed from history} other{{count} removed from history}}",
+  "@batchForgetDone": {
+    "description": "Confirms a batch of rows was dropped from the download history.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

@@ -13,8 +13,16 @@ class FakeImageStore implements ImageStore {
     this.storedImage,
     List<PrivateImage> privateLibrary = const <PrivateImage>[],
     Set<Uri> unreadable = const <Uri>{},
+    Set<String> failingIds = const <String>{},
   }) : _privateLibrary = List<PrivateImage>.of(privateLibrary),
-       _unreadable = Set<Uri>.of(unreadable);
+       _unreadable = Set<Uri>.of(unreadable),
+       _failingIds = Set<String>.of(failingIds);
+
+  /// Ids whose write throws while the rest succeed.
+  ///
+  /// [failure] fails every write, which cannot express the case a batch has to
+  /// get right: some of the wallpapers stored and some of them not.
+  final Set<String> _failingIds;
 
   /// Locations [canRead] answers false for — the files deleted behind tela's
   /// back, from Photos or a file manager.
@@ -57,6 +65,9 @@ class FakeImageStore implements ImageStore {
     receivedTier = tier;
     final ImageStoreFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
+    if (_failingIds.contains(id)) {
+      throw const ImageStoreFailure(ImageStoreProblem.source);
+    }
     return storedImage ??
         StoredImage(location: Uri.parse('memory://$id'), tier: tier);
   }

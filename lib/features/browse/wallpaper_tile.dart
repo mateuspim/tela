@@ -4,6 +4,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/network/wallpaper_image_caches.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_marks_scope.dart';
+import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 
 /// One wallpaper in the browse grid.
@@ -55,6 +56,9 @@ class WallpaperTile extends StatelessWidget {
     return Semantics(
       image: true,
       button: onTap != null,
+      selected: WallpaperSelectionScope.isActive(context)
+          ? WallpaperSelectionScope.isSelected(context, wallpaper.id)
+          : null,
       label: AppLocalizations.of(context).detailPreviewLabel(wallpaper.id),
       child: Material(
         clipBehavior: Clip.antiAlias,
@@ -103,15 +107,67 @@ class WallpaperTile extends StatelessWidget {
       wallpaper.id,
       visibleMarks,
     );
-    if (marks.isEmpty) return thumb;
+    final Widget? selection = _selectionOverlay(context);
+    if (marks.isEmpty && selection == null) return thumb;
     // Outside the Hero on purpose: a mark inside it would fly into the detail
-    // screen along with the thumbnail and land on top of the full preview.
+    // screen along with the thumbnail and land on top of the full preview. The
+    // selection tick is outside for the same reason, and additionally because a
+    // tick flying into a screen that has no selection mode is nonsense.
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
         thumb,
-        Positioned(bottom: 6, right: 6, child: _marks(context, marks)),
+        if (marks.isNotEmpty)
+          Positioned(bottom: 6, right: 6, child: _marks(context, marks)),
+        ?selection,
       ],
+    );
+  }
+
+  /// The tick and the wash, or null when this shelf is not selecting.
+  ///
+  /// Drawn on *every* tile while selection runs, not only the ticked ones: an
+  /// empty circle on the untouched tiles is what says the whole shelf has
+  /// changed mode, and without it the first tap on an unticked tile looks like
+  /// it should open the wallpaper.
+  ///
+  /// Top-left is the last free corner — the download history owns top-right for
+  /// its missing badge and C4's marks own bottom-right — so the three never
+  /// collide on a history tile that is missing, marked and ticked at once.
+  Widget? _selectionOverlay(BuildContext context) {
+    if (!WallpaperSelectionScope.isActive(context)) return null;
+    final bool selected = WallpaperSelectionScope.isSelected(
+      context,
+      wallpaper.id,
+    );
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        if (selected) ColoredBox(color: colors.primary.withValues(alpha: 0.28)),
+        Positioned(top: 6, left: 6, child: _tick(colors, selected)),
+      ],
+    );
+  }
+
+  Widget _tick(ColorScheme colors, bool selected) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        // The same 0.82 the marks pill uses, and for the same reason: legible
+        // over a wallpaper of any luminance.
+        color: selected
+            ? colors.primary
+            : colors.surface.withValues(alpha: .82),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(2),
+        child: Icon(
+          selected ? Icons.check : Icons.radio_button_unchecked,
+          size: 16,
+          color: selected ? colors.onPrimary : colors.onSurfaceVariant,
+        ),
+      ),
     );
   }
 

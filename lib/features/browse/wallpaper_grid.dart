@@ -7,12 +7,15 @@ import 'package:go_router/go_router.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
+import 'package:tela/app/selectable_wallpaper_shelf.dart';
+import 'package:tela/app/wallpaper_batch_actions.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/tile_density_scope.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
+import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -299,19 +302,48 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification notification) =>
           _maybeFetchNext(notification, state, fetchNextPage),
-      child: JustifiedWallpaperGrid(
-        controller: _scroll,
-        itemCount: loaded.length,
-        aspectRatioOf: (int index) => loaded[index].resolution.aspectRatio,
-        itemBuilder: (BuildContext context, int index, double _, double _) =>
-            WallpaperTile(
-              wallpaper: loaded[index],
-              heroTag: shelfHeroTag(identity, loaded[index].id, index),
-              onTap: () => _openDetail(context, loaded, index),
-              onLongPress: () => _openQuickActions(context, loaded, index),
-            ),
-        footer: _footer(l10n, state),
+      child: SelectableWallpaperShelf(
+        wallpapers: loaded,
+        // Nothing on this wall is favorited or downloaded by definition, so
+        // both marks — and therefore both batch actions — say something here.
+        actions: const <WallpaperBatchAction>[
+          WallpaperBatchAction.favorite,
+          WallpaperBatchAction.download,
+        ],
+        child: JustifiedWallpaperGrid(
+          controller: _scroll,
+          itemCount: loaded.length,
+          aspectRatioOf: (int index) => loaded[index].resolution.aspectRatio,
+          itemBuilder: (BuildContext context, int index, double _, double _) =>
+              _tile(context, loaded, index, identity),
+          footer: _footer(l10n, state),
+        ),
       ),
+    );
+  }
+
+  /// One tile, whose gestures depend on whether the wall is selecting.
+  ///
+  /// The context here is the one below `SelectableWallpaperShelf`'s scope,
+  /// which is what lets both the tick and the quick sheet's *Select* row find
+  /// the selection at all.
+  Widget _tile(
+    BuildContext context,
+    List<Wallpaper> loaded,
+    int index,
+    String identity,
+  ) {
+    final gestures = selectableTileGestures(
+      context: context,
+      wallpaperId: loaded[index].id,
+      onOpen: () => _openDetail(context, loaded, index),
+      onLongPress: () => _openQuickActions(context, loaded, index),
+    );
+    return WallpaperTile(
+      wallpaper: loaded[index],
+      heroTag: shelfHeroTag(identity, loaded[index].id, index),
+      onTap: gestures.onTap,
+      onLongPress: gestures.onLongPress,
     );
   }
 

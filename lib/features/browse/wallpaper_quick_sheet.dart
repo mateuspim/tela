@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -29,6 +30,13 @@ enum WallpaperQuickAction {
 
   /// Give up on the shortcut and open the wallpaper properly.
   openDetail,
+
+  /// Enter the shelf's multi-select mode with this wallpaper already ticked.
+  ///
+  /// Selection is reached through this sheet rather than by taking the long
+  /// press over, because the two are the same gesture and D1 already spent it
+  /// here. Deciding that twice is how they end up fighting.
+  select,
 }
 
 /// Asks what to do with the long-pressed [wallpaper]; null when dismissed.
@@ -38,6 +46,13 @@ enum WallpaperQuickAction {
 /// chooser and the result snackbar both need a context that is still mounted
 /// once this one has popped.
 ///
+/// Whether the *Select wallpapers* row appears is read from [context] here, at
+/// the call site, and **not** inside the sheet: `showModalBottomSheet` builds
+/// its child against the Navigator's context, which sits above every shelf, so
+/// a `WallpaperSelectionScope` lookup from in there finds nothing. The tile's
+/// own context is below the scope, which is why the question is answered before
+/// the sheet opens rather than by it.
+///
 /// ```dart
 /// final WallpaperQuickAction? action =
 ///     await chooseWallpaperQuickAction(context, wallpaper);
@@ -46,9 +61,11 @@ Future<WallpaperQuickAction?> chooseWallpaperQuickAction(
   BuildContext context,
   Wallpaper wallpaper,
 ) {
+  final bool canSelect = WallpaperSelectionScope.of(context) != null;
   return showModalBottomSheet<WallpaperQuickAction>(
     context: context,
-    builder: (BuildContext context) => _QuickActionSheet(wallpaper: wallpaper),
+    builder: (BuildContext context) =>
+        _QuickActionSheet(wallpaper: wallpaper, canSelect: canSelect),
   );
 }
 
@@ -57,6 +74,11 @@ Future<WallpaperQuickAction?> chooseWallpaperQuickAction(
 /// [openDetail] is the caller's own navigation rather than a push from here:
 /// the wall opens its detail screen on a gallery *session* seeded at the
 /// pressed index, and only the grid knows the listing that session walks.
+///
+/// Entering selection needs no callback for the mirror-image reason: the
+/// selection is published above the tile by `SelectableWallpaperShelf`, so this
+/// reaches it through [context] and every shelf gets the behaviour for free.
+/// A shelf with no selection above it simply offers no such row.
 Future<void> runWallpaperQuickAction({
   required BuildContext context,
   required WidgetRef ref,
@@ -73,6 +95,8 @@ Future<void> runWallpaperQuickAction({
       await _setWallpaper(context, ref, wallpaper);
     case WallpaperQuickAction.openDetail:
       openDetail();
+    case WallpaperQuickAction.select:
+      WallpaperSelectionScope.of(context)?.selectOnly(wallpaper.id);
   }
 }
 
@@ -125,9 +149,12 @@ void _say(ScaffoldMessengerState messenger, String message) {
 }
 
 class _QuickActionSheet extends ConsumerWidget {
-  const _QuickActionSheet({required this.wallpaper});
+  const _QuickActionSheet({required this.wallpaper, required this.canSelect});
 
   final Wallpaper wallpaper;
+
+  /// Whether the shelf that opened this sheet can enter selection mode.
+  final bool canSelect;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -179,6 +206,13 @@ class _QuickActionSheet extends ConsumerWidget {
               l10n.quickActionOpenDetail,
               WallpaperQuickAction.openDetail,
             ),
+            if (canSelect)
+              _tile(
+                context,
+                Icons.checklist,
+                l10n.quickActionSelect,
+                WallpaperQuickAction.select,
+              ),
           ],
         ),
       ),

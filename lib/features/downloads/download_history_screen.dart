@@ -1,17 +1,18 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/library_listings.dart';
-import 'package:tela/app/providers.dart';
+import 'package:tela/app/selectable_wallpaper_shelf.dart';
+import 'package:tela/app/wallpaper_batch_actions.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 import 'package:tela/core/ui/wallpaper_marks_scope.dart';
+import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/download_record.dart';
+import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/downloads/download_viewer_launch.dart';
 
@@ -19,8 +20,13 @@ import 'package:tela/features/downloads/download_viewer_launch.dart';
 ///
 /// Tapping a tile now opens the immersive, local-first viewer at that exact
 /// record — the same first-class fullscreen experience as Browse — with target
-/// selection moved behind the viewer's Set action. A long press still offers to
-/// forget the row, which is not the same as deleting the file.
+/// selection moved behind the viewer's Set action.
+///
+/// A long press now enters multi-select rather than offering to forget the one
+/// row (D4). Forgetting is still here, and still confirms in the same words —
+/// it is the batch action at a count of one, since "remove from history" and
+/// "delete the file" are two different things and this tile looks exactly like
+/// a file.
 class DownloadHistoryScreen extends ConsumerWidget {
   /// Creates the download-history screen.
   const DownloadHistoryScreen({super.key});
@@ -63,12 +69,25 @@ class DownloadHistoryScreen extends ConsumerWidget {
         message: l10n.downloadHistoryEmpty,
       );
     }
-    return JustifiedWallpaperGrid(
-      itemCount: recent.length,
-      aspectRatioOf: (int index) =>
-          recent[index].wallpaper.resolution.aspectRatio,
-      itemBuilder: (BuildContext context, int index, double _, double _) =>
-          _tile(context, ref, l10n, recent, index),
+    return SelectableWallpaperShelf(
+      wallpapers: <Wallpaper>[
+        for (final DownloadRecord record in recent) record.wallpaper,
+      ],
+      // The mirror of this shelf's marks again: everything here is downloaded,
+      // so re-downloading is the one batch that says nothing. Forgetting rows
+      // is what this screen is *for*, and it is the only destructive batch in
+      // the app — hence the confirmation `runWallpaperBatchAction` insists on.
+      actions: const <WallpaperBatchAction>[
+        WallpaperBatchAction.favorite,
+        WallpaperBatchAction.forget,
+      ],
+      child: JustifiedWallpaperGrid(
+        itemCount: recent.length,
+        aspectRatioOf: (int index) =>
+            recent[index].wallpaper.resolution.aspectRatio,
+        itemBuilder: (BuildContext context, int index, double _, double _) =>
+            _tile(context, ref, l10n, recent, index),
+      ),
     );
   }
 
@@ -92,6 +111,16 @@ class DownloadHistoryScreen extends ConsumerWidget {
     final Set<String> missing =
         ref.watch(missingDownloadsProvider).value ?? const <String>{};
     final bool isMissing = missing.contains(download.wallpaper.id);
+    final gestures = selectableTileGestures(
+      context: context,
+      wallpaperId: download.wallpaper.id,
+      onOpen: () => openDownloadViewer(context, recent, index),
+      // Forgetting one row is now the batch forget at a count of one — the
+      // plural strings render the identical sentence there, so the wording
+      // that is the feature survives intact — which frees this gesture for the
+      // same "long press means select" rule the favorites shelf follows.
+      longPressSelects: true,
+    );
     return Semantics(
       button: true,
       excludeSemantics: true,
@@ -109,8 +138,8 @@ class DownloadHistoryScreen extends ConsumerWidget {
                 download.wallpaper.id,
                 index,
               ),
-              onTap: () => openDownloadViewer(context, recent, index),
-              onLongPress: () => _confirmForget(context, ref, download),
+              onTap: gestures.onTap,
+              onLongPress: gestures.onLongPress,
               // The mirror of Favorites: everything here is downloaded by
               // definition, so only the heart carries information. It also
               // keeps this shelf to one new mark beside the missing badge.
@@ -146,41 +175,4 @@ class DownloadHistoryScreen extends ConsumerWidget {
     );
   }
 
-  /// Asks before forgetting a row — and the *wording* is the feature.
-  ///
-  /// "Remove from history" and "delete the file" are two different actions, and
-  /// this tile looks exactly like a file. So the confirmation says what will
-  /// and will not happen in plain words: the row goes, the wallpaper stays
-  /// where it was downloaded. Without that sentence this is a button that reads
-  /// as "delete my wallpaper" to half the people who press it.
-  Future<void> _confirmForget(
-    BuildContext context,
-    WidgetRef ref,
-    DownloadRecord download,
-  ) async {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: Text(l10n.downloadHistoryForgetTitle),
-        content: Text(l10n.downloadHistoryForgetBody),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.actionCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.downloadHistoryForget),
-          ),
-        ],
-      ),
-    );
-    if (confirmed ?? false) await _forget(ref, download);
-  }
-
-  Future<void> _forget(WidgetRef ref, DownloadRecord download) async {
-    await ref.read(downloadHistoryProvider).forget(download.wallpaper.id);
-    ref.invalidate(recentDownloadsProvider);
-  }
 }

@@ -85,18 +85,20 @@ void main() {
       );
     });
 
-    testWidgets('a long press offers to forget the row, and says the file '
-        'stays', (WidgetTester tester) async {
+    testWidgets('forgetting one row still says the file stays', (
+      WidgetTester tester,
+    ) async {
       // The wording *is* the feature. A history tile looks exactly like a file,
       // so a "remove" that does not say what it spares is how someone deletes
-      // the wallpaper they meant to keep.
+      // the wallpaper they meant to keep. D4 moved this behind multi-select —
+      // the long press now ticks rather than asking — so this pins that the
+      // sentence survived the move, at the count of one where it used to live.
       final FakeDownloadHistory history = FakeDownloadHistory(
         initial: <DownloadRecord>[_download('e7jvjd')],
       );
       await _pump(tester, history);
 
-      await tester.longPress(find.byType(WallpaperTile));
-      await tester.pumpAndSettle();
+      await _forgetSelected(tester);
 
       expect(find.text('Remove from history?'), findsOneWidget);
       expect(
@@ -115,8 +117,7 @@ void main() {
       );
       await _pump(tester, history);
 
-      await tester.longPress(find.byType(WallpaperTile));
-      await tester.pumpAndSettle();
+      await _forgetSelected(tester);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
@@ -132,12 +133,11 @@ void main() {
       );
       await _pump(tester, history);
 
-      await tester.longPress(find.byType(WallpaperTile).first);
-      await tester.pumpAndSettle();
+      await _forgetSelected(tester);
       await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
       await tester.pumpAndSettle();
 
-      // Only the one long-pressed (newest, '7j1mzo') is forgotten; 'e7jvjd'
+      // Only the one ticked (newest, '7j1mzo') is forgotten; 'e7jvjd'
       // remains. The grid refreshes without a relaunch — the stale-listing bug
       // of 2026-07-14 applies here too.
       expect(
@@ -294,3 +294,16 @@ DownloadRecord _download(String id) => DownloadRecord(
   location: _locationOf(id),
   downloadedAt: DateTime(2026, 7, 14),
 );
+
+/// Long-presses the newest tile to enter selection, then taps *Remove*.
+///
+/// Stops at the confirmation rather than answering it, so each caller decides
+/// what to do with the dialog. Extracted because all three forget tests walk
+/// the identical two steps to reach it, and D4 is what made that walk long
+/// enough to be worth naming.
+Future<void> _forgetSelected(WidgetTester tester) async {
+  await tester.longPress(find.byType(WallpaperTile).first);
+  await tester.pumpAndSettle();
+  await tester.tap(find.byIcon(Icons.playlist_remove));
+  await tester.pumpAndSettle();
+}

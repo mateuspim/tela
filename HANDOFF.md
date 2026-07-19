@@ -2,15 +2,16 @@
 
 Updated: 2026-07-19
 
-> **Picking up cold?** The work to *do* is **D4**, in *THE CURRENT PASS —
-> D1–D4*. D1 (`bdefc1d`), D2a (`af092cd`), D2b (`b24b15b`) and D3 (`c0e43b0`)
-> are built and device-verified; D4 is not started. **One open anomaly rides along:
-> the download-history shelf draws its lone tile far smaller than it should —
-> see *The lone history tile anomaly*, which has a defined probe and is not
-> understood.** The second UI pass (C1–C4) before it
-> is finished and verified on hardware; see *NEXT SESSION STARTS HERE* for what
-> each of those slices decided. Wave 4's product items (auto-rotate,
-> collections, Omarchy sync) sit behind D.
+> **Picking up cold?** **The D1–D4 pass is done** — D1 (`bdefc1d`), D2a
+> (`af092cd`), D2b (`b24b15b`), D3 (`c0e43b0`) and D4 are all built and
+> device-verified. The next work is **Wave 4's product items** (auto-rotate,
+> collections, Omarchy sync), described at the bottom, unless the owner calls
+> another UI pass. **One open anomaly rides along: the download-history shelf
+> draws its lone tile far smaller than it should — see *The lone history tile
+> anomaly*, now narrowed to a height the grid is handed, with a hand-operable
+> toggle to reproduce it, but still not understood.** The second UI pass
+> (C1–C4) before it is finished and verified on hardware; see *NEXT SESSION
+> STARTS HERE* for what each of those slices decided.
 >
 > The section immediately below is why the layout changed — read it first if you
 > are going to touch any grid, since masonry is gone and the reason it went is
@@ -591,7 +592,7 @@ Wave 4's product work (auto-rotate, collections, Omarchy sync) is untouched and
 described below. **The owner chose a third UI pass (D1–D4) ahead of it** — see
 the next section.
 
-## THE CURRENT PASS — D1–D4, chosen 2026-07-19; D1–D3 done, D4 next
+## THE CURRENT PASS — D1–D4, chosen 2026-07-19; all four done
 
 The owner asked what else the UI needs after C closed, and chose **all four** of
 these. They came out of a screenshot sweep of the SM-X730 in both orientations,
@@ -803,6 +804,31 @@ inference, and guessing further was worse than writing down exactly what is
 known. The favorites shelf proves the D2a mechanism works on hardware, so this
 is a narrower question than "is D2a broken".
 
+#### Narrowed by D4's device pass (2026-07-19) — reading 2 is dead, and there is now a toggle
+
+**It reproduces unchanged under D4** — the lone history tile still measures
+~299 x 184 dip, so nothing in this pass caused or cured it.
+
+**Reading 2 (width-limited) is ruled out, and the portrait probe above is no
+longer needed.** Entering selection mode on that screen flips the tile to
+~640 x 403 dip, and leaving it flips it straight back. Both sizes hold the
+wallpaper's true 1.6 ratio (299/187 and 640/403), and the screen width never
+changed — so **both states are height-limited and the grid is simply being
+handed two different heights.** That is reading 1: something gives the history
+grid a box of only ~280dip (2/3 of 280 ≈ 187, the observed height), where the
+correct ~636dip would give ≈ 424 (observed 403, the bar taking the difference).
+
+**And the bar is a toggle for it**, which is the useful part: the bug can now be
+turned on and off by hand on a settled screen, rather than waited for. The
+mechanism to instrument is `justified_wallpaper_grid.dart:96` —
+`soleRowMaxHeight: height.isFinite ? soleWallpaperRowHeight(height) : null`,
+fed by `constraints.maxHeight` from the `LayoutBuilder` at line 67. Dump that
+height in both states and the answer falls out; the remaining question is only
+*who* hands it ~280dip when nothing is above it in the Column.
+
+**Still not understood, so still do not "fix" it by changing
+`soleWallpaperRowHeight`.**
+
 ### D3 — Settings' two columns — **built (`c0e43b0`) and device-verified**
 
 The old `_wideGroups` hardcoded account/appearance/browse left and
@@ -843,13 +869,83 @@ group's height, where the static split ended ~2000dip apart. That number is what
 the widget test pins, and the static-split mutation reproduces the **2022dip**
 drift, i.e. the bug exactly as reported.
 
-### D4 — multi-select batch actions
+### D4 — multi-select batch actions — **built and device-verified**
 
-Select several wallpapers on the wall and favorite or download them in one go.
-The biggest tablet payoff and the largest slice. Likely builds on D1's gesture
-work, so **do D1 first** — a long-press that opens a sheet and a long-press that
-enters selection mode are the same gesture, and deciding that twice is how they
-end up fighting.
+Select several wallpapers on a shelf and favorite, download, un-favorite or
+forget them in one go. 766 tests (from 750), analyze and format clean, four new
+claims mutation-checked. **The whole D1–D4 pass is now built and seen on
+hardware.**
+
+`core/ui/wallpaper_selection.dart` is the model and the scope,
+`app/selectable_wallpaper_shelf.dart` the wrapper each shelf wears, and
+`app/wallpaper_batch_actions.dart` the enum and the runner.
+
+**The two entry gestures, decided by the owner, and worth not re-litigating.**
+D1 had already spent the long press on the quick sheet, so the same gesture
+could not also mean "select":
+
+- **Browse and the linked listing** enter through a new *Select wallpapers* row
+  in D1's sheet. The row's presence is read **at the call site**, not inside the
+  sheet: `showModalBottomSheet` builds against the Navigator's context, which
+  sits above every shelf, so a `WallpaperSelectionScope` lookup from in there
+  finds nothing. The tile's context is below the scope.
+- **Favorites and the download history** long-press straight into selection,
+  because the gesture is free on one and superseded on the other. Forgetting one
+  history row is now the batch forget **at a count of one** — the plural strings
+  render the identical sentence, so the wording that is the feature survived,
+  confirmed on the tablet. That retired `_confirmForget` and rewrote its three
+  tests rather than deleting them.
+
+**The other decisions worth keeping:**
+
+- **Selection has no mode flag.** It is active exactly when something is ticked,
+  so the mode and the ticks cannot disagree; deselecting the last tile leaves
+  the mode, which is what every gallery on the device does.
+- **`_favoriteAll` writes through `FavoritesRepository.save`, never
+  `ToggleFavorite`.** Toggling a *mixed* selection would un-favorite exactly the
+  wallpapers the user could see were already hearted — a button reading "Add to
+  favorites" that quietly removes some of them. `save`/`forget` are idempotent.
+  This is the mutation that is easiest to reintroduce; it has its own test.
+- **Each shelf narrows its actions**, the mirror of C4's `visibleMarks`: no *add
+  to favorites* on Favorites, no *download* on the history, and *set wallpaper*
+  is absent everywhere — unlike the quick sheet's missing *Share* it is not a
+  purity question, it simply has no meaning, because the device has one
+  wallpaper.
+- **Downloads run sequentially and report partials honestly** — "Downloaded 9 of
+  12" and "Downloaded 12" are different outcomes.
+- **Back leaves selection before it leaves the screen** (`PopScope`), the one
+  gesture everyone tries first to undo a selection.
+- **The bar is a band above the grid**, not a floating bottom bar or a swapped
+  app bar: two of these shelves are embedded widgets with no app bar and two sit
+  above a bottom nav a floating bar would fight.
+- The tick sits **top-left**, the last free corner — the history owns top-right
+  for its missing badge and C4's marks own bottom-right.
+
+#### D4's device pass (2026-07-19) — no defects
+
+Driven on the SM-X730 in landscape, live rather than against a seeded database:
+
+- The sheet's *Select wallpapers* row enters the mode with that tile ticked;
+  **a tap on another tile ticks it rather than opening the wallpaper**, which is
+  the load-bearing half, and the count ran 1 → 3.
+- A batch favorite of three said *"3 added to favorites"*, exited the mode, and
+  **re-marked all three tiles with hearts without a restart** — `refreshFavorites`
+  reaching C4's marks across a batch. The Library hub then read *FAVORITES · 3*,
+  so the invalidation crosses screens.
+- Favorites long-presses straight into selection, offering only download and
+  un-favorite. Un-favoriting one said *"Removed from favorites"* and the count
+  went 3 → 2.
+- The history long-presses into selection offering only the heart and forget,
+  and forget's dialog rendered the original single-row wording exactly.
+  **Cancelled rather than confirmed**, to leave the owner's one download alone.
+
+**Device data note:** this pass left **2 favorites** on the tablet (a GTA IV
+gunman and a red creature). The download history is untouched at 1.
+
+**Unverified, and cheap:** the partial-download snackbar
+(*"Downloaded 1 of 2 — 1 failed"*) has only been seen in a widget test, since
+making a real download fail on the device needs contrivance. *Select all* was
+likewise only exercised in tests on a 3-tile wall.
 
 ### The filter badge anomaly — observed, unexplained, probe defined
 
