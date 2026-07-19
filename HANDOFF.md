@@ -2,9 +2,9 @@
 
 Updated: 2026-07-19
 
-> **Picking up cold?** The work to *do* is **D3**, in *THE CURRENT PASS —
-> D1–D4*. D1 (`bdefc1d`), D2a (`af092cd`) and D2b (`b24b15b`) are built and
-> device-verified; D3 and D4 are not started. **One open anomaly rides along:
+> **Picking up cold?** The work to *do* is **D4**, in *THE CURRENT PASS —
+> D1–D4*. D1 (`bdefc1d`), D2a (`af092cd`), D2b (`b24b15b`) and D3 (`c0e43b0`)
+> are built and device-verified; D4 is not started. **One open anomaly rides along:
 > the download-history shelf draws its lone tile far smaller than it should —
 > see *The lone history tile anomaly*, which has a defined probe and is not
 > understood.** The second UI pass (C1–C4) before it
@@ -591,7 +591,7 @@ Wave 4's product work (auto-rotate, collections, Omarchy sync) is untouched and
 described below. **The owner chose a third UI pass (D1–D4) ahead of it** — see
 the next section.
 
-## THE CURRENT PASS — D1–D4, chosen 2026-07-19; D1 and D2 done, D3 next
+## THE CURRENT PASS — D1–D4, chosen 2026-07-19; D1–D3 done, D4 next
 
 The owner asked what else the UI needs after C closed, and chose **all four** of
 these. They came out of a screenshot sweep of the SM-X730 in both orientations,
@@ -803,17 +803,45 @@ inference, and guessing further was worse than writing down exactly what is
 known. The favorites shelf proves the D2a mechanism works on hardware, so this
 is a narrower question than "is D2a broken".
 
-### D3 — Settings' two columns are a static split
+### D3 — Settings' two columns — **built (`c0e43b0`) and device-verified**
 
-`settings_screen.dart:96` `_wideGroups` hardcodes account/appearance/browse into
-the left column and downloads/privacy/storage into the right. The right is much
-taller, and both sit in **one shared scroll view**, so the left ends less than
-halfway down and you scroll past dead space to read the right column's tail.
-Seen on the tablet in landscape.
+The old `_wideGroups` hardcoded account/appearance/browse left and
+downloads/privacy/storage right. The right is much taller and both sit in **one
+shared scroll view**, so the left ended less than halfway down and you scrolled
+past dead space to read the right column's tail.
 
-Balance by measured height, or give each column its own scroll. Note the split is
-static *by group*, so simply reordering groups is a cheaper first attempt than
-measuring — but it re-breaks the moment a group's height changes.
+750 tests (from 743), analyze and format clean, both new claims
+mutation-checked. `core/ui/balanced_columns.dart` is the widget.
+
+**The owner chose measured balance over two independent scrolls**, of three
+offered (the third being a reorder). `BalancedColumns` is a
+`MultiChildRenderObjectWidget` that lays each child out at the column width and
+drops it into whichever column is currently **shortest**; ties go leftmost so
+the first row still reads left to right. One shared scroll view survives, and
+unlike a reorder it does not re-break the moment a group's height changes.
+
+**The decisions worth not re-deriving:**
+
+- **`CustomMultiChildLayout` cannot do this**, which is why it is a render box.
+  Its delegate's `getSize` runs *before* `performLayout`, so the height must be
+  known before any child is measured — exactly the thing being measured. A
+  `RenderBox` is the honest route, not over-engineering.
+- **`computeDryLayout` packs the same way via `getDryLayout`.** Same lesson the
+  skeleton wall recorded: a parent that asks for intrinsics (`SliverFillRemaining`
+  content-sizing its child) throws if the box cannot answer.
+- **It breaks reading order *across* columns by design**, so the docstring
+  restricts it to independent blocks. Settings groups qualify; a sequence would
+  not. Do not reach for it to lay out a list.
+- **One group list now serves both layouts** — the compact path is the same
+  widget at `columnCount: 1`. The two hand-assigned orders that had to be kept
+  in step are gone.
+
+**Device pass (2026-07-19): no defects.** On the SM-X730 in landscape the greedy
+pack moves Appearance right and Storage left, and the columns end **~128dip
+apart** (left 589dip, right 717dip) against a viewport bottom — under one
+group's height, where the static split ended ~2000dip apart. That number is what
+the widget test pins, and the static-split mutation reproduces the **2022dip**
+drift, i.e. the bug exactly as reported.
 
 ### D4 — multi-select batch actions
 
