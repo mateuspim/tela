@@ -7,7 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/blurred_image_backdrop.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/gallery_viewport.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -39,12 +41,14 @@ void main() {
       final WallpaperDetails details = _details();
       await _pumpDetail(tester, details);
 
+      // Scoped to the contained frame: the letterbox backdrop behind it is a
+      // third layer on the same thumbnail, and it is not one of these two.
       final List<CachedNetworkImage> layers = tester
-          .widgetList<CachedNetworkImage>(find.byType(CachedNetworkImage))
-          .where(
-            (CachedNetworkImage image) =>
-                image.imageUrl == details.wallpaper.thumbOriginalUrl ||
-                image.imageUrl == details.wallpaper.fullImageUrl,
+          .widgetList<CachedNetworkImage>(
+            find.descendant(
+              of: find.byKey(GalleryViewport.imageFrameKey),
+              matching: find.byType(CachedNetworkImage),
+            ),
           )
           .toList();
 
@@ -219,6 +223,20 @@ void main() {
       find.byKey(const Key('detail-information-pane')),
     );
     expect(preview.dx, lessThan(information.dx));
+  });
+
+  testWidgets('fills the preview letterbox with the wallpaper itself', (
+    WidgetTester tester,
+  ) async {
+    await _pumpDetail(tester, _details());
+
+    // Detail's preview is a fixed-height pane, so a wide wallpaper strands a
+    // dead black band above and below it. It is painted from the same
+    // thumbnail the shelf already fetched — never a second request.
+    final BlurredImageBackdrop backdrop = tester.widget<BlurredImageBackdrop>(
+      find.byType(BlurredImageBackdrop),
+    );
+    expect(backdrop.imageUrl, 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg');
   });
 
   testWidgets('renders detail-only Wallhaven metadata after the preview', (

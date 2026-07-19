@@ -505,6 +505,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     final Wallpaper wallpaper = _gallery.items[index];
     return ProgressiveWallpaperPreview(
       wallpaper: wallpaper,
+      fillLetterbox: true,
       heroTag: index == _gallery.selectedIndex
           ? shelfHeroTag(_gallery.identity, wallpaper.id, index)
           : null,

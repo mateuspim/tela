@@ -40,6 +40,7 @@ class GalleryViewport extends StatelessWidget {
     this.onDoubleTapDown,
     this.onDoubleTap,
     this.heroTag,
+    this.backdrop,
     this.backgroundColor = Colors.black,
     this.maxScale = 4,
     super.key,
@@ -76,6 +77,14 @@ class GalleryViewport extends StatelessWidget {
   /// the calm backdrop — so the flight stays spatially coherent. Null leaves
   /// the viewport heroless, as when it is reached without a tile.
   final Object? heroTag;
+
+  /// Optional scenery filling the letterbox around the contained image.
+  ///
+  /// Painted over [backgroundColor] and *under* the zoom viewport, so pinching
+  /// the image never drags its own background with it. Null leaves the calm
+  /// flat canvas, which is what an immersive viewer and the crop editor want:
+  /// there, the frame's true bounds are the thing being judged.
+  final Widget? backdrop;
 
   /// The calm canvas shown around an image that does not fill both axes.
   final Color backgroundColor;
@@ -116,23 +125,35 @@ class GalleryViewport extends StatelessWidget {
                 ),
               ),
             );
-            return InteractiveViewer(
-              transformationController: transformationController,
-              onInteractionStart: onInteractionStart,
-              minScale: 1,
-              maxScale: maxScale,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                excludeFromSemantics: true,
-                onTap: onTap,
-                onDoubleTapDown: onDoubleTapDown,
-                onDoubleTap: onDoubleTap,
-                child: canvas,
+            return _behindBackdrop(
+              InteractiveViewer(
+                transformationController: transformationController,
+                onInteractionStart: onInteractionStart,
+                minScale: 1,
+                maxScale: maxScale,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  excludeFromSemantics: true,
+                  onTap: onTap,
+                  onDoubleTapDown: onDoubleTapDown,
+                  onDoubleTap: onDoubleTap,
+                  child: canvas,
+                ),
               ),
             );
           },
         ),
       ),
+    );
+  }
+
+  /// Stacks [backdrop] beneath the zoom viewport, when one was supplied.
+  Widget _behindBackdrop(Widget viewer) {
+    final Widget? scenery = backdrop;
+    if (scenery == null) return viewer;
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[scenery, viewer],
     );
   }
 
