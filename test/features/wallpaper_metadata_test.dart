@@ -51,6 +51,46 @@ void main() {
     expect(opened, Uri.parse('https://wallhaven.cc/w/e7jvjd'));
   });
 
+  testWidgets('every scalar fact is a tile, not a key-value row', (
+    WidgetTester tester,
+  ) async {
+    // The panel spoke two languages for one kind of data: resolution, size,
+    // category and purity were cards while file type, ratio, views and
+    // favorites were a plain list below them. All eight are tiles now.
+    await _pumpMetadata(tester);
+
+    for (final String label in <String>[
+      'Resolution',
+      'File size',
+      'Category',
+      'Purity',
+      'File type',
+      'Ratio',
+      'Views',
+      'Favorites',
+    ]) {
+      expect(
+        find.byKey(Key('metadata-fact-$label')),
+        findsOneWidget,
+        reason: '$label must render as a fact tile',
+      );
+    }
+  });
+
+  testWidgets('the colours sit above the attribution links and the tags', (
+    WidgetTester tester,
+  ) async {
+    // Reachability, not taste: the swatches used to sit at the panel's clipped
+    // bottom edge, and the 2026-07-18 device pass could not verify the colour
+    // drilldown at all because the tap landed in the gutter below them.
+    await _pumpMetadata(tester);
+
+    final double swatches = tester.getTopLeft(find.byType(WallpaperSwatch)).dy;
+
+    expect(swatches, lessThan(tester.getTopLeft(find.text('tela-fixture')).dy));
+    expect(swatches, lessThan(tester.getTopLeft(find.text('Tags')).dy));
+  });
+
   testWidgets('a non-URL source stays plain, copyable text', (
     WidgetTester tester,
   ) async {

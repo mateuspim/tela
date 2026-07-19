@@ -54,30 +54,17 @@ class WallpaperMetadata extends StatelessWidget {
           const SizedBox(height: 12),
           LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) =>
-                _summaryGrid(context, l10n, item, constraints.maxWidth),
+                _factGrid(l10n, item, constraints.maxWidth),
           ),
           const SizedBox(height: 16),
-          _MetadataRow(l10n.detailFileType, item.fileType),
-          _MetadataRow(l10n.detailRatio, item.ratio),
-          _MetadataRow(l10n.detailViews, _number(item.views)),
-          _MetadataRow(l10n.detailFavorites, _number(item.favorites)),
-          _MetadataRow.linked(
-            l10n.detailUploader,
-            value: _MetadataLink(
-              text: item.uploader.username,
-              onTap: () => onFollow(UploaderLink(item.uploader.username)),
-            ),
-          ),
-          _sourceRow(l10n, item),
-          const SizedBox(height: 4),
-          _viewOnWallhaven(l10n, item),
-          const SizedBox(height: 12),
           Text(
             l10n.detailColors,
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const SizedBox(height: 8),
           _Colors(colors: item.wallpaper.colors, onFollow: onFollow),
+          const SizedBox(height: 16),
+          ..._attribution(l10n, item),
           const SizedBox(height: 16),
           Text(l10n.detailTags, style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 8),
@@ -87,45 +74,71 @@ class WallpaperMetadata extends StatelessWidget {
     );
   }
 
-  Widget _summaryGrid(
-    BuildContext context,
-    AppLocalizations l10n,
-    WallpaperDetails item,
-    double width,
-  ) {
+  /// Every scalar fact about the wallpaper, in one visual language.
+  ///
+  /// File type, ratio, views and favorites used to be a plain key-value list
+  /// below these four, so the panel spoke two languages for one kind of data.
+  /// They are all tiles now; the only things left outside the grid are the ones
+  /// that are not facts at all — see [_attribution].
+  Widget _factGrid(AppLocalizations l10n, WallpaperDetails item, double width) {
     final double tileWidth = (width - 12) / 2;
     return Wrap(
       spacing: 12,
       runSpacing: 12,
       children: <Widget>[
-        _MetadataTile(
-          width: tileWidth,
-          label: l10n.detailResolution,
-          value: item.wallpaper.resolution.toString(),
-        ),
-        _MetadataTile(
-          width: tileWidth,
-          label: l10n.detailFileSize,
-          value: _bytes(l10n, item.wallpaper.fileSizeBytes),
-        ),
-        _MetadataTile(
-          width: tileWidth,
-          label: l10n.detailCategory,
-          value: categoryLabel(l10n, item.wallpaper.category),
-        ),
-        _MetadataTile(
-          width: tileWidth,
-          label: l10n.detailPurity,
-          value: purityLabel(l10n, item.wallpaper.purity),
-        ),
+        for (final (String, String) fact in _facts(l10n, item))
+          _MetadataTile(
+            // Keyed by label so a test can prove each fact is a *tile*: the
+            // panel used to render half of these as plain key-value rows.
+            key: Key('metadata-fact-${fact.$1}'),
+            width: tileWidth,
+            label: fact.$1,
+            value: fact.$2,
+          ),
       ],
     );
+  }
+
+  /// The grid's contents, in reading order: what the file *is* first, then how
+  /// it is classified, then what it weighs socially.
+  List<(String, String)> _facts(AppLocalizations l10n, WallpaperDetails item) {
+    return <(String, String)>[
+      (l10n.detailResolution, item.wallpaper.resolution.toString()),
+      (l10n.detailFileSize, _bytes(l10n, item.wallpaper.fileSizeBytes)),
+      (l10n.detailCategory, categoryLabel(l10n, item.wallpaper.category)),
+      (l10n.detailPurity, purityLabel(l10n, item.wallpaper.purity)),
+      (l10n.detailFileType, item.fileType),
+      (l10n.detailRatio, item.ratio),
+      (l10n.detailViews, _number(item.views)),
+      (l10n.detailFavorites, _number(item.favorites)),
+    ];
   }
 
   String _bytes(AppLocalizations l10n, int bytes) =>
       l10n.detailFileSizeBytes(_number(bytes));
 
   String _number(int value) => NumberFormat.decimalPattern().format(value);
+
+  /// Where this wallpaper came from and where it leads — credit, not fact.
+  ///
+  /// These sat in the key-value list beside views and favorites, which read
+  /// them as data when every one is somewhere you can *go*. Grouping them as
+  /// actions is what let the facts above become uniformly tiles.
+  List<Widget> _attribution(AppLocalizations l10n, WallpaperDetails item) {
+    return <Widget>[
+      _LinkAction(
+        icon: Icons.person_outline,
+        text: item.uploader.username,
+        onTap: () => onFollow(UploaderLink(item.uploader.username)),
+      ),
+      _sourceCredit(l10n, item),
+      _LinkAction(
+        icon: Icons.open_in_new,
+        text: l10n.detailViewOnWallhaven,
+        onTap: () => onOpenLink(item.wallpaper.pageUrl),
+      ),
+    ];
+  }
 
   /// The credited source: a tappable link when it is a web address, plain
   /// selectable text otherwise.
@@ -134,30 +147,18 @@ class WallpaperMetadata extends StatelessWidget {
   /// sometimes a bare attribution — so only an `http(s)` address becomes a
   /// link; anything else stays copyable text rather than a control that would
   /// open nothing.
-  Widget _sourceRow(AppLocalizations l10n, WallpaperDetails item) {
+  Widget _sourceCredit(AppLocalizations l10n, WallpaperDetails item) {
     final Uri? url = _webUrl(item.source);
-    if (url == null) {
-      return _MetadataRow(
-        l10n.detailSource,
-        item.source.isEmpty ? l10n.detailNotProvided : item.source,
+    if (url != null) {
+      return _LinkAction(
+        icon: Icons.link,
+        text: item.source,
+        onTap: () => onOpenLink(url),
       );
     }
-    return _MetadataRow.linked(
-      l10n.detailSource,
-      value: _MetadataLink(text: item.source, onTap: () => onOpenLink(url)),
-    );
-  }
-
-  /// The always-available way out to the wallpaper's public page.
-  Widget _viewOnWallhaven(AppLocalizations l10n, WallpaperDetails item) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: TextButton.icon(
-        onPressed: () => onOpenLink(item.wallpaper.pageUrl),
-        style: TextButton.styleFrom(padding: EdgeInsets.zero),
-        icon: const Icon(Icons.open_in_new, size: 18),
-        label: Text(l10n.detailViewOnWallhaven),
-      ),
+    return _PlainCredit(
+      label: l10n.detailSource,
+      text: item.source.isEmpty ? l10n.detailNotProvided : item.source,
     );
   }
 
@@ -175,6 +176,7 @@ class _MetadataTile extends StatelessWidget {
     required this.width,
     required this.label,
     required this.value,
+    super.key,
   });
 
   final double width;
@@ -209,49 +211,20 @@ class _MetadataTile extends StatelessWidget {
   }
 }
 
-/// One two-column metadata value, aligned with the rest of the detail screen.
-class _MetadataRow extends StatelessWidget {
-  /// A plain value, selectable so it can be copied out.
-  _MetadataRow(this.label, String text)
-    : value = SelectableText(text),
-      align = CrossAxisAlignment.start;
-
-  /// A value that leads somewhere. Takes the widget rather than a second copy
-  /// of the column layout, which is what kept the two rows aligned.
-  ///
-  /// Centred, not top-aligned: a linked value is a button, and its touch target
-  /// is taller than a line of text — top-aligning it left the uploader visibly
-  /// sitting below its own label (seen on the device, 2026-07-14).
-  const _MetadataRow.linked(this.label, {required this.value})
-    : align = CrossAxisAlignment.center;
-
-  final String label;
-  final Widget value;
-  final CrossAxisAlignment align;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        crossAxisAlignment: align,
-        children: <Widget>[
-          SizedBox(width: 112, child: Text(label)),
-          Expanded(child: value),
-        ],
-      ),
-    );
-  }
-}
-
-/// A metadata value you can follow, styled as the link it is.
+/// One place this wallpaper leads, styled as the link it is.
 ///
 /// A [TextButton] rather than a tapped [Text]: it carries button semantics and
 /// a real touch target, and a link only a sighted user with a steady thumb can
-/// find is not a link.
-class _MetadataLink extends StatelessWidget {
-  const _MetadataLink({required this.text, required this.onTap});
+/// find is not a link. The icon carries the kind — who uploaded it, where it
+/// came from, where it lives — so these need no labels to stay distinguishable.
+class _LinkAction extends StatelessWidget {
+  const _LinkAction({
+    required this.icon,
+    required this.text,
+    required this.onTap,
+  });
 
+  final IconData icon;
   final String text;
   final VoidCallback onTap;
 
@@ -259,15 +232,47 @@ class _MetadataLink extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: TextButton(
+      child: TextButton.icon(
         onPressed: onTap,
-        // No horizontal padding: the value must start on the same pixel as
-        // every other row's, or the column stops looking like a column.
-        style: TextButton.styleFrom(
-          padding: EdgeInsets.zero,
-          minimumSize: const Size(0, 36),
-        ),
-        child: Text(text),
+        // No horizontal padding: every action must start on the same pixel as
+        // the fact grid's left edge, or the panel stops looking like a column.
+        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+        icon: Icon(icon, size: 18),
+        label: Text(text),
+      ),
+    );
+  }
+}
+
+/// A credit that leads nowhere — free-text attribution, or its absence.
+///
+/// Labelled, because without an icon-bearing button beside it a bare name is
+/// not self-evidently the source. Selectable so it can still be copied out.
+class _PlainCredit extends StatelessWidget {
+  const _PlainCredit({required this.label, required this.text});
+
+  final String label;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            width: 96,
+            child: Text(
+              label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(child: SelectableText(text)),
+        ],
       ),
     );
   }
