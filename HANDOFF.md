@@ -2,10 +2,15 @@
 
 Updated: 2026-07-19
 
-> **Picking up cold?** The work to *do* is **NEXT SESSION STARTS HERE** (C1–C4,
-> a second UI pass). The section below is what just *happened* and why the
-> layout changed — read it first if you are going to touch any grid, since
-> masonry is gone and the reason it went is easy to re-litigate wrongly.
+> **Picking up cold?** The second UI pass (C1–C4) is **finished and verified on
+> hardware** — see *NEXT SESSION STARTS HERE* for what each slice decided, and
+> *What is left after this pass* at its end for the small loose threads. The
+> next real work is **Wave 4's product items** (auto-rotate, collections,
+> Omarchy sync), further down.
+>
+> The section immediately below is why the layout changed — read it first if you
+> are going to touch any grid, since masonry is gone and the reason it went is
+> easy to re-litigate wrongly.
 
 ## START HERE — the UI/UX pass is done and device-verified; the wall is now justified rows, not masonry
 
@@ -225,14 +230,16 @@ chose all four of these. They are ordered by cost, and each is independently
 shippable — take them one at a time, in this order, and stop wherever the
 session ends.
 
-**C1 (`46ec6c2`), C2 (`f1e34cd`) and C3 (`4b38b55`) are built; C4 is next.**
-Their own sections below now record what they decided rather than what to do.
+**All four are built and device-verified: C1 (`46ec6c2`), C2 (`f1e34cd`), C3
+(`4b38b55`), C4 (`d6ad1ca`). This pass is done.** Their own sections below now
+record what they decided rather than what to do.
 
-**All three have had a device pass** (2026-07-19). C1 and C2 each found one real
+**All four have had a device pass** (2026-07-19). C1 and C2 each found one real
 defect, each is fixed, and **both fixes have been seen working on the tablet**:
 C2's melt-through edge (`732d88e`) and C1's under-filled wall (`184c96e`). **C3
-found none** — and it closed two long-open verification items on its way past;
-see its section below. What is still owed is small and specific.
+and C4 found none** — and C3 closed two long-open verification items on its way
+past; see its section below. What is still owed is small and specific, and
+listed in *What is left after this pass*.
 
 **One hard-won piece of tooling knowledge, because it cost this session an hour
 of device time: an agent must never run `adb kill-server` here.** The tablet is
@@ -483,28 +490,97 @@ Seen on the SM-X730 in the expanded (440dp pane) layout:
 panel is the same widget under a `ListView` there, so nothing is suspected, but
 only the expanded pane has actually been seen.
 
-### C4 — tile state indicators
+### C4 — tile state indicators — **built (`d6ad1ca`) and device-verified**
 
-Browse cannot tell you what you already have. A discreet corner mark for
-already-favorited and already-downloaded closes that loop.
+A bottom-right pill on a browse tile now says "you already have this". 726
+tests (from 718), analyze and format clean, all four new claims
+mutation-checked. **The whole C1–C4 pass is now built and seen on hardware.**
 
-- The providers exist: `isFavoriteProvider(id)` in
-  `features/favorites/favorites_providers.dart`, and `recentDownloadsProvider` /
-  `missingDownloadsProvider` in `app/library_listings.dart`.
-- It lands in the shared `WallpaperTile`, so it appears on **all four** shelves
-  at once — which is the point, but also means the marks must not fight the
-  history shelf's existing `_missingBadge` (cloud icon, top-right). Pick a
-  different corner or fold the two into one badge vocabulary.
-- Per-tile `isFavoriteProvider` watches across a long grid are the risk here.
-  Prefer one set-shaped provider the tile reads from, the way the history shelf
-  already does with `missingDownloadsProvider`, over a family watch per tile.
+**Three shelves, not four.** The plan said "all four", but the private library
+renders `PrivateImage`, not `Wallpaper`, and never used `WallpaperTile` — only
+Browse/LinkedListing, Favorites and Download History do.
 
-### What is *not* in this pass
+**The wiring is a `WallpaperMarksScope`, and it is C1's `TileDensityScope`
+argument a second time.** `core/ui` packs the wall and may not reach up into a
+feature's provider, so the app root watches once and publishes. That is also
+what answers the plan's own warning about per-tile `isFavoriteProvider` watches:
+`favoritedIdsProvider` and `downloadedIdsProvider` (both in
+`app/library_listings.dart`) are **sets**, the shape `missingDownloadsProvider`
+already uses. `marksFor` answers empty with no scope above it — which is why no
+existing shelf test needed touching, exactly as with the density.
+
+**The decisions worth not re-deriving:**
+
+- **The pill renders outside the Hero.** Inside it, a mark flies into the detail
+  screen with the thumbnail and lands on top of the full preview. Pinned by a
+  test that fails the moment it moves in.
+- **Bottom-right, because the history's `_missingBadge` owns top-right** and
+  means something else entirely ("this file is gone, a tap costs a
+  re-download"). One shared pill holds both icons rather than a badge per mark,
+  so a doubly-marked tile does not grow two chips.
+- **Each library shelf narrows what it draws, via `visibleMarks`.** Every tile
+  on Favorites is favorited and every tile in the history is downloaded, so
+  drawing *that* mark there is decoration. Favorites shows the download check
+  only; the history shows the heart only. This is the one place the written plan
+  was refined rather than followed — "it appears on all four shelves at once,
+  which is the point" would have put a heart on every tile of Favorites.
+- **`downloadedIdsProvider` does not subtract `missingDownloadsProvider`.** That
+  probe opens every recorded file, and the wall must not wait on a filesystem
+  sweep to draw a mark. "You downloaded this" stays true once the file is gone;
+  the history is where that difference changes what a tap costs.
+- **It excludes the private tier**, which `recentDownloadsProvider` already
+  does. Load-bearing: a mark fed from `privateImagesProvider` would let the
+  browse grid — a screen with no app-lock in front of it — disclose what is in
+  the private library.
+
+#### C4's device pass (2026-07-19) — no defects
+
+Seen on the SM-X730, favoriting and downloading live rather than against a
+seeded database:
+
+- A favorited **and** downloaded wallpaper shows both icons in one pill, and it
+  **appears without a restart** — so the `refreshFavorites` invalidation
+  reaches `favoritedIdsProvider` and re-marks the wall, which is the half a
+  unit test cannot show.
+- **Legible at both luminance extremes.** Over snow the pill is a clean dark
+  chip. Over a near-black stone wallpaper the pill *background* melts away
+  entirely — but the heart is drawn in the accent (`colors.primary`), so it
+  stays perfectly readable. This is C2's melt problem inverted, and it resolves
+  itself: the backing is only invisible exactly where the icon has most
+  contrast. **Do not raise the pill's alpha to "fix" the dark case** — the same
+  reasoning that kept C2's scrim at .45 applies, and it would dull the light
+  case that is already right.
+- Both narrowings confirmed: on Favorites a favorited-only wallpaper carries no
+  mark at all and the downloaded one shows only the check; the history shows
+  only the heart.
+
+**Unverified, and cheap:** a tile that is *both* marked and missing on the
+history shelf, since nothing downloaded has been deleted yet. The two badges
+occupy structurally different corners, so nothing is suspected.
+
+**Note on the tablet's data:** this pass left **2 favorites and 1 download** on
+the device (a snow-village scene and a black stone texture). They are real test
+subjects for the next pass rather than a wiped database — remove them from the
+Library if they are in the way.
+
+### What is left after this pass
+
+The pass is done. Four cosmetic threads survive it, none blocking:
+
+1. **The skeleton at each density is still unseen** (C1) — the shelves load too
+   fast on a warm cache to catch it.
+2. **C2's pale-studio melt case still has no test subject.** The `@ranvijay`
+   lead is a dead end and *not* a tela bug (see the `@uploader` section); find a
+   near-white wallpaper by eye instead.
+3. **The compact (portrait) detail layout is unjudged** (C3) — same widget under
+   a `ListView`, so nothing is suspected.
+4. **A history tile that is both marked and missing** (C4) — different corners,
+   nothing suspected.
 
 Wave 4's product work (auto-rotate, collections, Omarchy sync) is untouched and
-still described below. The owner-owed hardware items are also unchanged — the
-wallpaper-apply round trip, the real biometric prompt, the cache figure, and the
-release keystore.
+still described below, and is the next real work. The owner-owed hardware items
+are also unchanged — the wallpaper-apply round trip, the real biometric prompt,
+the cache figure, and the release keystore.
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 
