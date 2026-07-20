@@ -1,6 +1,14 @@
 # tela handoff
 
-Updated: 2026-07-19
+Updated: 2026-07-20
+
+> **Newest first:** the native layer has tests at last (**F — the Kotlin
+> harness**, `make kotlin-test`, 17 green), and **both suites are now gated on
+> merge into master** — `.githooks/pre-merge-commit` locally plus a GitHub
+> Actions workflow waiting on a remote. **Run `make hooks` once per clone**, or
+> this clone is unguarded. The next chosen work is **G — SD card support**,
+> which is *planned and not built*; its slice 0 is a device step nobody could
+> run yet.
 
 > **Picking up cold?** **The E pass — tela's visual identity — is done and
 > device-verified**: the mark, an adaptive launcher icon with a Material You
@@ -32,11 +40,11 @@ Updated: 2026-07-19
 > 2. **A `make deploy` wiped the app database once, cause unexplained** (see
 >    D5a). Treat device state as disposable across deploys and re-seed test
 >    subjects rather than assuming yesterday's survived.
-> 3. **There is no Kotlin test infrastructure at all** — no `androidTest`, no
->    JUnit dependency — so every native path (`ImageStorage`, the wallpaper
->    applier, the crop editor) is verifiable only by hand on a device. The
->    duplicate-download fix exposed this; standing it up is real work nobody
->    has scheduled.
+> 3. ~~There is no Kotlin test infrastructure at all.~~ **There is now — see *F —
+>    the Kotlin harness* below.** `make kotlin-test` runs 17 Robolectric tests
+>    over `ImageStorage` with no device. What it does *not* cover is still real:
+>    the MediaStore and SAF write paths, the wallpaper applier and the crop
+>    editor remain hand-verified on hardware.
 >
 > The section immediately below is why the layout changed — read it first if you
 > are going to touch any grid, since masonry is gone and the reason it went is
@@ -1349,6 +1357,159 @@ wired* (dumped out of the built APK with `aapt2`: all three layers resolve, and
 the v31 splash attributes are there), and the silhouette was rendered locally
 under a circular mask and reads correctly. What is unverified is only how One UI
 tints it. Settings → Wallpaper and style → apply the palette to app icons.
+
+## F — the Kotlin harness, chosen 2026-07-20; built
+
+Chosen ahead of Wave 4 for one reason: **auto-rotate is WorkManager**, a
+scheduled background native wallpaper apply, and it would have been the fourth
+native feature to ship with zero automated coverage on a layer that had none.
+Better that it be the first to ship with tests.
+
+`make kotlin-test` → **17 tests, 0 skipped**, over `ImageStorage`. The Dart suite
+is untouched at 788 and the release build still shrinks correctly.
+
+### What it is, and the one Gradle fight
+
+JVM unit tests (`android/app/src/test/kotlin`), **not `androidTest`** — they run
+in the toolchain container with no emulator and no phone, which is the whole
+reason they are cheap enough to actually get run. JUnit 4 + Robolectric 4.16 +
+`androidx.test:core`.
+
+**The one thing that will bite anyone re-deriving this:** `testOptions {
+unitTests.isIncludeAndroidResources = true }` is required for Robolectric to
+stand up a `Context`, and it makes the unit-test task package the merged assets
+— a directory Flutter's own `copyFlutterAssets<Variant>` also writes. Gradle
+sees two tasks on one output with no ordering and **fails the build outright**.
+The `tasks.matching { it.name.endsWith("UnitTestForUnitTest") }` block in
+`build.gradle.kts` declares that dependency. It is not polish; without it there
+is no Kotlin suite at all under the Flutter Gradle plugin.
+
+Pinned to `@Config(sdk = [35])`, not the app's `targetSdk` 36 — Robolectric only
+ships framework jars for SDKs it has shipped against.
+
+### What mutation testing found, which is the valuable part
+
+Every claim was mutation-checked, and **two of the first tests written were
+weak** — recorded because the same traps are waiting for whoever extends this:
+
+- **A test asserting no MediaStore row appears for NSFW was vacuous.** Robolectric
+  returns nothing from a MediaStore insert regardless, so it passed with the
+  purity gate deleted. It was removed rather than left to look like coverage.
+  This is the same shape as C1's vacuous density test.
+- **The path-traversal guard is not where it looks.** `deletePrivate` filters a
+  *listing* rather than building a path, so a traversing id has nowhere to go
+  even with `VALID_ID` deleted. And on the store path, the real barrier is the
+  **`wallhaven-` prefix**, which does not look like a guard at all: `../tela`
+  becomes `wallhaven-../tela.jpg`, and `wallhaven-..` is an ordinary directory
+  name, not a parent reference. Mutation says it takes deleting **both** the
+  prefix and the regex to write outside the tier. Do not "simplify" the prefix
+  away on the grounds that the regex already covers it.
+
+### Where to take it next
+
+The uncovered native surface, roughly in value order: `WallpaperCropApplying`'s
+crop-rect maths (pure arithmetic, no framework — the cheapest win left),
+`SystemWallpaperEditing`'s intent construction (the AOSP-then-chooser fallback
+is pinnable without a device), and `ImageHandoffCache`'s wipe-on-entry privacy
+rule. The MediaStore and SAF write paths need Robolectric shadows that do not
+usefully exist; treat those as device-only rather than faking them into a green
+suite that proves nothing.
+
+## G — SD card support, chosen 2026-07-20; PLANNED, NOT BUILT
+
+The owner asked for "save to external storage if available", and clarified it
+means **the SD card specifically**. Nothing below is built. Slice 0 is a device
+step that gates the shape of the rest.
+
+### The design call: the card is a location, not a fourth tier
+
+Do not add `sdCard` to `StorageTier`. The three tiers all answer *who else can
+see this file* — gallery/file-manager/nobody. A card answers *which disk*, a
+different question, so as a peer row it is unreadable: "SD card" would not tell
+a user whether Photos indexes it. It also breaks `StorageSettings`, whose NSFW
+invariant is expressed as *which tiers are choosable* (`choicesFor` drops
+`sharedGallery` for NSFW); a volume dimension inside that enum makes the
+invariant mean two things.
+
+**The card is a location for `filesOutsideGallery`.** Three tiers stay.
+
+**A likely-free head start, still unproven:** that tier already grants through
+`ACTION_OPEN_DOCUMENT_TREE` and accepts any tree under
+`com.android.externalstorage.documents` (`MainActivity.kt:324`) — the same
+provider that serves removable volumes. `outsideGalleryDirectory` builds from
+`getTreeDocumentId`, so it is volume-agnostic by construction. Basic writing to
+a card may need **zero native code**. Unverified: see slice 0.
+
+### Slice 0 — prove the hypothesis (owner, on the tablet)
+
+Point the tier at the SD card in the picker, download one SFW wallpaper, confirm
+the file lands and `.nomedia` is created. **If this fails, slices 1–4 change
+shape.** No device was reachable when this was planned (no `/dev/bus/usb` in the
+session namespace; `192.168.50.151:5555` refuses) — needs a daemon started from
+a terminal outside Claude Code.
+
+### Slice 1 — show where files go
+
+The biggest hole, and not SD-specific: the chosen tree lives in SharedPreferences
+and is **never displayed**. No path, no volume, no way to change it without
+triggering a download. Nobody noticed because the tier has never been used.
+
+- Native `describeOutsideGalleryFolder()` → label, path, `isRemovable`,
+  `freeBytes`, `isAvailable`.
+- A `DownloadFolder` domain model + a port method. Prefer extending `ImageStore`
+  over a new port — the tree is already its concern.
+- Settings shows the resolved location, plus a **Change folder** button that
+  opens the picker standalone.
+- **The technical wrinkle, named so it is not re-derived:** SAF exposes no
+  free-space API and no filesystem path. Use `openFileDescriptor` on the tree +
+  `Os.fstatvfs`, which works on a `content://` URI. `DocumentFile` and `StatFs`
+  on a guessed path both dead-end.
+
+Independently shippable, and worth doing even if the card never happens.
+
+### Slice 2 — detect and offer, never switch
+
+`StorageManager.getStorageVolumes()` + `isRemovable`. Card present and no folder
+set → the row reads "SD card available — choose a folder". **No auto-switching**:
+a download that silently changes destination is the failure the NSFW routing
+rules exist to prevent. Android's own picker already names the card, so no
+custom picker is needed.
+
+### Slice 3 — ejection
+
+A `folderUnavailable` failure distinct from `notConfigured`, so the toast says
+"SD card unavailable" rather than "not set up". Settings shows the row
+unavailable instead of a stale path. **Nothing is written and nothing is
+rerouted** — silent fallback would land explicit pixels in `appPrivate` without
+a word, which costs trust where failing costs one retry.
+
+### Slice 4 — the NSFW removable warning (owner chose: warn once)
+
+**NSFW on a card is already legal today** — `choicesFor` permits
+`filesOutsideGallery` for NSFW and that tree can already be removable. Unused
+tier, so nobody hit it; making the card first-class makes it discoverable, which
+is what raises the stakes. A card defeats every protection the private tier
+gives: pull it out, read it anywhere — no app-lock, no `FLAG_SECURE`.
+
+The owner chose **allow, but confirm once** (over refusing) because the
+desktop-sync path is why this tier exists, and refusing would break the Omarchy
+loop for card-based syncing.
+
+- The rule lives in **domain** as a predicate over (nsfw tier, folder removable,
+  acknowledged) — pure, unit-testable, no widget.
+- Enforced twice, the usual way: domain use case and settings UI.
+- Acknowledgement persists in `SettingsRepository`.
+- **Fires on either edge**: setting NSFW to files-not-gallery when the folder is
+  already removable, *and* choosing a removable folder when NSFW already routes
+  there. Missing the second is the easy bug.
+
+### What the harness can and cannot cover here
+
+Robolectric does not usefully emulate SAF or `StorageManager`, so the volume
+plumbing is device-verified. That is an argument for putting logic where tests
+can reach it: slice 4's predicate and tree-id parsing are pure and get real
+tests. Do not fake MediaStore/SAF shadows into a green suite that proves nothing
+— see *F*'s vacuous-test finding.
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 

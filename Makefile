@@ -10,12 +10,15 @@
 TELA := ./tool/tela
 
 .DEFAULT_GOAL := help
-.PHONY: help deploy test analyze format apk shell
+.PHONY: help deploy test kotlin-test ci hooks analyze format apk shell
 
 help:
 	@printf 'targets:\n'
 	@printf '  deploy [DEVICE=host:port]  build release APK + adb install -r (safe)\n'
-	@printf '  test                       run the full suite\n'
+	@printf '  test                       run the full Dart suite\n'
+	@printf '  kotlin-test                run the native (Kotlin) suite\n'
+	@printf '  ci                         analyze + both suites, as the merge gate runs them\n'
+	@printf '  hooks                      install the pre-merge-commit gate (once per clone)\n'
 	@printf '  analyze                    static analysis (must be clean)\n'
 	@printf '  format                     dart format .\n'
 	@printf '  apk                        build the universal release APK\n'
@@ -27,6 +30,24 @@ deploy:
 
 test:
 	$(TELA) test
+
+# The native half. `make test` does not cover it — Dart and Kotlin are two
+# suites, and both are owed before a commit that touches android/.
+kotlin-test:
+	$(TELA) kotlin-test
+
+# Everything the merge gate checks, in one command, so you can find out before
+# git does. Same three steps as .github/workflows/ci.yml.
+ci: analyze test kotlin-test
+
+# `core.hooksPath` is per-clone local config — it cannot be committed, so a
+# fresh clone is unguarded until this runs. Also turns off fast-forward merges:
+# git creates no merge commit for a fast-forward, so there is nothing for
+# pre-merge-commit to hook onto and the suites would be silently skipped.
+hooks:
+	@git config core.hooksPath .githooks
+	@git config merge.ff false
+	@printf 'installed: .githooks (pre-merge-commit), merge.ff=false\n'
 
 analyze:
 	$(TELA) analyze

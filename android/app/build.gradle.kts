@@ -61,6 +61,14 @@ android {
         }
     }
 
+    // Robolectric needs the packaged resources and a real manifest to stand up a
+    // Context; without this every test that touches one fails at construction.
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
     buildTypes {
         release {
             // The real key when this machine has one, the debug key otherwise so
@@ -90,6 +98,31 @@ android {
             )
         }
     }
+}
+
+// `isIncludeAndroidResources` above makes the unit-test task package the merged
+// assets — a directory Flutter's own `copyFlutterAssets<Variant>` also writes.
+// Gradle sees two tasks on one output with no ordering between them and refuses
+// the build outright, so this is not optional polish: without it there is no
+// Kotlin suite at all under the Flutter Gradle plugin. Declaring the dependency
+// is the first of the three fixes Gradle itself suggests.
+tasks.matching { it.name.endsWith("UnitTestForUnitTest") }.configureEach {
+    val variant = name.removePrefix("package").removeSuffix("UnitTestForUnitTest")
+    dependsOn("copyFlutterAssets$variant")
+}
+
+// The native half of tela was verifiable only by hand on a device until this
+// landed. These are JVM unit tests (`src/test`), not `androidTest`: they run in
+// the toolchain container with no emulator and no phone, which is what makes
+// them cheap enough to actually run. Robolectric supplies the Android
+// framework classes the storage tiers are built out of.
+//
+// Run them with `make kotlin-test`. `flutter test` does NOT reach these — it
+// runs the Dart suite only, so both commands are needed before a commit.
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16")
+    testImplementation("androidx.test:core:1.7.0")
 }
 
 kotlin {

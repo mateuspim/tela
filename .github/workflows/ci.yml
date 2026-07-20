@@ -1,0 +1,110 @@
+# Both suites must pass on master.
+#
+# tela has TWO test suites and `flutter test` is only one of them: it never
+# reaches android/, so it stays green while the native layer is broken. They are
+# separate jobs so a red run says which half broke without reading a log.
+#
+# This mirrors `make ci`, which runs the same three steps locally through the
+# Docker toolchain. CI uses the pinned action instead of building that image,
+# for speed — `toolchain-pin` below is what keeps the two from drifting.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# A force-push over a running job should cancel it, not race it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Must equal FLUTTER_VERSION in tool/docker/Dockerfile. The toolchain-pin job
+  # fails the build if it does not, so this cannot silently drift.
+  FLUTTER_VERSION: '3.44.6'
+  JAVA_VERSION: '17'
+
+jobs:
+  # The Dockerfile is the source of truth for the toolchain: the whole point of
+  # tool/docker is that a green build here means a green build on the tablet.
+  # A version pinned in two files drifts, so this asserts they agree — a silent
+  # Flutter bump is a silent Dart-SDK bump, which breaks package resolution
+  # without touching a line of our code.
+  toolchain-pin:
+    name: flutter version matches the Dockerfile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: compare the pin against tool/docker/Dockerfile
+        run: |
+          set -euo pipefail
+          dockerfile_version="$(
+            sed -n 's/^ARG FLUTTER_VERSION=\(.*\)$/\1/p' tool/docker/Dockerfile
+          )"
+          if [[ -z "$dockerfile_version" ]]; then
+            echo "could not read ARG FLUTTER_VERSION from tool/docker/Dockerfile" >&2
+            exit 1
+          fi
+          if [[ "$dockerfile_version" != "${FLUTTER_VERSION}" ]]; then
+            echo "flutter pin drifted:" >&2
+            echo "  tool/docker/Dockerfile : $dockerfile_version" >&2
+            echo "  .github/workflows/ci.yml: ${FLUTTER_VERSION}" >&2
+            exit 1
+          fi
+          echo "both pinned to $dockerfile_version"
+
+  dart:
+    name: Dart suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # Non-negotiable per CLAUDE.md: analyze is clean before every commit.
+      - run: flutter analyze
+      - name: dart format
+        run: dart format --set-exit-if-changed .
+      - run: flutter test
+
+  kotlin:
+    name: native (Kotlin) suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - uses: gradle/actions/setup-gradle@v4
+      # The Gradle build reads flutter.sdk from here, and local.properties is
+      # gitignored (it holds machine paths). The runner's Flutter lives wherever
+      # the action put it, so this is written rather than checked in.
+      - name: write android/local.properties
+        run: |
+          set -euo pipefail
+          {
+            echo "sdk.dir=${ANDROID_HOME}"
+            echo "flutter.sdk=$(dirname "$(dirname "$(which flutter)")")"
+          } > android/local.properties
+      # Gradle needs the plugin list Flutter generates, which pub get writes.
+      - run: flutter pub get
+      - name: gradlew testDebugUnitTest
+        working-directory: android
+        run: ./gradlew --console=plain :app:testDebugUnitTest
+      # A red suite is far easier to read from the HTML report than the log.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: kotlin-test-report
+          path: build/app/reports/tests/testDebugUnitTest/

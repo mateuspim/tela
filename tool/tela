@@ -80,6 +80,15 @@ if [[ "${1:-}" == "dart" ]]; then
   exec docker run "${DOCKER_ARGS[@]}" "$IMAGE" dart "$@"
 fi
 
+# The native (Kotlin) suite. `flutter test` runs Dart only and never reaches
+# android/, so these need their own door. They are JVM unit tests, so no
+# emulator and no device is involved — Gradle and Robolectric do it all in here.
+if [[ "${1:-}" == "kotlin-test" ]]; then
+  shift
+  exec docker run "${DOCKER_ARGS[@]}" "$IMAGE" \
+    bash -c 'cd android && ./gradlew --console=plain :app:testDebugUnitTest "$@"' bash "$@"
+fi
+
 # adb is its own entrypoint too: ./tool/tela adb devices, ./tool/tela adb logcat.
 if [[ "${1:-}" == "adb" ]]; then
   shift

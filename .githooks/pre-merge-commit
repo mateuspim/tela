@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Both suites must pass before anything merges into master.
+#
+# tela has TWO test suites and `flutter test` is only one of them: it never
+# reaches android/, so it stays green while the native layer is broken. That is
+# the whole reason this hook exists rather than a note in a README.
+#
+# Install it with `make hooks` — `core.hooksPath` is per-clone local config and
+# cannot be committed, so a fresh clone has no hooks until that runs.
+#
+# KNOWN GAP: git does not run this hook for a fast-forward merge, because no
+# merge commit is created to hook onto. `make hooks` therefore also sets
+# `merge.ff = false` on this repo, so a merge into master always builds a
+# commit and always lands here. If you override that with `--ff`, you are
+# choosing to skip the suites.
+set -euo pipefail
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$branch" != "master" ]]; then
+  echo "pre-merge-commit: not master ($branch) — skipping the suites." >&2
+  exit 0
+fi
+
+echo "pre-merge-commit: merging into master — running both suites."
+
+# Run both even if the first fails, so one command reports every problem
+# rather than making you discover the Kotlin break on the next attempt.
+failed=()
+
+echo "==> Dart suite (flutter test)"
+./tool/tela test || failed+=("Dart (flutter test)")
+
+echo "==> native suite (kotlin-test)"
+./tool/tela kotlin-test || failed+=("Kotlin (make kotlin-test)")
+
+if (( ${#failed[@]} > 0 )); then
+  echo >&2
+  echo "MERGE BLOCKED — these suites failed:" >&2
+  printf '  - %s\n' "${failed[@]}" >&2
+  echo >&2
+  echo "Fix them, or re-run with --no-verify if you know what you are doing." >&2
+  exit 1
+fi
+
+echo "pre-merge-commit: both suites green."

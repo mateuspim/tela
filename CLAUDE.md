@@ -85,7 +85,19 @@ Each feature owns its widgets + Riverpod providers. Cross-feature logic goes to
 
 ## Tests
 
-- Single command: **`flutter test`**.
+- **Two suites, and `flutter test` is only the first.** Dart: **`flutter test`**.
+  Native/Kotlin: **`make kotlin-test`** (JVM unit tests under
+  `android/app/src/test`, Robolectric, no device). A change under `android/`
+  owes both — `flutter test` never reaches Kotlin and will stay green while the
+  native layer is broken.
+- **Both are gated on merge into master**, two ways: `.githooks/pre-merge-commit`
+  locally, and `.github/workflows/ci.yml` once a remote exists. Run **`make
+  hooks` once per clone** — `core.hooksPath` is local config and cannot be
+  committed, so a fresh clone is unguarded until it does. That also sets
+  `merge.ff false`: a fast-forward creates no merge commit, so there would be
+  no hook invocation and the suites would be skipped in silence.
+- The CI workflow pins Flutter separately from `tool/docker/Dockerfile`; its
+  `toolchain-pin` job fails if the two drift. Bump one, bump both.
 - Every new function gets a test. Every bug fix gets a regression test.
 - Mock external I/O (Wallhaven, Drift, filesystem, wallpaper plugin) with
   **named fake classes** (`FakeWallhavenApi`, `FakeWallpaperApplier`), not inline
@@ -161,7 +173,10 @@ Run `flutter analyze` clean before every commit.
 ```bash
 flutter analyze          # must be clean
 dart format .            # format
-flutter test             # all tests
+flutter test             # the Dart suite
+make kotlin-test         # the native (Kotlin) suite — Robolectric, no device
+make ci                  # analyze + both suites, exactly as the merge gate runs them
+make hooks               # install the merge gate — ONCE PER CLONE, see below
 flutter run              # dev (Android device/emulator)
 flutter build apk --release
 
