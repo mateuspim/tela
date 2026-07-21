@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/byte_size_text.dart';
 import 'package:tela/features/settings/clear_cache_tile.dart';
 
 import '../fakes/fake_fetched_image_cache.dart';

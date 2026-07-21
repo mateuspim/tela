@@ -907,6 +907,52 @@
     "description": "States the hard NSFW rule, so the missing Gallery option does not read as a bug."
   },
 
+  "settingsDownloadLocationTitle": "Where files are saved",
+  "@settingsDownloadLocationTitle": {
+    "description": "Header for the choice of which volume the files-outside-gallery tier writes to."
+  },
+
+  "settingsStorageVolumeDevice": "Internal storage",
+  "@settingsStorageVolumeDevice": {
+    "description": "The built-in storage option in the download-location choice."
+  },
+
+  "settingsStorageVolumeDeviceDetail": "Built-in device storage",
+  "@settingsStorageVolumeDeviceDetail": {
+    "description": "Subtitle for the built-in storage download-location option."
+  },
+
+  "settingsStorageVolumeSdCard": "SD card",
+  "@settingsStorageVolumeSdCard": {
+    "description": "The removable card option in the download-location choice."
+  },
+
+  "settingsStorageVolumeSdCardDetail": "Removable memory card",
+  "@settingsStorageVolumeSdCardDetail": {
+    "description": "Subtitle for the SD card download-location option."
+  },
+
+  "settingsDownloadFolderNone": "tela will ask you to confirm a folder the first time it saves here.",
+  "@settingsDownloadFolderNone": {
+    "description": "Shown under the volume choice when no folder has been granted yet."
+  },
+
+  "settingsDownloadFolderUnavailable": "Unavailable. Reconnect the storage or pick another volume.",
+  "@settingsDownloadFolderUnavailable": {
+    "description": "Shown when the granted folder is on storage that is not connected, such as an ejected SD card."
+  },
+
+  "settingsDownloadFolderFree": "{size} free",
+  "@settingsDownloadFolderFree": {
+    "description": "Free space left on the volume holding the download folder.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "8.2 GB"
+      }
+    }
+  },
+
   "downloadHistoryTitle": "Download history",
   "@downloadHistoryTitle": {
     "description": "Title of the screen listing wallpapers already downloaded to this device."

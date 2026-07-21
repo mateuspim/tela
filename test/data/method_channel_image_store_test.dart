@@ -1,10 +1,13 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/data/storage/method_channel_image_store.dart';
+import 'package:tela/domain/models/download_folder.dart';
+import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/storage_volume_kind.dart';
 
 void main() {
   test('sends image identity, purity, and tier to the native store', () async {
@@ -267,6 +270,173 @@ void main() {
       );
 
       expect(await store.canRead(Uri.parse('file:///gone.jpg')), false);
+    });
+  });
+
+  group('download location', () {
+    Map<Object?, Object?> folderPayload({
+      String label = 'SD card',
+      String path = 'Wallpapers/tela',
+      bool removable = true,
+      bool available = true,
+      int? freeBytes = 8589934592,
+    }) => <Object?, Object?>{
+      'volumeLabel': label,
+      'relativePath': path,
+      'isRemovable': removable,
+      'isAvailable': available,
+      'freeBytes': ?freeBytes,
+    };
+
+    test('maps the folder and card availability off the payload', () async {
+      final _FakeImageStoreChannel fake = _FakeImageStoreChannel(
+        response: <Object?, Object?>{
+          'success': true,
+          'sdCardAvailable': true,
+          'folder': folderPayload(),
+        },
+      );
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: fake.call,
+      );
+
+      final DownloadLocation location = await store.downloadLocation();
+
+      expect(fake.receivedMethod, 'describeDownloadLocation');
+      expect(location.sdCardAvailable, true);
+      expect(location.folder?.volumeLabel, 'SD card');
+      expect(location.folder?.relativePath, 'Wallpapers/tela');
+      expect(location.folder?.isRemovable, true);
+      expect(location.folder?.freeBytes, 8589934592);
+      expect(location.currentKind, StorageVolumeKind.sdCard);
+    });
+
+    test('a card present but no folder chosen is a null folder', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: const <Object?, Object?>{
+            'success': true,
+            'sdCardAvailable': true,
+          },
+        ).call,
+      );
+
+      final DownloadLocation location = await store.downloadLocation();
+
+      // Not an error: an unconfigured tier still has to report the card so the
+      // row can offer it before anything is granted.
+      expect(location.folder, isNull);
+      expect(location.sdCardAvailable, true);
+      expect(location.offersSdCard, true);
+    });
+
+    test('keeps an unavailable folder rather than dropping it', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: <Object?, Object?>{
+            'success': true,
+            'sdCardAvailable': false,
+            'folder': folderPayload(available: false, freeBytes: null),
+          },
+        ).call,
+      );
+
+      final DownloadLocation location = await store.downloadLocation();
+
+      // An ejected card is still the configured folder, and still offered even
+      // though `sdCardAvailable` is false — offersSdCard reads it off folder.
+      expect(location.folder?.isAvailable, false);
+      expect(location.offersSdCard, true);
+    });
+
+    test('reports no free space rather than zero when unread', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: <Object?, Object?>{
+            'success': true,
+            'sdCardAvailable': false,
+            'folder': folderPayload(
+              label: 'Internal storage',
+              path: 'tela',
+              removable: false,
+              freeBytes: null,
+            ),
+          },
+        ).call,
+      );
+
+      final DownloadLocation location = await store.downloadLocation();
+
+      expect(location.folder?.freeBytes, isNull);
+      expect(location.currentKind, StorageVolumeKind.device);
+    });
+
+    test('an unusable payload is empty, not a crash', () async {
+      final List<Object?> responses = <Object?>[
+        <Object?, Object?>{'success': false},
+        <Object?, Object?>{'success': true, 'folder': 'not a map'},
+        'not a map',
+        null,
+      ];
+
+      for (final Object? response in responses) {
+        final MethodChannelImageStore store = MethodChannelImageStore(
+          invokeMethod: _FakeImageStoreChannel(response: response).call,
+        );
+
+        final DownloadLocation location = await store.downloadLocation();
+        expect(location.folder, isNull, reason: '$response');
+        expect(location.sdCardAvailable, false, reason: '$response');
+      }
+    });
+
+    test('a thrown platform channel yields an empty location', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          platformError: PlatformException(code: 'unavailable'),
+        ).call,
+      );
+
+      final DownloadLocation location = await store.downloadLocation();
+      expect(location.folder, isNull);
+      expect(location.sdCardAvailable, false);
+    });
+
+    test('choosing sends the kind and maps the granted folder', () async {
+      final _FakeImageStoreChannel fake = _FakeImageStoreChannel(
+        response: <Object?, Object?>{
+          'success': true,
+          'sdCardAvailable': true,
+          'folder': folderPayload(path: 'tela'),
+        },
+      );
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: fake.call,
+      );
+
+      final DownloadFolder? folder = await store.chooseDownloadFolder(
+        StorageVolumeKind.sdCard,
+      );
+
+      expect(fake.receivedMethod, 'chooseDownloadFolder');
+      expect(fake.receivedArguments, <String, String>{'kind': 'sdCard'});
+      expect(folder?.volumeLabel, 'SD card');
+    });
+
+    test('a cancelled or absent pick answers null, not a folder', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: const <Object?, Object?>{
+            'success': false,
+            'errorCode': 'notConfigured',
+          },
+        ).call,
+      );
+
+      expect(
+        await store.chooseDownloadFolder(StorageVolumeKind.device),
+        isNull,
+      );
     });
   });
 }
