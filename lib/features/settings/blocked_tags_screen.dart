@@ -30,7 +30,7 @@ class BlockedTagsScreen extends ConsumerWidget {
         ),
       ),
       body: blocked.when(
-        data: (List<WallpaperTag> tags) => _list(ref, l10n, tags),
+        data: (List<WallpaperTag> tags) => _list(context, ref, l10n, tags),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
           icon: Icons.error_outline,
@@ -40,7 +40,12 @@ class BlockedTagsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _list(WidgetRef ref, AppLocalizations l10n, List<WallpaperTag> tags) {
+  Widget _list(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    List<WallpaperTag> tags,
+  ) {
     if (tags.isEmpty) {
       return WallpaperStatusView(
         icon: Icons.label_off_outlined,
@@ -48,7 +53,15 @@ class BlockedTagsScreen extends ConsumerWidget {
       );
     }
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      // The last tag has to scroll clear of the bottom system bar under
+      // edge-to-edge, so add its live inset to the 8. Same approach as
+      // `wallpaperGridPadding`.
+      padding: EdgeInsets.fromLTRB(
+        0,
+        8,
+        0,
+        8 + MediaQuery.paddingOf(context).bottom,
+      ),
       itemCount: tags.length,
       separatorBuilder: (BuildContext context, int index) => const Divider(),
       itemBuilder: (BuildContext context, int index) =>

@@ -73,6 +73,26 @@ void main() {
     expect((bottoms.first - bottoms.last).abs(), lessThan(200));
   });
 
+  testWidgets('pads its last group clear of the bottom system bar', (
+    WidgetTester tester,
+  ) async {
+    // Under edge-to-edge the body draws behind the gesture/nav bar; without
+    // this the final group strands behind it with no scroll extent left to lift
+    // it. Device-seen 2026-07-21 behind Samsung's taskbar.
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(),
+      viewport: const Size(2560, 1600),
+      pixelRatio: 2.125,
+      bottomInset: 48,
+    );
+
+    final SingleChildScrollView scroll = tester.widget<SingleChildScrollView>(
+      find.byType(SingleChildScrollView),
+    );
+    expect((scroll.padding! as EdgeInsets).bottom, 32 + 48);
+  });
+
   testWidgets('shows the saved destination for each purity', (
     WidgetTester tester,
   ) async {
@@ -589,6 +609,7 @@ Future<void> _pumpSettings(
   FakeAppLock? lock,
   Size viewport = const Size(1080, 5000),
   double pixelRatio = 1,
+  double bottomInset = 0,
 }) async {
   // Settings is a scrolling list, and it keeps growing — a download-history
   // tile, and now the browse-defaults switch. On a phone-sized test viewport
@@ -608,15 +629,24 @@ Future<void> _pumpSettings(
         wallhavenApiProvider.overrideWithValue(api ?? FakeWallhavenApi()),
         appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
       ],
-      child: const MaterialApp(
-        localizationsDelegates: <LocalizationsDelegate<Object>>[
+      child: MaterialApp(
+        localizationsDelegates: const <LocalizationsDelegate<Object>>[
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: SettingsScreen(),
+        // Injects a bottom system-bar inset above the Scaffold, the way an
+        // edge-to-edge gesture bar or nav bar would, so a test can prove the
+        // scroll content pads itself clear of it.
+        builder: (BuildContext context, Widget? child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            padding: EdgeInsets.only(bottom: bottomInset),
+          ),
+          child: child!,
+        ),
+        home: const SettingsScreen(),
       ),
     ),
   );

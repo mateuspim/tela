@@ -60,7 +60,18 @@ class _SettingsList extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) =>
           SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            // Under edge-to-edge the body draws behind the bottom system bar,
+            // so add its inset to the fixed 32: the last group has to be able
+            // to scroll clear of a gesture bar or nav bar, not strand behind
+            // it. Same live-inset approach as `wallpaperGridPadding`. (A
+            // floating OEM taskbar overlay is not reported as an inset — that
+            // one the user dismisses; see device check 2026-07-21.)
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              32 + MediaQuery.paddingOf(context).bottom,
+            ),
             child: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
