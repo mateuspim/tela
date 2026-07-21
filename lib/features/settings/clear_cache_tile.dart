@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/byte_size_text.dart';
 
 /// How much disk the fetched-image cache is using right now.
 ///
@@ -47,24 +48,4 @@ class ClearCacheTile extends ConsumerWidget {
     ref.invalidate(cachedImageBytesProvider);
     messenger.showSnackBar(SnackBar(content: Text(confirmation)));
   }
-}
-
-/// Renders [bytes] the way a storage screen does: `0 B`, `12 KB`, `1.9 GB`.
-///
-/// One decimal place from MB up, and none below: "1.9 GB" is the number that
-/// makes someone press the button, and "1.9 KB" of precision on a rounding
-/// error is noise.
-String formatBytes(int bytes) {
-  if (bytes < 1024) return '$bytes B';
-  const List<String> units = <String>['KB', 'MB', 'GB', 'TB'];
-  double size = bytes / 1024;
-  int unit = 0;
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024;
-    unit++;
-  }
-  final String rendered = unit == 0
-      ? size.round().toString()
-      : size.toStringAsFixed(1);
-  return '$rendered ${units[unit]}';
 }

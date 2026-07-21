@@ -23,7 +23,7 @@ class MainActivity : FlutterFragmentActivity() {
     private val wallpaperExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val imageStoreExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val shareExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-    private var pendingOutsideGalleryStore: PendingOutsideGalleryStore? = null
+    private var pendingOutsideGalleryGrant: PendingOutsideGalleryGrant? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -220,6 +220,8 @@ class MainActivity : FlutterFragmentActivity() {
             "canReadImage" -> handleCanReadImage(call, result)
             "materializeImage" -> handleMaterializeImage(call, result)
             "releasePreview" -> handleReleasePreview(call, result)
+            "describeDownloadLocation" -> handleDescribeDownloadLocation(result)
+            "chooseDownloadFolder" -> handleChooseDownloadFolder(call, result)
             else -> result.notImplemented()
         }
     }
@@ -260,6 +262,34 @@ class MainActivity : FlutterFragmentActivity() {
         storeImage(request, result)
     }
 
+    /** Describes the location off the UI thread; it does filesystem stats. */
+    private fun handleDescribeDownloadLocation(result: MethodChannel.Result) {
+        onStorageThread(result) {
+            DownloadFolderDescribing(this).describe(outsideGalleryTree())
+        }
+    }
+
+    /**
+     * Opens the folder picker pointed at the chosen volume, no download waiting.
+     *
+     * The `kind` ("device" or "sdCard") pre-aims the picker so the user confirms
+     * one folder instead of hunting through a blank tree browser — the whole
+     * point of the device/card choice. A card asked for while the slot is empty
+     * has no volume to aim at, so it answers `notConfigured` rather than opening
+     * a picker that could land anywhere.
+     */
+    private fun handleChooseDownloadFolder(call: MethodCall, result: MethodChannel.Result) {
+        val kind = call.argument<String>("kind") ?: run {
+            result.success(imageStoreFailure("unavailable"))
+            return
+        }
+        val intent = DownloadVolumes(this).openTreeIntentFor(kind) ?: run {
+            result.success(imageStoreFailure("notConfigured"))
+            return
+        }
+        requestOutsideGalleryDirectory(null, result, intent)
+    }
+
     private fun handleDeletePrivateImage(call: MethodCall, result: MethodChannel.Result) {
         val id = call.argument<String>("id") ?: run {
             result.success(imageStoreFailure("unavailable"))
@@ -291,33 +321,46 @@ class MainActivity : FlutterFragmentActivity() {
         return ImageStoreRequest(id, imageUrl, purity, tier)
     }
 
+    /**
+     * Starts the folder picker, for a waiting [request] or for its own sake when
+     * null.
+     *
+     * [intent] lets Settings pass a picker already aimed at a chosen volume; the
+     * download-time fallback passes null and gets the plain, un-aimed tree
+     * picker. Either way the persistable-grant flags are added here so no caller
+     * can forget them.
+     */
     private fun requestOutsideGalleryDirectory(
-        request: ImageStoreRequest,
+        request: ImageStoreRequest?,
         result: MethodChannel.Result,
+        intent: Intent? = null,
     ) {
-        if (pendingOutsideGalleryStore != null) {
+        if (pendingOutsideGalleryGrant != null) {
             result.success(imageStoreFailure("notConfigured"))
             return
         }
-        pendingOutsideGalleryStore = PendingOutsideGalleryStore(request, result)
-        startActivityForResult(
-            Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(DIRECTORY_ACCESS_FLAGS),
-            OUTSIDE_GALLERY_DIRECTORY_REQUEST,
-        )
+        pendingOutsideGalleryGrant = PendingOutsideGalleryGrant(request, result)
+        val picker = (intent ?: Intent(Intent.ACTION_OPEN_DOCUMENT_TREE))
+            .addFlags(DIRECTORY_ACCESS_FLAGS)
+        startActivityForResult(picker, OUTSIDE_GALLERY_DIRECTORY_REQUEST)
     }
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != OUTSIDE_GALLERY_DIRECTORY_REQUEST) return
-        val pending = pendingOutsideGalleryStore ?: return
-        pendingOutsideGalleryStore = null
+        val pending = pendingOutsideGalleryGrant ?: return
+        pendingOutsideGalleryGrant = null
         val tree = data?.data
         if (resultCode != RESULT_OK || tree == null || !saveOutsideGalleryTree(tree, data.flags)) {
             pending.result.success(imageStoreFailure("notConfigured"))
             return
         }
-        storeImage(pending.request, pending.result)
+        val request = pending.request
+        // No waiting download means Settings asked: answer with the location it
+        // now has, so the screen can redraw without a second round trip.
+        if (request == null) handleDescribeDownloadLocation(pending.result)
+        else storeImage(request, pending.result)
     }
 
     private fun saveOutsideGalleryTree(tree: Uri, returnedFlags: Int): Boolean {
@@ -439,8 +482,9 @@ class MainActivity : FlutterFragmentActivity() {
         "errorCode" to code,
     )
 
-    private data class PendingOutsideGalleryStore(
-        val request: ImageStoreRequest,
+    /** A folder picker in flight; [request] is null when nothing waits on it. */
+    private data class PendingOutsideGalleryGrant(
+        val request: ImageStoreRequest?,
         val result: MethodChannel.Result,
     )
 

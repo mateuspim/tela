@@ -1,6 +1,9 @@
+import 'package:tela/domain/models/download_folder.dart';
+import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
 
 /// Stores a remote wallpaper using a user-selected storage tier.
@@ -44,4 +47,20 @@ abstract interface class ImageStore {
   /// open: gone, revoked, unreadable. "I could not open it" is the only fact
   /// the caller wants, and none of the ways to fail are worth distinguishing.
   Future<bool> canRead(Uri location);
+
+  /// Where files-outside-gallery writes, and whether a card is offered.
+  ///
+  /// Never throws for the ordinary "nothing chosen yet" state — that is a
+  /// [DownloadLocation] with a null folder, not an error. A card being present
+  /// is reported the same whether or not a folder exists, so the picker can
+  /// offer it before anything is configured.
+  Future<DownloadLocation> downloadLocation();
+
+  /// Opens the system folder picker pointed at [kind]'s volume and remembers
+  /// what the user grants.
+  ///
+  /// Returns the new folder, or null when they backed out or the volume was
+  /// gone (a card asked for with an empty slot) — a cancelled picker must leave
+  /// the previous grant exactly as it was.
+  Future<DownloadFolder?> chooseDownloadFolder(StorageVolumeKind kind);
 }

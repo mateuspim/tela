@@ -6,9 +6,14 @@ Updated: 2026-07-20
 > harness**, `make kotlin-test`, 17 green), and **both suites are now gated on
 > merge into master** — `.githooks/pre-merge-commit` locally plus a GitHub
 > Actions workflow waiting on a remote. **Run `make hooks` once per clone**, or
-> this clone is unguarded. The next chosen work is **G — SD card support**,
-> which is *planned and not built*; its slice 0 is a device step nobody could
-> run yet.
+> this clone is unguarded. The current work is **G — SD card support**:
+> **slice 1 is built, then reshaped into a device/card chooser** at the owner's
+> request (**806 Dart tests, 31 Kotlin**). Selecting "Files, not gallery" in
+> Settings now reveals a **This device / SD card** choice; picking one opens the
+> system picker *pre-aimed* at that volume (`StorageVolume.createOpenDocumentTreeIntent`),
+> one tap to confirm. Slice 0 (device write to the card) **passed on hardware
+> 2026-07-21** — the SD-card download worked; that verification is what prompted
+> the UX reshape. The chooser itself has *not* yet been seen on hardware.
 
 > **Picking up cold?** **The E pass — tela's visual identity — is done and
 > device-verified**: the mark, an adaptive launcher icon with a Material You
@@ -1415,11 +1420,13 @@ rule. The MediaStore and SAF write paths need Robolectric shadows that do not
 usefully exist; treat those as device-only rather than faking them into a green
 suite that proves nothing.
 
-## G — SD card support, chosen 2026-07-20; PLANNED, NOT BUILT
+## G — SD card support, chosen 2026-07-20; SLICE 1 BUILT, slice 0 still owed
 
 The owner asked for "save to external storage if available", and clarified it
-means **the SD card specifically**. Nothing below is built. Slice 0 is a device
-step that gates the shape of the rest.
+means **the SD card specifically**. **Slice 1 is built** (802 Dart tests, 26
+Kotlin); slices 0 and 2–4 are not. Slice 0 is a device step that gates the shape
+of 2–4, and it is still owed — slice 1 was built ahead of it because it does not
+depend on the answer.
 
 ### The design call: the card is a location, not a fourth tier
 
@@ -1448,24 +1455,95 @@ shape.** No device was reachable when this was planned (no `/dev/bus/usb` in the
 session namespace; `192.168.50.151:5555` refuses) — needs a daemon started from
 a terminal outside Claude Code.
 
-### Slice 1 — show where files go
+### Slice 1 → device/card chooser — **BUILT, chooser not yet device-verified**
 
-The biggest hole, and not SD-specific: the chosen tree lives in SharedPreferences
-and is **never displayed**. No path, no volume, no way to change it without
+**Reshaped 2026-07-21 after slice 0 passed on the tablet.** The owner found the
+original design — a tier radio *plus* a separate "choose folder" row that opened
+a blank SAF tree browser — bad UX: "I wanted to set Files, and be asked *device
+or SD card*." So the folder row became a **This device / SD card** chooser
+(`DownloadLocationSection`), shown once under the Downloads pickers and only when
+a purity actually routes to `filesOutsideGallery`. Picking a volume calls the
+native `chooseDownloadFolder(kind)`, which opens the picker via
+`StorageVolume.createOpenDocumentTreeIntent()` — **pre-aimed at that volume**, so
+the user confirms one folder instead of navigating to it. Switching volumes
+re-confirms (one stored tree; the owner explicitly chose this over "remember
+both"). SAF still *requires* a grant per location — Android won't let tela write
+to a card silently — so the picker cannot vanish entirely; pre-aiming is as
+close as the platform allows.
+
+**Design calls not to re-litigate** (owner-approved 2026-07-21):
+- The card row hides when no card is in the slot — *but stays* when the current
+  folder is on a card that was then ejected (`DownloadLocation.offersSdCard`),
+  so an ejection doesn't erase the user's own choice from the screen.
+- The whole chooser hides until a purity uses `filesOutsideGallery` — a dead
+  control otherwise.
+- Volume label is "Internal storage", not "This device": browse-defaults already
+  owns "This device" for a different meaning, and both can show at once.
+
+**Where the logic lives, and why:** Robolectric stands up **zero** storage
+volumes (`getStorageVolumes()` is empty — probed 2026-07-21), so volume-by-kind
+resolution is untestable on `StorageManager`. It was lifted into the pure
+`VolumeSelection` (generic over the volume type), which `VolumeSelectionTest`
+drives with fakes — device/card transposition and the unmounted-card case are
+both mutation-proven there. `DownloadVolumes` is now a thin device-only adapter.
+This is the same "put logic where tests can reach it" move F's notes argue for;
+do **not** try to fake StorageVolumes into a Robolectric suite.
+
+---
+
+*Original slice-1 notes (folder-status row) below — superseded by the chooser,
+but the native describe/free-space mechanics still apply.*
+
+### Slice 1 — show where files go — **BUILT, not yet device-verified**
+
+The biggest hole, and not SD-specific: the chosen tree lived in SharedPreferences
+and was **never displayed**. No path, no volume, no way to change it without
 triggering a download. Nobody noticed because the tier has never been used.
 
-- Native `describeOutsideGalleryFolder()` → label, path, `isRemovable`,
-  `freeBytes`, `isAvailable`.
-- A `DownloadFolder` domain model + a port method. Prefer extending `ImageStore`
-  over a new port — the tree is already its concern.
-- Settings shows the resolved location, plus a **Change folder** button that
-  opens the picker standalone.
-- **The technical wrinkle, named so it is not re-derived:** SAF exposes no
-  free-space API and no filesystem path. Use `openFileDescriptor` on the tree +
-  `Os.fstatvfs`, which works on a `content://` URI. `DocumentFile` and `StatFs`
-  on a guessed path both dead-end.
+Built as planned:
 
-Independently shippable, and worth doing even if the card never happens.
+- `DownloadFolderDescribing.kt` — a new native file, because `ImageStorage.kt`
+  was at 460 of the 500-line budget. Read-only by design: describing a folder
+  never creates or grants one.
+- `DownloadFolder` domain model + `downloadFolder()` / `chooseDownloadFolder()`
+  on `ImageStore`, as planned (no new port — the tree was already its concern).
+- `DownloadFolderSection` under **both** tier pickers, not inside either: one
+  folder serves the tier whichever purity routes there, and a copy in each
+  picker would suggest there are two.
+- `formatBytes` moved from `clear_cache_tile.dart` to `core/ui/byte_size_text.dart`
+  once it had a second caller.
+
+**The technical wrinkle, as predicted:** SAF exposes no free-space API and no
+filesystem path. `openFileDescriptor` on the tree + `Os.fstatvfs` is what works.
+`DocumentFile` and `StatFs` on a guessed path both dead-end. Free space is
+**absent, never zero**, when it cannot be read — "unknown" and "full" are
+opposite messages.
+
+**Three decisions worth not re-litigating:**
+
+1. **A cancelled picker must not blank the row.** The port answers null for both
+   "cancelled" and "never configured", so `DownloadFolderController.choose()`
+   ignores null rather than writing it into state. Regression test:
+   *backing out of the picker leaves the folder alone*.
+2. **An ejected card stays a folder**, with `isAvailable: false` — it does not
+   collapse to null. Collapsing it would offer "Choose folder" for a folder that
+   already exists. This is slice 3's groundwork, already tested.
+3. **`MainActivity.pendingOutsideGalleryStore` became
+   `pendingOutsideGalleryGrant` with a nullable request** — null means Settings
+   asked, not a download, and the picker answers with a description instead of
+   storing. That is what makes the picker openable standalone.
+
+**Mutation testing caught one vacuous test before it landed**, the same shape F
+recorded. The "tree from another provider is refused" test originally used a
+document id (`raw`) that fails to parse anyway, so it passed with the authority
+guard deleted. It now uses a *well-formed* id (`primary%3APictures`) so the
+guard is the only barrier. Three mutations are confirmed caught: the authority
+check, `separator <= 0` → `< 0`, and `trim('/')` → `trimEnd()`. **Do not
+"simplify" any of the three.**
+
+What is **not** covered, and stays device-only: the volume label, removability,
+free space and availability all need `StorageManager`/SAF, which Robolectric
+does not usefully emulate. The settings row has never been seen on hardware.
 
 ### Slice 2 — detect and offer, never switch
 

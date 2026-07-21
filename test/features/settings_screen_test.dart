@@ -20,6 +20,7 @@ import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/features/settings/settings_screen.dart';
 
 import '../fakes/fake_app_lock.dart';
+import '../fakes/fake_image_store.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_wallhaven_api.dart';
@@ -73,6 +74,27 @@ void main() {
     expect((bottoms.first - bottoms.last).abs(), lessThan(200));
   });
 
+  testWidgets('pads its last group clear of the bottom system bar', (
+    WidgetTester tester,
+  ) async {
+    // Under edge-to-edge the body draws behind the gesture/nav bar; without
+    // this the final group (the download folder) strands behind it with no
+    // scroll extent left to lift it. Device-seen 2026-07-21 behind Samsung's
+    // taskbar.
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(),
+      viewport: const Size(2560, 1600),
+      pixelRatio: 2.125,
+      bottomInset: 48,
+    );
+
+    final SingleChildScrollView scroll = tester.widget<SingleChildScrollView>(
+      find.byType(SingleChildScrollView),
+    );
+    expect((scroll.padding! as EdgeInsets).bottom, 32 + 48);
+  });
+
   testWidgets('shows the saved destination for each purity', (
     WidgetTester tester,
   ) async {
@@ -106,6 +128,42 @@ void main() {
     expect(settings.saved.sfwTier, StorageTier.filesOutsideGallery);
     expect(settings.saved.nsfwTier, StorageTier.appPrivate);
   });
+
+  testWidgets('reveals the device/card choice only when files-tier is used', (
+    WidgetTester tester,
+  ) async {
+    // Dead control otherwise: the volume choice means nothing until a purity
+    // actually routes to files-outside-gallery, so it stays hidden until then.
+    await _pumpSettings(tester, FakeSettingsRepository());
+    expect(find.text('Where files are saved'), findsNothing);
+
+    await tester.tap(find.text('Files, not gallery').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Where files are saved'), findsOneWidget);
+    expect(find.text('SD card'), findsNothing); // no card in this fake
+  });
+
+  testWidgets(
+    'offers the SD card once files-tier routes there and a card is in',
+    (
+      WidgetTester tester,
+    ) async {
+      await _pumpSettings(
+        tester,
+        FakeSettingsRepository(
+          settings: StorageSettings(
+            sfwTier: StorageTier.filesOutsideGallery,
+            nsfwTier: StorageTier.appPrivate,
+          ),
+        ),
+        imageStore: FakeImageStore(sdCardAvailable: true),
+      );
+
+      expect(find.text('Where files are saved'), findsOneWidget);
+      expect(find.text('SD card'), findsOneWidget);
+    },
+  );
 
   testWidgets('opens on the density the wall is already drawing at', (
     WidgetTester tester,
@@ -587,8 +645,10 @@ Future<void> _pumpSettings(
   FakeSecretStore? secrets,
   FakeWallhavenApi? api,
   FakeAppLock? lock,
+  FakeImageStore? imageStore,
   Size viewport = const Size(1080, 5000),
   double pixelRatio = 1,
+  double bottomInset = 0,
 }) async {
   // Settings is a scrolling list, and it keeps growing — a download-history
   // tile, and now the browse-defaults switch. On a phone-sized test viewport
@@ -607,16 +667,26 @@ Future<void> _pumpSettings(
         secretStoreProvider.overrideWithValue(secrets ?? FakeSecretStore()),
         wallhavenApiProvider.overrideWithValue(api ?? FakeWallhavenApi()),
         appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
+        imageStoreProvider.overrideWithValue(imageStore ?? FakeImageStore()),
       ],
-      child: const MaterialApp(
-        localizationsDelegates: <LocalizationsDelegate<Object>>[
+      child: MaterialApp(
+        localizationsDelegates: const <LocalizationsDelegate<Object>>[
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: SettingsScreen(),
+        // Injects a bottom system-bar inset above the Scaffold, the way an
+        // edge-to-edge gesture bar or nav bar would, so a test can prove the
+        // scroll content pads itself clear of it.
+        builder: (BuildContext context, Widget? child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            padding: EdgeInsets.only(bottom: bottomInset),
+          ),
+          child: child!,
+        ),
+        home: const SettingsScreen(),
       ),
     ),
   );

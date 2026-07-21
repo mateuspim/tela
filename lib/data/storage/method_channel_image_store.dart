@@ -1,8 +1,11 @@
 import 'package:flutter/services.dart';
+import 'package:tela/domain/models/download_folder.dart';
+import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
 import 'package:tela/domain/ports/image_store.dart';
 
@@ -96,6 +99,63 @@ class MethodChannelImageStore implements ImageStore {
     }
   }
 
+  @override
+  Future<DownloadLocation> downloadLocation() async {
+    try {
+      final Object? raw = await _invokeMethod(
+        'describeDownloadLocation',
+        const <String, String>{},
+      );
+      return _downloadLocationFrom(raw);
+    } on PlatformException {
+      // The row can still offer "choose a folder"; it just cannot yet say a
+      // card is present. False is the safe guess — it hides an option rather
+      // than inventing one.
+      return const DownloadLocation(folder: null, sdCardAvailable: false);
+    }
+  }
+
+  @override
+  Future<DownloadFolder?> chooseDownloadFolder(StorageVolumeKind kind) async {
+    try {
+      final Object? raw = await _invokeMethod(
+        'chooseDownloadFolder',
+        <String, String>{'kind': kind.name},
+      );
+      if (raw is! Map<Object?, Object?> || raw['success'] != true) return null;
+      return _downloadFolderFrom(raw['folder']);
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  DownloadLocation _downloadLocationFrom(Object? raw) {
+    if (raw is! Map<Object?, Object?> || raw['success'] != true) {
+      return const DownloadLocation(folder: null, sdCardAvailable: false);
+    }
+    return DownloadLocation(
+      folder: _downloadFolderFrom(raw['folder']),
+      sdCardAvailable: raw['sdCardAvailable'] == true,
+    );
+  }
+
+  DownloadFolder? _downloadFolderFrom(Object? raw) {
+    if (raw is! Map<Object?, Object?>) return null;
+    final Object? label = raw['volumeLabel'];
+    final Object? path = raw['relativePath'];
+    final Object? removable = raw['isRemovable'];
+    final Object? available = raw['isAvailable'];
+    if (label is! String || path is! String) return null;
+    if (removable is! bool || available is! bool) return null;
+    return DownloadFolder(
+      volumeLabel: label,
+      relativePath: path,
+      isRemovable: removable,
+      isAvailable: available,
+      freeBytes: _positiveOrNull(raw['freeBytes']),
+    );
+  }
+
   static Future<Object?> _invokeNativeMethod(
     String method,
     Map<String, String> arguments,
@@ -132,16 +192,19 @@ class MethodChannelImageStore implements ImageStore {
       location: Uri.parse(location),
       savedAt: DateTime.fromMillisecondsSinceEpoch(savedAt),
       sizeBytes: sizeBytes,
-      width: _positiveDimension(raw['width']),
-      height: _positiveDimension(raw['height']),
+      width: _positiveOrNull(raw['width']),
+      height: _positiveOrNull(raw['height']),
     );
   }
 
-  /// A pixel dimension the native bounds decode read, or null when it couldn't.
+  /// A measurement the native side either read or could not, as int-or-null.
   ///
-  /// A corrupt file comes back as -1 (or absent on an older payload); either
-  /// way the image is still listed, just without a known shape.
-  int? _positiveDimension(Object? value) =>
+  /// Two things arrive this way and both mean it the same: a pixel dimension
+  /// from the bounds decode, which comes back -1 for a corrupt file (or absent
+  /// on an older payload), and free space, which is simply missing when
+  /// `fstatvfs` failed. In each case the row still draws, just without that
+  /// fact.
+  int? _positiveOrNull(Object? value) =>
       value is int && value > 0 ? value : null;
 
   StoredImage _storedImageFrom(Object? raw, StorageTier tier) {

@@ -1,7 +1,10 @@
+import 'package:tela/domain/models/download_folder.dart';
+import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
 import 'package:tela/domain/ports/image_store.dart';
 
@@ -11,6 +14,9 @@ class FakeImageStore implements ImageStore {
   FakeImageStore({
     this.failure,
     this.storedImage,
+    this.folder,
+    this.chosenFolder,
+    this.sdCardAvailable = false,
     List<PrivateImage> privateLibrary = const <PrivateImage>[],
     Set<Uri> unreadable = const <Uri>{},
     Set<String> failingIds = const <String>{},
@@ -89,4 +95,35 @@ class FakeImageStore implements ImageStore {
 
   @override
   Future<bool> canRead(Uri location) async => !_unreadable.contains(location);
+
+  /// The folder already granted, or null for a tier nobody has configured.
+  final DownloadFolder? folder;
+
+  /// What the picker returns; null stands for the user backing out of it.
+  ///
+  /// Separate from [folder] so a test can say "they had none and chose one",
+  /// which is the case the settings row exists for.
+  final DownloadFolder? chosenFolder;
+
+  /// Whether a removable card is on offer.
+  final bool sdCardAvailable;
+
+  /// The volume kinds passed to [chooseDownloadFolder], in order.
+  final List<StorageVolumeKind> chosenKinds = <StorageVolumeKind>[];
+
+  @override
+  Future<DownloadLocation> downloadLocation() async => DownloadLocation(
+    folder: _granted ?? folder,
+    sdCardAvailable: sdCardAvailable,
+  );
+
+  @override
+  Future<DownloadFolder?> chooseDownloadFolder(StorageVolumeKind kind) async {
+    chosenKinds.add(kind);
+    _granted = chosenFolder;
+    return chosenFolder;
+  }
+
+  /// Set once the picker has run, so a later read sees what it granted.
+  DownloadFolder? _granted;
 }

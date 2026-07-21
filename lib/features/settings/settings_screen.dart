@@ -16,6 +16,7 @@ import 'package:tela/features/settings/api_key_section.dart';
 import 'package:tela/features/settings/app_lock_switch.dart';
 import 'package:tela/features/settings/browse_defaults_section.dart';
 import 'package:tela/features/settings/clear_cache_tile.dart';
+import 'package:tela/features/settings/download_location_section.dart';
 import 'package:tela/features/settings/storage_settings_controller.dart';
 import 'package:tela/features/settings/tile_density_section.dart';
 
@@ -60,7 +61,18 @@ class _SettingsList extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) =>
           SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            // Under edge-to-edge the body draws behind the bottom system bar,
+            // so add its inset to the fixed 32: the last group has to be able
+            // to scroll clear of a gesture bar or nav bar, not strand behind
+            // it. Same live-inset approach as `wallpaperGridPadding`. (A
+            // floating OEM taskbar overlay is not reported as an inset — that
+            // one the user dismisses; see device check 2026-07-21.)
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              32 + MediaQuery.paddingOf(context).bottom,
+            ),
             child: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
@@ -152,9 +164,25 @@ class _SettingsList extends StatelessWidget {
           selected: settings.nsfwTier,
           note: l10n.settingsDownloadsNsfwNote,
         ),
+        // Only when a purity actually routes there, and under both pickers
+        // rather than inside either: one folder serves the tier whichever
+        // purity uses it, so a copy per picker would suggest there are two.
+        if (_usesFilesOutsideGallery) ...<Widget>[
+          const Divider(),
+          const DownloadLocationSection(),
+        ],
       ],
     );
   }
+
+  /// Whether either purity sends downloads to the files-outside-gallery tier.
+  ///
+  /// The device/card choice is meaningless until something routes there, so it
+  /// stays hidden rather than sitting as a dead control under the gallery and
+  /// private-library defaults.
+  bool get _usesFilesOutsideGallery =>
+      settings.sfwTier == StorageTier.filesOutsideGallery ||
+      settings.nsfwTier == StorageTier.filesOutsideGallery;
 
   /// Its own group rather than a line under Downloads, because the difference
   /// between the two is the whole point: a download is a file the user kept,
