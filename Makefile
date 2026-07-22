@@ -10,7 +10,7 @@
 TELA := ./tool/tela
 
 .DEFAULT_GOAL := help
-.PHONY: help deploy test kotlin-test ci hooks analyze format apk shell
+.PHONY: help deploy test kotlin-test ci hooks analyze format apk shell install run
 
 help:
 	@printf 'targets:\n'
@@ -60,6 +60,17 @@ apk:
 
 shell:
 	$(TELA) --shell
+
+# Guardrail: `flutter install` and `flutter run` uninstall the app before
+# reinstalling, which takes the Drift database and the Keystore-backed API key
+# with it (2026-07-22: `make install` wiped a device this way). The catch-all
+# below would forward `make install`/`make run` straight to them, so name them
+# explicitly and fail loudly instead. `make deploy` is the safe path — it builds
+# the universal versionCode-1 APK and `adb install -r`s it, never uninstalling.
+install run:
+	@printf 'make %s runs `flutter %s`, which UNINSTALLS first and wipes the\n' '$@' '$@' >&2
+	@printf 'database and the stored API key. Use `make deploy` instead.\n' >&2
+	@exit 2
 
 # Catch-all: any other single word forwards as-is — `make devices`, `make
 # doctor`, `make clean`. Flagged or multi-word commands (`build apk --release`)
