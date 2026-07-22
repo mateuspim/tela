@@ -131,7 +131,15 @@ class DownloadHistoryScreen extends ConsumerWidget {
       label: isMissing
           ? l10n.downloadHistoryRedownload(download.wallpaper.id)
           : l10n.downloadHistorySetAgain(download.wallpaper.id),
+      // Expand, not the default loose fit: the grid hands this tile a cell of a
+      // chosen width and height, and a loose Stack would let the WallpaperTile
+      // fall back to its own intrinsic size and sit top-left inside the cell.
+      // Invisible while cells are wall-sized, but a lone download gets a cell
+      // blown up to two thirds of the viewport, where the un-expanded tile drew
+      // small and adrift (the "lone history tile" anomaly). Favorites never hit
+      // this because it puts the tile straight in the SizedBox, with no Stack.
       child: Stack(
+        fit: StackFit.expand,
         children: <Widget>[
           Opacity(
             opacity: isMissing ? 0.55 : 1,
