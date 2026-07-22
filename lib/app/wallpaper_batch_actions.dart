@@ -157,6 +157,17 @@ Future<void> _downloadAll(
     // Backing out of first-time folder setup abandons the batch: every
     // remaining download would ask the same unanswered question.
     if (outcome == DownloadOutcome.cancelled) break;
+    // An unavailable folder is the same wall for every wallpaper left, so stop
+    // and name it — a "0 of N" tally would hide why nothing saved.
+    if (outcome == DownloadOutcome.folderUnavailable) {
+      refreshDownloads(ref);
+      _say(
+        messenger,
+        l10n.detailDownloadFolderUnavailable,
+        kind: ToastKind.failure,
+      );
+      return;
+    }
     if (outcome == DownloadOutcome.saved) saved++;
   }
   refreshDownloads(ref);

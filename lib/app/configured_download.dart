@@ -15,6 +15,11 @@ enum DownloadOutcome {
   /// deliberately not a failure to report — they chose to stop.
   cancelled,
 
+  /// The chosen folder is set but its volume is gone — an ejected card. Nothing
+  /// was written and nothing was rerouted; the message says to reconnect it,
+  /// not to set one up, so it is distinct from [failed] and [cancelled].
+  folderUnavailable,
+
   /// The download itself failed.
   failed,
 }
@@ -74,12 +79,30 @@ class ConfiguredDownload {
       await _perform(wallpaper, tier: tier);
       return DownloadOutcome.saved;
     } on ImageStoreFailure catch (failure) {
-      if (failure.problem != ImageStoreProblem.notConfigured) {
-        return DownloadOutcome.failed;
-      }
-      if (!await _grantFolder(chooseVolume)) return DownloadOutcome.cancelled;
-      return _retry(wallpaper, tier);
+      return switch (failure.problem) {
+        // A configured folder is present but unwritable — never offer setup or
+        // reroute; surface it so the user reconnects the storage.
+        ImageStoreProblem.folderUnavailable =>
+          DownloadOutcome.folderUnavailable,
+        // Never configured: run the chooser, grant a folder, and retry once.
+        ImageStoreProblem.notConfigured => await _setUpAndRetry(
+          wallpaper,
+          tier,
+          chooseVolume,
+        ),
+        _ => DownloadOutcome.failed,
+      };
     }
+  }
+
+  /// Grants a folder through the chooser, then retries the download once.
+  Future<DownloadOutcome> _setUpAndRetry(
+    Wallpaper wallpaper,
+    StorageTier? tier,
+    ChooseDownloadVolume chooseVolume,
+  ) async {
+    if (!await _grantFolder(chooseVolume)) return DownloadOutcome.cancelled;
+    return _retry(wallpaper, tier);
   }
 
   /// Opens the chooser — aimed by whether a card is on offer — and grants the

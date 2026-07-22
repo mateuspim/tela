@@ -67,6 +67,21 @@ class DownloadFolderDescribing(private val context: Context) {
         return if (folder == null) base else base + mapOf("folder" to folder)
     }
 
+    /**
+     * Whether the granted [tree] can take a download right now.
+     *
+     * The store gate asks this to tell an ejected card (folderUnavailable) from
+     * a tier that was never set up (notConfigured): both leave the same empty
+     * destination, but the fix differs — reconnect versus choose. False for a
+     * foreign or malformed tree, which names nothing writable. Settings surfaces
+     * the same fact through [describe]'s `isAvailable`.
+     */
+    fun isAvailable(tree: String): Boolean {
+        val uri = Uri.parse(tree)
+        val location = treeLocationOf(uri) ?: return false
+        return isAvailable(uri, DownloadVolumes(context).forLocation(location))
+    }
+
     /** The granted folder as a payload, or null for none / an unusable tree. */
     private fun folderOf(tree: String?, volumes: DownloadVolumes): Map<String, Any>? {
         val uri = tree?.let(Uri::parse) ?: return null

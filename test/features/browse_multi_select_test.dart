@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/app.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -185,6 +186,33 @@ void main() {
     await _settle(tester);
 
     expect(find.text('Downloaded 1 of 2 — 1 failed'), findsOneWidget);
+  });
+
+  testWidgets('a batch stops on an ejected folder and names it', (
+    WidgetTester tester,
+  ) async {
+    // Every remaining download would hit the same unwritable folder, so the
+    // batch stops rather than grinding out one failure per wallpaper — and it
+    // says why, instead of a "0 of 2" tally that hides the cause.
+    final FakeImageStore images = FakeImageStore(
+      failure: const ImageStoreFailure(ImageStoreProblem.folderUnavailable),
+    );
+    await _pumpWall(tester, images: images);
+    await _startSelecting(tester);
+    await tester.tap(find.byType(WallpaperTile).at(1));
+    await _settle(tester);
+
+    await tester.tap(find.byIcon(Icons.download_outlined));
+    await _settle(tester);
+
+    expect(
+      find.text(
+        'Download folder unavailable. '
+        'Reconnect the storage or pick another in Settings.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Downloaded 0 of 2'), findsNothing);
   });
 
   testWidgets('closing the bar drops the selection without acting', (

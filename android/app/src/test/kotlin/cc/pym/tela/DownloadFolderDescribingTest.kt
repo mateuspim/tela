@@ -115,4 +115,36 @@ class DownloadFolderDescribingTest {
         assertEquals(true, result["success"])
         assertFalse(result.containsKey("folder"))
     }
+
+    // --- availability, the store gate's notConfigured-vs-ejected question ----
+
+    @Test
+    fun `a foreign-provider tree is unavailable, never writable`() {
+        // The store gate calls this to decide folderUnavailable; a tree from a
+        // provider that does not serve these volumes names nothing tela can
+        // write into, so it is unavailable rather than crashing the gate.
+        assertFalse(
+            describing.isAvailable(
+                "content://com.android.providers.downloads/tree/primary%3APictures",
+            ),
+        )
+    }
+
+    @Test
+    fun `a well-formed tree with no held grant is unavailable`() {
+        // Robolectric holds no persisted permissions, so a properly shaped
+        // external-storage tree is still unwritable here — proving the grant
+        // check, not just the authority guard, gates availability. The device
+        // suite covers the granted-and-mounted true case.
+        assertFalse(
+            describing.isAvailable(
+                "content://com.android.externalstorage.documents/tree/primary%3APictures%2Ftela",
+            ),
+        )
+    }
+
+    @Test
+    fun `a malformed availability tree does not crash the gate`() {
+        assertFalse(describing.isAvailable("not-a-uri"))
+    }
 }

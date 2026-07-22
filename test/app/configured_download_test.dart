@@ -153,6 +153,37 @@ void main() {
       expect(chooser.calls, 1);
     });
 
+    test(
+      'an unavailable folder reports itself, never asking or retrying',
+      () async {
+        // An ejected card is not first-time setup: offering the chooser would
+        // ask a question the user already answered, and a silent reroute is the
+        // trust failure the NSFW rules exist to prevent. It must surface as its
+        // own outcome, distinct from a plain failure.
+        final _ScriptedDownload perform = _ScriptedDownload(<Object?>[
+          const ImageStoreFailure(ImageStoreProblem.folderUnavailable),
+        ]);
+        final FakeImageStore store = FakeImageStore(chosenFolder: _folder());
+        final _RecordingChooser chooser = _RecordingChooser(
+          StorageVolumeKind.device,
+        );
+        final ConfiguredDownload download = ConfiguredDownload(
+          perform: perform.call,
+          imageStore: store,
+        );
+
+        final DownloadOutcome outcome = await download(
+          _wallpaper('unavailable'),
+          chooseVolume: chooser.call,
+        );
+
+        expect(outcome, DownloadOutcome.folderUnavailable);
+        expect(perform.calls, 1, reason: 'no retry for an ejected card');
+        expect(chooser.calls, 0, reason: 'the folder exists; do not re-ask');
+        expect(store.chosenKinds, isEmpty);
+      },
+    );
+
     test('any other failure fails without touching the chooser', () async {
       final _ScriptedDownload perform = _ScriptedDownload(<Object?>[
         const ImageStoreFailure(ImageStoreProblem.source),

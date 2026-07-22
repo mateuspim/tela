@@ -37,6 +37,7 @@ void main() {
       'downloadFailed': ImageStoreProblem.source,
       'unavailable': ImageStoreProblem.unavailable,
       'notConfigured': ImageStoreProblem.notConfigured,
+      'folderUnavailable': ImageStoreProblem.folderUnavailable,
       'restricted': ImageStoreProblem.restricted,
       'newNativeFailure': ImageStoreProblem.unknown,
     };

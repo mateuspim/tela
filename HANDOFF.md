@@ -1,24 +1,29 @@
 # tela handoff
 
-Updated: 2026-07-21
+Updated: 2026-07-22
 
 > **Newest first:** the native layer has tests at last (**F — the Kotlin
-> harness**, `make kotlin-test`, 31 green), and **both suites are now gated on
+> harness**, `make kotlin-test`), and **both suites are now gated on
 > merge into master** — `.githooks/pre-merge-commit` locally plus a GitHub
 > Actions workflow waiting on a remote. **Run `make hooks` once per clone**, or
 > this clone is unguarded. The current work is **G — SD card support**.
-> **Slices 0, 1, and 2 are done.** Slice 1 built the device/card chooser
-> (reshaped from a folder-status row) and the owner has now **seen it on the
-> tablet**; slice 0 (device write to the card) passed on hardware 2026-07-21.
-> **Slice 2 is now complete (this session):** its detect/offer half was already
-> in the reshape, and the remaining **download-time gap** is closed — a
-> files-outside-gallery download with no folder no longer opens a blank system
-> picker mid-download but runs the **same device/card sheet** (via a UI-free
-> `ConfiguredDownload` coordinator that catches `notConfigured`, grants a
-> pre-aimed folder, and retries once). **817 Dart tests, 31 Kotlin**, analyze
-> and format clean. Not yet on hardware: the download-time sheet itself. Slices
-> 3 (ejection) and 4 (NSFW-on-removable warning) remain — see *G — SD card
-> support* below.
+> **Slices 0, 1, 2, and 3 are done.** Slice 1 built the device/card chooser
+> (reshaped from a folder-status row) and the owner has **seen it on the
+> tablet**; slice 0 (device write to the card) passed on hardware 2026-07-21;
+> slice 2 closed the download-time gap via the UI-free `ConfiguredDownload`
+> coordinator (catches `notConfigured`, grants a pre-aimed folder, retries once).
+> **Slice 3 is now complete (this session):** an ejected card is no longer
+> conflated with a never-configured tier — the store gate answers a new
+> `folderUnavailable` (native `MainActivity.outsideGalleryProblem` +
+> `DownloadFolderDescribing.isAvailable`) that the coordinator surfaces as
+> `DownloadOutcome.folderUnavailable`, so the toast says *"Download folder
+> unavailable. Reconnect the storage or pick another in Settings."* rather than
+> offering setup. **Nothing is rerouted**; a batch stops and names it instead of
+> a "0 of N" tally. Settings already showed the row unavailable (slice-1
+> groundwork). **820 Dart tests, 34 Kotlin**, analyze and format clean. Not yet
+> on hardware: the download-time sheet (slice 2) and the ejection message
+> (slice 3). Only **slice 4 (NSFW-on-removable warning)** remains — see *G — SD
+> card support* below.
 
 > **Picking up cold?** **The E pass — tela's visual identity — is done and
 > device-verified**: the mark, an adaptive launcher icon with a Material You
@@ -1425,14 +1430,14 @@ rule. The MediaStore and SAF write paths need Robolectric shadows that do not
 usefully exist; treat those as device-only rather than faking them into a green
 suite that proves nothing.
 
-## G — SD card support, chosen 2026-07-20; SLICES 0–2 DONE, 3–4 remain
+## G — SD card support, chosen 2026-07-20; SLICES 0–3 DONE, 4 remains
 
 The owner asked for "save to external storage if available", and clarified it
-means **the SD card specifically**. **Slices 0, 1, and 2 are done** (817 Dart
-tests, 31 Kotlin); slices 3–4 are not. Slice 0 (device write to the card) passed
+means **the SD card specifically**. **Slices 0, 1, 2, and 3 are done** (820 Dart
+tests, 34 Kotlin); only slice 4 is not. Slice 0 (device write to the card) passed
 on hardware 2026-07-21; slice 1's chooser has been seen on the tablet; slice 2
-closed the download-time gap this session (see its section). Slices 3 (ejection)
-and 4 (NSFW-on-removable warning) are still open.
+closed the download-time gap; slice 3 gave the ejected card its own failure (see
+their sections). Slice 4 (NSFW-on-removable warning) is still open.
 
 ### The design call: the card is a location, not a fourth tier
 
@@ -1596,13 +1601,46 @@ a download that silently changes destination is the failure the NSFW routing
 rules exist to prevent. Android's own picker already names the card, so no
 custom picker is needed.
 
-### Slice 3 — ejection
+### Slice 3 — ejection — **DONE 2026-07-22, not yet on hardware**
 
-A `folderUnavailable` failure distinct from `notConfigured`, so the toast says
-"SD card unavailable" rather than "not set up". Settings shows the row
-unavailable instead of a stale path. **Nothing is written and nothing is
-rerouted** — silent fallback would land explicit pixels in `appPrivate` without
-a word, which costs trust where failing costs one retry.
+A `folderUnavailable` failure distinct from `notConfigured`, so an ejected card
+is not offered first-time setup for a folder that already exists. Settings
+already showed the row unavailable (slice-1 groundwork); this slice closed the
+**download-time** half. **Nothing is written and nothing is rerouted** — silent
+fallback would land explicit pixels in `appPrivate` without a word, which costs
+trust where failing costs one retry.
+
+**Where it lives, boundary in:**
+- **Native gate** (`MainActivity.outsideGalleryProblem`): a files-outside-gallery
+  download resolves the tree's problem *before* writing — null tree →
+  `notConfigured`, tree set but unwritable → `folderUnavailable`, else proceed.
+  The write path is never reached for an unavailable folder, so nothing lands
+  anywhere by accident.
+- **The availability probe** is `DownloadFolderDescribing.isAvailable(String)`,
+  lifted from the private `isAvailable(uri, volume)` that `describe` already used
+  for the Settings row — one definition of "writable right now" (volume mounted
+  **and** grant still held), reused by both the row and the gate.
+- **Domain**: `ImageStoreProblem.folderUnavailable`, mapped from the native
+  `"folderUnavailable"` errorCode in `method_channel_image_store`.
+- **Coordinator**: `ConfiguredDownload` routes `folderUnavailable` straight to
+  `DownloadOutcome.folderUnavailable` — no chooser, no retry (contrast
+  `notConfigured`, which sets up and retries once). All three call sites map it
+  to the toast; a **batch stops and names it** rather than reporting "0 of N".
+
+**Wording call, not to re-litigate:** the message is generic ("Download folder
+unavailable. Reconnect the storage or pick another in Settings.") not "SD card
+unavailable", matching the existing `settingsDownloadFolderUnavailable` string.
+`DownloadFolder.isAvailable` already refuses to distinguish an ejected card from
+a system-dropped grant — "the user's next move is the same" — and naming the
+card would be wrong for a dropped grant on internal storage.
+
+**What the harness proves, and what it can't:** Robolectric holds no persisted
+grants and stands up no volumes, so `isAvailable(String)` is **false** there for
+any tree — the three new Kotlin tests prove the authority guard, the grant check
+(well-formed tree, no held grant → false), and no-crash on a malformed uri. The
+**true** case (granted + mounted) stays device-only, as does the toast itself.
+The coordinator's route, the errorCode mapping, and both call-site messages
+(detail + batch) are covered in the Dart suite.
 
 ### Slice 4 — the NSFW removable warning (owner chose: warn once)
 

@@ -514,6 +514,11 @@
     "description": "Safe fallback when the image cannot be stored."
   },
 
+  "detailDownloadFolderUnavailable": "Download folder unavailable. Reconnect the storage or pick another in Settings.",
+  "@detailDownloadFolderUnavailable": {
+    "description": "Shown when the chosen download folder is set but its storage is disconnected, such as an ejected SD card. Nothing is rerouted."
+  },
+
   "detailShare": "Share",
   "@detailShare": {
     "description": "Tooltip on the app-bar button that shares the current wallpaper."

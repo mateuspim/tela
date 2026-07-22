@@ -127,6 +127,12 @@ Future<void> _download(
     case DownloadOutcome.saved:
       refreshDownloads(ref);
       _say(messenger, l10n.detailDownloadSuccess);
+    case DownloadOutcome.folderUnavailable:
+      _say(
+        messenger,
+        l10n.detailDownloadFolderUnavailable,
+        kind: ToastKind.failure,
+      );
     case DownloadOutcome.failed:
       _say(messenger, l10n.detailDownloadFailure, kind: ToastKind.failure);
     case DownloadOutcome.cancelled:

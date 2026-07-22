@@ -276,6 +276,11 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       case DownloadOutcome.saved:
         refreshDownloads(ref);
         _showResult(AppLocalizations.of(context).detailDownloadSuccess);
+      case DownloadOutcome.folderUnavailable:
+        _showResult(
+          AppLocalizations.of(context).detailDownloadFolderUnavailable,
+          kind: ToastKind.failure,
+        );
       case DownloadOutcome.failed:
         _showResult(
           AppLocalizations.of(context).detailDownloadFailure,

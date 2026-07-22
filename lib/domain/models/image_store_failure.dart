@@ -9,6 +9,12 @@ enum ImageStoreProblem {
   /// A shared non-gallery directory still needs the user's selection.
   notConfigured,
 
+  /// The chosen non-gallery folder is set but cannot be written right now — its
+  /// card was ejected, or the system dropped the grant. Nothing is rerouted:
+  /// the user reconnects the storage or picks another, distinct from the
+  /// never-configured [notConfigured] which offers first-time setup instead.
+  folderUnavailable,
+
   /// The destination would violate the image's privacy restrictions.
   restricted,
 

@@ -260,11 +260,26 @@ class MainActivity : FlutterFragmentActivity() {
         // notConfigured so Dart can run the chooser and retry. Opening a blank
         // tree browser here — the old behaviour — is exactly the UX slice 2
         // replaced.
-        if (request.tier == "filesOutsideGallery" && outsideGalleryTree() == null) {
-            result.success(imageStoreFailure("notConfigured"))
-            return
+        if (request.tier == "filesOutsideGallery") {
+            outsideGalleryProblem()?.let { problem ->
+                result.success(imageStoreFailure(problem))
+                return
+            }
         }
         storeImage(request, result)
+    }
+
+    /**
+     * Why the files-outside-gallery folder can't take a download, or null when
+     * it can. `notConfigured` when nothing was ever chosen — Dart runs the
+     * chooser and retries. `folderUnavailable` when a folder is set but its
+     * volume is gone, an ejected card: nothing is rerouted, and the toast says
+     * "reconnect it" rather than offering setup for a folder that already
+     * exists.
+     */
+    private fun outsideGalleryProblem(): String? {
+        val tree = outsideGalleryTree() ?: return "notConfigured"
+        return if (DownloadFolderDescribing(this).isAvailable(tree)) null else "folderUnavailable"
     }
 
     /** Describes the location off the UI thread; it does filesystem stats. */

@@ -12,6 +12,7 @@ import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
+import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -382,6 +383,38 @@ void main() {
       expect(imageStore.receivedImageUrl, details.wallpaper.fullImageUrl);
       expect(imageStore.receivedTier, StorageTier.filesOutsideGallery);
       expect(find.text('Wallpaper downloaded.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    "an ejected download folder says reconnect it, not couldn't download",
+    (WidgetTester tester) async {
+      final WallpaperDetails details = _details();
+      final FakeImageStore imageStore = FakeImageStore(
+        failure: const ImageStoreFailure(
+          ImageStoreProblem.folderUnavailable,
+        ),
+      );
+      await _pumpDetail(
+        tester,
+        details,
+        imageStore: imageStore,
+        settings: StorageSettings.defaults.copyWith(
+          sfwTier: StorageTier.filesOutsideGallery,
+        ),
+      );
+
+      await tester.tap(find.bySemanticsLabel('Download'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Download folder unavailable. '
+          'Reconnect the storage or pick another in Settings.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text("Couldn't download this wallpaper."), findsNothing);
     },
   );
 
