@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/tela_toast.dart';
-import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
@@ -69,11 +70,12 @@ Future<bool> runWallpaperBatchAction({
   // a batch of downloads is long enough that the shelf may be gone by then.
   final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
   final AppLocalizations l10n = AppLocalizations.of(context);
-  await _perform(ref, action, wallpapers, messenger, l10n);
+  await _perform(context, ref, action, wallpapers, messenger, l10n);
   return true;
 }
 
 Future<void> _perform(
+  BuildContext context,
   WidgetRef ref,
   WallpaperBatchAction action,
   List<Wallpaper> wallpapers,
@@ -88,7 +90,7 @@ Future<void> _perform(
       await _unfavoriteAll(ref, wallpapers);
       _say(messenger, l10n.batchUnfavoriteDone(wallpapers.length));
     case WallpaperBatchAction.download:
-      await _downloadAll(ref, wallpapers, messenger, l10n);
+      await _downloadAll(context, ref, wallpapers, messenger, l10n);
     case WallpaperBatchAction.forget:
       await _forgetAll(ref, wallpapers);
       _say(messenger, l10n.batchForgetDone(wallpapers.length));
@@ -139,6 +141,7 @@ void _refreshFavorites(WidgetRef ref, List<Wallpaper> wallpapers) {
 /// and a snackbar that rounds the first up to the second is a lie about what is
 /// on the device.
 Future<void> _downloadAll(
+  BuildContext context,
   WidgetRef ref,
   List<Wallpaper> wallpapers,
   ScaffoldMessengerState messenger,
@@ -146,12 +149,15 @@ Future<void> _downloadAll(
 ) async {
   int saved = 0;
   for (final Wallpaper wallpaper in wallpapers) {
-    try {
-      await ref.read(downloadWallpaperProvider)(wallpaper);
-      saved++;
-    } on ImageStoreFailure {
-      continue;
-    }
+    final DownloadOutcome outcome = await ref.read(configuredDownloadProvider)(
+      wallpaper,
+      chooseVolume: ({required bool offerSdCard}) =>
+          chooseDownloadVolume(context, offerSdCard: offerSdCard),
+    );
+    // Backing out of first-time folder setup abandons the batch: every
+    // remaining download would ask the same unanswered question.
+    if (outcome == DownloadOutcome.cancelled) break;
+    if (outcome == DownloadOutcome.saved) saved++;
   }
   refreshDownloads(ref);
   _sayDownloadOutcome(messenger, l10n, saved, wallpapers.length);

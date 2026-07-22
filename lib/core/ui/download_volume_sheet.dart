@@ -1,0 +1,69 @@
+import 'package:flutter/material.dart';
+import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/domain/models/storage_volume_kind.dart';
+
+/// Asks which volume a fresh files-outside-gallery download should land on.
+///
+/// The download-time twin of the Settings chooser: the first time a download
+/// routes to the shared-but-hidden tier and no folder is set, this offers the
+/// same "Internal storage / SD card" choice rather than dropping the user into a
+/// blank system tree browser. The card row appears only when [offerSdCard].
+/// Resolves to null when the sheet is dismissed, or when [context] is already
+/// gone by the time the download failed and called back.
+///
+/// ```dart
+/// final StorageVolumeKind? kind =
+///     await chooseDownloadVolume(context, offerSdCard: true);
+/// ```
+Future<StorageVolumeKind?> chooseDownloadVolume(
+  BuildContext context, {
+  required bool offerSdCard,
+}) {
+  if (!context.mounted) return Future<StorageVolumeKind?>.value();
+  return showModalBottomSheet<StorageVolumeKind>(
+    context: context,
+    builder: (BuildContext context) => _volumeSheet(context, offerSdCard),
+  );
+}
+
+Widget _volumeSheet(BuildContext context, bool offerSdCard) {
+  final AppLocalizations l10n = AppLocalizations.of(context);
+  return SafeArea(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        ListTile(title: Text(l10n.settingsDownloadLocationTitle)),
+        _volumeTile(
+          context,
+          Icons.smartphone,
+          l10n.settingsStorageVolumeDevice,
+          l10n.settingsStorageVolumeDeviceDetail,
+          StorageVolumeKind.device,
+        ),
+        if (offerSdCard)
+          _volumeTile(
+            context,
+            Icons.sd_card_outlined,
+            l10n.settingsStorageVolumeSdCard,
+            l10n.settingsStorageVolumeSdCardDetail,
+            StorageVolumeKind.sdCard,
+          ),
+      ],
+    ),
+  );
+}
+
+Widget _volumeTile(
+  BuildContext context,
+  IconData icon,
+  String label,
+  String detail,
+  StorageVolumeKind kind,
+) {
+  return ListTile(
+    leading: Icon(icon),
+    title: Text(label),
+    subtitle: Text(detail),
+    onTap: () => Navigator.pop(context, kind),
+  );
+}

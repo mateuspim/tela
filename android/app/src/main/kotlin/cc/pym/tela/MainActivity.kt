@@ -255,8 +255,13 @@ class MainActivity : FlutterFragmentActivity() {
             result.success(imageStoreFailure("unavailable"))
             return
         }
+        // A files-outside-gallery download needs a folder first, but the
+        // device/card choice is a Flutter screen, not a native picker: answer
+        // notConfigured so Dart can run the chooser and retry. Opening a blank
+        // tree browser here — the old behaviour — is exactly the UX slice 2
+        // replaced.
         if (request.tier == "filesOutsideGallery" && outsideGalleryTree() == null) {
-            requestOutsideGalleryDirectory(request, result)
+            result.success(imageStoreFailure("notConfigured"))
             return
         }
         storeImage(request, result)
@@ -287,7 +292,7 @@ class MainActivity : FlutterFragmentActivity() {
             result.success(imageStoreFailure("notConfigured"))
             return
         }
-        requestOutsideGalleryDirectory(null, result, intent)
+        requestOutsideGalleryDirectory(result, intent)
     }
 
     private fun handleDeletePrivateImage(call: MethodCall, result: MethodChannel.Result) {
@@ -322,27 +327,27 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     /**
-     * Starts the folder picker, for a waiting [request] or for its own sake when
-     * null.
+     * Starts the folder picker for the Settings device/card chooser.
      *
-     * [intent] lets Settings pass a picker already aimed at a chosen volume; the
-     * download-time fallback passes null and gets the plain, un-aimed tree
-     * picker. Either way the persistable-grant flags are added here so no caller
-     * can forget them.
+     * [intent] is always pre-aimed at the chosen volume by [DownloadVolumes], so
+     * the user confirms one folder instead of navigating a blank tree. Downloads
+     * no longer open a picker here — an unconfigured one answers notConfigured
+     * and the Flutter chooser takes over. The persistable-grant flags are added
+     * here so no caller can forget them.
      */
     private fun requestOutsideGalleryDirectory(
-        request: ImageStoreRequest?,
         result: MethodChannel.Result,
-        intent: Intent? = null,
+        intent: Intent,
     ) {
         if (pendingOutsideGalleryGrant != null) {
             result.success(imageStoreFailure("notConfigured"))
             return
         }
-        pendingOutsideGalleryGrant = PendingOutsideGalleryGrant(request, result)
-        val picker = (intent ?: Intent(Intent.ACTION_OPEN_DOCUMENT_TREE))
-            .addFlags(DIRECTORY_ACCESS_FLAGS)
-        startActivityForResult(picker, OUTSIDE_GALLERY_DIRECTORY_REQUEST)
+        pendingOutsideGalleryGrant = PendingOutsideGalleryGrant(result)
+        startActivityForResult(
+            intent.addFlags(DIRECTORY_ACCESS_FLAGS),
+            OUTSIDE_GALLERY_DIRECTORY_REQUEST,
+        )
     }
 
     @Deprecated("Deprecated in Java")
@@ -356,11 +361,10 @@ class MainActivity : FlutterFragmentActivity() {
             pending.result.success(imageStoreFailure("notConfigured"))
             return
         }
-        val request = pending.request
-        // No waiting download means Settings asked: answer with the location it
-        // now has, so the screen can redraw without a second round trip.
-        if (request == null) handleDescribeDownloadLocation(pending.result)
-        else storeImage(request, pending.result)
+        // The only caller is the device/card chooser, so answer with the
+        // location the grant produced; the screen redraws without a second round
+        // trip, and the Dart coordinator retries the download it stands in for.
+        handleDescribeDownloadLocation(pending.result)
     }
 
     private fun saveOutsideGalleryTree(tree: Uri, returnedFlags: Int): Boolean {
@@ -482,9 +486,8 @@ class MainActivity : FlutterFragmentActivity() {
         "errorCode" to code,
     )
 
-    /** A folder picker in flight; [request] is null when nothing waits on it. */
+    /** A device/card folder picker in flight, awaiting the user's grant. */
     private data class PendingOutsideGalleryGrant(
-        val request: ImageStoreRequest?,
         val result: MethodChannel.Result,
     )
 

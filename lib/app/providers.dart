@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/configured_download.dart';
 import 'package:tela/core/network/wallhaven_client.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/downloads/drift_download_history.dart';
@@ -17,6 +18,8 @@ import 'package:tela/data/wallpaper/method_channel_system_wallpaper_editor.dart'
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_sharer.dart';
 import 'package:tela/data/wallpaper/url_launcher_external_link.dart';
+import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/external_link.dart';
@@ -207,6 +210,17 @@ final Provider<DownloadWallpaper> downloadWallpaperProvider =
         imageStore: ref.watch(imageStoreProvider),
         settings: ref.watch(settingsRepositoryProvider),
         history: ref.watch(downloadHistoryProvider),
+      ),
+    );
+
+/// A download that runs the device/card chooser the first time the
+/// files-outside-gallery tier needs a folder, then retries. See slice 2.
+final Provider<ConfiguredDownload> configuredDownloadProvider =
+    Provider<ConfiguredDownload>(
+      (Ref ref) => ConfiguredDownload(
+        perform: (Wallpaper wallpaper, {StorageTier? tier}) =>
+            ref.read(downloadWallpaperProvider)(wallpaper, tier: tier),
+        imageStore: ref.watch(imageStoreProvider),
       ),
     );
 

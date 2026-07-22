@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
@@ -18,7 +20,6 @@ import 'package:tela/core/ui/wallpaper_share_sheet.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/bitmap_export_rule.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
-import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/share_option.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -255,20 +256,33 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   Future<void> _download([StorageTier? tier]) async {
     setState(() => _isDownloading = true);
     try {
-      await ref.read(downloadWallpaperProvider)(_wallpaper, tier: tier);
-      refreshDownloads(ref);
-      if (mounted) {
+      final DownloadOutcome outcome =
+          await ref.read(configuredDownloadProvider)(
+            _wallpaper,
+            tier: tier,
+            chooseVolume: ({required bool offerSdCard}) =>
+                chooseDownloadVolume(context, offerSdCard: offerSdCard),
+          );
+      _reportDownload(outcome);
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
+  /// A dismissed folder chooser is silent: the user stopped, did not fail.
+  void _reportDownload(DownloadOutcome outcome) {
+    if (!mounted) return;
+    switch (outcome) {
+      case DownloadOutcome.saved:
+        refreshDownloads(ref);
         _showResult(AppLocalizations.of(context).detailDownloadSuccess);
-      }
-    } on ImageStoreFailure {
-      if (mounted) {
+      case DownloadOutcome.failed:
         _showResult(
           AppLocalizations.of(context).detailDownloadFailure,
           kind: ToastKind.failure,
         );
-      }
-    } finally {
-      if (mounted) setState(() => _isDownloading = false);
+      case DownloadOutcome.cancelled:
+        break;
     }
   }
 

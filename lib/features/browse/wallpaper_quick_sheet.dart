@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
-import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
@@ -117,12 +118,19 @@ Future<void> _download(
   // and the wall may have been navigated away from by then.
   final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
   final AppLocalizations l10n = AppLocalizations.of(context);
-  try {
-    await ref.read(downloadWallpaperProvider)(wallpaper);
-    refreshDownloads(ref);
-    _say(messenger, l10n.detailDownloadSuccess);
-  } on ImageStoreFailure {
-    _say(messenger, l10n.detailDownloadFailure, kind: ToastKind.failure);
+  final DownloadOutcome outcome = await ref.read(configuredDownloadProvider)(
+    wallpaper,
+    chooseVolume: ({required bool offerSdCard}) =>
+        chooseDownloadVolume(context, offerSdCard: offerSdCard),
+  );
+  switch (outcome) {
+    case DownloadOutcome.saved:
+      refreshDownloads(ref);
+      _say(messenger, l10n.detailDownloadSuccess);
+    case DownloadOutcome.failed:
+      _say(messenger, l10n.detailDownloadFailure, kind: ToastKind.failure);
+    case DownloadOutcome.cancelled:
+      break;
   }
 }
 

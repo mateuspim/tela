@@ -1,19 +1,24 @@
 # tela handoff
 
-Updated: 2026-07-20
+Updated: 2026-07-21
 
 > **Newest first:** the native layer has tests at last (**F — the Kotlin
-> harness**, `make kotlin-test`, 17 green), and **both suites are now gated on
+> harness**, `make kotlin-test`, 31 green), and **both suites are now gated on
 > merge into master** — `.githooks/pre-merge-commit` locally plus a GitHub
 > Actions workflow waiting on a remote. **Run `make hooks` once per clone**, or
-> this clone is unguarded. The current work is **G — SD card support**:
-> **slice 1 is built, then reshaped into a device/card chooser** at the owner's
-> request (**806 Dart tests, 31 Kotlin**). Selecting "Files, not gallery" in
-> Settings now reveals a **This device / SD card** choice; picking one opens the
-> system picker *pre-aimed* at that volume (`StorageVolume.createOpenDocumentTreeIntent`),
-> one tap to confirm. Slice 0 (device write to the card) **passed on hardware
-> 2026-07-21** — the SD-card download worked; that verification is what prompted
-> the UX reshape. The chooser itself has *not* yet been seen on hardware.
+> this clone is unguarded. The current work is **G — SD card support**.
+> **Slices 0, 1, and 2 are done.** Slice 1 built the device/card chooser
+> (reshaped from a folder-status row) and the owner has now **seen it on the
+> tablet**; slice 0 (device write to the card) passed on hardware 2026-07-21.
+> **Slice 2 is now complete (this session):** its detect/offer half was already
+> in the reshape, and the remaining **download-time gap** is closed — a
+> files-outside-gallery download with no folder no longer opens a blank system
+> picker mid-download but runs the **same device/card sheet** (via a UI-free
+> `ConfiguredDownload` coordinator that catches `notConfigured`, grants a
+> pre-aimed folder, and retries once). **817 Dart tests, 31 Kotlin**, analyze
+> and format clean. Not yet on hardware: the download-time sheet itself. Slices
+> 3 (ejection) and 4 (NSFW-on-removable warning) remain — see *G — SD card
+> support* below.
 
 > **Picking up cold?** **The E pass — tela's visual identity — is done and
 > device-verified**: the mark, an adaptive launcher icon with a Material You
@@ -1420,13 +1425,14 @@ rule. The MediaStore and SAF write paths need Robolectric shadows that do not
 usefully exist; treat those as device-only rather than faking them into a green
 suite that proves nothing.
 
-## G — SD card support, chosen 2026-07-20; SLICE 1 BUILT, slice 0 still owed
+## G — SD card support, chosen 2026-07-20; SLICES 0–2 DONE, 3–4 remain
 
 The owner asked for "save to external storage if available", and clarified it
-means **the SD card specifically**. **Slice 1 is built** (802 Dart tests, 26
-Kotlin); slices 0 and 2–4 are not. Slice 0 is a device step that gates the shape
-of 2–4, and it is still owed — slice 1 was built ahead of it because it does not
-depend on the answer.
+means **the SD card specifically**. **Slices 0, 1, and 2 are done** (817 Dart
+tests, 31 Kotlin); slices 3–4 are not. Slice 0 (device write to the card) passed
+on hardware 2026-07-21; slice 1's chooser has been seen on the tablet; slice 2
+closed the download-time gap this session (see its section). Slices 3 (ejection)
+and 4 (NSFW-on-removable warning) are still open.
 
 ### The design call: the card is a location, not a fourth tier
 
@@ -1545,7 +1551,44 @@ What is **not** covered, and stays device-only: the volume label, removability,
 free space and availability all need `StorageManager`/SAF, which Robolectric
 does not usefully emulate. The settings row has never been seen on hardware.
 
-### Slice 2 — detect and offer, never switch
+### Slice 2 — detect and offer, never switch — **DONE 2026-07-21**
+
+**Most of it was already built by the slice-1 reshape**, and the rest — the
+download-time gap — is now closed. The chooser itself is **device-verified** (the
+owner saw the "This device / SD card" screen on the tablet), which proves the
+detect-and-offer half end to end.
+
+- **Detect / offer** (already shipped in the reshape): `DownloadVolumes`
+  `getStorageVolumes()` + `isRemovable` + mounted, via `VolumeSelection.sdCard`,
+  reported through `describe()` → `DownloadLocation.sdCardAvailable`; `offersSdCard`
+  puts the card radio on the Settings chooser. **Never switch**: picking a volume
+  always opens the picker to confirm — nothing is silently redirected.
+- **The download-time gap (this session).** A files-outside-gallery download with
+  no folder used to open a *blank* `ACTION_OPEN_DOCUMENT_TREE` picker mid-download
+  (no device/card choice, no pre-aim). Now `MainActivity.handleStoreImage` answers
+  **`notConfigured`** instead, and a UI-free coordinator
+  (`ConfiguredDownload`, `lib/app/`) catches it, runs the **same device/card
+  sheet** (`chooseDownloadVolume`, `core/ui/`) Settings uses, grants a *pre-aimed*
+  folder via `chooseDownloadFolder(kind)`, then **retries once**. Wired into all
+  three download entry points (quick sheet, detail, batch). The coordinator is
+  plain-Dart tested (chooser injected); the sheet is widget-tested. **817 Dart
+  tests, 31 Kotlin.**
+
+**Two decisions not to re-litigate:**
+- The device/card choice is a **Flutter** sheet, not a native picker — so the
+  native side stops opening its own blank picker at download time and defers to
+  Dart. This retired the now-dead `request`-carrying picker plumbing in
+  `MainActivity` (`PendingOutsideGalleryGrant` no longer holds a request; the
+  picker is a Settings/coordinator grant path only).
+- **Retry exactly once.** A second `notConfigured` after a grant means the grant
+  did not take; looping would reopen the picker forever, so it fails instead.
+- **Widget-test gotcha, cost a debug cycle:** creating the `showModalBottomSheet`
+  future *inside* a `tester.tap` callback orphans it in flutter_test's guarded
+  zone → the next tester action throws `guardSync`. Call the sheet with a
+  captured `tester.element(...)` context instead, and await the pick.
+
+*(Original plan, now superseded by the above — the reshape made the Settings
+half of it real before this slice formalised the download-time half:)*
 
 `StorageManager.getStorageVolumes()` + `isRemovable`. Card present and no folder
 set → the row reads "SD card available — choose a folder". **No auto-switching**:
