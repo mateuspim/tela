@@ -2,11 +2,39 @@
 
 Updated: 2026-07-22
 
+> **G is merged, and the next work is a fifth UI pass.** SD card support
+> (slices 0–4) is on **master** as of `a9e272b` — the merge gate ran both suites
+> green (**838 Dart, 34 Kotlin**) on the way in. G is closed end to end: code,
+> device-verified on the tablet (2026-07-22), and now merged. The slice-4
+> **decline behaviour** ("decline → route NSFW to the private tier") the owner
+> walked on the device and **accepted** — it is no longer an open flag.
+>
+> The owner chose a fifth UI pass over starting Wave 4's product items, and
+> scoped it to **all four** candidate threads at once — see *H — the fifth UI
+> pass* below (it sits just above *Wave 4*):
+> 1. **Settings coherence** — the storage block grew a lot across G (device/card
+>    chooser, download-location section, per-purity tiers, free-space lines, the
+>    NSFW warning); make it read as one designed thing, not accreted rows.
+> 2. **Storage flow polish** — tighten wording/spacing/iconography of the
+>    download-time device/card sheet, the pre-aimed pickers, and the
+>    ejection/unavailable states slices 1–4 built.
+> 3. **The two carried anomalies** — the lone history tile drawing too small,
+>    and the filter-badge anomaly; closer to rendering bugs than polish, fold
+>    them in.
+> 4. **A whole-app once-over** — a broad sweep across
+>    browse/detail/favorites/viewer; the owner flags specifics on the device.
+>
+> The tablet is still in G's **test storage state** (Safe **and** Explicit →
+> files-outside-gallery → **SD card**, warning acknowledged); the owner declined
+> to revert it, which makes it a live subject for thread 1.
+
 > **Newest first:** the native layer has tests at last (**F — the Kotlin
 > harness**, `make kotlin-test`), and **both suites are now gated on
 > merge into master** — `.githooks/pre-merge-commit` locally plus a GitHub
 > Actions workflow waiting on a remote. **Run `make hooks` once per clone**, or
-> this clone is unguarded. The current work is **G — SD card support**.
+> this clone is unguarded. **G — SD card support is now done and merged
+> (`a9e272b`); the next work is the fifth UI pass — see the lead pointer above.**
+> The G history is kept below for context.
 > **Slices 0, 1, 2, and 3 are done.** Slice 1 built the device/card chooser
 > (reshaped from a folder-status row) and the owner has **seen it on the
 > tablet**; slice 0 (device write to the card) passed on hardware 2026-07-21;
@@ -1698,8 +1726,8 @@ it.) The folder chooser cannot gate before, because the SAF grant is taken the
 moment the picker returns, so it applies the folder and, on decline, reroutes
 NSFW to `appPrivate` instead.
 
-**Decline behaviour — a judgement call, owner please confirm:** the plan said
-"allow, but confirm once" without spelling out decline. The dialog is *"Use card
+**Decline behaviour — owner confirmed on the device (2026-07-22), no longer
+open:** the plan said "allow, but confirm once" without spelling out decline. The dialog is *"Use card
 anyway"* (confirm) vs *"Use private library"* (decline); a dismissed dialog is
 the safe decline. **Confirm** persists the nod and keeps the routing; **decline**
 routes NSFW to `appPrivate` — the card keeps serving safe downloads, explicit
@@ -1742,6 +1770,62 @@ plumbing is device-verified. That is an argument for putting logic where tests
 can reach it: slice 4's predicate and tree-id parsing are pure and get real
 tests. Do not fake MediaStore/SAF shadows into a green suite that proves nothing
 — see *F*'s vacuous-test finding.
+
+## H — the fifth UI pass, scoped 2026-07-22; four threads, NOT YET BUILT
+
+G closed the storage feature and merged (`a9e272b`). The owner chose a fifth UI
+pass over starting Wave 4's product items, and picked **all four** candidate
+threads rather than one. This is a polish/coherence pass, **not new
+capability** — keep the layout law (justified rows; masonry is gone, do not
+re-litigate) and the brand rules (`docs/BRAND.md`) intact while touching any of
+it. Nothing here is built or device-verified yet.
+
+The four threads, in the order offered (not a priority order — resequence on the
+device):
+
+**1. Settings coherence.** The storage half of Settings accreted across G:
+`DownloadLocationSection` (device/card radio, free-space status line), the
+per-purity `_TierPicker` rows, and the NSFW-on-removable warning. They are
+correct but read as separate rows bolted on in sequence. Make the whole block
+read as one designed unit — grouping, headers, and the relationship between
+*which tier* and *which volume* (they stopped being two independent decisions in
+slice 1, and the UI should say so). **Do not regress** the gate-before-persist
+behaviour of `_TierPicker._route` (slice 4) while restyling — the tier picker
+must still never write `route(nsfw, files)` before the warning is confirmed. The
+tablet is sitting in the exact test state this thread should design for (Safe +
+Explicit → files → SD card, acked), which is why it was left unreverted.
+
+**2. Storage flow polish.** The flows slices 1–4 built — the download-time
+device/card sheet (`ConfiguredDownload`), the pre-aimed system pickers, and the
+ejection/unavailable states — work but were built function-first. Tighten
+wording, spacing, and iconography. All user-facing strings stay in l10n — they
+live in `app_en.arb` (the ejection copy is *"Download folder unavailable.
+Reconnect the storage or pick another in Settings."*); no hardcoded strings, and
+regenerate l10n via `./tool/tela gen-l10n` (generated output is gitignored, not
+committed).
+
+**3. The two carried anomalies** (closer to rendering bugs than polish — each
+has its own section below, do not re-derive):
+   - **The lone history tile** draws far smaller than it should; narrowed to a
+     height the grid is handed, with a hand-operable toggle to reproduce, but
+     still not understood. See *The lone history tile anomaly*.
+   - **The filter badge anomaly** — observed, unexplained, probe already
+     defined. See *The filter badge anomaly*.
+   Fold both in; they are visual and live where the once-over is already
+   looking.
+
+**4. A whole-app once-over.** A broad sweep across
+browse / detail / favorites / viewer, not scoped to one area. The owner flags
+specifics on the device as they go, so this thread is *discovered on hardware*
+rather than planned here — capture what the device turns up as sub-items once it
+starts, the way the earlier passes logged their device findings.
+
+**Process reminders for this pass** (same as every pass here): `./tool/tela`
+Docker toolchain, not host flutter; `make deploy` to the tablet (**never**
+`flutter install`/`run` or `--split-per-abi` — they wipe data); a change under
+`android/` owes **both** `flutter test` and `make kotlin-test`; `flutter analyze`
+and `dart format .` clean before every commit; and the merge gate wants a real
+merge commit (`merge.ff false`), so run `make hooks` in a fresh clone.
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 
