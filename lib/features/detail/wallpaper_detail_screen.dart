@@ -396,8 +396,11 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
     final bool expanded = MediaQuery.sizeOf(context).width >= _expandedWidth;
     return Scaffold(
+      // No title: the resolution that used to sit here is a spec, not a name,
+      // and it already has a tile in the Details grid — a title bar reading
+      // "2880x1800" labelled the screen with a number. The image is the
+      // subject, so the bar carries only the back affordance and the actions.
       appBar: AppBar(
-        title: Text(_wallpaper.resolution.toString()),
         actions: expanded ? null : _compactActions(l10n),
       ),
       body: expanded

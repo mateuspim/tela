@@ -115,12 +115,21 @@ class RecentDownloadsStrip extends ConsumerWidget {
   }
 
   Widget _empty(BuildContext context, AppLocalizations l10n) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      child: Text(
-        l10n.downloadHistoryEmpty,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+    // Left-aligned at the same 16 as the header and the thumbnail row, and
+    // capped: centred full-width text stranded the line across a 2560-wide
+    // panel and read as detached from the section it belongs to.
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Text(
+            l10n.downloadHistoryEmpty,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         ),
       ),
     );

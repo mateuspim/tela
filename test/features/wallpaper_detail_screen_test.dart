@@ -542,8 +542,8 @@ void main() {
     await tester.drag(find.byType(PageView), const Offset(-500, 0));
     await tester.pumpAndSettle();
 
-    // The session moved, and the screen rebound to it: the app bar reads the
-    // new wallpaper's resolution and the preview names the new image.
+    // The session moved, and the screen rebound to it: the preview names the
+    // new image.
     expect(gallery.selectedItem, second.wallpaper);
     expect(
       find.bySemanticsLabel('Wallpaper ${second.wallpaper.id}'),
