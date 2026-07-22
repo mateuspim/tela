@@ -917,6 +917,11 @@
     "description": "Header for the choice of which volume the files-outside-gallery tier writes to."
   },
 
+  "settingsDownloadLocationHelp": "Downloads set to “Files, not gallery” are saved here.",
+  "@settingsDownloadLocationHelp": {
+    "description": "Connects the volume choice back to the tier that feeds it, so the device/card decision reads as a detail of the Files destination rather than a separate setting."
+  },
+
   "settingsStorageVolumeDevice": "Internal storage",
   "@settingsStorageVolumeDevice": {
     "description": "The built-in storage option in the download-location choice."
