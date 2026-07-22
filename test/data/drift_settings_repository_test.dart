@@ -91,6 +91,26 @@ void main() {
 
       expect(await settings.isPrivateLibraryLocked(), isTrue);
     });
+
+    test('has not acknowledged NSFW-on-removable until it is asked', () async {
+      expect(await settings.loadNsfwOnRemovableAcknowledged(), isFalse);
+    });
+
+    test('round-trips the NSFW-on-removable acknowledgement', () async {
+      await settings.saveNsfwOnRemovableAcknowledged(acknowledged: true);
+      expect(await settings.loadNsfwOnRemovableAcknowledged(), isTrue);
+
+      await settings.saveNsfwOnRemovableAcknowledged(acknowledged: false);
+      expect(await settings.loadNsfwOnRemovableAcknowledged(), isFalse);
+    });
+
+    test('reads a corrupt acknowledgement as not acknowledged', () async {
+      // The opposite of the lock: a warning fails *open* so it is shown. "I
+      // can't tell whether this was accepted" means ask again, not stay quiet.
+      await db.putSetting('privacy.nsfwOnRemovableAck', 'maybe');
+
+      expect(await settings.loadNsfwOnRemovableAcknowledged(), isFalse);
+    });
   });
 
   group('DriftSettingsRepository account defaults', () {

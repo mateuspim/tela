@@ -7,6 +7,7 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/balanced_columns.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
+import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -16,7 +17,9 @@ import 'package:tela/features/settings/api_key_section.dart';
 import 'package:tela/features/settings/app_lock_switch.dart';
 import 'package:tela/features/settings/browse_defaults_section.dart';
 import 'package:tela/features/settings/clear_cache_tile.dart';
+import 'package:tela/features/settings/download_location_controller.dart';
 import 'package:tela/features/settings/download_location_section.dart';
+import 'package:tela/features/settings/nsfw_removable_guard.dart';
 import 'package:tela/features/settings/storage_settings_controller.dart';
 import 'package:tela/features/settings/tile_density_section.dart';
 
@@ -313,7 +316,8 @@ class _TierPicker extends ConsumerWidget {
         ListTile(title: Text(title), dense: true),
         RadioGroup<StorageTier>(
           groupValue: selected,
-          onChanged: (StorageTier? tier) => _route(ref, tier),
+          onChanged: (StorageTier? tier) =>
+              unawaited(_route(ref, context, tier)),
           child: Column(
             children: <Widget>[
               for (final StorageTier tier in StorageSettings.choicesFor(purity))
@@ -349,8 +353,31 @@ class _TierPicker extends ConsumerWidget {
     );
   }
 
-  void _route(WidgetRef ref, StorageTier? tier) {
+  /// Routes [purity] to [tier], warning *before* it lands when this is the NSFW
+  /// picker moving to files-outside-gallery and the folder is a removable card.
+  /// This edge and the folder chooser's are the two moments explicit downloads
+  /// can first point at a card; gating before the write means a declined
+  /// warning never persists the unsafe routing, even for the frame it is open.
+  Future<void> _route(
+    WidgetRef ref,
+    BuildContext context,
+    StorageTier? tier,
+  ) async {
     if (tier == null) return;
-    unawaited(ref.read(storageSettingsProvider.notifier).route(purity, tier));
+    if (purity == Purity.nsfw && tier == StorageTier.filesOutsideGallery) {
+      final DownloadLocation location = await ref.read(
+        downloadLocationProvider.future,
+      );
+      if (!context.mounted) return;
+      final bool proceed = await confirmExplicitOnRemovable(
+        ref,
+        context,
+        nsfwTier: tier,
+        folderRemovable: location.folder?.isRemovable ?? false,
+      );
+      // Declined: leave NSFW on its current (private) tier — nothing written.
+      if (!proceed) return;
+    }
+    await ref.read(storageSettingsProvider.notifier).route(purity, tier);
   }
 }

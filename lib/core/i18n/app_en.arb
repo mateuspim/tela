@@ -958,6 +958,26 @@
     }
   },
 
+  "settingsNsfwRemovableWarningTitle": "Explicit downloads on a removable card",
+  "@settingsNsfwRemovableWarningTitle": {
+    "description": "Title of the one-time warning shown before explicit wallpapers are routed to a removable SD card."
+  },
+
+  "settingsNsfwRemovableWarningBody": "A card can be pulled out and read on any device. Explicit wallpapers saved there lose the private library's app-lock and screenshot protection. Keep saving them to the card, or move them back to the private library?",
+  "@settingsNsfwRemovableWarningBody": {
+    "description": "Body of the one-time warning explaining that a removable card defeats the private tier's protections."
+  },
+
+  "settingsNsfwRemovableWarningConfirm": "Use card anyway",
+  "@settingsNsfwRemovableWarningConfirm": {
+    "description": "Confirm button that keeps explicit downloads routed to the removable card and never asks again."
+  },
+
+  "settingsNsfwRemovableWarningDecline": "Use private library",
+  "@settingsNsfwRemovableWarningDecline": {
+    "description": "Decline button that routes explicit downloads to the private library instead of the removable card."
+  },
+
   "downloadHistoryTitle": "Download history",
   "@downloadHistoryTitle": {
     "description": "Title of the screen listing wallpapers already downloaded to this device."

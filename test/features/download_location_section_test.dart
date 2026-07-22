@@ -7,10 +7,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/download_folder.dart';
+import 'package:tela/domain/models/storage_settings.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/features/settings/download_location_section.dart';
 
 import '../fakes/fake_image_store.dart';
+import '../fakes/fake_settings_repository.dart';
 
 void main() {
   const DownloadFolder onCard = DownloadFolder(
@@ -123,6 +126,116 @@ void main() {
     expect(_selectedKind(tester), isNull);
     expect(find.textContaining('will ask you to confirm'), findsOneWidget);
   });
+
+  group('explicit-on-removable warning', () {
+    // The second edge: NSFW already routes to files-outside-gallery, so
+    // pointing that folder at a removable card is what tips explicit downloads
+    // onto storage the private tier's protections cannot reach.
+    FakeSettingsRepository nsfwOnFiles({bool acknowledged = false}) {
+      return FakeSettingsRepository(
+        settings: StorageSettings(
+          sfwTier: StorageTier.filesOutsideGallery,
+          nsfwTier: StorageTier.filesOutsideGallery,
+        ),
+        nsfwOnRemovableAcknowledged: acknowledged,
+      );
+    }
+
+    testWidgets('warns when a removable card is chosen for explicit files', (
+      WidgetTester tester,
+    ) async {
+      await _pump(
+        tester,
+        FakeImageStore(sdCardAvailable: true, chosenFolder: onCard),
+        settings: nsfwOnFiles(),
+      );
+
+      await tester.tap(find.text('SD card'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Explicit downloads on a removable card'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('using the card anyway persists the one-time nod', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = nsfwOnFiles();
+      await _pump(
+        tester,
+        FakeImageStore(sdCardAvailable: true, chosenFolder: onCard),
+        settings: settings,
+      );
+
+      await tester.tap(find.text('SD card'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Use card anyway'));
+      await tester.pumpAndSettle();
+
+      expect(settings.nsfwOnRemovableAckSaved, isTrue);
+      // Explicit downloads stay on the files tier — the card is accepted.
+      expect(settings.saved.nsfwTier, StorageTier.filesOutsideGallery);
+    });
+
+    testWidgets('declining routes explicit downloads to the private tier', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = nsfwOnFiles();
+      await _pump(
+        tester,
+        FakeImageStore(sdCardAvailable: true, chosenFolder: onCard),
+        settings: settings,
+      );
+
+      await tester.tap(find.text('SD card'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Use private library'));
+      await tester.pumpAndSettle();
+
+      // The card still serves safe downloads; explicit ones move off it.
+      expect(settings.saved.nsfwTier, StorageTier.appPrivate);
+      expect(settings.saved.sfwTier, StorageTier.filesOutsideGallery);
+      expect(settings.nsfwOnRemovableAckSaved, isFalse);
+    });
+
+    testWidgets('an already-acknowledged card never warns again', (
+      WidgetTester tester,
+    ) async {
+      await _pump(
+        tester,
+        FakeImageStore(sdCardAvailable: true, chosenFolder: onCard),
+        settings: nsfwOnFiles(acknowledged: true),
+      );
+
+      await tester.tap(find.text('SD card'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Explicit downloads on a removable card'),
+        findsNothing,
+      );
+    });
+
+    testWidgets('a device folder for explicit files raises no warning', (
+      WidgetTester tester,
+    ) async {
+      await _pump(
+        tester,
+        FakeImageStore(chosenFolder: onDevice),
+        settings: nsfwOnFiles(),
+      );
+
+      await tester.tap(find.text('Internal storage'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Explicit downloads on a removable card'),
+        findsNothing,
+      );
+    });
+  });
 }
 
 StorageVolumeKind? _selectedKind(WidgetTester tester) {
@@ -133,10 +246,19 @@ StorageVolumeKind? _selectedKind(WidgetTester tester) {
   return group.groupValue;
 }
 
-Future<void> _pump(WidgetTester tester, FakeImageStore store) async {
+Future<void> _pump(
+  WidgetTester tester,
+  FakeImageStore store, {
+  FakeSettingsRepository? settings,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: <Override>[imageStoreProvider.overrideWithValue(store)],
+      overrides: <Override>[
+        imageStoreProvider.overrideWithValue(store),
+        settingsRepositoryProvider.overrideWithValue(
+          settings ?? FakeSettingsRepository(),
+        ),
+      ],
       child: const MaterialApp(
         localizationsDelegates: <LocalizationsDelegate<Object>>[
           AppLocalizations.delegate,
