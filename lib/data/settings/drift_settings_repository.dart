@@ -27,6 +27,11 @@ class DriftSettingsRepository implements SettingsRepository {
   /// A new setting is a new row, never a migration — see the v1 schema note.
   static const String _privateLockKey = 'privacy.privateLibraryLock';
 
+  /// The one-time nod that explicit downloads may land on a removable card.
+  /// Stored as `'true'`/`'false'`; anything else, or absent, reads as *not*
+  /// acknowledged — a warning fails open so it is shown, not skipped.
+  static const String _nsfwOnRemovableAckKey = 'privacy.nsfwOnRemovableAck';
+
   /// The synced account defaults, stored as the wire literals Wallhaven itself
   /// uses (`"110"`, `"1M"`). They are the values' canonical form, they survive
   /// an enum constant being renamed, and they read the same in a `sqlite3`
@@ -87,6 +92,19 @@ class DriftSettingsRepository implements SettingsRepository {
   Future<void> saveStorageSettings(StorageSettings settings) async {
     await _db.putSetting(_sfwKey, settings.sfwTier.name);
     await _db.putSetting(_nsfwKey, settings.nsfwTier.name);
+  }
+
+  @override
+  Future<bool> loadNsfwOnRemovableAcknowledged() async {
+    // Absent or corrupt reads as not acknowledged: unlike the private lock,
+    // the safe reading of a warning is to show it. Only a literal 'true'
+    // suppresses it.
+    return await _db.settingValue(_nsfwOnRemovableAckKey) == 'true';
+  }
+
+  @override
+  Future<void> saveNsfwOnRemovableAcknowledged({required bool acknowledged}) {
+    return _db.putSetting(_nsfwOnRemovableAckKey, acknowledged.toString());
   }
 
   @override

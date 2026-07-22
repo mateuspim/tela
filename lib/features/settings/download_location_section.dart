@@ -6,8 +6,13 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/byte_size_text.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
+import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/storage_settings.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/features/settings/download_location_controller.dart';
+import 'package:tela/features/settings/nsfw_removable_guard.dart';
+import 'package:tela/features/settings/storage_settings_controller.dart';
 
 /// Picks which volume the files-outside-gallery tier writes to: device or card.
 ///
@@ -43,7 +48,8 @@ class DownloadLocationSection extends ConsumerWidget {
     return <Widget>[
       RadioGroup<StorageVolumeKind>(
         groupValue: location.currentKind,
-        onChanged: (StorageVolumeKind? kind) => _choose(ref, kind),
+        onChanged: (StorageVolumeKind? kind) =>
+            unawaited(_choose(ref, context, kind)),
         child: Column(
           children: <Widget>[
             _tile(context, StorageVolumeKind.device),
@@ -110,8 +116,40 @@ class DownloadLocationSection extends ConsumerWidget {
     return '${folder.volumeLabel}/${folder.relativePath}';
   }
 
-  void _choose(WidgetRef ref, StorageVolumeKind? kind) {
+  /// Points downloads at [kind]'s volume, then warns if the newly chosen folder
+  /// is a removable card that explicit downloads already route to. This is the
+  /// second edge of slice 4's warning, and the one easily missed: NSFW can
+  /// already sit on files-outside-gallery here, so choosing a card is what tips
+  /// it onto removable storage.
+  ///
+  /// Unlike the tier picker, the grant is already taken by the time the warning
+  /// shows, so a decline cannot un-choose the folder — it routes NSFW to the
+  /// private tier instead, leaving the card serving safe downloads.
+  Future<void> _choose(
+    WidgetRef ref,
+    BuildContext context,
+    StorageVolumeKind? kind,
+  ) async {
     if (kind == null) return;
-    unawaited(ref.read(downloadLocationProvider.notifier).choose(kind));
+    await ref.read(downloadLocationProvider.notifier).choose(kind);
+    if (!context.mounted) return;
+
+    final StorageSettings settings = await ref.read(
+      storageSettingsProvider.future,
+    );
+    final DownloadLocation location = await ref.read(
+      downloadLocationProvider.future,
+    );
+    if (!context.mounted) return;
+    final bool proceed = await confirmExplicitOnRemovable(
+      ref,
+      context,
+      nsfwTier: settings.nsfwTier,
+      folderRemovable: location.folder?.isRemovable ?? false,
+    );
+    if (proceed) return;
+    await ref
+        .read(storageSettingsProvider.notifier)
+        .route(Purity.nsfw, StorageTier.appPrivate);
   }
 }

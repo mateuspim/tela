@@ -25,6 +25,27 @@ Updated: 2026-07-22
 > (slice 3). Only **slice 4 (NSFW-on-removable warning)** remains — see *G — SD
 > card support* below.
 
+> **Slice 4 is now complete (this session), so G is done end to end (code;
+> and slices 2–4 device-verified on the tablet 2026-07-22).** The NSFW-on-removable warning
+> is built: a pure domain use case `ConfirmNsfwOnRemovable` owns the predicate
+> `isNeeded(nsfwTier, folderRemovable, acknowledged)`, acknowledgement persists
+> in `SettingsRepository` (`loadNsfwOnRemovableAcknowledged` /
+> `saveNsfwOnRemovableAcknowledged`, Drift key `privacy.nsfwOnRemovableAck`,
+> **fails open** — corrupt/absent = warn), and the warning fires on **both**
+> edges through one shared gate (`confirmExplicitOnRemovable`, returns whether
+> to proceed): the NSFW tier picker landing on files-outside-gallery, *and* the
+> folder chooser picking a removable card while NSFW already routes to files.
+> The tier picker gates **before** it writes, so a declined warning never
+> persists the unsafe routing even for the frame the dialog is open; the folder
+> chooser can only gate after (the SAF grant is already taken), so its decline
+> reroutes NSFW to the private tier. **Owner decision needed / made this
+> session:** the dialog is *"Use card anyway"* vs *"Use private library"* —
+> **confirm** persists the one-time nod and keeps the routing; **decline (or
+> dismiss)** routes NSFW to `appPrivate`, leaving the card serving safe
+> downloads. This "decline → private tier" behaviour was a judgement call, not
+> spelled out in the plan — flag it for the owner. **838 Dart tests**, analyze
+> and format clean; no native change, so the 34 Kotlin tests are untouched.
+
 > **Picking up cold?** **The E pass — tela's visual identity — is done and
 > device-verified**: the mark, an adaptive launcher icon with a Material You
 > monochrome layer, a branded splash on both the pre-31 and 31+ paths, an
@@ -1430,14 +1451,24 @@ rule. The MediaStore and SAF write paths need Robolectric shadows that do not
 usefully exist; treat those as device-only rather than faking them into a green
 suite that proves nothing.
 
-## G — SD card support, chosen 2026-07-20; SLICES 0–3 DONE, 4 remains
+## G — SD card support, chosen 2026-07-20; ALL SLICES DONE (0–4)
 
 The owner asked for "save to external storage if available", and clarified it
-means **the SD card specifically**. **Slices 0, 1, 2, and 3 are done** (820 Dart
-tests, 34 Kotlin); only slice 4 is not. Slice 0 (device write to the card) passed
-on hardware 2026-07-21; slice 1's chooser has been seen on the tablet; slice 2
-closed the download-time gap; slice 3 gave the ejected card its own failure (see
-their sections). Slice 4 (NSFW-on-removable warning) is still open.
+means **the SD card specifically**. **All five slices (0–4) are done** (838 Dart
+tests, 34 Kotlin). Slice 0 (device write to the card) passed on hardware
+2026-07-21; slice 1's chooser has been seen on the tablet; slice 2 closed the
+download-time gap; slice 3 gave the ejected card its own failure; slice 4 added
+the NSFW-on-removable warning (see their sections). **All device-verified on
+the tablet 2026-07-22** (with a real card, `6368-0382`): the picker pre-aims at
+the chosen volume (internal *and* card), free space reads on both
+(`Documents/tela · 49.1 GB`, `SD card/Alarms/tela · 816.7 GB`), both slice-4
+edges fire with the device-folder negative case staying silent, the warning
+persists its one-time nod (a re-toggle did not re-warn), and a
+software-ejected card (`sm unmount public:179,1`) produced slice 3's *"Download
+folder unavailable"* toast at download time with no reroute. The slice-4 build
+was installed with `make deploy` (in-place; `firstInstallTime` unchanged, no
+wipe). **Slice 4 remains uncommitted** — still a working-tree change at the time
+of this verification.
 
 ### The design call: the card is a location, not a fourth tier
 
@@ -1601,7 +1632,7 @@ a download that silently changes destination is the failure the NSFW routing
 rules exist to prevent. Android's own picker already names the card, so no
 custom picker is needed.
 
-### Slice 3 — ejection — **DONE 2026-07-22, not yet on hardware**
+### Slice 3 — ejection — **DONE 2026-07-22, device-verified same day**
 
 A `folderUnavailable` failure distinct from `notConfigured`, so an ejected card
 is not offered first-time setup for a folder that already exists. Settings
@@ -1642,7 +1673,49 @@ any tree — the three new Kotlin tests prove the authority guard, the grant che
 The coordinator's route, the errorCode mapping, and both call-site messages
 (detail + batch) are covered in the Dart suite.
 
-### Slice 4 — the NSFW removable warning (owner chose: warn once)
+### Slice 4 — the NSFW removable warning — **DONE 2026-07-22, device-verified same day**
+
+**Built this session.** The pure predicate lives in
+`ConfirmNsfwOnRemovable.isNeeded` (domain use case), acknowledgement persists in
+`SettingsRepository` (Drift key `privacy.nsfwOnRemovableAck`, fails **open** —
+absent or corrupt reads as *not* acknowledged, so the warning shows; the
+opposite of the private lock's fail-closed). The UI half is one shared gate
+`confirmExplicitOnRemovable` (predicate + dialog + acknowledge; returns whether
+to proceed), called from both edges — `_TierPicker._route`
+(NSFW → files-outside-gallery) and `DownloadLocationSection._choose` (a
+removable folder chosen). Both resolve `folderRemovable` from the providers'
+`.future`, not `.value`: the tier pick can reveal the location section the same
+frame, and a still-loading snapshot would read as "no removable folder" and
+skip a warning that was owed.
+
+**The two edges persist differently, on purpose.** The tier picker gates
+*before* it writes — it never calls `route(nsfw, files)` unless the gate returns
+proceed — so a declined warning leaves nothing on disk, not even for the frame
+the dialog is open. (An earlier cut applied the tier first and reverted on
+decline; that flickered the radio and left a window where a mid-dialog process
+kill would persist explicit-on-removable unacknowledged. Do not reintroduce
+it.) The folder chooser cannot gate before, because the SAF grant is taken the
+moment the picker returns, so it applies the folder and, on decline, reroutes
+NSFW to `appPrivate` instead.
+
+**Decline behaviour — a judgement call, owner please confirm:** the plan said
+"allow, but confirm once" without spelling out decline. The dialog is *"Use card
+anyway"* (confirm) vs *"Use private library"* (decline); a dismissed dialog is
+the safe decline. **Confirm** persists the nod and keeps the routing; **decline**
+routes NSFW to `appPrivate` — the card keeps serving safe downloads, explicit
+ones move off it. Reverting the folder choice itself was not an option: the SAF
+grant is already taken by the time the warning opens, and the folder is shared
+with the SFW tier, so re-aiming NSFW is the only clean protective lever. If the
+owner would rather decline *do nothing* on the folder-chooser edge, that is a
+small change to `DownloadLocationSection._choose`.
+
+Tests: `confirm_nsfw_on_removable_test` (truth table + `isPending`/`acknowledge`
+over the fake repo), the two edges in `settings_screen_test` and
+`download_location_section_test` (warn / confirm / decline / already-acked /
+device-folder-no-warn), and the Drift round-trip + corrupt-reads-open in
+`drift_settings_repository_test`.
+
+*Original plan below.*
 
 **NSFW on a card is already legal today** — `choicesFor` permits
 `filesOutsideGallery` for NSFW and that tree can already be removable. Unused

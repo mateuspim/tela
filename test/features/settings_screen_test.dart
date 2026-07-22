@@ -11,6 +11,7 @@ import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -456,6 +457,102 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(settings.accentSaved, isNull);
+    });
+  });
+
+  group('explicit-on-removable warning', () {
+    // The first edge: the folder is already on a removable card, and moving the
+    // NSFW picker onto files-outside-gallery is what routes explicit downloads
+    // there. (The other edge — choosing the card while NSFW already routes to
+    // files — is covered in download_location_section_test.)
+    const DownloadFolder onCard = DownloadFolder(
+      volumeLabel: 'SD card',
+      relativePath: 'tela',
+      isRemovable: true,
+      isAvailable: true,
+    );
+
+    testWidgets('warns when explicit files land on an already-removable card', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository();
+      await _pumpSettings(
+        tester,
+        settings,
+        imageStore: FakeImageStore(folder: onCard, sdCardAvailable: true),
+      );
+
+      // The NSFW picker's files option is the second on screen.
+      await tester.tap(find.text('Files, not gallery').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Explicit downloads on a removable card'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('using the card anyway keeps NSFW on files and acknowledges', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository();
+      await _pumpSettings(
+        tester,
+        settings,
+        imageStore: FakeImageStore(folder: onCard, sdCardAvailable: true),
+      );
+
+      await tester.tap(find.text('Files, not gallery').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Use card anyway'));
+      await tester.pumpAndSettle();
+
+      expect(settings.saved.nsfwTier, StorageTier.filesOutsideGallery);
+      expect(settings.nsfwOnRemovableAckSaved, isTrue);
+    });
+
+    testWidgets('declining leaves explicit downloads in the private library', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository();
+      await _pumpSettings(
+        tester,
+        settings,
+        imageStore: FakeImageStore(folder: onCard, sdCardAvailable: true),
+      );
+
+      await tester.tap(find.text('Files, not gallery').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Use private library'));
+      await tester.pumpAndSettle();
+
+      expect(settings.saved.nsfwTier, StorageTier.appPrivate);
+      expect(settings.nsfwOnRemovableAckSaved, isFalse);
+    });
+
+    testWidgets('no warning when the explicit folder is on the device', (
+      WidgetTester tester,
+    ) async {
+      await _pumpSettings(
+        tester,
+        FakeSettingsRepository(),
+        imageStore: FakeImageStore(
+          folder: const DownloadFolder(
+            volumeLabel: 'Internal storage',
+            relativePath: 'tela',
+            isRemovable: false,
+            isAvailable: true,
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Files, not gallery').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Explicit downloads on a removable card'),
+        findsNothing,
+      );
     });
   });
 

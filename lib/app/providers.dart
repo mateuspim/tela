@@ -40,6 +40,7 @@ import 'package:tela/domain/use_cases/apply_cropped_wallpaper.dart';
 import 'package:tela/domain/use_cases/apply_download.dart';
 import 'package:tela/domain/use_cases/apply_private_image.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
+import 'package:tela/domain/use_cases/confirm_nsfw_on_removable.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
 import 'package:tela/domain/use_cases/forget_api_key.dart';
 import 'package:tela/domain/use_cases/load_account_defaults.dart';
@@ -222,6 +223,14 @@ final Provider<ConfiguredDownload> configuredDownloadProvider =
             ref.read(downloadWallpaperProvider)(wallpaper, tier: tier),
         imageStore: ref.watch(imageStoreProvider),
       ),
+    );
+
+/// The one-time confirmation before explicit downloads reach a removable card.
+/// See slice 4 — enforced at the NSFW tier picker and the folder chooser both.
+final Provider<ConfirmNsfwOnRemovable> confirmNsfwOnRemovableProvider =
+    Provider<ConfirmNsfwOnRemovable>(
+      (Ref ref) =>
+          ConfirmNsfwOnRemovable(ref.watch(settingsRepositoryProvider)),
     );
 
 /// Sets an already-downloaded wallpaper again, from the file on this device.

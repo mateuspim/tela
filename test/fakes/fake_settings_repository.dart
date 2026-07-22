@@ -11,6 +11,7 @@ class FakeSettingsRepository implements SettingsRepository {
   FakeSettingsRepository({
     StorageSettings? settings,
     bool privateLibraryLocked = false,
+    bool nsfwOnRemovableAcknowledged = false,
     AccountSettings? accountDefaults,
     BrowseDefaultsSource source = BrowseDefaultsSource.account,
     BrowseDefaults? deviceDefaults,
@@ -18,6 +19,7 @@ class FakeSettingsRepository implements SettingsRepository {
     TileDensity density = TileDensity.medium,
   }) : _settings = settings ?? StorageSettings.defaults,
        _privateLibraryLocked = privateLibraryLocked,
+       _nsfwOnRemovableAcknowledged = nsfwOnRemovableAcknowledged,
        _accountDefaults = accountDefaults,
        _source = source,
        _deviceDefaults = deviceDefaults,
@@ -26,6 +28,7 @@ class FakeSettingsRepository implements SettingsRepository {
 
   StorageSettings _settings;
   bool _privateLibraryLocked;
+  bool _nsfwOnRemovableAcknowledged;
   AccountSettings? _accountDefaults;
   BrowseDefaultsSource _source;
   BrowseDefaults? _deviceDefaults;
@@ -37,6 +40,9 @@ class FakeSettingsRepository implements SettingsRepository {
 
   /// Whether the private library's lock is currently on.
   bool get lockSaved => _privateLibraryLocked;
+
+  /// Whether the NSFW-on-removable warning has been acknowledged.
+  bool get nsfwOnRemovableAckSaved => _nsfwOnRemovableAcknowledged;
 
   /// The account defaults currently stored, if any.
   AccountSettings? get accountSaved => _accountDefaults;
@@ -56,6 +62,17 @@ class FakeSettingsRepository implements SettingsRepository {
   @override
   Future<void> saveStorageSettings(StorageSettings settings) async {
     _settings = settings;
+  }
+
+  @override
+  Future<bool> loadNsfwOnRemovableAcknowledged() async =>
+      _nsfwOnRemovableAcknowledged;
+
+  @override
+  Future<void> saveNsfwOnRemovableAcknowledged({
+    required bool acknowledged,
+  }) async {
+    _nsfwOnRemovableAcknowledged = acknowledged;
   }
 
   @override

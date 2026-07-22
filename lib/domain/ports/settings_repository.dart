@@ -18,6 +18,19 @@ abstract interface class SettingsRepository {
   /// Persists [settings] as the new storage routing.
   Future<void> saveStorageSettings(StorageSettings settings);
 
+  /// Whether the user has accepted that explicit downloads on a removable card
+  /// give up the private tier's protections — pull the card and read it
+  /// anywhere, no app-lock, no `FLAG_SECURE`.
+  ///
+  /// A one-time confirmation: never asked answers `false`, so the warning still
+  /// fires. A row that was written but cannot be *read* answers `false` too —
+  /// the safe reading of a *warning* is to show it, not to suppress it, the
+  /// opposite of the private-lock's fail-closed. Never throws.
+  Future<bool> loadNsfwOnRemovableAcknowledged();
+
+  /// Records whether the user accepted explicit downloads on a removable card.
+  Future<void> saveNsfwOnRemovableAcknowledged({required bool acknowledged});
+
   /// Whether the private library asks for a biometric or PIN before it opens.
   ///
   /// The lock is opt-in, so a setting that was never written answers `false`. A
