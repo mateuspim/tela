@@ -2,6 +2,38 @@
 
 Updated: 2026-07-22
 
+> **The fifth UI pass (H) is underway on branch `feat/ui-pass-h` — three
+> commits, not yet merged, device-verified on the tablet.** Off `master`
+> (`bdea572`):
+> 1. `161786f` **Thread 1 — Settings coherence: DONE.** The Downloads storage
+>    block reads as one unit now — captions unified to `SettingsSectionLabel`,
+>    internal slab dividers dropped for the Appearance caption+spacing rhythm,
+>    and the device/card volume chooser is a bordered inset panel with a
+>    connective line ("Downloads set to 'Files, not gallery' are saved here.")
+>    tying it to the Files tier. `_TierPicker._route`'s gate-before-persist is
+>    untouched. New l10n key `settingsDownloadLocationHelp`.
+> 2. `6842b5f` **Thread 4 (two items) — detail + library polish.** Dropped the
+>    raw resolution from the detail AppBar title (it duplicated the Resolution
+>    tile and labelled the screen with a spec); capped `WallpaperStatusView`'s
+>    measure at 360 and left-aligned the recent-downloads empty line, so empty
+>    states compose instead of stretching one line across the tablet.
+> 3. `28fbfbb` **Thread 3 — the lone history tile: SOLVED.** See its section
+>    below (now headed SOLVED). Root cause was a loose `Stack`, **not** the
+>    layout math; fixed with `StackFit.expand`, regression guarded structurally.
+>
+> **Still open in H:** **Thread 2 (storage-flow polish** — wording/spacing/
+> iconography of the download-time device/card sheet, the pre-aimed pickers, the
+> ejection states — *not started*). **Thread 3's filter badge** (narrowed, not
+> fixed — see its section: the landscape "1" is arguably correct; only the
+> portrait "3" is unexplained and needs the rotation probe). **Thread 4's
+> whole-app once-over** continues (device-flagged; two items done above).
+>
+> **839 Dart tests green**, analyze + format clean; no `android/` change, so the
+> 34 Kotlin tests are untouched. **A test download was left in the tablet's
+> Download history** (added to reproduce the lone-tile bug) — harmless; one
+> long-press → Remove clears it. Merge `feat/ui-pass-h` into `master` through
+> the gate (`merge.ff false`) when the pass is called done.
+
 > **G is merged, and the next work is a fifth UI pass.** SD card support
 > (slices 0–4) is on **master** as of `a9e272b` — the merge gate ran both suites
 > green (**838 Dart, 34 Kotlin**) on the way in. G is closed end to end: code,
@@ -849,7 +881,24 @@ legible. One defect found and fixed on the spot: the private row was flush
 against the strip and read as part of the downloads section, so it is detached
 now.
 
-### The lone history tile anomaly — observed, measured, UNEXPLAINED
+### The lone history tile anomaly — SOLVED (2026-07-22, `28fbfbb`)
+
+**It was never the layout math — the ceiling warning below was right.** An
+on-device probe closed it: drawing a green border on the grid *cell* showed the
+cell at the correct 2/3-viewport size (`rowH=434`, `maxH=651`, `sole=434` — all
+correct) with the `WallpaperTile` sitting **small in the top-left corner**.
+
+Root cause: `DownloadHistoryScreen._tile` wrapped the tile in a **default
+(loose) `Stack`** for the missing-file badge, and `WallpaperTile` *deliberately
+does not size itself* — so under loose constraints it fell back to its
+`memCacheWidth`-decoded size (~300dip) instead of filling. Favorites never hit
+it: it puts the tile straight in the grid `SizedBox` (tight). Only the **lone**
+tile showed it, because that is the only cell the sole-row ceiling grows past
+the decoded size. Fix: `Stack(fit: StackFit.expand, …)`. Guarded **structurally**
+(assert the Stack's `fit`) — a size assertion can't catch it, since the shrink
+needs a really-decoded image a widget test never loads (the placeholder fills
+either way). See memory `tela-wallpapertile-needs-tight-box`. Everything below
+this line is the pre-solution investigation, kept for provenance.
 
 **Do not treat this as understood, and do not "fix" it by changing
 `soleWallpaperRowHeight`.** It is not known to be a D2 regression at all.
@@ -1771,19 +1820,23 @@ can reach it: slice 4's predicate and tree-id parsing are pure and get real
 tests. Do not fake MediaStore/SAF shadows into a green suite that proves nothing
 — see *F*'s vacuous-test finding.
 
-## H — the fifth UI pass, scoped 2026-07-22; four threads, NOT YET BUILT
+## H — the fifth UI pass, scoped 2026-07-22; underway on `feat/ui-pass-h`
 
 G closed the storage feature and merged (`a9e272b`). The owner chose a fifth UI
 pass over starting Wave 4's product items, and picked **all four** candidate
 threads rather than one. This is a polish/coherence pass, **not new
 capability** — keep the layout law (justified rows; masonry is gone, do not
 re-litigate) and the brand rules (`docs/BRAND.md`) intact while touching any of
-it. Nothing here is built or device-verified yet.
+it.
 
-The four threads, in the order offered (not a priority order — resequence on the
-device):
+**Status (2026-07-22, branch `feat/ui-pass-h`, device-verified):** thread 1
+**done** (`161786f`); thread 3's **lone history tile done** (`28fbfbb`), its
+filter badge **narrowed** (not fixed); thread 4 **in progress** — two items done
+(`6842b5f`). **Thread 2 not started.** See the lead pointer at the top for the
+per-commit summary. The four threads, in the order offered (not a priority
+order — resequence on the device):
 
-**1. Settings coherence.** The storage half of Settings accreted across G:
+**1. Settings coherence — DONE (`161786f`).** The storage half of Settings accreted across G:
 `DownloadLocationSection` (device/card radio, free-space status line), the
 per-purity `_TierPicker` rows, and the NSFW-on-removable warning. They are
 correct but read as separate rows bolted on in sequence. Make the whole block
@@ -1795,7 +1848,7 @@ must still never write `route(nsfw, files)` before the warning is confirmed. The
 tablet is sitting in the exact test state this thread should design for (Safe +
 Explicit → files → SD card, acked), which is why it was left unreverted.
 
-**2. Storage flow polish.** The flows slices 1–4 built — the download-time
+**2. Storage flow polish — NOT STARTED.** The flows slices 1–4 built — the download-time
 device/card sheet (`ConfiguredDownload`), the pre-aimed system pickers, and the
 ejection/unavailable states — work but were built function-first. Tighten
 wording, spacing, and iconography. All user-facing strings stay in l10n — they
@@ -1806,19 +1859,26 @@ committed).
 
 **3. The two carried anomalies** (closer to rendering bugs than polish — each
 has its own section below, do not re-derive):
-   - **The lone history tile** draws far smaller than it should; narrowed to a
-     height the grid is handed, with a hand-operable toggle to reproduce, but
-     still not understood. See *The lone history tile anomaly*.
-   - **The filter badge anomaly** — observed, unexplained, probe already
-     defined. See *The filter badge anomaly*.
-   Fold both in; they are visual and live where the once-over is already
-   looking.
+   - ~~**The lone history tile**~~ **DONE (`28fbfbb`)** — a loose `Stack` let
+     `WallpaperTile` shrink to its decoded size; `StackFit.expand` fixed it. See
+     *The lone history tile anomaly* (now headed SOLVED).
+   - **The filter badge anomaly — NARROWED, not fixed.** In code the landscape
+     "1" is arguably correct (only `ratios` differs from baseline; `resolution`
+     stays `Automatic` == baseline, so it isn't counted — the "expected 2"
+     assumed a `forScreen` substitution that does not happen at this layer). The
+     unexplained part is the portrait "3"; it still needs the rotation probe. See
+     *The filter badge anomaly*.
 
-**4. A whole-app once-over.** A broad sweep across
+**4. A whole-app once-over — IN PROGRESS (`6842b5f`).** A broad sweep across
 browse / detail / favorites / viewer, not scoped to one area. The owner flags
 specifics on the device as they go, so this thread is *discovered on hardware*
 rather than planned here — capture what the device turns up as sub-items once it
-starts, the way the earlier passes logged their device findings.
+starts, the way the earlier passes logged their device findings. Done so far:
+the detail AppBar title (dropped the raw resolution) and the library empty
+states (capped measure, left-aligned strip line). One thing checked and left
+alone: the "See all" appears on Recent downloads (a preview strip) but not
+Favorites (already the full grid inline) — that asymmetry is intentional, not a
+bug.
 
 **Process reminders for this pass** (same as every pass here): `./tool/tela`
 Docker toolchain, not host flutter; `make deploy` to the tablet (**never**
