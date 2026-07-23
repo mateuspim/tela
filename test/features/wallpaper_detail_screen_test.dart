@@ -11,6 +11,7 @@ import 'package:tela/core/ui/blurred_image_backdrop.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/download_destination_streak.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -448,6 +449,39 @@ void main() {
     expect(find.text('Private library'), findsOneWidget);
   });
 
+  // The memory paying off: a run of private-library downloads offers to become
+  // the default, and taking the offer writes the setting so the next plain tap
+  // needs no long press at all.
+  testWidgets('"Always save here" persists the streak tier as the default', (
+    WidgetTester tester,
+  ) async {
+    final FakeSettingsRepository repository = FakeSettingsRepository(
+      streaks: <Purity, DownloadDestinationStreak>{
+        Purity.sfw: DownloadDestinationStreak(
+          tier: StorageTier.appPrivate,
+          length: 3,
+        ),
+      },
+    );
+    await _tallSurface(tester);
+    await _pumpDetail(
+      tester,
+      _details(purity: Purity.sketchy),
+      imageStore: FakeImageStore(),
+      settingsRepository: repository,
+    );
+
+    await tester.longPress(find.bySemanticsLabel('Download'));
+    await tester.pumpAndSettle();
+    final Finder always = find.text('Always save Sketchy here');
+    await tester.ensureVisible(always);
+    await tester.tap(always);
+    await tester.pumpAndSettle();
+
+    // Sketchy writes the safe bucket — two knobs, not three.
+    expect(repository.saved.sfwTier, StorageTier.appPrivate);
+  });
+
   testWidgets('the download button warns before a not-safe wallpaper lands', (
     WidgetTester tester,
   ) async {
@@ -763,6 +797,7 @@ Future<void> _pumpDetail(
   WallpaperDetails details, {
   FakeImageStore? imageStore,
   StorageSettings? settings,
+  FakeSettingsRepository? settingsRepository,
   FakeWallpaperSharer? sharer,
   FakeTagBlocklistRepository? blocklist,
   FakeImmersiveSystemUi? immersiveSystemUi,
@@ -781,7 +816,7 @@ Future<void> _pumpDetail(
         ),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         settingsRepositoryProvider.overrideWithValue(
-          FakeSettingsRepository(settings: settings),
+          settingsRepository ?? FakeSettingsRepository(settings: settings),
         ),
         // The app bar now carries the favorites heart, so this screen reaches
         // the database. Left unbound, it opens the real one and leaks a timer.

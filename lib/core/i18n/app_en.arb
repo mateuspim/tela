@@ -485,6 +485,27 @@
     "description": "Heading above the one-download storage destination choices."
   },
 
+  "detailDownloadStreak": "{count, plural, other{Last {count} saved here}}",
+  "@detailDownloadStreak": {
+    "description": "Marks the destination a run of recent downloads has been going to, in the download-destination chooser.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "detailDownloadAlways": "Always save {purity} here",
+  "@detailDownloadAlways": {
+    "description": "Action that makes the streak destination the default for this wallpaper's kind. {purity} is a localized purity name like Sketchy.",
+    "placeholders": {
+      "purity": {
+        "type": "String",
+        "example": "Sketchy"
+      }
+    }
+  },
+
   "storageSharedGallery": "Gallery",
   "@storageSharedGallery": {
     "description": "Storage tier: the system-visible Pictures/tela gallery folder."

@@ -7,6 +7,7 @@ import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
+import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
@@ -21,9 +22,11 @@ import 'package:tela/core/ui/wallpaper_share_sheet.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/bitmap_export_rule.dart';
+import 'package:tela/domain/models/download_destination_streak.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/share_option.dart';
+import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -33,6 +36,7 @@ import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/domain/models/wallpaper_share_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
+import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/use_cases/share_wallpaper.dart';
 import 'package:tela/features/browse/linked_listing_args.dart';
@@ -217,13 +221,32 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   /// Offers only the tiers this wallpaper's purity is allowed to land in, so a
   /// one-off override cannot do what the settings screen forbids — the dialog
   /// asks the domain for that list rather than being told it from here.
+  ///
+  /// Feeds the chooser what it needs to notice a habit: where a plain tap
+  /// already routes, and the run of recent same-destination downloads. When the
+  /// user takes the "Always" offer, the new default is persisted through the
+  /// same controller the settings screen writes, so that screen stays in step.
   Future<void> _chooseDownloadTier() async {
-    final StorageTier? tier = await chooseDownloadDestination(
-      context,
-      _wallpaper.purity,
+    final SettingsRepository settings = ref.read(settingsRepositoryProvider);
+    final StorageSettings storage = await ref.read(
+      storageSettingsProvider.future,
     );
-    if (tier == null || !mounted) return;
-    await _download(tier);
+    final DownloadDestinationStreak? streak = await settings
+        .loadDestinationStreak(_wallpaper.purity);
+    if (!mounted) return;
+    final DownloadDestinationChoice? choice = await chooseDownloadDestination(
+      context,
+      purity: _wallpaper.purity,
+      configuredTier: storage.tierFor(_wallpaper.purity),
+      streak: streak,
+    );
+    if (choice == null || !mounted) return;
+    if (choice.remember) {
+      await ref
+          .read(storageSettingsProvider.notifier)
+          .route(_wallpaper.purity, choice.tier);
+    }
+    await _download(choice.tier);
   }
 
   /// Downloads to [tier], or to the configured destination when it is null.
