@@ -2,9 +2,19 @@
 
 Updated: 2026-07-23
 
-> **The fifth UI pass (H) is underway on branch `feat/ui-pass-h` — four
+> **The fifth UI pass (H) is underway on branch `feat/ui-pass-h` — five
 > commits, not yet merged; the first three device-verified on the tablet, the
-> fourth (Thread 2) code-only so far.** Off `master` (`bdea572`):
+> last two (Thread 2 vocabulary, Thread 4 sheet headers) code-only so far.** Off
+> `master` (`bdea572`):
+> -1. `a2abfc8` **Thread 4 — chooser-sheet headers.** Every action-chooser sheet
+>    (wallpaper target, share, download volume, per-download tier, long-press
+>    quick actions) headed itself with a bare `ListTile(title:)`, giving the
+>    title a list row's `bodyLarge` weight — it read as a disabled first option,
+>    not a heading. Extracted `SheetHeader` (core/ui, a muted
+>    `titleSmall`/`onSurfaceVariant` caption, the sheet twin of
+>    `SettingsSectionLabel`) and routed all five through it. The larger filter
+>    and accent sheets keep their prominent `headlineSmall`/`titleLarge` titles.
+>    **Not yet on the device.**
 > 0. `68e9d82` **Thread 2 — storage vocabulary: first coherence commit.** The
 >    three places that name a download destination (Settings device/card
 >    chooser, download-time device/card sheet, per-download tier override) had
@@ -38,9 +48,11 @@ Updated: 2026-07-23
 > code — waiting on the tablet to flag anything). **Thread 3's filter badge**
 > (narrowed, not fixed — see its section: the landscape "1" is arguably correct;
 > only the portrait "3" is unexplained and needs the rotation probe). **Thread
-> 4's whole-app once-over** continues (device-flagged; two items done above).
+> 4's whole-app once-over** continues (device-flagged; three items done above —
+> the untouched surfaces surveyed this session, favorites/viewer/immersive
+> controls, read clean in code, so the rest is genuinely device-discovered).
 >
-> **841 Dart tests green**, analyze + format clean; no `android/` change, so the
+> **843 Dart tests green**, analyze + format clean; no `android/` change, so the
 > 34 Kotlin tests are untouched. **A test download was left in the tablet's
 > Download history** (added to reproduce the lone-tile bug) — harmless; one
 > long-press → Remove clears it. Merge `feat/ui-pass-h` into `master` through
@@ -1844,9 +1856,10 @@ it.
 **Status (2026-07-23, branch `feat/ui-pass-h`):** thread 1 **done** (`161786f`,
 device-verified); thread 3's **lone history tile done** (`28fbfbb`,
 device-verified), its filter badge **narrowed** (not fixed); thread 4 **in
-progress** — two items done (`6842b5f`, device-verified). **Thread 2 underway**
-— first coherence commit landed (`68e9d82`, code-only, not yet on device). See
-the lead pointer at the top for the per-commit summary. The four threads, in the order offered (not a priority
+progress** — three items done (`6842b5f` device-verified, plus `a2abfc8` sheet
+headers code-only). **Thread 2 underway** — first coherence commit landed
+(`68e9d82`, code-only, not yet on device). See the lead pointer at the top for
+the per-commit summary. The four threads, in the order offered (not a priority
 order — resequence on the device):
 
 **1. Settings coherence — DONE (`161786f`).** The storage half of Settings accreted across G:
@@ -1896,16 +1909,28 @@ has its own section below, do not re-derive):
      unexplained part is the portrait "3"; it still needs the rotation probe. See
      *The filter badge anomaly*.
 
-**4. A whole-app once-over — IN PROGRESS (`6842b5f`).** A broad sweep across
+**4. A whole-app once-over — IN PROGRESS (`6842b5f`, `a2abfc8`).** A broad sweep across
 browse / detail / favorites / viewer, not scoped to one area. The owner flags
 specifics on the device as they go, so this thread is *discovered on hardware*
 rather than planned here — capture what the device turns up as sub-items once it
 starts, the way the earlier passes logged their device findings. Done so far:
-the detail AppBar title (dropped the raw resolution) and the library empty
-states (capped measure, left-aligned strip line). One thing checked and left
-alone: the "See all" appears on Recent downloads (a preview strip) but not
-Favorites (already the full grid inline) — that asymmetry is intentional, not a
-bug.
+   - `6842b5f` — the detail AppBar title (dropped the raw resolution) and the
+     library empty states (capped measure, left-aligned strip line).
+   - `a2abfc8` — **chooser-sheet headers.** Every action-chooser sheet headed
+     itself with a bare `ListTile(title:)`, so the title carried a list row's
+     `bodyLarge` weight and read as a disabled first option. Extracted
+     `SheetHeader` (core/ui, muted `titleSmall`/`onSurfaceVariant`) and routed
+     the five action sheets through it — target, share, download volume,
+     per-download tier, quick actions. The filter/accent sheets keep their
+     larger `headlineSmall`/`titleLarge` titles on purpose. Code-only so far.
+   - **Code-side surfaces surveyed this session and left alone:** the favorites
+     grid, the immersive viewer, and `ImmersiveGalleryControls` all read clean
+     and are already carefully documented — the remaining Thread 4 work is
+     genuinely device-discovered, not sitting unfound in the code.
+
+One thing checked and left alone: the "See all" appears on Recent downloads (a
+preview strip) but not Favorites (already the full grid inline) — that asymmetry
+is intentional, not a bug.
 
 **Process reminders for this pass** (same as every pass here): `./tool/tela`
 Docker toolchain, not host flutter; `make deploy` to the tablet (**never**
