@@ -2,6 +2,7 @@ import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
+import 'package:tela/domain/models/download_destination_streak.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -76,6 +77,15 @@ class DriftSettingsRepository implements SettingsRepository {
   /// constant name — so a renamed constant reads back as unset (medium) rather
   /// than as some other density. Absent means medium.
   static const String _densityKey = 'appearance.tileDensity';
+
+  /// Where the last run of downloads landed, one row per storage bucket, as
+  /// `tier:count` (see [DownloadDestinationStreak.encode]).
+  ///
+  /// Two rows and no wallpaper identity — this is the *only* place tela records
+  /// anything about an explicit download, and it deliberately cannot say which
+  /// wallpaper it was.
+  static const String _safeStreakKey = 'downloads.streak.sfw';
+  static const String _explicitStreakKey = 'downloads.streak.nsfw';
 
   final TelaDatabase _db;
 
@@ -232,6 +242,43 @@ class DriftSettingsRepository implements SettingsRepository {
   @override
   Future<void> saveTileDensity(TileDensity density) {
     return _db.putSetting(_densityKey, density.name);
+  }
+
+  @override
+  Future<DownloadDestinationStreak?> loadDestinationStreak(
+    Purity purity,
+  ) async {
+    final DownloadDestinationStreak? streak =
+        DownloadDestinationStreak.tryParse(
+          await _db.settingValue(_streakKey(purity)),
+        );
+    if (streak == null) return null;
+    // Distrust the row the same way [_tier] does: a hand-edited database
+    // claiming an explicit run landed in the gallery must not become a
+    // suggestion to route explicit downloads there. An impossible streak is
+    // no streak.
+    final bool allowed = StorageSettings.choicesFor(
+      purity,
+    ).contains(streak.tier);
+    return allowed ? streak : null;
+  }
+
+  @override
+  Future<void> recordDestination(Purity purity, StorageTier tier) async {
+    final DownloadDestinationStreak? current = await loadDestinationStreak(
+      purity,
+    );
+    await _db.putSetting(
+      _streakKey(purity),
+      DownloadDestinationStreak.extending(current, tier).encode(),
+    );
+  }
+
+  /// The row a [purity]'s streak lives in, bucketed exactly as its tier is.
+  String _streakKey(Purity purity) {
+    return StorageSettings.bucketFor(purity) == Purity.nsfw
+        ? _explicitStreakKey
+        : _safeStreakKey;
   }
 
   /// Reads one tier, treating an absent, unrecognised, or forbidden row as

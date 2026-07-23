@@ -1,7 +1,10 @@
 import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
+import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tile_density.dart';
 
 /// Reads and writes the user's persisted preferences.
@@ -103,4 +106,23 @@ abstract interface class SettingsRepository {
 
   /// Persists [density] as the size the shelves draw at.
   Future<void> saveTileDensity(TileDensity density);
+
+  /// How many downloads in a row have landed in the same tier for [purity], or
+  /// null when there is no run to speak of yet.
+  ///
+  /// Keyed by [StorageSettings.bucketFor], so `sketchy` shares `sfw`'s streak
+  /// exactly as it shares its configured tier.
+  ///
+  /// Never throws: a row it cannot read answers null, which simply means
+  /// nothing is suggested. A memory is a convenience, and losing one may never
+  /// cost a download.
+  Future<DownloadDestinationStreak?> loadDestinationStreak(Purity purity);
+
+  /// Records that a [purity] download landed in [tier], growing the streak when
+  /// it matches the last one and starting a fresh one when it does not.
+  ///
+  /// Called for **every** download, not only overridden ones: a streak that
+  /// merely agrees with the configured tier is what tells the caller it has
+  /// nothing to suggest.
+  Future<void> recordDestination(Purity purity, StorageTier tier);
 }

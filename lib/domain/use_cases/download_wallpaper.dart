@@ -24,6 +24,16 @@ class DownloadWallpaper {
   /// Stores [wallpaper], preserving its purity so the adapter routes it safely,
   /// and records where it landed so it can be set again without a second fetch.
   ///
+  /// Two records, and they are not the same record. [_remember] writes a
+  /// browsable history row and withholds it for explicit and private downloads;
+  /// `recordDestination` writes a tier and a count with no wallpaper identity
+  /// in it at all, and so is written for **every** download — including the
+  /// ones the history must drop, which are exactly the ones the destination
+  /// memory exists to notice.
+  ///
+  /// Both read [StoredImage.tier] rather than the requested one: the adapter
+  /// has the last word on where a file actually went.
+  ///
   /// [tier] is the per-download override; without it the wallpaper goes to the
   /// tier the user configured for its purity.
   ///
@@ -40,6 +50,7 @@ class DownloadWallpaper {
       tier: destination,
     );
     await _remember(wallpaper, stored);
+    await _settings.recordDestination(wallpaper.purity, stored.tier);
     return stored;
   }
 

@@ -1,10 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/download_destination_streak.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/stored_image.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
 
@@ -139,16 +141,77 @@ void main() {
       expect(history.recorded.single.tier, StorageTier.sharedGallery);
     });
   });
+
+  group('the destination memory', () {
+    // The case that decides the whole design. History drops explicit and
+    // private downloads on purpose, which is exactly the run the memory exists
+    // to notice — so the memory cannot be built on History, and this is the
+    // test that fails first if someone tries.
+    test('counts the very downloads the history refuses to keep', () async {
+      final FakeDownloadHistory history = FakeDownloadHistory();
+      final FakeSettingsRepository repository = FakeSettingsRepository();
+      final DownloadWallpaper download = _download(
+        FakeImageStore(),
+        history: history,
+        repository: repository,
+      );
+
+      await download(_wallpaper(Purity.nsfw), tier: StorageTier.appPrivate);
+      await download(_wallpaper(Purity.nsfw), tier: StorageTier.appPrivate);
+
+      expect(history.recorded, isEmpty);
+      expect(repository.streakSaved(Purity.nsfw)?.length, 2);
+    });
+
+    test('restarts the run when a download lands somewhere else', () async {
+      final FakeSettingsRepository repository = FakeSettingsRepository();
+      final DownloadWallpaper download = _download(
+        FakeImageStore(),
+        repository: repository,
+      );
+
+      await download(_wallpaper(Purity.sfw), tier: StorageTier.appPrivate);
+      await download(_wallpaper(Purity.sfw), tier: StorageTier.sharedGallery);
+
+      final DownloadDestinationStreak? streak = repository.streakSaved(
+        Purity.sfw,
+      );
+      expect(streak?.tier, StorageTier.sharedGallery);
+      expect(streak?.length, 1);
+    });
+
+    // The adapter has the last word on where a file went — G's decline
+    // behaviour reroutes explicit downloads to the private tier — so a memory
+    // built on the *requested* tier would remember a destination that was
+    // never used.
+    test('remembers where the file landed, not what was asked for', () async {
+      final FakeSettingsRepository repository = FakeSettingsRepository();
+      final FakeImageStore imageStore = FakeImageStore(
+        storedImage: StoredImage(
+          location: Uri.parse('memory://rerouted'),
+          tier: StorageTier.appPrivate,
+        ),
+      );
+
+      await _download(imageStore, repository: repository)(
+        _wallpaper(Purity.nsfw),
+        tier: StorageTier.filesOutsideGallery,
+      );
+
+      expect(repository.streakSaved(Purity.nsfw)?.tier, StorageTier.appPrivate);
+    });
+  });
 }
 
 DownloadWallpaper _download(
   FakeImageStore imageStore, {
   StorageSettings? settings,
   FakeDownloadHistory? history,
+  FakeSettingsRepository? repository,
 }) {
   return DownloadWallpaper(
     imageStore: imageStore,
-    settings: FakeSettingsRepository(settings: settings),
+    settings: repository ?? FakeSettingsRepository(settings: settings),
     history: history ?? FakeDownloadHistory(),
   );
 }
