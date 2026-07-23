@@ -61,13 +61,18 @@ Updated: 2026-07-23
 >    below (now headed SOLVED). Root cause was a loose `Stack`, **not** the
 >    layout math; fixed with `StackFit.expand`, regression guarded structurally.
 >
+> **Thread 3 is now CLOSED** — the filter-badge rotation probe ran on the tablet
+> (2026-07-23) and the badge stays **1** through a rotation and through a cold
+> launch into either orientation, with the 4s frame byte-identical to the 24s
+> one. Rotation exonerated, no late-defaults transient, the portrait "3" not
+> reproducible. See *The filter badge anomaly* — and do not re-open it without a
+> fresh sighting.
+>
 > **Still open in H:** **Thread 2 (storage-flow polish** — *underway*: the
 > vocabulary/de-duplication commit above landed; what remains is device-driven
 > wording/spacing/iconography of the download-time device/card sheet, the
 > pre-aimed pickers, and the ejection states, none of which read as broken in
-> code — waiting on the tablet to flag anything). **Thread 3's filter badge**
-> (narrowed, not fixed — see its section: the landscape "1" is arguably correct;
-> only the portrait "3" is unexplained and needs the rotation probe). **Thread
+> code — waiting on the tablet to flag anything). **Thread
 > 4's whole-app once-over** continues (device-flagged; three items done above —
 > the untouched surfaces surveyed this session, favorites/viewer/immersive
 > controls, read clean in code, so the rest is genuinely device-discovered).
@@ -1374,7 +1379,40 @@ healthy: re-downloading immediately repopulated it. **Treat device state as
 disposable across deploys until this is understood**, and re-seed test subjects
 rather than assuming yesterday's are still there.
 
-### The filter badge anomaly — observed, unexplained, probe defined
+### The filter badge anomaly — PROBE RUN 2026-07-23; rotation exonerated, "3" not reproducible
+
+**Result first, so nobody re-runs it.** The probe below was finally run on the
+tablet over network adb (2026-07-23, build `eff1efa`). Four readings:
+
+| state | badge |
+|---|---|
+| cold launch in **landscape**, ~20s to settle | **1** |
+| **rotated to portrait**, same process, no restart | **1** |
+| cold launch straight into **portrait**, sampled at 4s / 10s / 24s | **1** |
+| …and those three portrait frames are **byte-identical** (same md5) | — |
+
+**Rotation is exonerated.** It does not rewrite the active query: the badge is
+unmoved by a rotation with the process still running. And there is no
+late-defaults transient either — the 4s frame already equals the 24s frame
+pixel for pixel, so nothing is landing after first paint to change the count.
+
+**The "3" is not reproducible on the current build**, in either orientation, at
+any sampling point. What has *not* been proven is what produced it originally.
+The reading that survives: the count was taken while browse was on a **different
+defaults state** — the `account` source with a synced purity/categories/topRange
+that genuinely differed from baseline in three classes — not while the device
+was on the state it now holds. That is consistent with the arithmetic below
+(which never could produce 3 from *these* defaults) and with
+`browseDefaultsSource` being a switch the owner has since moved.
+
+**Do not spend another slice on this without a fresh sighting.** If the 3 ever
+returns, the thing to capture is the *filter sheet contents* at that moment, not
+the badge — the badge is a count and the sheet is the evidence.
+
+The original write-up follows, unchanged, because its arithmetic is still the
+reference for what the badge counts.
+
+---
 
 **Do not treat this as understood.** Browse's filter badge read **1** in
 landscape right after launch, and **3** in portrait a few minutes later. The
@@ -1402,7 +1440,9 @@ back to landscape and read the badge again. **If it stays 3, rotation is
 exonerated** and this is defaults landing late; if it drops to 1, rotation really
 is rewriting the active query and that is a defect worth its own slice. This
 session tried exactly that and the tablet dropped off the USB bus mid-probe
-before the reading came back.
+before the reading came back. *(Run 2026-07-23 — see the result block above.
+The badge stayed at 1 throughout, which lands on the first branch: rotation
+exonerated.)*
 
 ## E — the visual identity, chosen 2026-07-19; built and device-verified
 
@@ -1922,12 +1962,18 @@ has its own section below, do not re-derive):
    - ~~**The lone history tile**~~ **DONE (`28fbfbb`)** — a loose `Stack` let
      `WallpaperTile` shrink to its decoded size; `StackFit.expand` fixed it. See
      *The lone history tile anomaly* (now headed SOLVED).
-   - **The filter badge anomaly — NARROWED, not fixed.** In code the landscape
-     "1" is arguably correct (only `ratios` differs from baseline; `resolution`
-     stays `Automatic` == baseline, so it isn't counted — the "expected 2"
-     assumed a `forScreen` substitution that does not happen at this layer). The
-     unexplained part is the portrait "3"; it still needs the rotation probe. See
-     *The filter badge anomaly*.
+   - ~~**The filter badge anomaly**~~ **CLOSED (probe run 2026-07-23).** In code
+     the landscape "1" is arguably correct (only `ratios` differs from baseline;
+     `resolution` stays `Automatic` == baseline, so it isn't counted — the
+     "expected 2" assumed a `forScreen` substitution that does not happen at
+     this layer). The rotation probe finally ran on the tablet and **the badge
+     stays 1** — cold launch in landscape, rotated to portrait in the same
+     process, and cold launch straight into portrait sampled at 4s/10s/24s
+     (byte-identical frames). Rotation is exonerated, there is no late-defaults
+     transient, and the portrait "3" is not reproducible on this build. See
+     *The filter badge anomaly* for what would still explain the original
+     sighting, and for the rule: **do not spend a slice on this without a fresh
+     sighting.**
 
 **4. A whole-app once-over — IN PROGRESS (`6842b5f`, `a2abfc8`).** A broad sweep across
 browse / detail / favorites / viewer, not scoped to one area. The owner flags
@@ -2067,15 +2113,22 @@ attached is worse than no warning, and I4 is what attaches the remedy.
 - Regression: the existing *long-press download exposes all three one-download
   destinations* test moves from sheet to dialog.
 
-### Open questions for the owner
+### Settled by the owner, 2026-07-23 — do not re-open
 
-1. **Dialog or a real pushed screen?** Dialog recommended above; the word used
-   was "screen".
-2. **Threshold 3 forever, or ask once?** If the suggestion is dismissed, does it
-   come back on the next download, or stay quiet until the streak grows again?
-3. **Does "Always" also belong on the download-complete toast**, or chooser
-   only? The toast reaches the plain-tap path, which is where a user who never
-   long-presses would meet it.
+1. **Centred dialog, not a pushed route.** Confirmed against the mock in the
+   slice-I1 note above. "Screen" in the original request meant *not at the
+   bottom of the page*, not *a route of its own*.
+2. **"Always save X here" lives in the chooser only.** Not on the success toast,
+   not as a Settings nudge — it should only meet the people who are already
+   long-pressing, and the plain-tap path stays silent.
+3. **H merges to `master` first**, then I opens on its own branch.
+
+### Still open
+
+- **Threshold 3 forever, or ask once?** If the suggestion is dismissed, does it
+  return on the next download or stay quiet until the streak grows again?
+  Decide when I3 is built — it is a one-line policy either way, and the device
+  will have an opinion.
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 
