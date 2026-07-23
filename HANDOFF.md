@@ -2,10 +2,18 @@
 
 Updated: 2026-07-23
 
-> **START HERE — I (the download destination decision) is BUILT, slices I1–I3,
-> on branch `feat/download-destination` off `master` (`ee09b3b`).** Not merged,
-> not pushed. **875 Dart tests**, analyze + format clean; no `android/` change,
-> so the 34 Kotlin tests are untouched. The three slices, newest first:
+> **START HERE — I (the download destination decision) is COMPLETE, all four
+> slices, on branch `feat/download-destination` off `master` (`ee09b3b`).** Not
+> merged, not pushed. **877 Dart tests**, and the full gate (`make ci`) is green
+> both ways — no `android/` change, so the 34 Kotlin tests pass untouched. Ready
+> to merge into `master` through the gate when called. The slices, newest first:
+> - `1b837a5` **I4 — the grid's download gets a destination.** The browse
+>   long-press sheet's Download row had no destination choice at all; it now
+>   wears the purity tint and, for a not-safe wallpaper, its tap opens the same
+>   chooser (safe still routes silently). The detail/grid asymmetry is forced by
+>   the surface — the grid row has no long press to hide a chooser behind.
+>   **Device-verified**: red Download row → Sketchy chooser, already showing the
+>   streak shared with the detail-screen runs.
 > - `bbc679e` **I3 — the chooser learns the habit.** When a run of downloads has
 >   diverged from where a plain tap routes, the destination dialog marks it
 >   ("Last 3 saved here") and offers one action, "Always save Safe here", that
@@ -32,9 +40,10 @@ Updated: 2026-07-23
 > row, the private library. Planned as **J** below; **not started**, and it needs
 > native work (see the section for why `forget()` can't already do this).
 >
-> **Next:** finish I (I4 — the same dialog + memory on the browse long-press
-> sheet, which today has no destination choice at all), then decide merge vs.
-> continue into J. Older START-HERE for H follows.
+> **Next:** merge `feat/download-destination` into `master` through the gate
+> (`merge.ff false`), then **J** — the hard delete (owner request, planned
+> below; needs its three open questions answered and owes native/Kotlin work).
+> Older START-HERE for H follows.
 >
 > **What to do next:** open a branch off `master` and build **I — the download
 > destination decision** (its own section, just below H). The owner settled its
@@ -2047,17 +2056,17 @@ Docker toolchain, not host flutter; `make deploy` to the tablet (**never**
 and `dart format .` clean before every commit; and the merge gate wants a real
 merge commit (`merge.ff false`), so run `make hooks` in a fresh clone.
 
-## I — the download destination decision, scoped 2026-07-23; I1–I3 BUILT, I4 open
+## I — the download destination decision, scoped 2026-07-23; COMPLETE (I1–I4)
 
 Asked for by the owner on the device, 2026-07-23, in the same breath as the
 purity tint that shipped as `eff1efa`. **This is new capability, not polish** —
 it does not belong inside H, and H's "no new capability" rule is why it is
 written down here instead.
 
-**Status:** on `feat/download-destination` off `master`. I1 (`18f44fa`), I2
-(`a5e9ef9`), I3 (`bbc679e`) all built and — for the ones with a visible surface —
-device-verified. **I4 is the only slice left.** See the per-slice notes below,
-each now headed with what actually landed.
+**Status: COMPLETE.** On `feat/download-destination` off `master`. I1
+(`18f44fa`), I2 (`a5e9ef9`), I3 (`bbc679e`), I4 (`1b837a5`) all built and
+device-verified. Full gate green both ways (877 Dart, 34 Kotlin). Ready to
+merge. See the per-slice notes below.
 
 ### The problem, in the owner's words
 
@@ -2154,22 +2163,22 @@ Three steps, escalating, and the third is the whole point:
 - The NSFW invariant survives for free: "Always" goes through the
   `StorageSettings` constructor, which already throws on `nsfw → sharedGallery`.
 
-### Slice I4 — the other entry point — **THE ONLY SLICE LEFT**
+### Slice I4 — the other entry point — **DONE (`1b837a5`), device-verified**
 
-`wallpaper_quick_sheet.dart`'s Download row has **no destination choice at
-all**: a long press on a grid tile can only accept the configured routing. Give
-it the same dialog on the same gesture, then the purity tint too. The tint was
-deliberately left off the quick sheet in `eff1efa` — a warning with no remedy
-attached is worse than no warning, and I4 is what attaches the remedy.
+`wallpaper_quick_sheet.dart`'s Download row had **no destination choice at
+all**. It now tints for a not-safe wallpaper (`purityAlertTint`) and, for one,
+its tap opens `chooseDownloadDestination` via a new `_resolveDestination` helper
+— which returns `(proceed, tier)` so a dismissed chooser downloads nothing and a
+safe wallpaper skips it and routes silently. A `remember`ed choice persists
+through `storageSettingsProvider.route`, so the memory is shared with the detail
+screen (verified: the grid chooser showed the streak the detail runs built).
 
-The wiring to copy is `wallpaper_detail_screen.dart`'s `_chooseDownloadTier`
-(read streak + `storageSettingsProvider.future`, call `chooseDownloadDestination`,
-persist a `remember`ed choice through `storageSettingsProvider.route`). The
-quick sheet is a `ConsumerWidget` in `features/browse`, so `storageSettingsProvider`
-being in `app/` now (moved in I3) is what makes this reachable without a
-sideways import. Note the quick sheet runs its actions **after** the sheet pops,
-via `runWallpaperQuickAction` over a still-mounted context — the chooser has to
-open from there, not from inside the popped sheet.
+**The detail/grid asymmetry is deliberate**, and worth not "fixing": the detail
+button has a long press to reach the chooser, so its *tap* stays silent even for
+not-safe content; the quick-sheet row has no second gesture, so a silent
+not-safe tap would leave the grid unable to choose at all. Different affordance
+budgets, different rule. This was reachable without a sideways import only
+because I3 moved `storageSettingsProvider` to `app/`.
 
 ### Tests this owes — I1–I3 DONE, I4 outstanding
 
@@ -2183,8 +2192,9 @@ open from there, not from inside the popped sheet.
   explicit→files corner withholds "Always"
   (`download_destination_dialog_test.dart`); and the detail screen persists a
   remembered choice (`wallpaper_detail_screen_test.dart`).
-- ⬜ **I4**: the browse quick sheet opens the same dialog and honours a
-  remembered choice.
+- ✅ **I4**: the browse quick sheet skips the chooser for a safe wallpaper and
+  opens it for a not-safe one, routing to the picked tier
+  (`browse_quick_actions_test.dart`).
 
 ### Settled by the owner, 2026-07-23 — do not re-open
 
