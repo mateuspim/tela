@@ -12,6 +12,7 @@ import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
+import 'package:tela/core/ui/sheet_header.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/core/ui/tela_toast.dart';
@@ -230,7 +231,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          ListTile(title: Text(l10n.detailDownloadChooseTier)),
+          SheetHeader(title: l10n.detailDownloadChooseTier),
           for (final StorageTier tier in StorageSettings.choicesFor(
             _wallpaper.purity,
           ))

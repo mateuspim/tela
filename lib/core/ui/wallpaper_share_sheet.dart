@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/sheet_header.dart';
 import 'package:tela/domain/models/share_option.dart';
 
 /// Asks whether to share a wallpaper's link or its image file.
@@ -29,7 +30,7 @@ Widget _shareSheet(BuildContext context, List<ShareOption> options) {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        ListTile(title: Text(l10n.detailShareTitle)),
+        SheetHeader(title: l10n.detailShareTitle),
         for (final ShareOption option in options) _shareTile(context, option),
       ],
     ),

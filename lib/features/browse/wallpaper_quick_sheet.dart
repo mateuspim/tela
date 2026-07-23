@@ -5,6 +5,7 @@ import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
+import 'package:tela/core/ui/sheet_header.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
@@ -200,7 +201,7 @@ class _QuickActionSheet extends ConsumerWidget {
             // long press landed on the tile you aimed at, because nobody
             // recognises a wallhaven id by eye. A thumbnail here would; left
             // as a follow-up rather than widened into this slice.
-            ListTile(title: Text(l10n.detailPreviewLabel(wallpaper.id))),
+            SheetHeader(title: l10n.detailPreviewLabel(wallpaper.id)),
             _tile(
               context,
               isFavorite ? Icons.favorite : Icons.favorite_border,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/sheet_header.dart';
 import 'package:tela/core/ui/storage_volume_kind_text.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 
@@ -33,7 +34,7 @@ Widget _volumeSheet(BuildContext context, bool offerSdCard) {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        ListTile(title: Text(l10n.settingsDownloadLocationTitle)),
+        SheetHeader(title: l10n.settingsDownloadLocationTitle),
         _volumeTile(context, l10n, StorageVolumeKind.device),
         if (offerSdCard) _volumeTile(context, l10n, StorageVolumeKind.sdCard),
       ],
