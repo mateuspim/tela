@@ -2040,7 +2040,23 @@ the private library long-presses forever, and the one time they forget, the
 image is in Photos. `eff1efa` made the *need* to decide visible; it did nothing
 about the *cost* of deciding.
 
-### Slice I1 — the chooser stops being a bottom sheet
+### Slice I1 — the chooser stops being a bottom sheet — **DONE (`18f44fa`), device-verified**
+
+Built as designed and walked on the tablet (2026-07-23), both branches: a
+Sketchy wallpaper shows the red purity line, a Safe one shows none. Two notes
+for whoever picks up I2:
+
+- **`AlertDialog` does not cap its own width.** The content sits in a 360dp
+  `ConstrainedBox`, which is intersected with the dialog's own constraints — so
+  a narrow phone gets less than 360 and nothing overflows. Do not "simplify"
+  this into a `SizedBox`; that overflows below ~440dp of screen.
+- **No new l10n strings were needed** — `detailDownloadChooseTier` and
+  `actionCancel` already existed. I3's "Always save X here" is the first string
+  this feature owes.
+
+The original design note follows.
+
+
 
 Replace `_downloadTierSheet` in `wallpaper_detail_screen.dart` with a shared
 `lib/core/ui/download_destination_dialog.dart`: a centred `Dialog` — the
