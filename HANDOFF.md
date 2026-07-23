@@ -2,10 +2,30 @@
 
 Updated: 2026-07-23
 
-> **The fifth UI pass (H) is underway on branch `feat/ui-pass-h` — five
-> commits, not yet merged; the first three device-verified on the tablet, the
-> last two (Thread 2 vocabulary, Thread 4 sheet headers) code-only so far.** Off
-> `master` (`bdea572`):
+> **The fifth UI pass (H) is underway on branch `feat/ui-pass-h` — six
+> commits, not yet merged; four device-verified on the tablet, two (Thread 2
+> vocabulary, Thread 4 sheet headers) code-only so far.** Off `master`
+> (`bdea572`). **A seventh item is scoped but not started** — the owner asked
+> for a redesigned destination chooser with a memory; that is *new capability*,
+> so it is written up separately as **I — the download destination decision**,
+> just below the H section. Do not fold it into H.
+> -2. `eff1efa` **A not-safe wallpaper asks before it lands** (owner request,
+>    2026-07-23; strictly this is I's first slice, landed on the H branch
+>    because it is three lines of UI). The detail action bar drew the same grey
+>    download glyph whatever the purity, so nothing said "decide where this one
+>    goes" before the tap — and **sketchy is the case that stings**: it follows
+>    the *safe* setting straight into the MediaStore-indexed gallery, so a
+>    suggestive wallpaper lands in Photos because nothing on the way in said it
+>    was suggestive. The glyph now wears `ColorScheme.error` for sketchy **and**
+>    explicit (`lib/core/ui/purity_alert_tint.dart`). One tint for both on
+>    purpose — the question the colour answers is *"should I pick where this
+>    lands?"* and both answer yes. The purity name rides in the Semantics
+>    **hint**, not the label: the label stays `"Download"` so every caller that
+>    looks the control up by name (the tests do) still finds it. `error` rather
+>    than a constant of ours because `TelaTheme`'s accent splice leaves the
+>    error roles alone — it is the one warm role a user's chosen accent cannot
+>    repaint into the thing it is warning about. **Device-verified** on the
+>    tablet: Sketchy detail shows the red glyph, Safe does not.
 > -1. `a2abfc8` **Thread 4 — chooser-sheet headers.** Every action-chooser sheet
 >    (wallpaper target, share, download volume, per-download tier, long-press
 >    quick actions) headed itself with a bare `ListTile(title:)`, giving the
@@ -52,7 +72,7 @@ Updated: 2026-07-23
 > the untouched surfaces surveyed this session, favorites/viewer/immersive
 > controls, read clean in code, so the rest is genuinely device-discovered).
 >
-> **843 Dart tests green**, analyze + format clean; no `android/` change, so the
+> **847 Dart tests green**, analyze + format clean; no `android/` change, so the
 > 34 Kotlin tests are untouched. **A test download was left in the tablet's
 > Download history** (added to reproduce the lone-tile bug) — harmless; one
 > long-press → Remove clears it. Merge `feat/ui-pass-h` into `master` through
@@ -1938,6 +1958,124 @@ Docker toolchain, not host flutter; `make deploy` to the tablet (**never**
 `android/` owes **both** `flutter test` and `make kotlin-test`; `flutter analyze`
 and `dart format .` clean before every commit; and the merge gate wants a real
 merge commit (`merge.ff false`), so run `make hooks` in a fresh clone.
+
+## I — the download destination decision, scoped 2026-07-23; NOT STARTED
+
+Asked for by the owner on the device, 2026-07-23, in the same breath as the
+purity tint that shipped as `eff1efa`. **This is new capability, not polish** —
+it does not belong inside H, and H's "no new capability" rule is why it is
+written down here instead.
+
+### The problem, in the owner's words
+
+> *"a better dialog to show where it downloads — don't open on the bottom of the
+> page but a screen with buttons to show where download, and it has a memory: to
+> show 'you downloaded the last 3 images in private, continue saving to
+> private?'"*
+
+Two complaints, one root. Choosing a destination today means long-pressing the
+download button and picking from a small bottom sheet, and the choice is **per
+download with no memory at all**. A user who wants every sketchy wallpaper in
+the private library long-presses forever, and the one time they forget, the
+image is in Photos. `eff1efa` made the *need* to decide visible; it did nothing
+about the *cost* of deciding.
+
+### Slice I1 — the chooser stops being a bottom sheet
+
+Replace `_downloadTierSheet` in `wallpaper_detail_screen.dart` with a shared
+`lib/core/ui/download_destination_dialog.dart`: a centred `Dialog` — the
+wallpaper's purity as a caption, then one **large button per tier**, each
+carrying the icon/label/detail `storage_tier_text.dart` already provides.
+
+Option list still comes from `StorageSettings.choicesFor(purity)`. That is not
+an implementation detail to inline: it is where the NSFW invariant lives, and it
+is why the gallery button cannot appear for an explicit wallpaper.
+
+**Dialog, not a pushed route — recommended, but the owner said "screen", so
+confirm.** A route push animates the wallpaper away and back to ask a
+three-option question, and on the 840dp+ tablet a full screen for three buttons
+is mostly empty. A dialog is centred (which is the actual complaint — *not at
+the bottom*), caps at ~420dp, and goes full-width on a phone. If the owner
+wants a real route, it is the same widget under `showDialog` → `context.push`.
+
+### Slice I2 — the memory, and why it needs its own store
+
+**`DownloadHistory` cannot power this — check before reaching for it.**
+`DownloadWallpaper._remember` deliberately drops every explicit download *and*
+every `appPrivate` one. That is exactly the streak the owner wants remembered
+("the last 3 in private"), so the history is blind to it by design and must stay
+that way.
+
+That constraint is a privacy win rather than a workaround: the memory stores
+only **`(purity bucket, tier, count)`** — no wallpaper id, no path, no URL. It
+cannot leak *what* was saved, only how many in a row went the same way, which
+keeps it clear of the NSFW logging rules entirely.
+
+- New model `lib/domain/models/download_destination_streak.dart`:
+  `DownloadDestinationStreak { StorageTier tier; int length; }`.
+- New pair on `SettingsRepository` (already a pure-domain port with no vendor
+  behind it, so nothing new gets wrapped):
+  - `Future<DownloadDestinationStreak?> loadDestinationStreak(Purity purity)`
+  - `Future<void> recordDestination(Purity purity, StorageTier tier)` — same
+    tier ⇒ `length + 1`; a different tier ⇒ reset to 1.
+- Keyed by the **same two buckets `StorageSettings.tierFor` uses** (nsfw vs
+  everything else), not by all three purities. Two knobs, not three — sketchy
+  follows safe here for the same reason it does there.
+- Written from `DownloadWallpaper.call` using `stored.tier` — where the file
+  actually *landed*, not what was requested. `_remember` already applies that
+  rule; this is the second reader of it.
+- Never throws. Unreadable answers null, and null just means no suggestion.
+
+### Slice I3 — what the memory is allowed to do
+
+Three steps, escalating, and the third is the whole point:
+
+1. The chooser marks the streak destination: *"Last 3 went here."*
+2. Once `length >= 3` **and** the streak tier differs from
+   `settings.tierFor(purity)`, the chooser grows a second action — **"Always
+   save Sketchy here"** — which writes `StorageSettings.copyWith(...)`. The
+   long-pressing stops, which is the actual fix.
+3. **The plain tap never changes.** It still routes by settings, silently. A
+   suggestion that quietly redirected an un-long-pressed download would be a
+   worse bug than the one this slice is fixing.
+
+- Threshold `3` is the owner's own number; one named constant, not a scatter.
+- Reset when the user picks a different tier, or when Settings changes that
+  purity's tier out from under it.
+- The NSFW invariant survives for free: "Always" goes through the
+  `StorageSettings` constructor, which already throws on `nsfw → sharedGallery`.
+
+### Slice I4 — the other entry point
+
+`wallpaper_quick_sheet.dart`'s Download row has **no destination choice at
+all**: a long press on a grid tile can only accept the configured routing. Give
+it the same dialog on the same gesture, then the purity tint too. The tint was
+deliberately left off the quick sheet in `eff1efa` — a warning with no remedy
+attached is worse than no warning, and I4 is what attaches the remedy.
+
+### Tests this owes
+
+- `purityAlertTint` — **already done** (`test/core/ui/purity_alert_tint_test.dart`).
+- Streak arithmetic, plain Dart: same tier grows, a different tier resets to 1,
+  the two purity buckets stay independent.
+- `DownloadWallpaper` records the *landed* tier — including for the explicit and
+  private downloads the history drops, which is the case a naive
+  implementation gets wrong.
+- Widget: the streak line shows at 3 and not at 2; it is withheld when the
+  streak already equals the configured tier (nothing to suggest); "Always"
+  writes settings; the gallery button never appears for explicit.
+- Regression: the existing *long-press download exposes all three one-download
+  destinations* test moves from sheet to dialog.
+
+### Open questions for the owner
+
+1. **Dialog or a real pushed screen?** Dialog recommended above; the word used
+   was "screen".
+2. **Threshold 3 forever, or ask once?** If the suggestion is dismissed, does it
+   come back on the next download, or stay quiet until the streak grows again?
+3. **Does "Always" also belong on the download-complete toast**, or chooser
+   only? The toast reaches the plain-tap path, which is where a user who never
+   long-presses would meet it.
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 
