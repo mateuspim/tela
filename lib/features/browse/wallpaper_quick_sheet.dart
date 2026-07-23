@@ -3,15 +3,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
+import 'package:tela/core/ui/purity_alert_tint.dart';
 import 'package:tela/core/ui/sheet_header.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
+import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/storage_settings.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
+import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 
 /// What a long press on a wall tile offers, without opening the wallpaper.
@@ -115,6 +123,15 @@ Future<void> _download(
   WidgetRef ref,
   Wallpaper wallpaper,
 ) async {
+  // A not-safe wallpaper opens the chooser first: the grid's only download path
+  // is this row, so unlike the detail screen there is no long press to reach a
+  // destination — and a sketchy download silently entering the gallery is the
+  // exact surprise the tint on this row warns about. A safe one still routes
+  // silently, as a plain tap does everywhere.
+  final ({bool proceed, StorageTier? tier}) destination =
+      await _resolveDestination(context, ref, wallpaper);
+  if (!destination.proceed || !context.mounted) return;
+
   // Read before the await, not after: the snackbar is shown across an async gap
   // and the wall may have been navigated away from by then.
   final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
@@ -123,6 +140,7 @@ Future<void> _download(
     wallpaper,
     chooseVolume: ({required bool offerSdCard}) =>
         chooseDownloadVolume(context, offerSdCard: offerSdCard),
+    tier: destination.tier,
   );
   switch (outcome) {
     case DownloadOutcome.saved:
@@ -139,6 +157,44 @@ Future<void> _download(
     case DownloadOutcome.cancelled:
       break;
   }
+}
+
+/// Where a grid download should land: which tier, and whether to go ahead.
+///
+/// A safe wallpaper proceeds straight to its configured destination
+/// (`tier: null`), the same silent routing a plain tap does. A not-safe one
+/// opens the shared [chooseDownloadDestination] first — the grid's only remedy
+/// for the destination it cannot otherwise pick — and a dismissed chooser
+/// answers `proceed: false` so nothing downloads. A remembered choice is
+/// persisted through the same controller Settings writes.
+Future<({bool proceed, StorageTier? tier})> _resolveDestination(
+  BuildContext context,
+  WidgetRef ref,
+  Wallpaper wallpaper,
+) async {
+  if (wallpaper.purity == Purity.sfw) {
+    return (proceed: true, tier: null);
+  }
+  final SettingsRepository settings = ref.read(settingsRepositoryProvider);
+  final StorageSettings storage = await ref.read(
+    storageSettingsProvider.future,
+  );
+  final DownloadDestinationStreak? streak = await settings
+      .loadDestinationStreak(wallpaper.purity);
+  if (!context.mounted) return (proceed: false, tier: null);
+  final DownloadDestinationChoice? choice = await chooseDownloadDestination(
+    context,
+    purity: wallpaper.purity,
+    configuredTier: storage.tierFor(wallpaper.purity),
+    streak: streak,
+  );
+  if (choice == null) return (proceed: false, tier: null);
+  if (choice.remember) {
+    await ref
+        .read(storageSettingsProvider.notifier)
+        .route(wallpaper.purity, choice.tier);
+  }
+  return (proceed: true, tier: choice.tier);
 }
 
 /// Asks Home/Lock/Both first, through the same chooser the detail screen and
@@ -213,6 +269,13 @@ class _QuickActionSheet extends ConsumerWidget {
               Icons.download_outlined,
               l10n.detailDownload,
               WallpaperQuickAction.download,
+              // The same warm signal the detail button wears, for the same
+              // reason: a not-safe wallpaper here is one tap from the gallery,
+              // and this row is where that tap begins.
+              tint: purityAlertTint(
+                Theme.of(context).colorScheme,
+                wallpaper.purity,
+              ),
             ),
             _tile(
               context,
@@ -243,11 +306,12 @@ class _QuickActionSheet extends ConsumerWidget {
     BuildContext context,
     IconData icon,
     String label,
-    WallpaperQuickAction action,
-  ) {
+    WallpaperQuickAction action, {
+    Color? tint,
+  }) {
     return ListTile(
-      leading: Icon(icon),
-      title: Text(label),
+      leading: Icon(icon, color: tint),
+      title: Text(label, style: tint == null ? null : TextStyle(color: tint)),
       onTap: () => Navigator.pop(context, action),
     );
   }
