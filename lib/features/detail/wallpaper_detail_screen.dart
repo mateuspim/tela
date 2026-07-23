@@ -8,14 +8,13 @@ import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/purity_alert_tint.dart';
-import 'package:tela/core/ui/sheet_header.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
-import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
 import 'package:tela/core/ui/wallpaper_share_sheet.dart';
@@ -25,7 +24,6 @@ import 'package:tela/domain/models/bitmap_export_rule.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/share_option.dart';
-import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -216,40 +214,16 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
   }
 
+  /// Offers only the tiers this wallpaper's purity is allowed to land in, so a
+  /// one-off override cannot do what the settings screen forbids — the dialog
+  /// asks the domain for that list rather than being told it from here.
   Future<void> _chooseDownloadTier() async {
-    final StorageTier? tier = await showModalBottomSheet<StorageTier>(
-      context: context,
-      builder: _downloadTierSheet,
+    final StorageTier? tier = await chooseDownloadDestination(
+      context,
+      _wallpaper.purity,
     );
     if (tier == null || !mounted) return;
     await _download(tier);
-  }
-
-  /// Offers only the tiers this wallpaper's purity is allowed to land in, so a
-  /// one-off override cannot do what the settings screen forbids.
-  Widget _downloadTierSheet(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SheetHeader(title: l10n.detailDownloadChooseTier),
-          for (final StorageTier tier in StorageSettings.choicesFor(
-            _wallpaper.purity,
-          ))
-            _downloadTierTile(l10n, tier),
-        ],
-      ),
-    );
-  }
-
-  Widget _downloadTierTile(AppLocalizations l10n, StorageTier tier) {
-    return ListTile(
-      leading: Icon(storageTierIcon(tier)),
-      title: Text(storageTierLabel(l10n, tier)),
-      subtitle: Text(storageTierDetail(l10n, tier)),
-      onTap: () => Navigator.pop(context, tier),
-    );
   }
 
   /// Downloads to [tier], or to the configured destination when it is null.
