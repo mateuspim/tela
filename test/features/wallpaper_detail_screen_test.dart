@@ -448,6 +448,28 @@ void main() {
     expect(find.text('Private library'), findsOneWidget);
   });
 
+  testWidgets('the download button warns before a not-safe wallpaper lands', (
+    WidgetTester tester,
+  ) async {
+    // Sketchy is the case that stings, so it is the one pinned here: it routes
+    // to the MediaStore-indexed gallery exactly like a safe wallpaper, the
+    // long press that would send it elsewhere is invisible, and nothing else
+    // on this screen tells the two apart at a glance.
+    await _pumpDetail(tester, _details(purity: Purity.sketchy));
+
+    final ColorScheme colors = Theme.of(
+      tester.element(find.byType(WallpaperDetailScreen)),
+    ).colorScheme;
+    expect(_downloadIcon(tester).color, colors.error);
+  });
+
+  testWidgets('the download button stays quiet for a safe wallpaper', (
+    WidgetTester tester,
+  ) async {
+    await _pumpDetail(tester, _details());
+    expect(_downloadIcon(tester).color, isNull);
+  });
+
   testWidgets('the share menu offers the link and the image for safe content', (
     WidgetTester tester,
   ) async {
@@ -692,6 +714,17 @@ void main() {
     expect(history.recorded, hasLength(1));
     expect(await container.read(recentDownloadsProvider.future), hasLength(1));
   });
+}
+
+/// The action-bar download glyph, scoped so the fullscreen viewer's own
+/// download button can never be the one that answers.
+Icon _downloadIcon(WidgetTester tester) {
+  return tester.widget<Icon>(
+    find.descendant(
+      of: find.bySemanticsLabel('Download'),
+      matching: find.byIcon(Icons.download_outlined),
+    ),
+  );
 }
 
 /// A two-wallpaper Detail session, for the swipe and chevron paging tests.

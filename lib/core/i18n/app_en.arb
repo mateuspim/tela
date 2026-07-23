@@ -469,6 +469,17 @@
     "description": "Downloads the current wallpaper to its configured destination."
   },
 
+  "detailDownloadPurity": "{purity}. Press and hold to choose where this lands.",
+  "@detailDownloadPurity": {
+    "description": "Spoken hint on the download button for a sketchy or explicit wallpaper, which is the same thing the button's tint says.",
+    "placeholders": {
+      "purity": {
+        "type": "String",
+        "example": "Sketchy"
+      }
+    }
+  },
+
   "detailDownloadChooseTier": "Download to",
   "@detailDownloadChooseTier": {
     "description": "Heading above the one-download storage destination choices."
