@@ -1,10 +1,20 @@
 # tela handoff
 
-Updated: 2026-07-22
+Updated: 2026-07-23
 
-> **The fifth UI pass (H) is underway on branch `feat/ui-pass-h` — three
-> commits, not yet merged, device-verified on the tablet.** Off `master`
-> (`bdea572`):
+> **The fifth UI pass (H) is underway on branch `feat/ui-pass-h` — four
+> commits, not yet merged; the first three device-verified on the tablet, the
+> fourth (Thread 2) code-only so far.** Off `master` (`bdea572`):
+> 0. `68e9d82` **Thread 2 — storage vocabulary: first coherence commit.** The
+>    three places that name a download destination (Settings device/card
+>    chooser, download-time device/card sheet, per-download tier override) had
+>    drifted into three copies of the same icon/label/detail mapping. Extracted
+>    `storage_volume_kind_text` (the volume twin of `storage_tier_text`) and
+>    routed the sheet + Settings chooser through it; gave the detail screen's
+>    per-download tier sheet the explanation subtitle every other destination
+>    list already carries. No behaviour change, no new strings. **Not yet on the
+>    device** — the visible change is the new subtitle in the per-download tier
+>    sheet.
 > 1. `161786f` **Thread 1 — Settings coherence: DONE.** The Downloads storage
 >    block reads as one unit now — captions unified to `SettingsSectionLabel`,
 >    internal slab dividers dropped for the Appearance caption+spacing rhythm,
@@ -21,14 +31,16 @@ Updated: 2026-07-22
 >    below (now headed SOLVED). Root cause was a loose `Stack`, **not** the
 >    layout math; fixed with `StackFit.expand`, regression guarded structurally.
 >
-> **Still open in H:** **Thread 2 (storage-flow polish** — wording/spacing/
-> iconography of the download-time device/card sheet, the pre-aimed pickers, the
-> ejection states — *not started*). **Thread 3's filter badge** (narrowed, not
-> fixed — see its section: the landscape "1" is arguably correct; only the
-> portrait "3" is unexplained and needs the rotation probe). **Thread 4's
-> whole-app once-over** continues (device-flagged; two items done above).
+> **Still open in H:** **Thread 2 (storage-flow polish** — *underway*: the
+> vocabulary/de-duplication commit above landed; what remains is device-driven
+> wording/spacing/iconography of the download-time device/card sheet, the
+> pre-aimed pickers, and the ejection states, none of which read as broken in
+> code — waiting on the tablet to flag anything). **Thread 3's filter badge**
+> (narrowed, not fixed — see its section: the landscape "1" is arguably correct;
+> only the portrait "3" is unexplained and needs the rotation probe). **Thread
+> 4's whole-app once-over** continues (device-flagged; two items done above).
 >
-> **839 Dart tests green**, analyze + format clean; no `android/` change, so the
+> **841 Dart tests green**, analyze + format clean; no `android/` change, so the
 > 34 Kotlin tests are untouched. **A test download was left in the tablet's
 > Download history** (added to reproduce the lone-tile bug) — harmless; one
 > long-press → Remove clears it. Merge `feat/ui-pass-h` into `master` through
@@ -1829,11 +1841,12 @@ capability** — keep the layout law (justified rows; masonry is gone, do not
 re-litigate) and the brand rules (`docs/BRAND.md`) intact while touching any of
 it.
 
-**Status (2026-07-22, branch `feat/ui-pass-h`, device-verified):** thread 1
-**done** (`161786f`); thread 3's **lone history tile done** (`28fbfbb`), its
-filter badge **narrowed** (not fixed); thread 4 **in progress** — two items done
-(`6842b5f`). **Thread 2 not started.** See the lead pointer at the top for the
-per-commit summary. The four threads, in the order offered (not a priority
+**Status (2026-07-23, branch `feat/ui-pass-h`):** thread 1 **done** (`161786f`,
+device-verified); thread 3's **lone history tile done** (`28fbfbb`,
+device-verified), its filter badge **narrowed** (not fixed); thread 4 **in
+progress** — two items done (`6842b5f`, device-verified). **Thread 2 underway**
+— first coherence commit landed (`68e9d82`, code-only, not yet on device). See
+the lead pointer at the top for the per-commit summary. The four threads, in the order offered (not a priority
 order — resequence on the device):
 
 **1. Settings coherence — DONE (`161786f`).** The storage half of Settings accreted across G:
@@ -1848,7 +1861,7 @@ must still never write `route(nsfw, files)` before the warning is confirmed. The
 tablet is sitting in the exact test state this thread should design for (Safe +
 Explicit → files → SD card, acked), which is why it was left unreverted.
 
-**2. Storage flow polish — NOT STARTED.** The flows slices 1–4 built — the download-time
+**2. Storage flow polish — UNDERWAY (`68e9d82`).** The flows slices 1–4 built — the download-time
 device/card sheet (`ConfiguredDownload`), the pre-aimed system pickers, and the
 ejection/unavailable states — work but were built function-first. Tighten
 wording, spacing, and iconography. All user-facing strings stay in l10n — they
@@ -1856,6 +1869,20 @@ live in `app_en.arb` (the ejection copy is *"Download folder unavailable.
 Reconnect the storage or pick another in Settings."*); no hardcoded strings, and
 regenerate l10n via `./tool/tela gen-l10n` (generated output is gitignored, not
 committed).
+   - **Done (`68e9d82`) — one vocabulary, three destination lists.** The
+     device/card sheet and the Settings chooser each hardcoded the same
+     `StorageVolumeKind → (icon, label, detail)` mapping; extracted
+     `lib/core/ui/storage_volume_kind_text.dart` (mirrors `storage_tier_text`)
+     so they can't drift, and gave the detail screen's per-download tier sheet
+     the explanation subtitle the other lists carry. No behaviour change, no new
+     strings. **Iconography note — do not "fix":** the volume sheet's device
+     icon is filled `Icons.smartphone`, *deliberately matching the Settings
+     chooser*, not the target sheet's `Icons.smartphone_outlined` — the two
+     volume choosers are a pair and must agree with each other.
+   - **Remaining is device-driven.** In code the sheets, the OS-owned pre-aimed
+     pickers, and the ejection toast copy read fine; the wording/spacing nits
+     this thread is scoped to want the tablet to surface them. Log them as
+     sub-items here as the device turns them up, like the earlier passes did.
 
 **3. The two carried anomalies** (closer to rendering bugs than polish — each
 has its own section below, do not re-derive):
