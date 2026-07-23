@@ -2,11 +2,39 @@
 
 Updated: 2026-07-23
 
-> **START HERE — H IS MERGED. The next work is I, the download destination
-> decision.** The fifth UI pass went into `master` as `ee09b3b` (2026-07-23), a
-> real merge commit off `bdea572` carrying six commits; the gate ran both suites
-> on the way in (**847 Dart, 34 Kotlin**). **Nothing is pushed** — `origin` has
-> not seen any of it.
+> **START HERE — I (the download destination decision) is BUILT, slices I1–I3,
+> on branch `feat/download-destination` off `master` (`ee09b3b`).** Not merged,
+> not pushed. **875 Dart tests**, analyze + format clean; no `android/` change,
+> so the 34 Kotlin tests are untouched. The three slices, newest first:
+> - `bbc679e` **I3 — the chooser learns the habit.** When a run of downloads has
+>   diverged from where a plain tap routes, the destination dialog marks it
+>   ("Last 3 saved here") and offers one action, "Always save Safe here", that
+>   persists it as the bucket's default through `storageSettingsProvider.route`
+>   — the same controller Settings writes, so Settings stays in step. Never a
+>   nag (the dialog is long-press-only), plain tap untouched. That provider
+>   **moved from `features/settings` to `app/`** (app-wide routing; detail may
+>   not import it sideways). One corner deferred to Settings on purpose:
+>   explicit→files-outside-gallery, whose removable-card warning lives there.
+>   **Device-verified**: three private downloads → the 4th long-press showed the
+>   mark + offer → taking it flipped Settings' Safe tier to Private library live.
+> - `a5e9ef9` **I2 — the memory.** `DownloadDestinationStreak` (tier + count, no
+>   wallpaper identity), two rows `downloads.streak.{sfw,nsfw}`, written from
+>   `DownloadWallpaper` on every download via `stored.tier`. **Could not** be
+>   built on `DownloadHistory` — it drops exactly the explicit/private runs the
+>   memory needs (test guards this). New `StorageSettings.bucketFor` spells the
+>   two-knobs rule once.
+> - `18f44fa` **I1 — the chooser is a centred dialog**, not a bottom sheet, one
+>   card per destination carrying its consequence. Plus `eff1efa` (already on
+>   `master` via H): the purity tint on the download glyph.
+>
+> **A new request landed 2026-07-23 (owner):** a **delete** button on a
+> downloaded wallpaper that removes it *from everything* — the file, the history
+> row, the private library. Planned as **J** below; **not started**, and it needs
+> native work (see the section for why `forget()` can't already do this).
+>
+> **Next:** finish I (I4 — the same dialog + memory on the browse long-press
+> sheet, which today has no destination choice at all), then decide merge vs.
+> continue into J. Older START-HERE for H follows.
 >
 > **What to do next:** open a branch off `master` and build **I — the download
 > destination decision** (its own section, just below H). The owner settled its
@@ -2019,12 +2047,17 @@ Docker toolchain, not host flutter; `make deploy` to the tablet (**never**
 and `dart format .` clean before every commit; and the merge gate wants a real
 merge commit (`merge.ff false`), so run `make hooks` in a fresh clone.
 
-## I — the download destination decision, scoped 2026-07-23; NEXT UP, branch not yet opened
+## I — the download destination decision, scoped 2026-07-23; I1–I3 BUILT, I4 open
 
 Asked for by the owner on the device, 2026-07-23, in the same breath as the
 purity tint that shipped as `eff1efa`. **This is new capability, not polish** —
 it does not belong inside H, and H's "no new capability" rule is why it is
 written down here instead.
+
+**Status:** on `feat/download-destination` off `master`. I1 (`18f44fa`), I2
+(`a5e9ef9`), I3 (`bbc679e`) all built and — for the ones with a visible surface —
+device-verified. **I4 is the only slice left.** See the per-slice notes below,
+each now headed with what actually landed.
 
 ### The problem, in the owner's words
 
@@ -2121,7 +2154,7 @@ Three steps, escalating, and the third is the whole point:
 - The NSFW invariant survives for free: "Always" goes through the
   `StorageSettings` constructor, which already throws on `nsfw → sharedGallery`.
 
-### Slice I4 — the other entry point
+### Slice I4 — the other entry point — **THE ONLY SLICE LEFT**
 
 `wallpaper_quick_sheet.dart`'s Download row has **no destination choice at
 all**: a long press on a grid tile can only accept the configured routing. Give
@@ -2129,19 +2162,29 @@ it the same dialog on the same gesture, then the purity tint too. The tint was
 deliberately left off the quick sheet in `eff1efa` — a warning with no remedy
 attached is worse than no warning, and I4 is what attaches the remedy.
 
-### Tests this owes
+The wiring to copy is `wallpaper_detail_screen.dart`'s `_chooseDownloadTier`
+(read streak + `storageSettingsProvider.future`, call `chooseDownloadDestination`,
+persist a `remember`ed choice through `storageSettingsProvider.route`). The
+quick sheet is a `ConsumerWidget` in `features/browse`, so `storageSettingsProvider`
+being in `app/` now (moved in I3) is what makes this reachable without a
+sideways import. Note the quick sheet runs its actions **after** the sheet pops,
+via `runWallpaperQuickAction` over a still-mounted context — the chooser has to
+open from there, not from inside the popped sheet.
 
-- `purityAlertTint` — **already done** (`test/core/ui/purity_alert_tint_test.dart`).
-- Streak arithmetic, plain Dart: same tier grows, a different tier resets to 1,
-  the two purity buckets stay independent.
-- `DownloadWallpaper` records the *landed* tier — including for the explicit and
-  private downloads the history drops, which is the case a naive
-  implementation gets wrong.
-- Widget: the streak line shows at 3 and not at 2; it is withheld when the
-  streak already equals the configured tier (nothing to suggest); "Always"
-  writes settings; the gallery button never appears for explicit.
-- Regression: the existing *long-press download exposes all three one-download
-  destinations* test moves from sheet to dialog.
+### Tests this owes — I1–I3 DONE, I4 outstanding
+
+- ✅ `purityAlertTint` (`test/core/ui/purity_alert_tint_test.dart`).
+- ✅ Streak arithmetic (`test/domain/models/download_destination_streak_test.dart`)
+  and its Drift round-trip + bucket isolation (`drift_settings_repository_test.dart`).
+- ✅ `DownloadWallpaper` records the *landed* tier, including the explicit/private
+  downloads the history drops (`download_wallpaper_test.dart`).
+- ✅ Dialog: streak line at 3 not 2, withheld when the run already equals the
+  default, "Always" returns `remember`, gallery never offered for explicit, the
+  explicit→files corner withholds "Always"
+  (`download_destination_dialog_test.dart`); and the detail screen persists a
+  remembered choice (`wallpaper_detail_screen_test.dart`).
+- ⬜ **I4**: the browse quick sheet opens the same dialog and honours a
+  remembered choice.
 
 ### Settled by the owner, 2026-07-23 — do not re-open
 
@@ -2155,10 +2198,82 @@ attached is worse than no warning, and I4 is what attaches the remedy.
 
 ### Still open
 
-- **Threshold 3 forever, or ask once?** If the suggestion is dismissed, does it
-  return on the next download or stay quiet until the streak grows again?
-  Decide when I3 is built — it is a one-line policy either way, and the device
-  will have an opinion.
+- ~~**Threshold 3 forever, or ask once?**~~ **Decided in I3: threshold 3, no
+  cooldown.** Because the chooser is only reached by a deliberate long press,
+  the offer is never unsolicited — it just waits in a sheet the user opened, and
+  clears itself the moment they take it or route elsewhere. No dismiss state to
+  track. (`download_destination_dialog.dart`, `_alwaysAction`.)
+
+## J — delete a download, everywhere it is, scoped 2026-07-23; NOT STARTED
+
+Owner request, 2026-07-23 (mid-I3): *"a delete button on a downloaded image to
+remove from storage, remove from history, remove from everything."* New
+capability. Needs **native work** — do not assume it is a UI-only slice.
+
+### Why `forget()` does not already do this — read before designing
+
+`DownloadHistory.forget(id)` is **deliberately list-only** and its docstring
+says so: for the gallery and files-outside-gallery tiers the file lives where
+Photos and every file manager can already delete it, and "tela deleting it from
+behind a tile that merely *looks* like a file is how someone loses a wallpaper
+they meant to keep." So J is **not** "make forget also delete" — it is a second,
+louder, explicitly-confirmed action that sits beside forget, not on top of it.
+Keep both: *Remove from history* (index only, unchanged) and *Delete from
+device* (the new hard delete).
+
+### What "everything" is, per tier
+
+A downloaded wallpaper is in exactly one storage tier plus (sometimes) a history
+row. The hard delete has to reach both, and the file deletion differs by tier:
+
+- **`appPrivate`** — tela owns the file outright. `ImageStore.deletePrivateImage`
+  already exists and the private library screen already calls it. No history row
+  exists for this tier (`_remember` drops it), so here "everything" is just the
+  private delete. **This tier needs no new native code.**
+- **`filesOutsideGallery`** — tela holds the SAF grant for the folder it wrote,
+  so it *can* delete the file it created. Needs a new native delete-by-document
+  path.
+- **`sharedGallery`** — MediaStore. On API 30+ deleting media tela did not
+  create (or even that it did) goes through `MediaStore.createDeleteRequest`,
+  which shows the **OS's own confirmation**. That is a launched intent with a
+  result, not a silent call — the trickiest part of J, and the reason this is
+  not UI-only. (tela's `minSdk` is 29; on 29 a direct delete works, 30+ wants
+  the request. Handle both.)
+
+### Shape of the work
+
+1. **Port**: add `ImageStore.deleteDownload({required StorageTier tier, required
+   Uri location})` (or delete by a `StoredImage`/`DownloadRecord`). It routes to
+   the private delete, the SAF delete, or the MediaStore delete by tier. Keep
+   `deletePrivateImage` as-is or express it through the new method — one of the
+   two, not both doing the same thing.
+2. **Native (Kotlin)**: method-channel handlers for the SAF and MediaStore
+   deletes, the MediaStore one plumbing the `createDeleteRequest` intent result
+   back. **Owes `make kotlin-test` (Robolectric)** as well as `flutter test`.
+3. **Use case**: `DeleteDownload` — deletes the file via the port, then
+   `forget(id)` on the history (a no-op when there is no row, e.g. private). One
+   ordering decision: delete file first, then row, so a failed file delete does
+   not orphan the row's disappearance.
+4. **UI**: a destructive **Delete from device** action with a confirmation
+   dialog whose copy is honest about scope ("This deletes the file from your
+   device and removes it from your history. This cannot be undone."). It belongs
+   on the **download-history tile** (beside the existing *Remove from history*)
+   and on the **private-library tile** (which already deletes — fold its delete
+   into the same use case so there is one delete path, not two). Consider the
+   **detail screen** for an already-downloaded wallpaper too, but that needs a
+   "is this downloaded, and where" lookup the history/private-library screens
+   already have for free — decide when building.
+
+### Open questions for the owner (do not guess)
+
+1. **One button or two?** Keep *Remove from history* (list-only) as a separate,
+   softer action, or replace it entirely with the hard delete? The docstring
+   rationale argues for keeping both; confirm.
+2. **The MediaStore OS dialog** (API 30+) means a gallery-tier delete shows
+   Android's *own* "allow tela to delete?" prompt on top of tela's. Accept the
+   double confirm, or suppress tela's for that tier and lean on the OS one?
+3. **Scope of the first cut** — history + private library tiles only, or the
+   detail screen as well?
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 
