@@ -91,34 +91,41 @@ class WallpaperStatusView extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHigh,
-                shape: BoxShape.circle,
+        // Cap the measure: on a 2560-wide tablet an uncapped sentence stretches
+        // into one long line the width of the whole shelf, which reads as
+        // stranded text rather than a composed empty state. 360 keeps it to a
+        // book-column wrap wherever this state is met.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHigh,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 36, color: theme.colorScheme.primary),
               ),
-              child: Icon(icon, size: 36, color: theme.colorScheme.primary),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              const SizedBox(height: 16),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
-            if (onAction != null) ...<Widget>[
-              const SizedBox(height: 24),
-              FilledButton.tonal(
-                onPressed: onAction,
-                child: Text(actionLabel ?? ''),
-              ),
+              if (onAction != null) ...<Widget>[
+                const SizedBox(height: 24),
+                FilledButton.tonal(
+                  onPressed: onAction,
+                  child: Text(actionLabel ?? ''),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

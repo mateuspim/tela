@@ -1,6 +1,87 @@
 # tela handoff
 
-Updated: 2026-07-22
+Updated: 2026-07-23
+
+> **The fifth UI pass (H) is underway on branch `feat/ui-pass-h` — six
+> commits, not yet merged; four device-verified on the tablet, two (Thread 2
+> vocabulary, Thread 4 sheet headers) code-only so far.** Off `master`
+> (`bdea572`). **A seventh item is scoped but not started** — the owner asked
+> for a redesigned destination chooser with a memory; that is *new capability*,
+> so it is written up separately as **I — the download destination decision**,
+> just below the H section. Do not fold it into H.
+> -2. `eff1efa` **A not-safe wallpaper asks before it lands** (owner request,
+>    2026-07-23; strictly this is I's first slice, landed on the H branch
+>    because it is three lines of UI). The detail action bar drew the same grey
+>    download glyph whatever the purity, so nothing said "decide where this one
+>    goes" before the tap — and **sketchy is the case that stings**: it follows
+>    the *safe* setting straight into the MediaStore-indexed gallery, so a
+>    suggestive wallpaper lands in Photos because nothing on the way in said it
+>    was suggestive. The glyph now wears `ColorScheme.error` for sketchy **and**
+>    explicit (`lib/core/ui/purity_alert_tint.dart`). One tint for both on
+>    purpose — the question the colour answers is *"should I pick where this
+>    lands?"* and both answer yes. The purity name rides in the Semantics
+>    **hint**, not the label: the label stays `"Download"` so every caller that
+>    looks the control up by name (the tests do) still finds it. `error` rather
+>    than a constant of ours because `TelaTheme`'s accent splice leaves the
+>    error roles alone — it is the one warm role a user's chosen accent cannot
+>    repaint into the thing it is warning about. **Device-verified** on the
+>    tablet: Sketchy detail shows the red glyph, Safe does not.
+> -1. `a2abfc8` **Thread 4 — chooser-sheet headers.** Every action-chooser sheet
+>    (wallpaper target, share, download volume, per-download tier, long-press
+>    quick actions) headed itself with a bare `ListTile(title:)`, giving the
+>    title a list row's `bodyLarge` weight — it read as a disabled first option,
+>    not a heading. Extracted `SheetHeader` (core/ui, a muted
+>    `titleSmall`/`onSurfaceVariant` caption, the sheet twin of
+>    `SettingsSectionLabel`) and routed all five through it. The larger filter
+>    and accent sheets keep their prominent `headlineSmall`/`titleLarge` titles.
+>    **Not yet on the device.**
+> 0. `68e9d82` **Thread 2 — storage vocabulary: first coherence commit.** The
+>    three places that name a download destination (Settings device/card
+>    chooser, download-time device/card sheet, per-download tier override) had
+>    drifted into three copies of the same icon/label/detail mapping. Extracted
+>    `storage_volume_kind_text` (the volume twin of `storage_tier_text`) and
+>    routed the sheet + Settings chooser through it; gave the detail screen's
+>    per-download tier sheet the explanation subtitle every other destination
+>    list already carries. No behaviour change, no new strings. **Not yet on the
+>    device** — the visible change is the new subtitle in the per-download tier
+>    sheet.
+> 1. `161786f` **Thread 1 — Settings coherence: DONE.** The Downloads storage
+>    block reads as one unit now — captions unified to `SettingsSectionLabel`,
+>    internal slab dividers dropped for the Appearance caption+spacing rhythm,
+>    and the device/card volume chooser is a bordered inset panel with a
+>    connective line ("Downloads set to 'Files, not gallery' are saved here.")
+>    tying it to the Files tier. `_TierPicker._route`'s gate-before-persist is
+>    untouched. New l10n key `settingsDownloadLocationHelp`.
+> 2. `6842b5f` **Thread 4 (two items) — detail + library polish.** Dropped the
+>    raw resolution from the detail AppBar title (it duplicated the Resolution
+>    tile and labelled the screen with a spec); capped `WallpaperStatusView`'s
+>    measure at 360 and left-aligned the recent-downloads empty line, so empty
+>    states compose instead of stretching one line across the tablet.
+> 3. `28fbfbb` **Thread 3 — the lone history tile: SOLVED.** See its section
+>    below (now headed SOLVED). Root cause was a loose `Stack`, **not** the
+>    layout math; fixed with `StackFit.expand`, regression guarded structurally.
+>
+> **Thread 3 is now CLOSED** — the filter-badge rotation probe ran on the tablet
+> (2026-07-23) and the badge stays **1** through a rotation and through a cold
+> launch into either orientation, with the 4s frame byte-identical to the 24s
+> one. Rotation exonerated, no late-defaults transient, the portrait "3" not
+> reproducible. See *The filter badge anomaly* — and do not re-open it without a
+> fresh sighting.
+>
+> **Still open in H:** **Thread 2 (storage-flow polish** — *underway*: the
+> vocabulary/de-duplication commit above landed; what remains is device-driven
+> wording/spacing/iconography of the download-time device/card sheet, the
+> pre-aimed pickers, and the ejection states, none of which read as broken in
+> code — waiting on the tablet to flag anything). **Thread
+> 4's whole-app once-over** continues (device-flagged; three items done above —
+> the untouched surfaces surveyed this session, favorites/viewer/immersive
+> controls, read clean in code, so the rest is genuinely device-discovered).
+>
+> **847 Dart tests green**, analyze + format clean; no `android/` change, so the
+> 34 Kotlin tests are untouched. **A test download was left in the tablet's
+> Download history** (added to reproduce the lone-tile bug) — harmless; one
+> long-press → Remove clears it. Merge `feat/ui-pass-h` into `master` through
+> the gate (`merge.ff false`) when the pass is called done.
 
 > **G is merged, and the next work is a fifth UI pass.** SD card support
 > (slices 0–4) is on **master** as of `a9e272b` — the merge gate ran both suites
@@ -849,7 +930,24 @@ legible. One defect found and fixed on the spot: the private row was flush
 against the strip and read as part of the downloads section, so it is detached
 now.
 
-### The lone history tile anomaly — observed, measured, UNEXPLAINED
+### The lone history tile anomaly — SOLVED (2026-07-22, `28fbfbb`)
+
+**It was never the layout math — the ceiling warning below was right.** An
+on-device probe closed it: drawing a green border on the grid *cell* showed the
+cell at the correct 2/3-viewport size (`rowH=434`, `maxH=651`, `sole=434` — all
+correct) with the `WallpaperTile` sitting **small in the top-left corner**.
+
+Root cause: `DownloadHistoryScreen._tile` wrapped the tile in a **default
+(loose) `Stack`** for the missing-file badge, and `WallpaperTile` *deliberately
+does not size itself* — so under loose constraints it fell back to its
+`memCacheWidth`-decoded size (~300dip) instead of filling. Favorites never hit
+it: it puts the tile straight in the grid `SizedBox` (tight). Only the **lone**
+tile showed it, because that is the only cell the sole-row ceiling grows past
+the decoded size. Fix: `Stack(fit: StackFit.expand, …)`. Guarded **structurally**
+(assert the Stack's `fit`) — a size assertion can't catch it, since the shrink
+needs a really-decoded image a widget test never loads (the placeholder fills
+either way). See memory `tela-wallpapertile-needs-tight-box`. Everything below
+this line is the pre-solution investigation, kept for provenance.
 
 **Do not treat this as understood, and do not "fix" it by changing
 `soleWallpaperRowHeight`.** It is not known to be a D2 regression at all.
@@ -1281,7 +1379,40 @@ healthy: re-downloading immediately repopulated it. **Treat device state as
 disposable across deploys until this is understood**, and re-seed test subjects
 rather than assuming yesterday's are still there.
 
-### The filter badge anomaly — observed, unexplained, probe defined
+### The filter badge anomaly — PROBE RUN 2026-07-23; rotation exonerated, "3" not reproducible
+
+**Result first, so nobody re-runs it.** The probe below was finally run on the
+tablet over network adb (2026-07-23, build `eff1efa`). Four readings:
+
+| state | badge |
+|---|---|
+| cold launch in **landscape**, ~20s to settle | **1** |
+| **rotated to portrait**, same process, no restart | **1** |
+| cold launch straight into **portrait**, sampled at 4s / 10s / 24s | **1** |
+| …and those three portrait frames are **byte-identical** (same md5) | — |
+
+**Rotation is exonerated.** It does not rewrite the active query: the badge is
+unmoved by a rotation with the process still running. And there is no
+late-defaults transient either — the 4s frame already equals the 24s frame
+pixel for pixel, so nothing is landing after first paint to change the count.
+
+**The "3" is not reproducible on the current build**, in either orientation, at
+any sampling point. What has *not* been proven is what produced it originally.
+The reading that survives: the count was taken while browse was on a **different
+defaults state** — the `account` source with a synced purity/categories/topRange
+that genuinely differed from baseline in three classes — not while the device
+was on the state it now holds. That is consistent with the arithmetic below
+(which never could produce 3 from *these* defaults) and with
+`browseDefaultsSource` being a switch the owner has since moved.
+
+**Do not spend another slice on this without a fresh sighting.** If the 3 ever
+returns, the thing to capture is the *filter sheet contents* at that moment, not
+the badge — the badge is a count and the sheet is the evidence.
+
+The original write-up follows, unchanged, because its arithmetic is still the
+reference for what the badge counts.
+
+---
 
 **Do not treat this as understood.** Browse's filter badge read **1** in
 landscape right after launch, and **3** in portrait a few minutes later. The
@@ -1309,7 +1440,9 @@ back to landscape and read the badge again. **If it stays 3, rotation is
 exonerated** and this is defaults landing late; if it drops to 1, rotation really
 is rewriting the active query and that is a defect worth its own slice. This
 session tried exactly that and the tablet dropped off the USB bus mid-probe
-before the reading came back.
+before the reading came back. *(Run 2026-07-23 — see the result block above.
+The badge stayed at 1 throughout, which lands on the first branch: rotation
+exonerated.)*
 
 ## E — the visual identity, chosen 2026-07-19; built and device-verified
 
@@ -1771,19 +1904,25 @@ can reach it: slice 4's predicate and tree-id parsing are pure and get real
 tests. Do not fake MediaStore/SAF shadows into a green suite that proves nothing
 — see *F*'s vacuous-test finding.
 
-## H — the fifth UI pass, scoped 2026-07-22; four threads, NOT YET BUILT
+## H — the fifth UI pass, scoped 2026-07-22; underway on `feat/ui-pass-h`
 
 G closed the storage feature and merged (`a9e272b`). The owner chose a fifth UI
 pass over starting Wave 4's product items, and picked **all four** candidate
 threads rather than one. This is a polish/coherence pass, **not new
 capability** — keep the layout law (justified rows; masonry is gone, do not
 re-litigate) and the brand rules (`docs/BRAND.md`) intact while touching any of
-it. Nothing here is built or device-verified yet.
+it.
 
-The four threads, in the order offered (not a priority order — resequence on the
-device):
+**Status (2026-07-23, branch `feat/ui-pass-h`):** thread 1 **done** (`161786f`,
+device-verified); thread 3's **lone history tile done** (`28fbfbb`,
+device-verified), its filter badge **narrowed** (not fixed); thread 4 **in
+progress** — three items done (`6842b5f` device-verified, plus `a2abfc8` sheet
+headers code-only). **Thread 2 underway** — first coherence commit landed
+(`68e9d82`, code-only, not yet on device). See the lead pointer at the top for
+the per-commit summary. The four threads, in the order offered (not a priority
+order — resequence on the device):
 
-**1. Settings coherence.** The storage half of Settings accreted across G:
+**1. Settings coherence — DONE (`161786f`).** The storage half of Settings accreted across G:
 `DownloadLocationSection` (device/card radio, free-space status line), the
 per-purity `_TierPicker` rows, and the NSFW-on-removable warning. They are
 correct but read as separate rows bolted on in sequence. Make the whole block
@@ -1795,7 +1934,7 @@ must still never write `route(nsfw, files)` before the warning is confirmed. The
 tablet is sitting in the exact test state this thread should design for (Safe +
 Explicit → files → SD card, acked), which is why it was left unreverted.
 
-**2. Storage flow polish.** The flows slices 1–4 built — the download-time
+**2. Storage flow polish — UNDERWAY (`68e9d82`).** The flows slices 1–4 built — the download-time
 device/card sheet (`ConfiguredDownload`), the pre-aimed system pickers, and the
 ejection/unavailable states — work but were built function-first. Tighten
 wording, spacing, and iconography. All user-facing strings stay in l10n — they
@@ -1803,22 +1942,61 @@ live in `app_en.arb` (the ejection copy is *"Download folder unavailable.
 Reconnect the storage or pick another in Settings."*); no hardcoded strings, and
 regenerate l10n via `./tool/tela gen-l10n` (generated output is gitignored, not
 committed).
+   - **Done (`68e9d82`) — one vocabulary, three destination lists.** The
+     device/card sheet and the Settings chooser each hardcoded the same
+     `StorageVolumeKind → (icon, label, detail)` mapping; extracted
+     `lib/core/ui/storage_volume_kind_text.dart` (mirrors `storage_tier_text`)
+     so they can't drift, and gave the detail screen's per-download tier sheet
+     the explanation subtitle the other lists carry. No behaviour change, no new
+     strings. **Iconography note — do not "fix":** the volume sheet's device
+     icon is filled `Icons.smartphone`, *deliberately matching the Settings
+     chooser*, not the target sheet's `Icons.smartphone_outlined` — the two
+     volume choosers are a pair and must agree with each other.
+   - **Remaining is device-driven.** In code the sheets, the OS-owned pre-aimed
+     pickers, and the ejection toast copy read fine; the wording/spacing nits
+     this thread is scoped to want the tablet to surface them. Log them as
+     sub-items here as the device turns them up, like the earlier passes did.
 
 **3. The two carried anomalies** (closer to rendering bugs than polish — each
 has its own section below, do not re-derive):
-   - **The lone history tile** draws far smaller than it should; narrowed to a
-     height the grid is handed, with a hand-operable toggle to reproduce, but
-     still not understood. See *The lone history tile anomaly*.
-   - **The filter badge anomaly** — observed, unexplained, probe already
-     defined. See *The filter badge anomaly*.
-   Fold both in; they are visual and live where the once-over is already
-   looking.
+   - ~~**The lone history tile**~~ **DONE (`28fbfbb`)** — a loose `Stack` let
+     `WallpaperTile` shrink to its decoded size; `StackFit.expand` fixed it. See
+     *The lone history tile anomaly* (now headed SOLVED).
+   - ~~**The filter badge anomaly**~~ **CLOSED (probe run 2026-07-23).** In code
+     the landscape "1" is arguably correct (only `ratios` differs from baseline;
+     `resolution` stays `Automatic` == baseline, so it isn't counted — the
+     "expected 2" assumed a `forScreen` substitution that does not happen at
+     this layer). The rotation probe finally ran on the tablet and **the badge
+     stays 1** — cold launch in landscape, rotated to portrait in the same
+     process, and cold launch straight into portrait sampled at 4s/10s/24s
+     (byte-identical frames). Rotation is exonerated, there is no late-defaults
+     transient, and the portrait "3" is not reproducible on this build. See
+     *The filter badge anomaly* for what would still explain the original
+     sighting, and for the rule: **do not spend a slice on this without a fresh
+     sighting.**
 
-**4. A whole-app once-over.** A broad sweep across
+**4. A whole-app once-over — IN PROGRESS (`6842b5f`, `a2abfc8`).** A broad sweep across
 browse / detail / favorites / viewer, not scoped to one area. The owner flags
 specifics on the device as they go, so this thread is *discovered on hardware*
 rather than planned here — capture what the device turns up as sub-items once it
-starts, the way the earlier passes logged their device findings.
+starts, the way the earlier passes logged their device findings. Done so far:
+   - `6842b5f` — the detail AppBar title (dropped the raw resolution) and the
+     library empty states (capped measure, left-aligned strip line).
+   - `a2abfc8` — **chooser-sheet headers.** Every action-chooser sheet headed
+     itself with a bare `ListTile(title:)`, so the title carried a list row's
+     `bodyLarge` weight and read as a disabled first option. Extracted
+     `SheetHeader` (core/ui, muted `titleSmall`/`onSurfaceVariant`) and routed
+     the five action sheets through it — target, share, download volume,
+     per-download tier, quick actions. The filter/accent sheets keep their
+     larger `headlineSmall`/`titleLarge` titles on purpose. Code-only so far.
+   - **Code-side surfaces surveyed this session and left alone:** the favorites
+     grid, the immersive viewer, and `ImmersiveGalleryControls` all read clean
+     and are already carefully documented — the remaining Thread 4 work is
+     genuinely device-discovered, not sitting unfound in the code.
+
+One thing checked and left alone: the "See all" appears on Recent downloads (a
+preview strip) but not Favorites (already the full grid inline) — that asymmetry
+is intentional, not a bug.
 
 **Process reminders for this pass** (same as every pass here): `./tool/tela`
 Docker toolchain, not host flutter; `make deploy` to the tablet (**never**
@@ -1826,6 +2004,131 @@ Docker toolchain, not host flutter; `make deploy` to the tablet (**never**
 `android/` owes **both** `flutter test` and `make kotlin-test`; `flutter analyze`
 and `dart format .` clean before every commit; and the merge gate wants a real
 merge commit (`merge.ff false`), so run `make hooks` in a fresh clone.
+
+## I — the download destination decision, scoped 2026-07-23; NOT STARTED
+
+Asked for by the owner on the device, 2026-07-23, in the same breath as the
+purity tint that shipped as `eff1efa`. **This is new capability, not polish** —
+it does not belong inside H, and H's "no new capability" rule is why it is
+written down here instead.
+
+### The problem, in the owner's words
+
+> *"a better dialog to show where it downloads — don't open on the bottom of the
+> page but a screen with buttons to show where download, and it has a memory: to
+> show 'you downloaded the last 3 images in private, continue saving to
+> private?'"*
+
+Two complaints, one root. Choosing a destination today means long-pressing the
+download button and picking from a small bottom sheet, and the choice is **per
+download with no memory at all**. A user who wants every sketchy wallpaper in
+the private library long-presses forever, and the one time they forget, the
+image is in Photos. `eff1efa` made the *need* to decide visible; it did nothing
+about the *cost* of deciding.
+
+### Slice I1 — the chooser stops being a bottom sheet
+
+Replace `_downloadTierSheet` in `wallpaper_detail_screen.dart` with a shared
+`lib/core/ui/download_destination_dialog.dart`: a centred `Dialog` — the
+wallpaper's purity as a caption, then one **large button per tier**, each
+carrying the icon/label/detail `storage_tier_text.dart` already provides.
+
+Option list still comes from `StorageSettings.choicesFor(purity)`. That is not
+an implementation detail to inline: it is where the NSFW invariant lives, and it
+is why the gallery button cannot appear for an explicit wallpaper.
+
+**Dialog, not a pushed route — recommended, but the owner said "screen", so
+confirm.** A route push animates the wallpaper away and back to ask a
+three-option question, and on the 840dp+ tablet a full screen for three buttons
+is mostly empty. A dialog is centred (which is the actual complaint — *not at
+the bottom*), caps at ~420dp, and goes full-width on a phone. If the owner
+wants a real route, it is the same widget under `showDialog` → `context.push`.
+
+### Slice I2 — the memory, and why it needs its own store
+
+**`DownloadHistory` cannot power this — check before reaching for it.**
+`DownloadWallpaper._remember` deliberately drops every explicit download *and*
+every `appPrivate` one. That is exactly the streak the owner wants remembered
+("the last 3 in private"), so the history is blind to it by design and must stay
+that way.
+
+That constraint is a privacy win rather than a workaround: the memory stores
+only **`(purity bucket, tier, count)`** — no wallpaper id, no path, no URL. It
+cannot leak *what* was saved, only how many in a row went the same way, which
+keeps it clear of the NSFW logging rules entirely.
+
+- New model `lib/domain/models/download_destination_streak.dart`:
+  `DownloadDestinationStreak { StorageTier tier; int length; }`.
+- New pair on `SettingsRepository` (already a pure-domain port with no vendor
+  behind it, so nothing new gets wrapped):
+  - `Future<DownloadDestinationStreak?> loadDestinationStreak(Purity purity)`
+  - `Future<void> recordDestination(Purity purity, StorageTier tier)` — same
+    tier ⇒ `length + 1`; a different tier ⇒ reset to 1.
+- Keyed by the **same two buckets `StorageSettings.tierFor` uses** (nsfw vs
+  everything else), not by all three purities. Two knobs, not three — sketchy
+  follows safe here for the same reason it does there.
+- Written from `DownloadWallpaper.call` using `stored.tier` — where the file
+  actually *landed*, not what was requested. `_remember` already applies that
+  rule; this is the second reader of it.
+- Never throws. Unreadable answers null, and null just means no suggestion.
+
+### Slice I3 — what the memory is allowed to do
+
+Three steps, escalating, and the third is the whole point:
+
+1. The chooser marks the streak destination: *"Last 3 went here."*
+2. Once `length >= 3` **and** the streak tier differs from
+   `settings.tierFor(purity)`, the chooser grows a second action — **"Always
+   save Sketchy here"** — which writes `StorageSettings.copyWith(...)`. The
+   long-pressing stops, which is the actual fix.
+3. **The plain tap never changes.** It still routes by settings, silently. A
+   suggestion that quietly redirected an un-long-pressed download would be a
+   worse bug than the one this slice is fixing.
+
+- Threshold `3` is the owner's own number; one named constant, not a scatter.
+- Reset when the user picks a different tier, or when Settings changes that
+  purity's tier out from under it.
+- The NSFW invariant survives for free: "Always" goes through the
+  `StorageSettings` constructor, which already throws on `nsfw → sharedGallery`.
+
+### Slice I4 — the other entry point
+
+`wallpaper_quick_sheet.dart`'s Download row has **no destination choice at
+all**: a long press on a grid tile can only accept the configured routing. Give
+it the same dialog on the same gesture, then the purity tint too. The tint was
+deliberately left off the quick sheet in `eff1efa` — a warning with no remedy
+attached is worse than no warning, and I4 is what attaches the remedy.
+
+### Tests this owes
+
+- `purityAlertTint` — **already done** (`test/core/ui/purity_alert_tint_test.dart`).
+- Streak arithmetic, plain Dart: same tier grows, a different tier resets to 1,
+  the two purity buckets stay independent.
+- `DownloadWallpaper` records the *landed* tier — including for the explicit and
+  private downloads the history drops, which is the case a naive
+  implementation gets wrong.
+- Widget: the streak line shows at 3 and not at 2; it is withheld when the
+  streak already equals the configured tier (nothing to suggest); "Always"
+  writes settings; the gallery button never appears for explicit.
+- Regression: the existing *long-press download exposes all three one-download
+  destinations* test moves from sheet to dialog.
+
+### Settled by the owner, 2026-07-23 — do not re-open
+
+1. **Centred dialog, not a pushed route.** Confirmed against the mock in the
+   slice-I1 note above. "Screen" in the original request meant *not at the
+   bottom of the page*, not *a route of its own*.
+2. **"Always save X here" lives in the chooser only.** Not on the success toast,
+   not as a Settings nudge — it should only meet the people who are already
+   long-pressing, and the plain-tap path stays silent.
+3. **H merges to `master` first**, then I opens on its own branch.
+
+### Still open
+
+- **Threshold 3 forever, or ask once?** If the suggestion is dismissed, does it
+  return on the next download or stay quiet until the streak grows again?
+  Decide when I3 is built — it is a one-line policy either way, and the device
+  will have an opinion.
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 

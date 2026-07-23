@@ -469,6 +469,17 @@
     "description": "Downloads the current wallpaper to its configured destination."
   },
 
+  "detailDownloadPurity": "{purity}. Press and hold to choose where this lands.",
+  "@detailDownloadPurity": {
+    "description": "Spoken hint on the download button for a sketchy or explicit wallpaper, which is the same thing the button's tint says.",
+    "placeholders": {
+      "purity": {
+        "type": "String",
+        "example": "Sketchy"
+      }
+    }
+  },
+
   "detailDownloadChooseTier": "Download to",
   "@detailDownloadChooseTier": {
     "description": "Heading above the one-download storage destination choices."
@@ -915,6 +926,11 @@
   "settingsDownloadLocationTitle": "Where files are saved",
   "@settingsDownloadLocationTitle": {
     "description": "Header for the choice of which volume the files-outside-gallery tier writes to."
+  },
+
+  "settingsDownloadLocationHelp": "Downloads set to “Files, not gallery” are saved here.",
+  "@settingsDownloadLocationHelp": {
+    "description": "Connects the volume choice back to the tier that feeds it, so the device/card decision reads as a detail of the Files destination rather than a separate setting."
   },
 
   "settingsStorageVolumeDevice": "Internal storage",

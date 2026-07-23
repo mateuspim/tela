@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/byte_size_text.dart';
+import 'package:tela/core/ui/storage_volume_kind_text.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -12,6 +13,7 @@ import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/features/settings/download_location_controller.dart';
 import 'package:tela/features/settings/nsfw_removable_guard.dart';
+import 'package:tela/features/settings/settings_section_label.dart';
 import 'package:tela/features/settings/storage_settings_controller.dart';
 
 /// Picks which volume the files-outside-gallery tier writes to: device or card.
@@ -26,17 +28,55 @@ class DownloadLocationSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final ThemeData theme = Theme.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context);
     final AsyncValue<DownloadLocation> location = ref.watch(
       downloadLocationProvider,
     );
     final DownloadLocation? value = location.value;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        ListTile(title: Text(l10n.settingsDownloadLocationTitle), dense: true),
-        if (value != null) ..._choices(context, ref, value),
-      ],
+    // An inset, tinted panel rather than another full-width slab: the volume
+    // is a detail of whichever tier routes to files-outside-gallery, and the
+    // recessed surface says so at a glance. The connective line spells it out.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      // A Material, not a coloured Container: the nested RadioListTiles paint
+      // their ink on the nearest Material ancestor, so a bare DecoratedBox over
+      // them would swallow the splash (and trips a framework assertion in
+      // test).
+      child: Material(
+        color: theme.colorScheme.surfaceContainerHighest,
+        // A hairline edge as well as the fill: on a dark card the tint alone is
+        // too close to the surface to read as a separate, nested panel.
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  SettingsSectionLabel(
+                    text: l10n.settingsDownloadLocationTitle,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.settingsDownloadLocationHelp,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (value != null) ..._choices(context, ref, value),
+          ],
+        ),
+      ),
     );
   }
 
@@ -66,20 +106,11 @@ class DownloadLocationSection extends ConsumerWidget {
 
   Widget _tile(BuildContext context, StorageVolumeKind kind) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final bool isCard = kind == StorageVolumeKind.sdCard;
     return RadioListTile<StorageVolumeKind>(
       value: kind,
-      secondary: Icon(isCard ? Icons.sd_card_outlined : Icons.smartphone),
-      title: Text(
-        isCard
-            ? l10n.settingsStorageVolumeSdCard
-            : l10n.settingsStorageVolumeDevice,
-      ),
-      subtitle: Text(
-        isCard
-            ? l10n.settingsStorageVolumeSdCardDetail
-            : l10n.settingsStorageVolumeDeviceDetail,
-      ),
+      secondary: Icon(storageVolumeIcon(kind)),
+      title: Text(storageVolumeLabel(l10n, kind)),
+      subtitle: Text(storageVolumeDetail(l10n, kind)),
     );
   }
 

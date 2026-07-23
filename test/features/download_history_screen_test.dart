@@ -51,6 +51,36 @@ void main() {
       );
     });
 
+    testWidgets('wraps each tile in a cell-filling Stack', (
+      WidgetTester tester,
+    ) async {
+      // The "lone history tile" anomaly: the grid blows a single download's
+      // cell up to two thirds of the viewport, and a loose Stack let the
+      // WallpaperTile fall back to its own decoded size and sit small in the
+      // corner. StackFit.expand hands it the whole cell instead.
+      //
+      // Asserted structurally, not by measuring: reproducing the shrink needs a
+      // really-decoded image at its memCacheWidth, which a widget test never
+      // loads — the placeholder fills either way, so a size check passes even
+      // with the bug present. The Stack's fit is the thing that actually moved.
+      await _pump(
+        tester,
+        FakeDownloadHistory(
+          initial: <DownloadRecord>[_landscapeDownload('k8')],
+        ),
+      );
+
+      final Stack stack = tester.widget<Stack>(
+        find
+            .ancestor(
+              of: find.byType(WallpaperTile),
+              matching: find.byType(Stack),
+            )
+            .first,
+      );
+      expect(stack.fit, StackFit.expand);
+    });
+
     testWidgets('a tap opens the viewer at the exact tapped record', (
       WidgetTester tester,
     ) async {
@@ -285,6 +315,26 @@ DownloadRecord _download(String id) => DownloadRecord(
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',
     thumbOriginalUrl: 'https://th.wallhaven.cc/orig/$id.jpg',
     resolution: const Resolution(1080, 2400),
+    fileSizeBytes: 1024,
+    purity: Purity.sfw,
+    category: Category.general,
+    colors: const <String>[],
+  ),
+  tier: StorageTier.sharedGallery,
+  location: _locationOf(id),
+  downloadedAt: DateTime(2026, 7, 14),
+);
+
+/// A landscape download (ratio 1.6), for the lone-cell fill test: a portrait
+/// tile would fill the width first and never reach the sole-row ceiling.
+DownloadRecord _landscapeDownload(String id) => DownloadRecord(
+  wallpaper: Wallpaper(
+    id: id,
+    fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
+    thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
+    thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',
+    thumbOriginalUrl: 'https://th.wallhaven.cc/orig/$id.jpg',
+    resolution: const Resolution(2880, 1800),
     fileSizeBytes: 1024,
     purity: Purity.sfw,
     category: Category.general,

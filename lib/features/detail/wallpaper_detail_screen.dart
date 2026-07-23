@@ -12,12 +12,15 @@ import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
+import 'package:tela/core/ui/purity_alert_tint.dart';
+import 'package:tela/core/ui/sheet_header.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
 import 'package:tela/core/ui/wallpaper_share_sheet.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
+import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/bitmap_export_rule.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/search_query.dart';
@@ -230,7 +233,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          ListTile(title: Text(l10n.detailDownloadChooseTier)),
+          SheetHeader(title: l10n.detailDownloadChooseTier),
           for (final StorageTier tier in StorageSettings.choicesFor(
             _wallpaper.purity,
           ))
@@ -244,6 +247,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     return ListTile(
       leading: Icon(storageTierIcon(tier)),
       title: Text(storageTierLabel(l10n, tier)),
+      subtitle: Text(storageTierDetail(l10n, tier)),
       onTap: () => Navigator.pop(context, tier),
     );
   }
@@ -396,8 +400,11 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
     final bool expanded = MediaQuery.sizeOf(context).width >= _expandedWidth;
     return Scaffold(
+      // No title: the resolution that used to sit here is a spec, not a name,
+      // and it already has a tile in the Details grid — a title bar reading
+      // "2880x1800" labelled the screen with a number. The image is the
+      // subject, so the bar carries only the back affordance and the actions.
       appBar: AppBar(
-        title: Text(_wallpaper.resolution.toString()),
         actions: expanded ? null : _compactActions(l10n),
       ),
       body: expanded
@@ -712,10 +719,26 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
   }
 
+  /// Downloads on a tap, offers the destination on a long press — and says
+  /// which of the two this wallpaper wants before either happens.
+  ///
+  /// The tint is the whole point (see `purityAlertTint`): a long press is an
+  /// invisible affordance, so a wallpaper that deserves a deliberate
+  /// destination has to *ask* for one. Sketchy is the case that stings —
+  /// nothing else on this screen distinguishes it from safe, and it routes to
+  /// the gallery by default.
   Widget _downloadButton(AppLocalizations l10n) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final Color? tint = purityAlertTint(colors, _wallpaper.purity);
     return Semantics(
       button: true,
       label: l10n.detailDownload,
+      // The purity rides in the hint, not the label: the label is what the
+      // control *is*, and every caller that looks this button up by name —
+      // including the tests — must keep finding one called "Download".
+      hint: tint == null
+          ? null
+          : l10n.detailDownloadPurity(purityLabel(l10n, _wallpaper.purity)),
       child: InkWell(
         onTap: _isDownloading ? null : _download,
         onLongPress: _isDownloading ? null : _chooseDownloadTier,
@@ -727,7 +750,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
                   dimension: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Icon(Icons.download_outlined),
+              : Icon(Icons.download_outlined, color: tint),
         ),
       ),
     );

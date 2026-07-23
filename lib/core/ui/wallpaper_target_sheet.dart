@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/sheet_header.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 
 /// Asks which Android surface a wallpaper should be applied to.
@@ -25,7 +26,7 @@ Widget _targetSheet(BuildContext context) {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        ListTile(title: Text(l10n.detailTargetTitle)),
+        SheetHeader(title: l10n.detailTargetTitle),
         _targetTile(
           context,
           l10n.detailTargetHome,

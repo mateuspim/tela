@@ -20,6 +20,7 @@ import 'package:tela/features/settings/clear_cache_tile.dart';
 import 'package:tela/features/settings/download_location_controller.dart';
 import 'package:tela/features/settings/download_location_section.dart';
 import 'package:tela/features/settings/nsfw_removable_guard.dart';
+import 'package:tela/features/settings/settings_section_label.dart';
 import 'package:tela/features/settings/storage_settings_controller.dart';
 import 'package:tela/features/settings/tile_density_section.dart';
 
@@ -155,12 +156,15 @@ class _SettingsList extends StatelessWidget {
           routeName: TelaRoutes.downloadHistoryName,
         ),
         const Divider(),
+        // No dividers between the two pickers and the volume panel: the
+        // captions carry the breaks, the way the Appearance card separates its
+        // accent and size controls. A slab per sub-decision was what made the
+        // block read as rows bolted on in sequence.
         _TierPicker(
           title: l10n.settingsDownloadsSfw,
           purity: Purity.sfw,
           selected: settings.sfwTier,
         ),
-        const Divider(),
         _TierPicker(
           title: l10n.settingsDownloadsNsfw,
           purity: Purity.nsfw,
@@ -170,10 +174,9 @@ class _SettingsList extends StatelessWidget {
         // Only when a purity actually routes there, and under both pickers
         // rather than inside either: one folder serves the tier whichever
         // purity uses it, so a copy per picker would suggest there are two.
-        if (_usesFilesOutsideGallery) ...<Widget>[
-          const Divider(),
-          const DownloadLocationSection(),
-        ],
+        // Its own inset panel says it is a detail of the Files destination, not
+        // a third peer decision.
+        if (_usesFilesOutsideGallery) const DownloadLocationSection(),
       ],
     );
   }
@@ -313,7 +316,10 @@ class _TierPicker extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        ListTile(title: Text(title), dense: true),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: SettingsSectionLabel(text: title),
+        ),
         RadioGroup<StorageTier>(
           groupValue: selected,
           onChanged: (StorageTier? tier) =>

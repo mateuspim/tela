@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/sheet_header.dart';
+import 'package:tela/core/ui/storage_volume_kind_text.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 
 /// Asks which volume a fresh files-outside-gallery download should land on.
@@ -32,22 +34,9 @@ Widget _volumeSheet(BuildContext context, bool offerSdCard) {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        ListTile(title: Text(l10n.settingsDownloadLocationTitle)),
-        _volumeTile(
-          context,
-          Icons.smartphone,
-          l10n.settingsStorageVolumeDevice,
-          l10n.settingsStorageVolumeDeviceDetail,
-          StorageVolumeKind.device,
-        ),
-        if (offerSdCard)
-          _volumeTile(
-            context,
-            Icons.sd_card_outlined,
-            l10n.settingsStorageVolumeSdCard,
-            l10n.settingsStorageVolumeSdCardDetail,
-            StorageVolumeKind.sdCard,
-          ),
+        SheetHeader(title: l10n.settingsDownloadLocationTitle),
+        _volumeTile(context, l10n, StorageVolumeKind.device),
+        if (offerSdCard) _volumeTile(context, l10n, StorageVolumeKind.sdCard),
       ],
     ),
   );
@@ -55,15 +44,13 @@ Widget _volumeSheet(BuildContext context, bool offerSdCard) {
 
 Widget _volumeTile(
   BuildContext context,
-  IconData icon,
-  String label,
-  String detail,
+  AppLocalizations l10n,
   StorageVolumeKind kind,
 ) {
   return ListTile(
-    leading: Icon(icon),
-    title: Text(label),
-    subtitle: Text(detail),
+    leading: Icon(storageVolumeIcon(kind)),
+    title: Text(storageVolumeLabel(l10n, kind)),
+    subtitle: Text(storageVolumeDetail(l10n, kind)),
     onTap: () => Navigator.pop(context, kind),
   );
 }
