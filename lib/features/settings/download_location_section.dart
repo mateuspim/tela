@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/byte_size_text.dart';
+import 'package:tela/core/ui/storage_volume_kind_text.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -105,20 +106,11 @@ class DownloadLocationSection extends ConsumerWidget {
 
   Widget _tile(BuildContext context, StorageVolumeKind kind) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final bool isCard = kind == StorageVolumeKind.sdCard;
     return RadioListTile<StorageVolumeKind>(
       value: kind,
-      secondary: Icon(isCard ? Icons.sd_card_outlined : Icons.smartphone),
-      title: Text(
-        isCard
-            ? l10n.settingsStorageVolumeSdCard
-            : l10n.settingsStorageVolumeDevice,
-      ),
-      subtitle: Text(
-        isCard
-            ? l10n.settingsStorageVolumeSdCardDetail
-            : l10n.settingsStorageVolumeDeviceDetail,
-      ),
+      secondary: Icon(storageVolumeIcon(kind)),
+      title: Text(storageVolumeLabel(l10n, kind)),
+      subtitle: Text(storageVolumeDetail(l10n, kind)),
     );
   }
 

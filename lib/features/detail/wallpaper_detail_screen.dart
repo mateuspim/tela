@@ -244,6 +244,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     return ListTile(
       leading: Icon(storageTierIcon(tier)),
       title: Text(storageTierLabel(l10n, tier)),
+      subtitle: Text(storageTierDetail(l10n, tier)),
       onTap: () => Navigator.pop(context, tier),
     );
   }
