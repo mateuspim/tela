@@ -2,13 +2,27 @@
 
 Updated: 2026-07-23
 
-> **The fifth UI pass (H) is underway on branch `feat/ui-pass-h` — six
-> commits, not yet merged; four device-verified on the tablet, two (Thread 2
-> vocabulary, Thread 4 sheet headers) code-only so far.** Off `master`
-> (`bdea572`). **A seventh item is scoped but not started** — the owner asked
-> for a redesigned destination chooser with a memory; that is *new capability*,
-> so it is written up separately as **I — the download destination decision**,
-> just below the H section. Do not fold it into H.
+> **START HERE — H IS MERGED. The next work is I, the download destination
+> decision.** The fifth UI pass went into `master` as `ee09b3b` (2026-07-23), a
+> real merge commit off `bdea572` carrying six commits; the gate ran both suites
+> on the way in (**847 Dart, 34 Kotlin**). **Nothing is pushed** — `origin` has
+> not seen any of it.
+>
+> **What to do next:** open a branch off `master` and build **I — the download
+> destination decision** (its own section, just below H). The owner settled its
+> three design questions on 2026-07-23 — centred dialog, "Always save X here" in
+> the chooser only, and H merges before I opens. All three are recorded in I's
+> *Settled by the owner* block; do not re-litigate them.
+>
+> **Two threads of H stayed open on purpose** and neither has outstanding *code*
+> work: Thread 2's storage-flow polish and Thread 4's whole-app once-over both
+> want the owner to flag nits on the tablet. They were merged rather than held
+> because a polish thread with nothing found is not a blocker — reopen either as
+> a small branch when the device turns something up.
+>
+> The per-commit record of the pass follows. Two of the six (`68e9d82` Thread 2
+> vocabulary, `a2abfc8` Thread 4 sheet headers) are **still not device-verified**
+> — they are on the tablet now via `make deploy`, but nobody has walked them.
 > -2. `eff1efa` **A not-safe wallpaper asks before it lands** (owner request,
 >    2026-07-23; strictly this is I's first slice, landed on the H branch
 >    because it is three lines of UI). The detail action bar drew the same grey
@@ -80,8 +94,8 @@ Updated: 2026-07-23
 > **847 Dart tests green**, analyze + format clean; no `android/` change, so the
 > 34 Kotlin tests are untouched. **A test download was left in the tablet's
 > Download history** (added to reproduce the lone-tile bug) — harmless; one
-> long-press → Remove clears it. Merge `feat/ui-pass-h` into `master` through
-> the gate (`merge.ff false`) when the pass is called done.
+> long-press → Remove clears it. ~~Merge `feat/ui-pass-h` into `master`~~ —
+> **done, `ee09b3b`.**
 
 > **G is merged, and the next work is a fifth UI pass.** SD card support
 > (slices 0–4) is on **master** as of `a9e272b` — the merge gate ran both suites
@@ -1904,7 +1918,7 @@ can reach it: slice 4's predicate and tree-id parsing are pure and get real
 tests. Do not fake MediaStore/SAF shadows into a green suite that proves nothing
 — see *F*'s vacuous-test finding.
 
-## H — the fifth UI pass, scoped 2026-07-22; underway on `feat/ui-pass-h`
+## H — the fifth UI pass, scoped 2026-07-22; MERGED as `ee09b3b` 2026-07-23
 
 G closed the storage feature and merged (`a9e272b`). The owner chose a fifth UI
 pass over starting Wave 4's product items, and picked **all four** candidate
@@ -2005,7 +2019,7 @@ Docker toolchain, not host flutter; `make deploy` to the tablet (**never**
 and `dart format .` clean before every commit; and the merge gate wants a real
 merge commit (`merge.ff false`), so run `make hooks` in a fresh clone.
 
-## I — the download destination decision, scoped 2026-07-23; NOT STARTED
+## I — the download destination decision, scoped 2026-07-23; NEXT UP, branch not yet opened
 
 Asked for by the owner on the device, 2026-07-23, in the same breath as the
 purity tint that shipped as `eff1efa`. **This is new capability, not polish** —
