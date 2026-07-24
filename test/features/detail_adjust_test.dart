@@ -22,8 +22,8 @@ import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_system_wallpaper_editor.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
 import '../fakes/fake_wallpaper_sharer.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   testWidgets('a safe wallpaper offers the editor', (
@@ -135,8 +135,8 @@ Future<void> _pumpDetail(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(
-          FakeWallhavenApi(
+        wallhavenSourceProvider.overrideWithValue(
+          FakeWallpaperSource(
             details: details,
           ),
         ),

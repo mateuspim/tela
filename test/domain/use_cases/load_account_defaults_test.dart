@@ -9,7 +9,7 @@ import 'package:tela/domain/use_cases/sync_account_defaults.dart';
 
 import '../../fakes/fake_secret_store.dart';
 import '../../fakes/fake_settings_repository.dart';
-import '../../fakes/fake_wallhaven_api.dart';
+import '../../fakes/fake_wallpaper_source.dart';
 
 void main() {
   test('answers null when no key was ever saved', () {
@@ -43,48 +43,48 @@ void main() {
   group('backfill', () {
     test('syncs a key that predates the sync — the upgrade case, where the '
         'feature would otherwise never run', () async {
-      final FakeWallhavenApi api = FakeWallhavenApi(account: _account);
+      final FakeWallpaperSource source = FakeWallpaperSource(account: _account);
       final FakeSettingsRepository settings = FakeSettingsRepository();
       final LoadAccountDefaults load = _load(
-        api: api,
+        source: source,
         settings: settings,
         storedKey: 'abc123',
       );
 
       expect(await load(), _account);
-      expect(api.accountSettingsCalls, 1);
+      expect(source.accountSettingsCalls, 1);
       // Written, so the next load costs nothing.
       expect(settings.accountSaved, _account);
     });
 
     test('costs nothing once the defaults are there', () async {
-      final FakeWallhavenApi api = FakeWallhavenApi();
+      final FakeWallpaperSource source = FakeWallpaperSource();
       final LoadAccountDefaults load = _load(
-        api: api,
+        source: source,
         stored: _account,
         storedKey: 'abc123',
       );
 
       await load();
 
-      expect(api.accountSettingsCalls, isZero);
+      expect(source.accountSettingsCalls, isZero);
     });
 
     test(
       'never spends a request without a key — Wallhaven would 401',
       () async {
-        final FakeWallhavenApi api = FakeWallhavenApi();
-        final LoadAccountDefaults load = _load(api: api);
+        final FakeWallpaperSource source = FakeWallpaperSource();
+        final LoadAccountDefaults load = _load(source: source);
 
         await load();
 
-        expect(api.accountSettingsCalls, isZero);
+        expect(source.accountSettingsCalls, isZero);
       },
     );
 
     test('an unreachable account costs the defaults, not the app', () async {
       final LoadAccountDefaults load = _load(
-        api: FakeWallhavenApi(failure: const NetworkFailure()),
+        source: FakeWallpaperSource(failure: const NetworkFailure()),
         storedKey: 'abc123',
       );
 
@@ -98,7 +98,7 @@ void main() {
         settings: FakeSettingsRepository(),
         secrets: secrets,
         syncDefaults: SyncAccountDefaults(
-          api: FakeWallhavenApi(failure: const InvalidApiKeyFailure()),
+          source: FakeWallpaperSource(failure: const InvalidApiKeyFailure()),
           settings: FakeSettingsRepository(),
         ),
       );
@@ -119,7 +119,7 @@ const AccountSettings _account = AccountSettings(
 LoadAccountDefaults _load({
   AccountSettings? stored,
   String? storedKey,
-  FakeWallhavenApi? api,
+  FakeWallpaperSource? source,
   FakeSettingsRepository? settings,
 }) {
   final FakeSettingsRepository store =
@@ -128,7 +128,7 @@ LoadAccountDefaults _load({
     settings: store,
     secrets: FakeSecretStore(storedKey: storedKey),
     syncDefaults: SyncAccountDefaults(
-      api: api ?? FakeWallhavenApi(),
+      source: source ?? FakeWallpaperSource(),
       settings: store,
     ),
   );

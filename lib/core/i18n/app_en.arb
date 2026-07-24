@@ -56,6 +56,16 @@
     "description": "Accessibility label for the button emptying the search field."
   },
 
+  "browseSource": "Source: {name}",
+  "@browseSource": {
+    "description": "Accessibility label and tooltip for the browse source switcher, naming the site currently being browsed.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+
   "browseFilters": "Filters",
   "@browseFilters": {
     "description": "Accessibility label for the button opening the filter sheet."

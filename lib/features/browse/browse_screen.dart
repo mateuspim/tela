@@ -10,6 +10,7 @@ import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/features/browse/browse_filter_button.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/browse/browse_search_field.dart';
+import 'package:tela/features/browse/browse_source_button.dart';
 import 'package:tela/features/browse/wallpaper_grid.dart';
 
 /// The app's home: one Wallhaven listing per sorting, as tabs.
@@ -79,6 +80,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
           titleSpacing: 16,
           title: const BrowseSearchField(),
           actions: <Widget>[
+            const BrowseSourceButton(),
             const SelectModeButton(),
             BrowseFilterButton(
               filters: query,

@@ -27,20 +27,20 @@ import 'package:tela/features/browse/wallpaper_tile.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   testWidgets('a tag listing searches the exact tag and says what it is', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = _api();
+    final FakeWallpaperSource source = _api();
     await _pumpListing(
       tester,
-      api,
+      source,
       const TagLink(WallpaperTag(id: 37, name: 'nature')),
     );
 
-    expect(api.receivedQueries.single.term, 'id:37');
+    expect(source.receivedQueries.single.term, 'id:37');
     expect(find.text('nature'), findsOneWidget);
     expect(find.text('Wallpapers with this tag'), findsOneWidget);
     expect(find.byType(WallpaperTile), findsOneWidget);
@@ -53,10 +53,10 @@ void main() {
   testWidgets('an uploader listing is their uploads, and never a profile', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = _api();
-    await _pumpListing(tester, api, const UploaderLink('pym'));
+    final FakeWallpaperSource source = _api();
+    await _pumpListing(tester, source, const UploaderLink('pym'));
 
-    expect(api.receivedQueries.single.term, '@pym');
+    expect(source.receivedQueries.single.term, '@pym');
     expect(find.text('@pym'), findsOneWidget);
     // Wallhaven's API has no user endpoint. The screen must not imply one.
     expect(find.text('Uploads by this user'), findsOneWidget);
@@ -65,10 +65,10 @@ void main() {
   testWidgets('newest first, and fitted to the screen it is opened on', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = _api();
-    await _pumpListing(tester, api, const UploaderLink('pym'));
+    final FakeWallpaperSource source = _api();
+    await _pumpListing(tester, source, const UploaderLink('pym'));
 
-    final SearchQuery query = api.receivedQueries.single;
+    final SearchQuery query = source.receivedQueries.single;
     expect(query.sorting, Sorting.dateAdded);
     // Automatic is resolved into a real minimum by the screen it opened on.
     expect(query.resolution, isA<AtLeastResolution>());
@@ -81,10 +81,10 @@ void main() {
     // user was actually on, not Browse's global filters. Here Browse is safe,
     // but the seed is a sketchy People + colour session — the seed must win, or
     // a sketchy→wallpaper→tag chain silently drops back to safe.
-    final FakeWallhavenApi api = _api();
+    final FakeWallpaperSource source = _api();
     await _pumpListing(
       tester,
-      api,
+      source,
       const UploaderLink('pym'),
       seed: SearchQuery(
         categories: const CategoryFilter(<Category>{Category.anime}),
@@ -93,7 +93,7 @@ void main() {
       ),
     );
 
-    final SearchQuery query = api.receivedQueries.single;
+    final SearchQuery query = source.receivedQueries.single;
     expect(query.categories.categories, <Category>{Category.anime});
     expect(query.purity.purities, <Purity>{Purity.sfw, Purity.sketchy});
     expect(query.color, WallpaperColor('#0066cc'));
@@ -105,8 +105,8 @@ void main() {
     // Arriving without an origin — a deep link, a curated shelf — still lands
     // in the user's current world, the same starting point arriving from
     // Browse gives. Read once at arrival, not watched (see below).
-    final FakeWallhavenApi api = _api();
-    final ProviderContainer container = _container(api);
+    final FakeWallpaperSource source = _api();
+    final ProviderContainer container = _container(source);
     container
         .read(browseQueryProvider.notifier)
         .applyFilters(
@@ -117,12 +117,12 @@ void main() {
 
     await _pumpListing(
       tester,
-      api,
+      source,
       const UploaderLink('pym'),
       container: container,
     );
 
-    expect(api.receivedQueries.single.purity.purities, <Purity>{
+    expect(source.receivedQueries.single.purity.purities, <Purity>{
       Purity.sfw,
       Purity.sketchy,
     });
@@ -133,11 +133,11 @@ void main() {
   ) async {
     // Inheriting is a starting point, not a subscription: the seed is read
     // once at arrival, so narrowing Browse behind this must not re-narrow it.
-    final FakeWallhavenApi api = _api();
-    final ProviderContainer container = _container(api);
+    final FakeWallpaperSource source = _api();
+    final ProviderContainer container = _container(source);
     await _pumpListing(
       tester,
-      api,
+      source,
       const TagLink(WallpaperTag(id: 37, name: 'nature')),
       container: container,
     );
@@ -153,7 +153,7 @@ void main() {
 
     // Still browsing under the defaults it opened on, not Browse's new People.
     expect(
-      api.receivedQueries.last.categories.categories,
+      source.receivedQueries.last.categories.categories,
       const SearchQuery().categories.categories,
     );
   });
@@ -164,17 +164,17 @@ void main() {
     // "More wallpapers in this colour" is a followed listing too: it sets the
     // colour param, drops the term, and keeps the purity the user was on — the
     // same inheritance every follow gets.
-    final FakeWallhavenApi api = _api();
+    final FakeWallpaperSource source = _api();
     await _pumpListing(
       tester,
-      api,
+      source,
       ColorLink(WallpaperColor('#0066cc')),
       seed: const SearchQuery(
         purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
       ),
     );
 
-    final SearchQuery query = api.receivedQueries.single;
+    final SearchQuery query = source.receivedQueries.single;
     expect(query.color, WallpaperColor('#0066cc'));
     expect(query.term, '');
     expect(query.sorting, Sorting.dateAdded);
@@ -203,11 +203,11 @@ void main() {
   testWidgets('filtering the listing re-queries it, and leaves browse alone', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = _api();
-    final ProviderContainer container = _container(api);
+    final FakeWallpaperSource source = _api();
+    final ProviderContainer container = _container(source);
     await _pumpListing(
       tester,
-      api,
+      source,
       const TagLink(WallpaperTag(id: 37, name: 'nature')),
       container: container,
     );
@@ -221,10 +221,10 @@ void main() {
 
     // The listing itself narrowed...
     expect(
-      api.receivedQueries.last.categories.categories,
+      source.receivedQueries.last.categories.categories,
       <Category>{Category.people},
     );
-    expect(api.receivedQueries.last.term, 'id:37');
+    expect(source.receivedQueries.last.term, 'id:37');
     // ...and the tabs waiting underneath did not. A pushed listing is a detour:
     // Back must leave browse exactly as it was.
     expect(
@@ -236,17 +236,17 @@ void main() {
   testWidgets('resetting a listing puts the purity back to safe', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = _api();
+    final FakeWallpaperSource source = _api();
     // A sketchy session, inherited into the listing on arrival as the seed.
     await _pumpListing(
       tester,
-      api,
+      source,
       const TagLink(WallpaperTag(id: 37, name: 'nature')),
       seed: const SearchQuery(
         purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy}),
       ),
     );
-    expect(api.receivedQueries.single.purity.purities, <Purity>{
+    expect(source.receivedQueries.single.purity.purities, <Purity>{
       Purity.sfw,
       Purity.sketchy,
     });
@@ -256,7 +256,7 @@ void main() {
 
     // Reset is the button that ends a sketchy session. Re-inheriting the seed
     // here would have left it sketchy.
-    expect(api.receivedQueries.last.purity.purities, <Purity>{Purity.sfw});
+    expect(source.receivedQueries.last.purity.purities, <Purity>{Purity.sfw});
   });
 }
 
@@ -265,7 +265,7 @@ void main() {
 BrowseFilterScope _scope(WidgetTester tester) =>
     tester.state(find.byType(LinkedListingScreen)) as BrowseFilterScope;
 
-FakeWallhavenApi _api() => FakeWallhavenApi(
+FakeWallpaperSource _api() => FakeWallpaperSource(
   page: WallpaperPage(
     wallpapers: <Wallpaper>[_wallpaper()],
     hasMore: false,
@@ -274,10 +274,10 @@ FakeWallhavenApi _api() => FakeWallhavenApi(
   ),
 );
 
-ProviderContainer _container(FakeWallhavenApi api) {
+ProviderContainer _container(FakeWallpaperSource source) {
   return ProviderContainer(
     overrides: <Override>[
-      wallhavenApiProvider.overrideWithValue(api),
+      wallhavenSourceProvider.overrideWithValue(source),
       secretStoreProvider.overrideWithValue(FakeSecretStore()),
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
       tagBlocklistRepositoryProvider.overrideWithValue(
@@ -287,15 +287,15 @@ ProviderContainer _container(FakeWallhavenApi api) {
   );
 }
 
-/// Boots the real listing screen with the network replaced by [api].
+/// Boots the real listing screen with the network replaced by [source].
 Future<void> _pumpListing(
   WidgetTester tester,
-  FakeWallhavenApi api,
+  FakeWallpaperSource source,
   WallpaperLink link, {
   SearchQuery? seed,
   ProviderContainer? container,
 }) async {
-  final ProviderContainer scope = container ?? _container(api);
+  final ProviderContainer scope = container ?? _container(source);
   addTearDown(scope.dispose);
   await tester.pumpWidget(
     UncontrolledProviderScope(

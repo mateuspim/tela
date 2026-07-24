@@ -6,7 +6,7 @@ import 'package:dio/dio.dart';
 /// Dio actually built.
 ///
 /// Sits *below* Dio's query serialization, and that is the whole point.
-/// `FakeWallhavenApi` records a `SearchQuery` and `SearchQuery`'s own tests
+/// `FakeWallpaperSource` records a `SearchQuery` and `SearchQuery`'s own tests
 /// assert on the param **map** — so between them nothing can see what that map
 /// is encoded into on the wire. A param Dio dropped, repeated, or escaped into
 /// something Wallhaven reads as garbage would pass both. This captures

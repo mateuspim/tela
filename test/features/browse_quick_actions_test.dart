@@ -23,8 +23,8 @@ import '../fakes/fake_image_store.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
 import '../fakes/fake_wallpaper_applier.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 /// D1 — the wall's long-press quick actions: favorite, download or set a
 /// wallpaper without the round trip through the detail screen that collecting
@@ -231,7 +231,7 @@ Future<void> _pumpWall(
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
-  final FakeWallhavenApi api = FakeWallhavenApi(
+  final FakeWallpaperSource source = FakeWallpaperSource(
     page: WallpaperPage(
       wallpapers: <Wallpaper>[_wallpaper(purity: purity)],
       hasMore: false,
@@ -242,7 +242,7 @@ Future<void> _pumpWall(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(api),
+        wallhavenSourceProvider.overrideWithValue(source),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         settingsRepositoryProvider.overrideWithValue(
           settings ?? FakeSettingsRepository(),

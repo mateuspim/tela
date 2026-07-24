@@ -19,7 +19,7 @@ import 'package:tela/features/favorites/favorites_grid.dart';
 
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_secret_store.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   group('FavoritesGrid', () {
@@ -147,8 +147,8 @@ Future<void> _pumpDetail(
     ProviderScope(
       overrides: <Override>[
         favoritesRepositoryProvider.overrideWithValue(favorites),
-        wallhavenApiProvider.overrideWithValue(
-          FakeWallhavenApi(details: _details()),
+        wallhavenSourceProvider.overrideWithValue(
+          FakeWallpaperSource(details: _details()),
         ),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
       ],

@@ -3,6 +3,7 @@ import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tile_density.dart';
@@ -32,6 +33,17 @@ class FakeSettingsRepository implements SettingsRepository {
        _deviceDefaults = deviceDefaults,
        _accent = accent,
        _density = density;
+
+  /// The source browse is on, as `saveActiveSource` last left it.
+  SourceId activeSource = SourceId.wallhaven;
+
+  @override
+  Future<SourceId> loadActiveSource() async => activeSource;
+
+  @override
+  Future<void> saveActiveSource(SourceId source) async {
+    activeSource = source;
+  }
 
   StorageSettings _settings;
   bool _privateLibraryLocked;

@@ -12,7 +12,7 @@ import 'package:tela/features/settings/api_key_controller.dart';
 
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 /// The slice end to end: settings saves a key, and browse follows it.
 ///
@@ -85,8 +85,8 @@ const AccountSettings _explicitAccount = AccountSettings(
 ProviderContainer _container({required AccountSettings account}) {
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
-      wallhavenApiProvider.overrideWithValue(
-        FakeWallhavenApi(account: account),
+      wallhavenSourceProvider.overrideWithValue(
+        FakeWallpaperSource(account: account),
       ),
       secretStoreProvider.overrideWithValue(FakeSecretStore()),
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),

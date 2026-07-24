@@ -16,15 +16,15 @@ import 'package:tela/features/browse/wallpaper_tile.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
 import '../fakes/fake_wallpaper_applier.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   testWidgets('grid to preview to both screens is a three-tap core loop', (
     WidgetTester tester,
   ) async {
     final Wallpaper wallpaper = _wallpaper();
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       page: WallpaperPage(
         wallpapers: <Wallpaper>[wallpaper],
         hasMore: false,
@@ -33,7 +33,7 @@ void main() {
       ),
     );
     final FakeWallpaperApplier applier = FakeWallpaperApplier();
-    await _pumpApp(tester, api, applier);
+    await _pumpApp(tester, source, applier);
 
     await tester.tap(find.byType(WallpaperTile).first);
     await _finishTransition(tester);
@@ -55,13 +55,13 @@ void main() {
 
 Future<void> _pumpApp(
   WidgetTester tester,
-  FakeWallhavenApi api,
+  FakeWallpaperSource source,
   FakeWallpaperApplier applier,
 ) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(api),
+        wallhavenSourceProvider.overrideWithValue(source),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         wallpaperApplierProvider.overrideWithValue(applier),
         settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),

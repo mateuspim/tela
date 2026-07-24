@@ -10,31 +10,31 @@ import 'package:tela/domain/use_cases/search_wallpapers.dart';
 
 import '../../fakes/fake_secret_store.dart';
 import '../../fakes/fake_tag_blocklist_repository.dart';
-import '../../fakes/fake_wallhaven_api.dart';
+import '../../fakes/fake_wallpaper_source.dart';
 
 const SearchQuery _nsfwQuery = SearchQuery(purity: PurityFilter({Purity.nsfw}));
 
 void main() {
   group('SearchWallpapers', () {
     test('passes an sfw query straight through', () async {
-      final FakeWallhavenApi api = FakeWallhavenApi();
+      final FakeWallpaperSource source = FakeWallpaperSource();
       final SearchWallpapers search = SearchWallpapers(
-        api: api,
+        source: source,
         secrets: FakeSecretStore(),
         blocklist: FakeTagBlocklistRepository(),
       );
 
       await search(const SearchQuery(term: 'forest'));
 
-      expect(api.receivedQueries.single.term, 'forest');
+      expect(source.receivedQueries.single.term, 'forest');
     });
 
     test(
       'refuses an nsfw query with no key, without calling the API',
       () async {
-        final FakeWallhavenApi api = FakeWallhavenApi();
+        final FakeWallpaperSource source = FakeWallpaperSource();
         final SearchWallpapers search = SearchWallpapers(
-          api: api,
+          source: source,
           secrets: FakeSecretStore(),
           blocklist: FakeTagBlocklistRepository(),
         );
@@ -45,29 +45,29 @@ void main() {
         );
         // The point of the guard: don't spend one of the 45 req/min on a
         // guaranteed 401.
-        expect(api.receivedQueries, isEmpty);
+        expect(source.receivedQueries, isEmpty);
       },
     );
 
     test('allows an nsfw query once a key is stored', () async {
-      final FakeWallhavenApi api = FakeWallhavenApi();
+      final FakeWallpaperSource source = FakeWallpaperSource();
       final SearchWallpapers search = SearchWallpapers(
-        api: api,
+        source: source,
         secrets: FakeSecretStore(storedKey: 'wallhaven-key'),
         blocklist: FakeTagBlocklistRepository(),
       );
 
       await search(_nsfwQuery);
 
-      expect(api.receivedQueries, hasLength(1));
+      expect(source.receivedQueries, hasLength(1));
     });
 
     test('folds the standing blocklist into every query as -name', () async {
       // Not -id:{n}: confirmed live against Wallhaven that the exact-id
       // operator has no exclude side and is silently ignored.
-      final FakeWallhavenApi api = FakeWallhavenApi();
+      final FakeWallpaperSource source = FakeWallpaperSource();
       final SearchWallpapers search = SearchWallpapers(
-        api: api,
+        source: source,
         secrets: FakeSecretStore(),
         blocklist: FakeTagBlocklistRepository(
           initial: const <WallpaperTag>[WallpaperTag(id: 37, name: 'nature')],
@@ -76,22 +76,22 @@ void main() {
 
       await search(const SearchQuery(term: 'forest'));
 
-      final SearchQuery sent = api.receivedQueries.single;
+      final SearchQuery sent = source.receivedQueries.single;
       expect(sent.blockedTagNames, <String>{'nature'});
       expect(wallhavenQueryParameters(sent)['q'], 'forest -"nature"');
     });
 
     test('sends no exclude at all with an empty blocklist', () async {
-      final FakeWallhavenApi api = FakeWallhavenApi();
+      final FakeWallpaperSource source = FakeWallpaperSource();
       final SearchWallpapers search = SearchWallpapers(
-        api: api,
+        source: source,
         secrets: FakeSecretStore(),
         blocklist: FakeTagBlocklistRepository(),
       );
 
       await search(const SearchQuery(term: 'forest'));
 
-      expect(api.receivedQueries.single.blockedTagNames, isEmpty);
+      expect(source.receivedQueries.single.blockedTagNames, isEmpty);
     });
   });
 
@@ -99,9 +99,9 @@ void main() {
     test(
       'advances the page and carries the seed of a random listing',
       () async {
-        final FakeWallhavenApi api = FakeWallhavenApi();
+        final FakeWallpaperSource source = FakeWallpaperSource();
         final SearchWallpapers search = SearchWallpapers(
-          api: api,
+          source: source,
           secrets: FakeSecretStore(),
           blocklist: FakeTagBlocklistRepository(),
         );
@@ -118,7 +118,7 @@ void main() {
           first,
         );
 
-        final SearchQuery sent = api.receivedQueries.single;
+        final SearchQuery sent = source.receivedQueries.single;
         expect(sent.page, 2);
         // Dropping the seed here would silently re-roll the shuffle and repeat
         // images the user already scrolled past.
@@ -127,9 +127,9 @@ void main() {
     );
 
     test('keeps the original query seed when the page carries none', () async {
-      final FakeWallhavenApi api = FakeWallhavenApi();
+      final FakeWallpaperSource source = FakeWallpaperSource();
       final SearchWallpapers search = SearchWallpapers(
-        api: api,
+        source: source,
         secrets: FakeSecretStore(),
         blocklist: FakeTagBlocklistRepository(),
       );
@@ -145,15 +145,15 @@ void main() {
         first,
       );
 
-      final SearchQuery sent = api.receivedQueries.single;
+      final SearchQuery sent = source.receivedQueries.single;
       expect(sent.page, 4);
       expect(sent.seed, 'from-query');
     });
 
     test('carries the blocklist into the next page too', () async {
-      final FakeWallhavenApi api = FakeWallhavenApi();
+      final FakeWallpaperSource source = FakeWallpaperSource();
       final SearchWallpapers search = SearchWallpapers(
-        api: api,
+        source: source,
         secrets: FakeSecretStore(),
         blocklist: FakeTagBlocklistRepository(
           initial: const <WallpaperTag>[WallpaperTag(id: 9, name: 'spoilers')],
@@ -168,7 +168,9 @@ void main() {
 
       await search.nextPageAfter(const SearchQuery(), first);
 
-      expect(api.receivedQueries.single.blockedTagNames, <String>{'spoilers'});
+      expect(source.receivedQueries.single.blockedTagNames, <String>{
+        'spoilers',
+      });
     });
   });
 }

@@ -23,7 +23,7 @@ import '../fakes/fake_image_store.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 /// D4 — selecting several wallpapers on the wall and acting on them at once.
 ///
@@ -338,7 +338,7 @@ Future<void> _pumpWall(
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
-  final FakeWallhavenApi api = FakeWallhavenApi(
+  final FakeWallpaperSource source = FakeWallpaperSource(
     page: WallpaperPage(
       wallpapers:
           wallpapers ??
@@ -355,7 +355,7 @@ Future<void> _pumpWall(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(api),
+        wallhavenSourceProvider.overrideWithValue(source),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         settingsRepositoryProvider.overrideWithValue(
           settings ?? FakeSettingsRepository(),

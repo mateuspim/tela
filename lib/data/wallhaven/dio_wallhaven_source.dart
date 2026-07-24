@@ -2,22 +2,64 @@ import 'package:dio/dio.dart';
 import 'package:tela/data/wallhaven/wallhaven_mapper.dart';
 import 'package:tela/data/wallhaven/wallhaven_query.dart';
 import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/source_capabilities.dart';
 import 'package:tela/domain/models/source_failure.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
-import 'package:tela/domain/ports/wallhaven_api.dart';
+import 'package:tela/domain/ports/wallpaper_source.dart';
 
-/// The Dio-backed [WallhavenApi].
+/// Wallhaven, as a [WallpaperSource], over Dio.
 ///
 /// Dio stops here: every `DioException` becomes a [SourceFailure], so no
 /// feature ever imports the HTTP client to find out what went wrong, and
 /// swapping Dio out touches only this file (CLAUDE.md, dependency rule).
-class DioWallhavenApi implements WallhavenApi {
+class DioWallhavenSource implements WallpaperSource {
   /// Creates the adapter over a configured [Dio] (see `WallhavenClient`).
-  const DioWallhavenApi(this._dio);
+  const DioWallhavenSource(this._dio);
 
   final Dio _dio;
+
+  @override
+  SourceId get id => SourceId.wallhaven;
+
+  @override
+  String get displayName => 'Wallhaven';
+
+  /// Everything Wallhaven's `/search` honours, and nothing it doesn't.
+  ///
+  /// The whole filter vocabulary is here because Wallhaven is the source tela
+  /// was built around; a second source declaring less is what proves the sheet
+  /// really renders from this rather than from habit.
+  @override
+  SourceCapabilities get capabilities => const SourceCapabilities(
+    filters: <SourceFilter>{
+      SourceFilter.categories,
+      SourceFilter.purity,
+      SourceFilter.colors,
+      SourceFilter.ratios,
+      SourceFilter.resolutions,
+      SourceFilter.tags,
+      SourceFilter.topRange,
+    },
+    sortings: <Sorting>{
+      Sorting.dateAdded,
+      Sorting.relevance,
+      Sorting.random,
+      Sorting.views,
+      Sorting.favorites,
+      Sorting.toplist,
+      Sorting.hot,
+    },
+    purities: <Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw},
+    credentials: SourceCredentials.nsfwRequiresKey,
+    // The published ceiling. The interceptor throttles to it; a 429 still
+    // backs off exponentially rather than trusting any Retry-After blindly.
+    requestsPerMinute: 45,
+    syncsAccountDefaults: true,
+  );
 
   @override
   Future<WallpaperPage> search(SearchQuery query) async {

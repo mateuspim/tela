@@ -35,9 +35,9 @@ import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_system_wallpaper_editor.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
 import '../fakes/fake_wallpaper_applier.dart';
 import '../fakes/fake_wallpaper_sharer.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   testWidgets(
@@ -185,7 +185,7 @@ void main() {
             items: <Wallpaper>[first.wallpaper, second.wallpaper],
             initialIndex: 0,
           );
-      final FakeWallhavenApi api = FakeWallhavenApi(
+      final FakeWallpaperSource source = FakeWallpaperSource(
         detailsById: <String, WallpaperDetails>{
           first.wallpaper.id: first,
           second.wallpaper.id: second,
@@ -197,7 +197,7 @@ void main() {
       await _pumpDetail(
         tester,
         first,
-        api: api,
+        source: source,
         gallerySession: gallery,
         imageStore: imageStore,
         sharer: sharer,
@@ -600,7 +600,7 @@ void main() {
       tester,
       first,
       gallerySession: gallery,
-      api: _detailsApi(first, second),
+      source: _detailsApi(first, second),
     );
 
     await tester.drag(find.byType(PageView), const Offset(-500, 0));
@@ -628,7 +628,7 @@ void main() {
       tester,
       first,
       gallerySession: gallery,
-      api: _detailsApi(first, second),
+      source: _detailsApi(first, second),
       disableAnimations: true,
     );
 
@@ -654,7 +654,7 @@ void main() {
       tester,
       first,
       gallerySession: gallery,
-      api: _detailsApi(first, second),
+      source: _detailsApi(first, second),
       disableAnimations: true,
     );
 
@@ -686,7 +686,7 @@ void main() {
       tester,
       first,
       gallerySession: gallery,
-      api: _detailsApi(first, second),
+      source: _detailsApi(first, second),
       disableAnimations: true,
     );
 
@@ -714,8 +714,8 @@ void main() {
     final WallpaperDetails details = _details();
     final ProviderContainer container = ProviderContainer(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(
-          FakeWallhavenApi(details: details),
+        wallhavenSourceProvider.overrideWithValue(
+          FakeWallpaperSource(details: details),
         ),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
@@ -870,8 +870,11 @@ GallerySessionController<Wallpaper> _twoItemGallery(
 
 /// A fake API that answers full metadata for both wallpapers in the session, so
 /// paging between them resolves rather than erroring.
-FakeWallhavenApi _detailsApi(WallpaperDetails first, WallpaperDetails second) {
-  return FakeWallhavenApi(
+FakeWallpaperSource _detailsApi(
+  WallpaperDetails first,
+  WallpaperDetails second,
+) {
+  return FakeWallpaperSource(
     detailsById: <String, WallpaperDetails>{
       first.wallpaper.id: first,
       second.wallpaper.id: second,
@@ -896,7 +899,7 @@ Future<void> _pumpDetail(
   FakeWallpaperSharer? sharer,
   FakeTagBlocklistRepository? blocklist,
   FakeImmersiveSystemUi? immersiveSystemUi,
-  FakeWallhavenApi? api,
+  FakeWallpaperSource? source,
   GallerySessionController<Wallpaper>? gallerySession,
   FakeWallpaperApplier? applier,
   FakeExternalLink? externalLink,
@@ -907,8 +910,8 @@ Future<void> _pumpDetail(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(
-          api ?? FakeWallhavenApi(details: details),
+        wallhavenSourceProvider.overrideWithValue(
+          source ?? FakeWallpaperSource(details: details),
         ),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         settingsRepositoryProvider.overrideWithValue(

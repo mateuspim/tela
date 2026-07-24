@@ -19,7 +19,7 @@ import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 /// A wallpaper is a place you can navigate *from* — this is that path, end to
 /// end, through the real router: browse, a wallpaper, and out along one of the
@@ -28,13 +28,13 @@ void main() {
   testWidgets('a tag chip opens that tag, and Back returns to the wallpaper', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = _api();
-    await _pumpDetail(tester, api);
+    final FakeWallpaperSource source = _api();
+    await _pumpDetail(tester, source);
 
     await _follow(tester, find.text('nature'));
 
     expect(find.text('Wallpapers with this tag'), findsOneWidget);
-    expect(api.receivedQueries.last.term, 'id:37');
+    expect(source.receivedQueries.last.term, 'id:37');
 
     await tester.pageBack();
     await _finishTransition(tester);
@@ -43,13 +43,13 @@ void main() {
   });
 
   testWidgets('the uploader opens their uploads', (WidgetTester tester) async {
-    final FakeWallhavenApi api = _api();
-    await _pumpDetail(tester, api);
+    final FakeWallpaperSource source = _api();
+    await _pumpDetail(tester, source);
 
     await _follow(tester, find.text('pym'));
 
     expect(find.text('Uploads by this user'), findsOneWidget);
-    expect(api.receivedQueries.last.term, '@pym');
+    expect(source.receivedQueries.last.term, '@pym');
   });
 
   testWidgets(
@@ -60,10 +60,10 @@ void main() {
       // silently turn every followed tag into a self-contradicting, blank
       // listing as soon as the user had blocked a single, unrelated tag —
       // confirmed live against Wallhaven, 2026-07-15.
-      final FakeWallhavenApi api = _api();
+      final FakeWallpaperSource source = _api();
       await _pumpDetail(
         tester,
-        api,
+        source,
         blocklist: FakeTagBlocklistRepository(
           initial: const <WallpaperTag>[
             WallpaperTag(id: 99, name: 'unrelated'),
@@ -74,7 +74,7 @@ void main() {
       await _follow(tester, find.text('nature'));
 
       expect(
-        wallhavenQueryParameters(api.receivedQueries.last)['q'],
+        wallhavenQueryParameters(source.receivedQueries.last)['q'],
         'id:37',
       );
     },
@@ -83,8 +83,8 @@ void main() {
   testWidgets('the browse tabs are left as they were', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = _api();
-    final ProviderContainer container = await _pumpDetail(tester, api);
+    final FakeWallpaperSource source = _api();
+    final ProviderContainer container = await _pumpDetail(tester, source);
 
     await _follow(tester, find.text('nature'));
     await tester.pageBack();
@@ -102,12 +102,12 @@ void main() {
 /// Boots the whole app and taps through to one wallpaper's detail screen.
 Future<ProviderContainer> _pumpDetail(
   WidgetTester tester,
-  FakeWallhavenApi api, {
+  FakeWallpaperSource source, {
   FakeTagBlocklistRepository? blocklist,
 }) async {
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
-      wallhavenApiProvider.overrideWithValue(api),
+      wallhavenSourceProvider.overrideWithValue(source),
       secretStoreProvider.overrideWithValue(FakeSecretStore()),
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
       favoritesRepositoryProvider.overrideWithValue(FakeFavoritesRepository()),
@@ -152,7 +152,7 @@ Future<void> _finishTransition(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 500));
 }
 
-FakeWallhavenApi _api() => FakeWallhavenApi(
+FakeWallpaperSource _api() => FakeWallpaperSource(
   page: WallpaperPage(
     wallpapers: <Wallpaper>[_wallpaper],
     hasMore: false,

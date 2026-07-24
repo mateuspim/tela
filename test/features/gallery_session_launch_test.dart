@@ -22,7 +22,7 @@ import 'package:tela/features/favorites/favorites_grid.dart';
 
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   testWidgets('query shelf opens the exact tapped item with all loaded items', (
@@ -45,8 +45,8 @@ void main() {
       tester,
       router,
       <Override>[
-        wallhavenApiProvider.overrideWithValue(
-          FakeWallhavenApi(
+        wallhavenSourceProvider.overrideWithValue(
+          FakeWallpaperSource(
             page: WallpaperPage(
               wallpapers: loaded,
               hasMore: false,

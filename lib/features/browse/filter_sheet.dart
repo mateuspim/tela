@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/browse_defaults.dart';
+import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/browse_filter_text.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
@@ -12,6 +13,7 @@ import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/search_tag.dart';
+import 'package:tela/domain/models/source_capabilities.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/features/browse/browse_filter_scope.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
@@ -79,13 +81,10 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: Column(
                 children: <Widget>[
-                  _contentCard(l10n),
-                  const SizedBox(height: 12),
-                  _fitCard(l10n),
-                  const SizedBox(height: 12),
-                  _appearanceCard(l10n),
-                  const SizedBox(height: 12),
-                  _resultsCard(l10n),
+                  for (final Widget card in _cards(l10n)) ...<Widget>[
+                    card,
+                    const SizedBox(height: 12),
+                  ],
                 ],
               ),
             ),
@@ -94,6 +93,43 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
         ],
       ),
     );
+  }
+
+  /// The cards this source has anything to put in.
+  ///
+  /// The sheet renders *from* the active source's capabilities. The failure
+  /// mode being designed out is the obvious alternative — offering a filter the
+  /// source cannot honour and silently dropping it, which looks to the user
+  /// like the app ignoring them.
+  List<Widget> _cards(AppLocalizations l10n) {
+    return <Widget>[
+      ?_contentCard(l10n),
+      ?_fitCard(l10n),
+      ?_appearanceCard(l10n),
+      ?_resultsCard(l10n),
+    ];
+  }
+
+  /// What the active source can be asked for.
+  SourceCapabilities get _capabilities =>
+      ref.watch(activeWallpaperSourceProvider).capabilities;
+
+  /// One group, or nothing at all where the source has no such axis.
+  _FilterGroup? _group(SourceFilter filter, String title, Widget child) {
+    if (!_capabilities.supports(filter)) return null;
+    return _FilterGroup(title: title, child: child);
+  }
+
+  /// One card, or nothing when every group in it was withheld — an empty card
+  /// is a heading promising filters that are not there.
+  _FilterCard? _card({
+    required IconData icon,
+    required String title,
+    required List<_FilterGroup?> groups,
+  }) {
+    final List<_FilterGroup> present = groups.nonNulls.toList();
+    if (present.isEmpty) return null;
+    return _FilterCard(icon: icon, title: title, children: present);
   }
 
   Widget _sheetHeading(AppLocalizations l10n) {
@@ -127,46 +163,52 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
     );
   }
 
-  Widget _contentCard(AppLocalizations l10n) {
-    return _FilterCard(
+  _FilterCard? _contentCard(AppLocalizations l10n) {
+    return _card(
       icon: Icons.collections_outlined,
       title: l10n.filterContentGroup,
-      children: <Widget>[
-        _FilterGroup(title: l10n.filterCategories, child: _categories(l10n)),
-        _FilterGroup(title: l10n.filterPurity, child: _purities(l10n)),
-        _FilterGroup(title: l10n.filterTags, child: _tags()),
+      groups: <_FilterGroup?>[
+        _group(
+          SourceFilter.categories,
+          l10n.filterCategories,
+          _categories(l10n),
+        ),
+        _group(SourceFilter.purity, l10n.filterPurity, _purities(l10n)),
+        _group(SourceFilter.tags, l10n.filterTags, _tags()),
       ],
     );
   }
 
-  Widget _fitCard(AppLocalizations l10n) {
-    return _FilterCard(
+  _FilterCard? _fitCard(AppLocalizations l10n) {
+    return _card(
       icon: Icons.fit_screen_outlined,
       title: l10n.filterFitGroup,
-      children: <Widget>[
-        _FilterGroup(title: l10n.filterRatio, child: _ratios(l10n)),
-        _FilterGroup(title: l10n.filterResolution, child: _resolution()),
+      groups: <_FilterGroup?>[
+        _group(SourceFilter.ratios, l10n.filterRatio, _ratios(l10n)),
+        _group(SourceFilter.resolutions, l10n.filterResolution, _resolution()),
       ],
     );
   }
 
-  Widget _appearanceCard(AppLocalizations l10n) {
-    return _FilterCard(
+  _FilterCard? _appearanceCard(AppLocalizations l10n) {
+    return _card(
       icon: Icons.palette_outlined,
       title: l10n.filterAppearanceGroup,
-      children: <Widget>[
-        _FilterGroup(title: l10n.filterColor, child: _colors(l10n)),
+      groups: <_FilterGroup?>[
+        _group(SourceFilter.colors, l10n.filterColor, _colors(l10n)),
       ],
     );
   }
 
-  Widget _resultsCard(AppLocalizations l10n) {
-    return _FilterCard(
+  _FilterCard? _resultsCard(AppLocalizations l10n) {
+    return _card(
       icon: Icons.sort,
       title: l10n.filterResultsGroup,
-      children: <Widget>[
+      groups: <_FilterGroup?>[
+        // Order is not a capability: every source tela can browse has some
+        // direction, and one that did not would answer the same either way.
         _FilterGroup(title: l10n.filterOrder, child: _order(l10n)),
-        _FilterGroup(title: l10n.filterTopRange, child: _topRange(l10n)),
+        _group(SourceFilter.topRange, l10n.filterTopRange, _topRange(l10n)),
       ],
     );
   }

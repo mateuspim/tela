@@ -28,7 +28,7 @@ import 'package:tela/features/settings/blocked_tags_providers.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 Wallpaper _wallpaper(String id) => Wallpaper(
   id: id,
@@ -45,17 +45,17 @@ Wallpaper _wallpaper(String id) => Wallpaper(
   colors: const <String>[],
 );
 
-/// Boots the real BrowseScreen with the network replaced by [api].
+/// Boots the real BrowseScreen with the network replaced by [source].
 Future<void> _pumpBrowse(
   WidgetTester tester,
-  FakeWallhavenApi api, {
+  FakeWallpaperSource source, {
   String? storedKey,
   FakeSettingsRepository? settings,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(api),
+        wallhavenSourceProvider.overrideWithValue(source),
         secretStoreProvider.overrideWithValue(
           FakeSecretStore(storedKey: storedKey),
         ),
@@ -93,12 +93,12 @@ Future<void> _pumpBrowse(
 /// does.
 Future<ProviderContainer> _pumpBrowseWithContainer(
   WidgetTester tester,
-  FakeWallhavenApi api,
+  FakeWallpaperSource source,
   FakeTagBlocklistRepository blocklist,
 ) async {
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[
-      wallhavenApiProvider.overrideWithValue(api),
+      wallhavenSourceProvider.overrideWithValue(source),
       secretStoreProvider.overrideWithValue(FakeSecretStore()),
       settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
       tagBlocklistRepositoryProvider.overrideWithValue(blocklist),
@@ -128,7 +128,7 @@ void main() {
   testWidgets('renders a tile per wallpaper returned by the API', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       page: WallpaperPage(
         wallpapers: <Wallpaper>[_wallpaper('aaa111'), _wallpaper('bbb222')],
         hasMore: false,
@@ -137,7 +137,7 @@ void main() {
       ),
     );
 
-    await _pumpBrowse(tester, api);
+    await _pumpBrowse(tester, source);
 
     expect(find.byType(WallpaperTile), findsNWidgets(2));
   });
@@ -145,7 +145,7 @@ void main() {
   testWidgets('grids with the ratio-preserving thumb, never the cropped one', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       page: WallpaperPage(
         wallpapers: <Wallpaper>[_wallpaper('aaa111')],
         hasMore: false,
@@ -154,7 +154,7 @@ void main() {
       ),
     );
 
-    await _pumpBrowse(tester, api);
+    await _pumpBrowse(tester, source);
 
     // Wallhaven crops small/large to a fixed 300x200. Rendering those inside a
     // box shaped by the wallpaper's real ratio turns a landscape into a
@@ -168,14 +168,14 @@ void main() {
   testWidgets('asks for images at least as large as the device screen', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
+    final FakeWallpaperSource source = FakeWallpaperSource();
 
-    await _pumpBrowse(tester, api);
+    await _pumpBrowse(tester, source);
 
     // Without this the grid fills with images too small to look sharp once
     // they're actually set as a wallpaper. `Automatic` is what says so, and the
     // screen is what answers it — the domain has no idea how big the screen is.
-    final ResolutionFilter resolution = api.receivedQueries.first.resolution;
+    final ResolutionFilter resolution = source.receivedQueries.first.resolution;
     expect(resolution, isA<AtLeastResolution>());
     final Resolution atLeast = (resolution as AtLeastResolution).minimum;
     expect(atLeast.width, greaterThan(0));
@@ -185,11 +185,13 @@ void main() {
   testWidgets('opens on Latest, and browses sfw with no key', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
+    final FakeWallpaperSource source = FakeWallpaperSource();
 
-    await _pumpBrowse(tester, api);
+    await _pumpBrowse(tester, source);
 
-    final SearchQueryFacts first = SearchQueryFacts(api.receivedQueries.first);
+    final SearchQueryFacts first = SearchQueryFacts(
+      source.receivedQueries.first,
+    );
     expect(first.sorting, 'date_added');
     expect(first.purity, '100');
   });
@@ -197,7 +199,7 @@ void main() {
   testWidgets('withholds the explicit filter until a key is stored', (
     WidgetTester tester,
   ) async {
-    await _pumpBrowse(tester, FakeWallhavenApi());
+    await _pumpBrowse(tester, FakeWallpaperSource());
 
     await _openFilters(tester);
 
@@ -210,8 +212,8 @@ void main() {
   testWidgets('a stored key unlocks the explicit filter, and it searches', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api, storedKey: 'abc123');
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source, storedKey: 'abc123');
 
     await _openFilters(tester);
     await tester.tap(find.text('Explicit'));
@@ -222,29 +224,31 @@ void main() {
 
     // Safe stays on, so this is the sfw+nsfw mask, and the grid re-queried
     // rather than sitting on its previous page.
-    final SearchQueryFacts applied = SearchQueryFacts(api.receivedQueries.last);
+    final SearchQueryFacts applied = SearchQueryFacts(
+      source.receivedQueries.last,
+    );
     expect(applied.purity, '101');
   });
 
   testWidgets('searching a term re-queries with it', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await tester.enterText(find.byType(TextField), 'sunset');
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(api.receivedQueries.last.term, 'sunset');
+    expect(source.receivedQueries.last.term, 'sunset');
   });
 
   testWidgets('a tag added in the sheet is folded into the grid query', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await tester.enterText(find.byType(TextField), 'sunset');
     await tester.testTextInput.receiveAction(TextInputAction.search);
@@ -265,28 +269,28 @@ void main() {
 
     // The tag rides in `q` beside the term the user typed, not in place of it —
     // this is the first filter tela builds a Wallhaven operator for.
-    expect(SearchQueryFacts(api.receivedQueries.last).q, 'sunset +"nature"');
+    expect(SearchQueryFacts(source.receivedQueries.last).q, 'sunset +"nature"');
   });
 
   testWidgets('most viewed and most favorited are reachable listings', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     // Both have been in the Sorting enum since Wave 1 and could not be reached
     // at all: the tab *was* the sorting, and there were only four tabs.
     await _tapTab(tester, 'Most viewed');
-    expect(SearchQueryFacts(api.receivedQueries.last).sorting, 'views');
+    expect(SearchQueryFacts(source.receivedQueries.last).sorting, 'views');
 
     await _tapTab(tester, 'Most favorited');
-    expect(SearchQueryFacts(api.receivedQueries.last).sorting, 'favorites');
+    expect(SearchQueryFacts(source.receivedQueries.last).sorting, 'favorites');
   });
 
   testWidgets('withholds relevance until there is a term to rank against', (
     WidgetTester tester,
   ) async {
-    await _pumpBrowse(tester, FakeWallhavenApi());
+    await _pumpBrowse(tester, FakeWallpaperSource());
 
     // Wallhaven's `relevance` ranks against `q`. With no term it has nothing to
     // rank, so the tab would quietly be a listing of something else.
@@ -297,22 +301,22 @@ void main() {
   testWidgets('submitting a search lands on relevance', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await _search(tester, 'sunset');
 
     // A search that left you on Latest would rank by upload date and take no
     // account of what you typed.
     expect(_selectedTab(tester), 'Relevance');
-    expect(_sortingsRequested(api), contains('relevance'));
-    expect(api.receivedQueries.last.term, 'sunset');
+    expect(_sortingsRequested(source), contains('relevance'));
+    expect(source.receivedQueries.last.term, 'sunset');
   });
 
   testWidgets('refining a search returns to relevance', (
     WidgetTester tester,
   ) async {
-    await _pumpBrowse(tester, FakeWallhavenApi());
+    await _pumpBrowse(tester, FakeWallpaperSource());
 
     await _search(tester, 'sunset');
     await _tapTab(tester, 'Top');
@@ -329,8 +333,8 @@ void main() {
   testWidgets('clearing the search keeps the listing you were on', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await _search(tester, 'sunset');
     await _tapTab(tester, 'Top');
@@ -341,14 +345,14 @@ void main() {
     // from Top to Hot without being asked. The selection is by sorting.
     expect(find.text('Relevance'), findsNothing);
     expect(_selectedTab(tester), 'Top');
-    expect(SearchQueryFacts(api.receivedQueries.last).sorting, 'toplist');
-    expect(api.receivedQueries.last.term, isEmpty);
+    expect(SearchQueryFacts(source.receivedQueries.last).sorting, 'toplist');
+    expect(source.receivedQueries.last.term, isEmpty);
   });
 
   testWidgets('clearing the search while on relevance falls back to latest', (
     WidgetTester tester,
   ) async {
-    await _pumpBrowse(tester, FakeWallhavenApi());
+    await _pumpBrowse(tester, FakeWallpaperSource());
 
     await _search(tester, 'sunset');
     expect(_selectedTab(tester), 'Relevance');
@@ -362,11 +366,11 @@ void main() {
   testWidgets('shows a localized message and a retry when the API fails', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       failure: const NetworkFailure(),
     );
 
-    await _pumpBrowse(tester, api);
+    await _pumpBrowse(tester, source);
 
     expect(
       find.text("Can't reach Wallhaven. Check your connection."),
@@ -381,20 +385,20 @@ void main() {
   testWidgets('browses every colour until a swatch is picked', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
+    final FakeWallpaperSource source = FakeWallpaperSource();
 
-    await _pumpBrowse(tester, api);
+    await _pumpBrowse(tester, source);
 
     // No `colors` at all, rather than an empty one — Wallhaven reads an empty
     // filter as matching nothing.
-    expect(SearchQueryFacts(api.receivedQueries.first).colors, isNull);
+    expect(SearchQueryFacts(source.receivedQueries.first).colors, isNull);
   });
 
   testWidgets('picking a colour re-queries the grid with it', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await _openFilters(tester);
     await _tapSwatch(tester, WallpaperColor('#0066cc'));
@@ -404,14 +408,14 @@ void main() {
 
     // Sent bare, and the grid actually re-fetched rather than leaving the old
     // page up under a filter that appears ignored.
-    expect(SearchQueryFacts(api.receivedQueries.last).colors, '0066cc');
+    expect(SearchQueryFacts(source.receivedQueries.last).colors, '0066cc');
   });
 
   testWidgets('tapping the chosen colour again clears the filter', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await _openFilters(tester);
     await _tapSwatch(tester, WallpaperColor('#0066cc'));
@@ -422,14 +426,14 @@ void main() {
 
     // The colour must be removable, which is the whole reason SearchQuery has
     // withColor: copyWith cannot express "back to none".
-    expect(SearchQueryFacts(api.receivedQueries.last).colors, isNull);
+    expect(SearchQueryFacts(source.receivedQueries.last).colors, isNull);
   });
 
   testWidgets('"Any color" clears a chosen colour', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await _openFilters(tester);
     await _tapSwatch(tester, WallpaperColor('#ea4c88'));
@@ -439,13 +443,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(SearchQueryFacts(api.receivedQueries.last).colors, isNull);
+    expect(SearchQueryFacts(source.receivedQueries.last).colors, isNull);
   });
 
   testWidgets('the apply button stays reachable under the colour palette', (
     WidgetTester tester,
   ) async {
-    await _pumpBrowse(tester, FakeWallhavenApi());
+    await _pumpBrowse(tester, FakeWallpaperSource());
 
     await _openFilters(tester);
 
@@ -459,8 +463,8 @@ void main() {
   testWidgets('saving the filters as a default keeps them, and browses on '
       'them', (WidgetTester tester) async {
     final FakeSettingsRepository settings = FakeSettingsRepository();
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api, settings: settings);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source, settings: settings);
 
     await _openFilters(tester);
     await tester.tap(find.widgetWithText(FilterChip, 'Anime'));
@@ -472,7 +476,7 @@ void main() {
     // left the grid on the old filters would be a button that does nothing.
     expect(settings.sourceSaved, BrowseDefaultsSource.device);
     expect(settings.deviceSaved?.categories.encodeStored(), '101');
-    expect(api.receivedQueries.last.categories.encodeStored(), '101');
+    expect(source.receivedQueries.last.categories.encodeStored(), '101');
     expect(find.text('Saved as your browse defaults.'), findsOneWidget);
   });
 
@@ -481,7 +485,7 @@ void main() {
     final FakeSettingsRepository settings = FakeSettingsRepository();
     await _pumpBrowse(
       tester,
-      FakeWallhavenApi(),
+      FakeWallpaperSource(),
       storedKey: 'abc123',
       settings: settings,
     );
@@ -505,7 +509,7 @@ void main() {
     WidgetTester tester,
   ) async {
     _phoneViewport(tester);
-    await _pumpBrowse(tester, FakeWallhavenApi());
+    await _pumpBrowse(tester, FakeWallpaperSource());
 
     await _openFilters(tester);
 
@@ -519,8 +523,8 @@ void main() {
     WidgetTester tester,
   ) async {
     _phoneViewport(tester);
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await _openFilters(tester);
     // Portrait 9x16 is on by default; add a second shape rather than replacing
@@ -529,15 +533,15 @@ void main() {
     await _tapInSheet(tester, find.widgetWithText(FilterChip, '16×9'));
     await _applyFilters(tester);
 
-    expect(SearchQueryFacts(api.receivedQueries.last).ratios, '9x16,16x9');
+    expect(SearchQueryFacts(source.receivedQueries.last).ratios, '9x16,16x9');
   });
 
   testWidgets('a keyword shape is offered beside the exact ones', (
     WidgetTester tester,
   ) async {
     _phoneViewport(tester);
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await _openFilters(tester);
     // `portrait` is broader than any exact ratio and is not a synonym for one:
@@ -546,7 +550,7 @@ void main() {
     await _applyFilters(tester);
 
     expect(
-      SearchQueryFacts(api.receivedQueries.last).ratios,
+      SearchQueryFacts(source.receivedQueries.last).ratios,
       '9x16,portrait',
     );
   });
@@ -555,8 +559,8 @@ void main() {
     WidgetTester tester,
   ) async {
     _phoneViewport(tester);
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await _openFilters(tester);
     await _tapInSheet(tester, find.widgetWithText(FilterChip, 'Any shape'));
@@ -564,15 +568,15 @@ void main() {
 
     // Not an empty `ratios=`, which is not how you ask Wallhaven for every
     // shape. The last ratio chip *may* be turned off, unlike the last category.
-    expect(SearchQueryFacts(api.receivedQueries.last).ratios, isNull);
+    expect(SearchQueryFacts(source.receivedQueries.last).ratios, isNull);
   });
 
   testWidgets('the resolution filter opens on Automatic, fitting the screen', (
     WidgetTester tester,
   ) async {
     _phoneViewport(tester);
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await _openFilters(tester);
     final Finder hint = find.text(
@@ -585,7 +589,7 @@ void main() {
     // upgrades browses exactly as it did yesterday.
     expect(hint, findsOneWidget);
     final SearchQueryFacts opening = SearchQueryFacts(
-      api.receivedQueries.first,
+      source.receivedQueries.first,
     );
     expect(opening.atLeast, '1080x2400');
     expect(opening.resolutions, isNull);
@@ -595,8 +599,8 @@ void main() {
     WidgetTester tester,
   ) async {
     _phoneViewport(tester);
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await _openFilters(tester);
     await _tapInSheet(tester, find.text('Exactly'));
@@ -606,7 +610,9 @@ void main() {
     // silently ignores `resolutions` — so sending both would be a filter that
     // appears ignored. Switching mode seeds with the screen, which is what
     // Automatic was already asking for.
-    final SearchQueryFacts exact = SearchQueryFacts(api.receivedQueries.last);
+    final SearchQueryFacts exact = SearchQueryFacts(
+      source.receivedQueries.last,
+    );
     expect(exact.resolutions, '1080x2400');
     expect(exact.atLeast, isNull);
   });
@@ -615,15 +621,17 @@ void main() {
     WidgetTester tester,
   ) async {
     _phoneViewport(tester);
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    await _pumpBrowse(tester, api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(tester, source);
 
     await _openFilters(tester);
     await _tapInSheet(tester, find.text('At least'));
     await _tapInSheet(tester, find.widgetWithText(FilterChip, '1440×2560'));
     await _applyFilters(tester);
 
-    final SearchQueryFacts atLeast = SearchQueryFacts(api.receivedQueries.last);
+    final SearchQueryFacts atLeast = SearchQueryFacts(
+      source.receivedQueries.last,
+    );
     expect(atLeast.atLeast, '1440x2560');
     expect(atLeast.resolutions, isNull);
   });
@@ -631,7 +639,7 @@ void main() {
   testWidgets(
     'blocking a tag silently re-fetches the grid already on screen',
     (WidgetTester tester) async {
-      final FakeWallhavenApi api = FakeWallhavenApi(
+      final FakeWallpaperSource source = FakeWallpaperSource(
         pageFor: (SearchQuery query) => query.blockedTagNames.isEmpty
             ? WallpaperPage(
                 wallpapers: <Wallpaper>[
@@ -652,7 +660,7 @@ void main() {
       final FakeTagBlocklistRepository blocklist = FakeTagBlocklistRepository();
       final ProviderContainer container = await _pumpBrowseWithContainer(
         tester,
-        api,
+        source,
         blocklist,
       );
 
@@ -672,7 +680,7 @@ void main() {
   testWidgets(
     'the blocklist merely loading does not re-fetch the page already on screen',
     (WidgetTester tester) async {
-      final FakeWallhavenApi api = FakeWallhavenApi(
+      final FakeWallpaperSource source = FakeWallpaperSource(
         page: WallpaperPage(
           wallpapers: <Wallpaper>[_wallpaper('aaa111')],
           hasMore: false,
@@ -689,15 +697,15 @@ void main() {
       final FakeTagBlocklistRepository blocklist = FakeTagBlocklistRepository(
         readDelay: const Duration(milliseconds: 600),
       );
-      await _pumpBrowseWithContainer(tester, api, blocklist);
+      await _pumpBrowseWithContainer(tester, source, blocklist);
       expect(find.byType(WallpaperTile), findsOneWidget);
-      final int afterFirstPage = api.receivedQueries.length;
+      final int afterFirstPage = source.receivedQueries.length;
 
       await tester.pump(const Duration(seconds: 1));
 
       // Nothing was blocked, so nothing changed, so nothing is worth asking
       // Wallhaven again — the opening fetch read this same empty blocklist.
-      expect(api.receivedQueries, hasLength(afterFirstPage));
+      expect(source.receivedQueries, hasLength(afterFirstPage));
     },
   );
 }
@@ -741,8 +749,8 @@ String _selectedTab(WidgetTester tester) {
 }
 
 /// Every `sorting` Wallhaven was actually asked for, in order.
-List<String?> _sortingsRequested(FakeWallhavenApi api) {
-  return api.receivedQueries
+List<String?> _sortingsRequested(FakeWallpaperSource source) {
+  return source.receivedQueries
       .map((SearchQuery query) => SearchQueryFacts(query).sorting)
       .toList();
 }

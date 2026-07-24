@@ -24,7 +24,7 @@ import '../fakes/fake_app_lock.dart';
 import '../fakes/fake_image_store.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   testWidgets('groups related settings into six scannable sections', (
@@ -254,7 +254,7 @@ void main() {
       tester,
       FakeSettingsRepository(),
       secrets: secrets,
-      api: FakeWallhavenApi(failure: const InvalidApiKeyFailure()),
+      source: FakeWallpaperSource(failure: const InvalidApiKeyFailure()),
     );
 
     await _enterKey(tester, 'nope');
@@ -378,18 +378,18 @@ void main() {
     final FakeSettingsRepository settings = FakeSettingsRepository(
       accountDefaults: _account,
     );
-    final FakeWallhavenApi api = FakeWallhavenApi(account: _refreshed);
+    final FakeWallpaperSource source = FakeWallpaperSource(account: _refreshed);
     await _pumpSettings(
       tester,
       settings,
       secrets: FakeSecretStore(storedKey: 'abc123'),
-      api: api,
+      source: source,
     );
 
     await tester.tap(find.byIcon(Icons.refresh));
     await tester.pumpAndSettle();
 
-    expect(api.accountSettingsCalls, 1);
+    expect(source.accountSettingsCalls, 1);
     expect(settings.accountSaved, _refreshed);
     expect(
       find.text('Browse defaults updated from your account.'),
@@ -407,7 +407,7 @@ void main() {
       tester,
       settings,
       secrets: FakeSecretStore(storedKey: 'abc123'),
-      api: FakeWallhavenApi(failure: const NetworkFailure()),
+      source: FakeWallpaperSource(failure: const NetworkFailure()),
     );
 
     await tester.tap(find.byIcon(Icons.refresh));
@@ -740,7 +740,7 @@ Future<void> _pumpSettings(
   WidgetTester tester,
   FakeSettingsRepository settings, {
   FakeSecretStore? secrets,
-  FakeWallhavenApi? api,
+  FakeWallpaperSource? source,
   FakeAppLock? lock,
   FakeImageStore? imageStore,
   Size viewport = const Size(1080, 5000),
@@ -762,7 +762,9 @@ Future<void> _pumpSettings(
       overrides: <Override>[
         settingsRepositoryProvider.overrideWithValue(settings),
         secretStoreProvider.overrideWithValue(secrets ?? FakeSecretStore()),
-        wallhavenApiProvider.overrideWithValue(api ?? FakeWallhavenApi()),
+        wallhavenSourceProvider.overrideWithValue(
+          source ?? FakeWallpaperSource(),
+        ),
         appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
         imageStoreProvider.overrideWithValue(imageStore ?? FakeImageStore()),
       ],

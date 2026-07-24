@@ -11,7 +11,7 @@ import 'package:tela/domain/use_cases/sync_account_defaults.dart';
 
 import '../../fakes/fake_secret_store.dart';
 import '../../fakes/fake_settings_repository.dart';
-import '../../fakes/fake_wallhaven_api.dart';
+import '../../fakes/fake_wallpaper_source.dart';
 
 void main() {
   test('takes the account when that is the source', () async {
@@ -101,7 +101,7 @@ ResolveBrowseDefaults _resolve({
       settings: settings,
       secrets: FakeSecretStore(),
       syncDefaults: SyncAccountDefaults(
-        api: FakeWallhavenApi(),
+        source: FakeWallpaperSource(),
         settings: settings,
       ),
     ),
