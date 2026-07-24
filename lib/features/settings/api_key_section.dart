@@ -59,7 +59,11 @@ class ApiKeySection extends ConsumerWidget {
       messenger.showSnackBar(SnackBar(content: Text(_saved(l10n, outcome))));
     } on SourceFailure catch (failure) {
       messenger.showSnackBar(
-        SnackBar(content: Text(localizedFailure(l10n, failure))),
+        SnackBar(
+          content: Text(
+            localizedFailure(l10n, failure, sourceName: 'Wallhaven'),
+          ),
+        ),
       );
     }
   }

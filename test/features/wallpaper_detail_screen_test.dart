@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/blurred_image_backdrop.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
@@ -23,6 +24,7 @@ import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
+import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/favorites/favorite_button.dart';
 
@@ -92,6 +94,20 @@ void main() {
     expect(find.byKey(const Key('immersive-viewer-favorite')), findsOneWidget);
     expect(find.byKey(const Key('immersive-viewer-download')), findsOneWidget);
     expect(find.byKey(const Key('immersive-viewer-set')), findsOneWidget);
+  });
+
+  testWidgets('fullscreen Open details returns to the selected Detail', (
+    WidgetTester tester,
+  ) async {
+    await _pumpDetail(tester, _details());
+
+    await tester.tap(find.byTooltip('View wallpaper full screen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('immersive-viewer-open-details')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(WallpaperDetailScreen), findsOneWidget);
+    expect(find.text('Set wallpaper'), findsOneWidget);
   });
 
   testWidgets('favoriting from the fullscreen viewer saves and re-marks', (
@@ -572,6 +588,35 @@ void main() {
     expect(links.opened, <Uri>[details.wallpaper.pageUrl]);
   });
 
+  testWidgets('Konachan detail and share copy name Konachan', (
+    WidgetTester tester,
+  ) async {
+    await _tallSurface(tester);
+    final WallpaperDetails details = _details(sourceId: SourceId.konachan);
+    await _pumpDetail(
+      tester,
+      details,
+      source: FakeWallpaperSource(
+        id: SourceId.konachan,
+        displayName: 'Konachan',
+        capabilities: narrowCapabilities,
+        details: details,
+      ),
+    );
+
+    expect(find.text('View on Konachan'), findsOneWidget);
+    expect(find.textContaining('View on Wallhaven'), findsNothing);
+
+    await tester.tap(find.byTooltip('Share'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('The Konachan page for this wallpaper.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('The Wallhaven page'), findsNothing);
+  });
+
   testWidgets('a link that opens nothing says so, and no more', (
     WidgetTester tester,
   ) async {
@@ -910,9 +955,16 @@ Future<void> _pumpDetail(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenSourceProvider.overrideWithValue(
-          source ?? FakeWallpaperSource(details: details),
-        ),
+        wallpaperSourcesProvider.overrideWithValue(<WallpaperSource>[
+          source ??
+              FakeWallpaperSource(
+                id: details.wallpaper.source,
+                displayName: details.wallpaper.source == SourceId.konachan
+                    ? 'Konachan'
+                    : 'Wallhaven',
+                details: details,
+              ),
+        ]),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         settingsRepositoryProvider.overrideWithValue(
           settingsRepository ?? FakeSettingsRepository(settings: settings),
@@ -973,15 +1025,32 @@ Future<void> _pumpDetail(
   await tester.pump();
 }
 
-WallpaperDetails _details({Purity purity = Purity.sfw}) {
+WallpaperDetails _details({
+  Purity purity = Purity.sfw,
+  SourceId sourceId = SourceId.wallhaven,
+}) {
+  final bool konachan = sourceId == SourceId.konachan;
+  final String id = konachan ? '406484' : 'e7jvjd';
   final Wallpaper wallpaper = Wallpaper(
-    id: 'e7jvjd',
-    source: SourceId.wallhaven,
-    pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
-    fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
-    thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
-    thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
-    thumbOriginalUrl: 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg',
+    id: id,
+    source: sourceId,
+    pageUrl: Uri.parse(
+      konachan
+          ? 'https://konachan.net/post/show/$id'
+          : 'https://wallhaven.cc/w/$id',
+    ),
+    fullImageUrl: konachan
+        ? 'https://konachan.com/image/$id.jpg'
+        : 'https://w.wallhaven.cc/full/e7/wallhaven-$id.jpg',
+    thumbSmallUrl: konachan
+        ? 'https://konachan.com/preview/$id.jpg'
+        : 'https://th.wallhaven.cc/small/e7/$id.jpg',
+    thumbLargeUrl: konachan
+        ? 'https://konachan.com/sample/$id.jpg'
+        : 'https://th.wallhaven.cc/lg/e7/$id.jpg',
+    thumbOriginalUrl: konachan
+        ? 'https://konachan.com/preview/$id.jpg'
+        : 'https://th.wallhaven.cc/orig/e7/$id.jpg',
     resolution: const Resolution(3840, 2160),
     fileSizeBytes: 1048576,
     purity: purity,

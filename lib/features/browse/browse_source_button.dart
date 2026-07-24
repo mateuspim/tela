@@ -27,15 +27,25 @@ class BrowseSourceButton extends ConsumerWidget {
     final WallpaperSource active = ref.watch(activeWallpaperSourceProvider);
     final AppLocalizations l10n = AppLocalizations.of(context);
     return PopupMenuButton<SourceId>(
-      icon: const Icon(Icons.travel_explore_outlined),
       tooltip: l10n.browseSource(active.displayName),
       initialValue: active.id,
       onSelected: (SourceId id) =>
           ref.read(activeSourceProvider.notifier).choose(id),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(active.displayName),
+            const Icon(Icons.arrow_drop_down),
+          ],
+        ),
+      ),
       itemBuilder: (BuildContext context) => <PopupMenuEntry<SourceId>>[
         for (final WallpaperSource source in sources)
-          PopupMenuItem<SourceId>(
+          CheckedPopupMenuItem<SourceId>(
             value: source.id,
+            checked: source.id == active.id,
             child: Text(source.displayName),
           ),
       ],

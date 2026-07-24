@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_capabilities.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 
@@ -90,6 +92,41 @@ void main() {
 
       expect(page.wallpapers, hasLength(2));
     });
+
+    test('retries one transient transport failure and then succeeds', () async {
+      final _TransientTransport transport = _TransientTransport(
+        body: File('test/fixtures/konachan_post_list.json').readAsStringSync(),
+        failures: 1,
+      );
+      final Dio dio = Dio()..httpClientAdapter = transport;
+      final DioKonachanSource api = DioKonachanSource(
+        dio,
+        delay: (_) async {},
+      );
+
+      final WallpaperPage page = await api.search(const SearchQuery());
+
+      expect(page.wallpapers, hasLength(2));
+      expect(transport.attempts, 2);
+    });
+
+    test('stops after one retry when the transport stays down', () async {
+      final _TransientTransport transport = _TransientTransport(
+        body: '[]',
+        failures: 2,
+      );
+      final Dio dio = Dio()..httpClientAdapter = transport;
+      final DioKonachanSource api = DioKonachanSource(
+        dio,
+        delay: (_) async {},
+      );
+
+      await expectLater(
+        api.search(const SearchQuery()),
+        throwsA(isA<NetworkFailure>()),
+      );
+      expect(transport.attempts, 2);
+    });
   });
 
   group('DioKonachanSource.wallpaperDetails', () {
@@ -144,4 +181,38 @@ void main() {
       expect(_wired().api.accountSettings, throwsUnsupportedError);
     });
   });
+}
+
+/// Fails the first [failures] adapter reads as receive timeouts, then answers.
+final class _TransientTransport implements HttpClientAdapter {
+  _TransientTransport({required this.body, required this.failures});
+
+  final String body;
+  final int failures;
+  int attempts = 0;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    attempts += 1;
+    if (attempts <= failures) {
+      throw DioException(
+        requestOptions: options,
+        type: DioExceptionType.receiveTimeout,
+      );
+    }
+    return ResponseBody.fromString(
+      body,
+      200,
+      headers: <String, List<String>>{
+        Headers.contentTypeHeader: <String>[Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
 }

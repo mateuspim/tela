@@ -85,6 +85,7 @@ void main() {
 
       expect(sfw, isNot(nsfw));
       expect(const SearchQuery(term: 'cats'), isNot(const SearchQuery()));
+      expect(const SearchQuery(uploader: 'pym'), isNot(const SearchQuery()));
       expect(const SearchQuery().atPage(2), isNot(const SearchQuery()));
       expect(
         const SearchQuery(ratios: <RatioChoice>[ExactRatio(16, 9)]),

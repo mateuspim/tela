@@ -56,7 +56,8 @@ void main() {
     final FakeWallpaperSource source = _api();
     await _pumpListing(tester, source, const UploaderLink('pym'));
 
-    expect(source.receivedQueries.single.term, '@pym');
+    expect(source.receivedQueries.single.term, isEmpty);
+    expect(source.receivedQueries.single.uploader, 'pym');
     expect(find.text('@pym'), findsOneWidget);
     // Wallhaven's API has no user endpoint. The screen must not imply one.
     expect(find.text('Uploads by this user'), findsOneWidget);

@@ -3,7 +3,7 @@ import 'package:tela/domain/models/purity.dart';
 
 /// What a share action can send out about a wallpaper.
 enum ShareOption {
-  /// The public Wallhaven page, as a link. Reveals nothing tela is holding.
+  /// The public source page, as a link. Reveals nothing tela is holding.
   link,
 
   /// The full-resolution image file itself, exported off the device.

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/ports/wallpaper_source.dart';
@@ -50,6 +51,7 @@ void main() {
     expect(find.text('Categories'), findsNothing);
     expect(find.text('Color'), findsNothing);
     expect(find.text('Top list range'), findsNothing);
+    expect(find.text('Order'), findsNothing);
     // The whole "Appearance" card goes with its one group: a heading promising
     // filters that are not there is worse than no heading.
     expect(find.text('Appearance'), findsNothing);
@@ -57,17 +59,68 @@ void main() {
     expect(find.text('Purity'), findsOneWidget);
     expect(find.text('Shape'), findsOneWidget);
   });
+
+  testWidgets('a credential-free source offers explicit without a key', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSheet(
+      tester,
+      FakeWallpaperSource(
+        id: const SourceId('booru'),
+        displayName: 'Booru',
+        capabilities: narrowCapabilities,
+      ),
+      storedKey: null,
+    );
+
+    expect(find.text('Explicit'), findsOneWidget);
+  });
+
+  testWidgets('explains why the final purity cannot be turned off', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSheet(tester, FakeWallpaperSource());
+
+    expect(
+      find.text('At least one purity must stay selected.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.widgetWithText(FilterChip, 'Safe'));
+    await tester.pump();
+
+    final FilterChip safe = tester.widget<FilterChip>(
+      find.widgetWithText(FilterChip, 'Safe'),
+    );
+    expect(safe.selected, isTrue);
+  });
+
+  testWidgets('names the active group behind a nonzero badge', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSheet(
+      tester,
+      FakeWallpaperSource(),
+      filters: const SearchQuery(ratios: <RatioChoice>[]),
+    );
+
+    expect(find.text('1 active filter: Shape'), findsOneWidget);
+  });
 }
 
 /// Mounts the sheet with [source] as the only registered source.
-Future<void> _pumpSheet(WidgetTester tester, WallpaperSource source) async {
+Future<void> _pumpSheet(
+  WidgetTester tester,
+  WallpaperSource source, {
+  String? storedKey = 'abc123',
+  SearchQuery filters = const SearchQuery(),
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
         wallpaperSourcesProvider.overrideWithValue(<WallpaperSource>[source]),
         settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
         secretStoreProvider.overrideWithValue(
-          FakeSecretStore(storedKey: 'abc123'),
+          FakeSecretStore(storedKey: storedKey),
         ),
       ],
       child: MaterialApp(
@@ -77,7 +130,7 @@ Future<void> _pumpSheet(WidgetTester tester, WallpaperSource source) async {
           GlobalWidgetsLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(body: FilterSheet(scope: _StaticScope())),
+        home: Scaffold(body: FilterSheet(scope: _StaticScope(filters))),
       ),
     ),
   );
@@ -87,8 +140,10 @@ Future<void> _pumpSheet(WidgetTester tester, WallpaperSource source) async {
 /// A shelf that holds one query and forgets what is applied to it — the sheet's
 /// only collaborator, and none of what this test asserts depends on it.
 class _StaticScope implements BrowseFilterScope {
+  const _StaticScope(this.filters);
+
   @override
-  SearchQuery get filters => const SearchQuery();
+  final SearchQuery filters;
 
   SearchQuery get defaultQuery => const SearchQuery();
 

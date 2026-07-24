@@ -133,22 +133,65 @@ String topRangeLabel(AppLocalizations l10n, TopRange range) {
 /// visible in Browse. This count exists for the filter button, where it answers
 /// the otherwise invisible question "did I leave something narrowed?".
 int activeBrowseFilterCount(SearchQuery query) {
+  return _activeBrowseFilters(query).length;
+}
+
+/// Localized names of the groups counted by [activeBrowseFilterCount].
+///
+/// The badge stays compact, while its tooltip and the sheet heading can answer
+/// *which* filter is active. This matters for legitimate but non-obvious
+/// choices such as "Any shape", which differs from tela's portrait-first
+/// opening query and otherwise looks like a mysterious baseline badge.
+List<String> activeBrowseFilterLabels(
+  AppLocalizations l10n,
+  SearchQuery query,
+) {
+  return <String>[
+    for (final _ActiveBrowseFilter filter in _activeBrowseFilters(query))
+      switch (filter) {
+        _ActiveBrowseFilter.categories => l10n.filterCategories,
+        _ActiveBrowseFilter.purity => l10n.filterPurity,
+        _ActiveBrowseFilter.ratios => l10n.filterRatio,
+        _ActiveBrowseFilter.resolution => l10n.filterResolution,
+        _ActiveBrowseFilter.tags => l10n.filterTags,
+        _ActiveBrowseFilter.color => l10n.filterColor,
+        _ActiveBrowseFilter.order => l10n.filterOrder,
+        _ActiveBrowseFilter.topRange => l10n.filterTopRange,
+      },
+  ];
+}
+
+List<_ActiveBrowseFilter> _activeBrowseFilters(SearchQuery query) {
   const SearchQuery baseline = SearchQuery();
-  return <bool>[
-    !_sameFilterMembers(
+  return <_ActiveBrowseFilter>[
+    if (!_sameFilterMembers(
       query.categories.categories,
       baseline.categories.categories,
-    ),
-    !_sameFilterMembers(query.purity.purities, baseline.purity.purities),
-    !_sameFilterMembers(query.ratios, baseline.ratios),
-    query.resolution != baseline.resolution,
-    query.tags.isNotEmpty,
-    query.color != null,
-    query.order != baseline.order,
-    query.topRange != baseline.topRange,
-  ].where((bool active) => active).length;
+    ))
+      _ActiveBrowseFilter.categories,
+    if (!_sameFilterMembers(query.purity.purities, baseline.purity.purities))
+      _ActiveBrowseFilter.purity,
+    if (!_sameFilterMembers(query.ratios, baseline.ratios))
+      _ActiveBrowseFilter.ratios,
+    if (query.resolution != baseline.resolution) _ActiveBrowseFilter.resolution,
+    if (query.tags.isNotEmpty) _ActiveBrowseFilter.tags,
+    if (query.color != null) _ActiveBrowseFilter.color,
+    if (query.order != baseline.order) _ActiveBrowseFilter.order,
+    if (query.topRange != baseline.topRange) _ActiveBrowseFilter.topRange,
+  ];
 }
 
 bool _sameFilterMembers(Iterable<Object> a, Iterable<Object> b) {
   return a.length == b.length && a.toSet().containsAll(b);
+}
+
+enum _ActiveBrowseFilter {
+  categories,
+  purity,
+  ratios,
+  resolution,
+  tags,
+  color,
+  order,
+  topRange,
 }

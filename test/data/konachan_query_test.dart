@@ -123,6 +123,23 @@ void main() {
   );
 
   group('konachanQueryParameters — tags are underscore-joined, unquoted', () {
+    test('encodes a structural uploader with Konachan syntax', () {
+      expect(
+        _tagsOf(
+          const SearchQuery(
+            uploader: 'pym',
+            purity: PurityFilter(<Purity>{
+              Purity.sfw,
+              Purity.sketchy,
+              Purity.nsfw,
+            }),
+            ratios: <RatioChoice>[],
+          ),
+        ),
+        'user:pym',
+      );
+    });
+
     test(
       'a multi-word required tag becomes one underscore token, no quotes',
       () {

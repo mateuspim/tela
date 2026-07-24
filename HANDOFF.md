@@ -2,6 +2,39 @@
 
 Updated: 2026-07-24
 
+> **DEVICE-WALK GAPS FIXED AND RE-VERIFIED (2026-07-24, uncommitted on
+> `feat/konachan-source`).** The source switch now replaces the grid even when
+> both sources have an equal default query, and the visible switcher names and
+> checks the active source. Browse tabs, filter order, and available purities
+> now follow the active source's capabilities (including explicit Konachan
+> browsing without a Wallhaven key). Uploader narrowing is structural:
+> Wallhaven encodes `@name`, while Konachan encodes `user:name`. Detail,
+> sharing, and request-failure copy name the wallpaper's actual source instead
+> of saying Wallhaven. The fullscreen wallpaper and Download History viewers
+> now expose an **Open details** info action for the image currently selected,
+> restoring system chrome before navigating. A transient Konachan listing
+> timeout/connection failure now gets one bounded retry; HTTP responses are
+> never retried. The filter sheet explains that at least one purity must stay
+> selected, and its active summary names the changed groups (for example,
+> **1 active filter: Shape**) instead of presenting an unexplained count.
+> Regression coverage exercises all of these paths. `make ci` is green:
+> `flutter analyze` clean, Dart **1023**, Kotlin green.
+>
+> **Hardware pass:** deployed over the accumulated tablet data on SM-X730 at
+> `192.168.50.151:5555`. Konachan↔Wallhaven switched and reloaded immediately;
+> the tab/filter vocabulary followed each source; Konachan uploader narrowing,
+> source-aware Detail, fullscreen **Open details**, and Download History
+> **Open details** all worked. The follow-up build kept Konachan on Safe-only,
+> exposed **Filters, 1 active: Shape**, explained the purity invariant, and
+> recovered the listing on Retry after the endpoint transiently failed. No
+> Flutter exception, overflow, or crash appeared in the app-process log.
+>
+> **Still owed on a device:** repeat the §18.6 human checks for the NSFW
+> invariant/private storage/`FLAG_SECURE`/app lock, observe the `.net` host,
+> run the full wallpaper lifecycle, check the source-prefixed filename, verify
+> the v6 migration against a real accumulated database, and finish the
+> destructive/storage-sensitive parts of the lifecycle.
+>
 > **START HERE — KONACHAN (§17 stage 3 / §18) IS BUILT on branch
 > `feat/konachan-source`; device pass owed before merge.** Stages 1 & 2 are
 > now MERGED to `master` (`ba41af2`), correcting this file's older claim that
@@ -1411,8 +1444,10 @@ wallpaper** in its bottom bar, each running through D1's
 `runWallpaperQuickAction` rather than growing a second copy — the target
 chooser, the snackbars and the `refreshFavorites`/`refreshDownloads`
 invalidations are all decided there, and two implementations of "download this
-wallpaper" would drift. *Open details* is deliberately absent: from here,
-closing **is** that action.
+wallpaper" would drift. *Open details* was deliberately absent at this point:
+from here, closing **was** that action. The 2026-07-24 follow-up at the top of
+this file adds an explicit info action, and also makes it useful from Download
+History where Detail is not already underneath the viewer.
 
 **The chrome was six labelled pills in four corners** — *Zoom in*, hide,
 *Close*, *Previous*, *Next* and a counter — all at the same visual weight, on

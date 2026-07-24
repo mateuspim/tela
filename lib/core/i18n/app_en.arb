@@ -81,12 +81,38 @@
     }
   },
 
+  "browseFiltersActiveDetails": "Filters, {count} active: {filters}",
+  "@browseFiltersActiveDetails": {
+    "description": "Accessibility label for the filter button, naming both the active count and the changed groups.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "filters": {
+        "type": "String"
+      }
+    }
+  },
+
   "filterActiveCount": "{count, plural, =0{No active filters} =1{1 active filter} other{{count} active filters}}",
   "@filterActiveCount": {
     "description": "Summary beneath the filter-sheet heading.",
     "placeholders": {
       "count": {
         "type": "int"
+      }
+    }
+  },
+
+  "filterActiveDetails": "{count}: {filters}",
+  "@filterActiveDetails": {
+    "description": "Filter-sheet summary combining the localized active-filter count with the names of the changed groups.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "filters": {
+        "type": "String"
       }
     }
   },
@@ -119,6 +145,11 @@
   "filterPurity": "Purity",
   "@filterPurity": {
     "description": "Heading of the purity chips in the filter sheet."
+  },
+
+  "filterPurityRequired": "At least one purity must stay selected.",
+  "@filterPurityRequired": {
+    "description": "Explains why tapping the final selected purity chip cannot turn it off."
   },
 
   "filterRatio": "Shape",
@@ -198,7 +229,7 @@
 
   "purityNsfw": "Explicit",
   "@purityNsfw": {
-    "description": "Purity: NSFW. Offered only when an API key is stored."
+    "description": "Purity: NSFW. Availability follows the active source's credential capabilities."
   },
 
   "ratioPortrait": "Any portrait",
@@ -389,19 +420,34 @@
   "topRangeSixMonths": "Last 6 months",
   "topRangeOneYear": "Last year",
 
-  "errorInvalidApiKey": "That Wallhaven API key was rejected.",
+  "errorInvalidApiKey": "That {sourceName} API key was rejected.",
   "@errorInvalidApiKey": {
-    "description": "Shown when Wallhaven answers 401."
+    "description": "Shown when a wallpaper source rejects its API key.",
+    "placeholders": {
+      "sourceName": {
+        "type": "String"
+      }
+    }
   },
 
-  "errorRateLimited": "Too many requests. Waiting for Wallhaven to catch up…",
+  "errorRateLimited": "Too many requests. Waiting for {sourceName} to catch up…",
   "@errorRateLimited": {
-    "description": "Shown when Wallhaven answers 429 and backoff is exhausted."
+    "description": "Shown when a wallpaper source answers 429 and backoff is exhausted.",
+    "placeholders": {
+      "sourceName": {
+        "type": "String"
+      }
+    }
   },
 
-  "errorOffline": "Can't reach Wallhaven. Check your connection.",
+  "errorOffline": "Can't reach {sourceName}. Check your connection.",
   "@errorOffline": {
-    "description": "Shown when the device has no route to Wallhaven."
+    "description": "Shown when the device has no route to the active wallpaper source.",
+    "placeholders": {
+      "sourceName": {
+        "type": "String"
+      }
+    }
   },
 
   "errorUnexpected": "Something went wrong loading wallpapers.",
@@ -609,12 +655,17 @@
 
   "detailShareLink": "Link",
   "@detailShareLink": {
-    "description": "Share option: the wallpaper's public Wallhaven page URL."
+    "description": "Share option: the wallpaper's public source page URL."
   },
 
-  "detailShareLinkDetail": "The Wallhaven page for this wallpaper.",
+  "detailShareLinkDetail": "The {sourceName} page for this wallpaper.",
   "@detailShareLinkDetail": {
-    "description": "Explains what sharing the link sends."
+    "description": "Explains what sharing the link sends.",
+    "placeholders": {
+      "sourceName": {
+        "type": "String"
+      }
+    }
   },
 
   "detailShareImage": "Image",
@@ -735,9 +786,14 @@
   "detailTags": "Tags",
   "detailNotProvided": "Not provided",
 
-  "detailViewOnWallhaven": "View on Wallhaven",
-  "@detailViewOnWallhaven": {
-    "description": "Action on the detail screen that opens the wallpaper's public wallhaven.cc page in the device browser."
+  "detailViewOnSource": "View on {sourceName}",
+  "@detailViewOnSource": {
+    "description": "Action on the detail screen that opens the wallpaper's public source page in the device browser.",
+    "placeholders": {
+      "sourceName": {
+        "type": "String"
+      }
+    }
   },
 
   "detailLinkFailure": "Couldn't open the link.",

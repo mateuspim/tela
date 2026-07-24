@@ -62,6 +62,7 @@ Map<String, String> konachanQueryParameters(SearchQuery query) {
 String _tags(SearchQuery query) {
   final List<String> tokens = <String>[
     if (query.term.isNotEmpty) query.term,
+    if (query.uploader.isNotEmpty) 'user:${_slug(query.uploader)}',
     for (final SearchTag tag in query.tags) _tagToken(tag),
     for (final String name in query.blockedTagNames) '-${_slug(name)}',
     ?_ratingToken(query.purity),

@@ -81,7 +81,7 @@ class WallpaperTag {
   int get hashCode => id?.hashCode ?? name.hashCode;
 }
 
-/// The Wallhaven user credited as a wallpaper's uploader.
+/// The source user credited as a wallpaper's uploader.
 @immutable
 class WallpaperUploader {
   /// Creates uploader information supplied by the detail endpoint.

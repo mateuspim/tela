@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/data/wallhaven/wallhaven_query.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
@@ -20,6 +21,7 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
+import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/features/browse/browse_screen.dart';
 import 'package:tela/features/browse/filter_sheet.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
@@ -125,6 +127,77 @@ Future<ProviderContainer> _pumpBrowseWithContainer(
 }
 
 void main() {
+  testWidgets(
+    'switching source visibly relabels and reloads an equal default query',
+    (WidgetTester tester) async {
+      final FakeWallpaperSource wallhaven = FakeWallpaperSource();
+      final FakeWallpaperSource booru = FakeWallpaperSource(
+        id: const SourceId('booru'),
+        displayName: 'Booru',
+        capabilities: narrowCapabilities,
+      );
+      final ProviderContainer container = ProviderContainer(
+        overrides: <Override>[
+          wallpaperSourcesProvider.overrideWithValue(<WallpaperSource>[
+            wallhaven,
+            booru,
+          ]),
+          secretStoreProvider.overrideWithValue(FakeSecretStore()),
+          settingsRepositoryProvider.overrideWithValue(
+            FakeSettingsRepository(),
+          ),
+          tagBlocklistRepositoryProvider.overrideWithValue(
+            FakeTagBlocklistRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            localizationsDelegates: <LocalizationsDelegate<Object>>[
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: BrowseScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Wallhaven'), findsOneWidget);
+      expect(wallhaven.receivedQueries, isNotEmpty);
+      expect(booru.receivedQueries, isEmpty);
+
+      await tester.tap(find.text('Wallhaven'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(CheckedPopupMenuItem<SourceId>, 'Booru'),
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Booru'), findsOneWidget);
+      expect(booru.receivedQueries, isNotEmpty);
+      expect(
+        booru.receivedQueries.every(
+          (SearchQuery query) => narrowCapabilities.sortsBy(query.sorting),
+        ),
+        isTrue,
+      );
+      expect(find.text('Most viewed'), findsOneWidget);
+      expect(find.text('Most favorited'), findsOneWidget);
+      expect(find.text('Top'), findsNothing);
+      expect(find.text('Hot'), findsNothing);
+      expect(find.text('Random'), findsNothing);
+    },
+  );
+
   testWidgets('renders a tile per wallpaper returned by the API', (
     WidgetTester tester,
   ) async {

@@ -122,6 +122,15 @@ void main() {
       );
     });
 
+    test('encodes a structural uploader with Wallhaven syntax', () {
+      expect(
+        wallhavenQueryParameters(
+          const SearchQuery(uploader: 'pym'),
+        )['q'],
+        '@pym',
+      );
+    });
+
     test('sends topRange only for toplist, which is the only sorting that '
         'honours it', () {
       final Map<String, String> hot = wallhavenQueryParameters(

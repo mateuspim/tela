@@ -54,11 +54,16 @@ final class TagLink extends WallpaperLink {
     if (tagId == null) {
       return query.copyWith(
         term: '',
+        uploader: '',
         tags: <SearchTag>[SearchTag(tag.name)],
         sorting: Sorting.dateAdded,
       );
     }
-    return query.copyWith(term: 'id:$tagId', sorting: Sorting.dateAdded);
+    return query.copyWith(
+      term: 'id:$tagId',
+      uploader: '',
+      sorting: Sorting.dateAdded,
+    );
   }
 
   @override
@@ -68,23 +73,22 @@ final class TagLink extends WallpaperLink {
   int get hashCode => Object.hash(TagLink, tag);
 }
 
-/// Everything one Wallhaven user has uploaded.
-///
-/// Not a profile, and the screen says so: **Wallhaven's API has no user
-/// endpoint**. Their uploads, their avatar, and their group are all it can ever
-/// know about them, and the first of those is this listing.
+/// Everything one source user has uploaded.
 @immutable
 final class UploaderLink extends WallpaperLink {
   /// Creates a link to [username]'s uploads.
   const UploaderLink(this.username);
 
-  /// The uploader's public Wallhaven name, without the `@`.
+  /// The uploader's public name, without a source-specific operator.
   final String username;
 
-  /// `@{username}`, Wallhaven's uploader operator.
+  /// Carries the uploader structurally so each source can encode its operator.
   @override
-  SearchQuery narrow(SearchQuery query) =>
-      query.copyWith(term: '@$username', sorting: Sorting.dateAdded);
+  SearchQuery narrow(SearchQuery query) => query.copyWith(
+    term: '',
+    uploader: username,
+    sorting: Sorting.dateAdded,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -108,8 +112,9 @@ final class ColorLink extends WallpaperLink {
   final WallpaperColor color;
 
   @override
-  SearchQuery narrow(SearchQuery query) =>
-      query.withColor(color).copyWith(term: '', sorting: Sorting.dateAdded);
+  SearchQuery narrow(SearchQuery query) => query
+      .withColor(color)
+      .copyWith(term: '', uploader: '', sorting: Sorting.dateAdded);
 
   @override
   bool operator ==(Object other) => other is ColorLink && other.color == color;

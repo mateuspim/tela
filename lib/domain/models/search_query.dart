@@ -111,6 +111,7 @@ class SearchQuery {
   /// every category, newest first.
   const SearchQuery({
     this.term = '',
+    this.uploader = '',
     this.categories = CategoryFilter.all,
     this.purity = PurityFilter.sfwOnly,
     this.sorting = Sorting.dateAdded,
@@ -132,6 +133,13 @@ class SearchQuery {
   /// never parsed out of it, so a power user's hand-typed operators are left
   /// exactly as they were.
   final String term;
+
+  /// The uploader whose posts to show, without a source-specific operator.
+  ///
+  /// Empty means every uploader. Kept separate from [term] because sources
+  /// spell the same request differently: Wallhaven uses `@name`, while
+  /// Konachan uses `user:name`.
+  final String uploader;
 
   /// Which content buckets to include.
   final CategoryFilter categories;
@@ -219,6 +227,7 @@ class SearchQuery {
   SearchQuery withColor(WallpaperColor? color) {
     return SearchQuery(
       term: term,
+      uploader: uploader,
       categories: categories,
       purity: purity,
       sorting: sorting,
@@ -240,6 +249,7 @@ class SearchQuery {
   /// nullable one — see [withColor].
   SearchQuery copyWith({
     String? term,
+    String? uploader,
     CategoryFilter? categories,
     PurityFilter? purity,
     Sorting? sorting,
@@ -255,6 +265,7 @@ class SearchQuery {
   }) {
     return SearchQuery(
       term: term ?? this.term,
+      uploader: uploader ?? this.uploader,
       categories: categories ?? this.categories,
       purity: purity ?? this.purity,
       sorting: sorting ?? this.sorting,
@@ -280,6 +291,7 @@ class SearchQuery {
   bool operator ==(Object other) {
     return other is SearchQuery &&
         other.term == term &&
+        other.uploader == uploader &&
         _sameElements(other.categories.categories, categories.categories) &&
         _sameElements(other.purity.purities, purity.purities) &&
         other.sorting == sorting &&
@@ -298,6 +310,7 @@ class SearchQuery {
   int get hashCode {
     return Object.hash(
       term,
+      uploader,
       Object.hashAllUnordered(categories.categories),
       Object.hashAllUnordered(purity.purities),
       sorting,
@@ -334,6 +347,7 @@ class SearchQuery {
   String get key {
     final List<String> parts = <String>[
       'term=$term',
+      if (uploader.isNotEmpty) 'uploader=$uploader',
       _part('categories', categories.categories.map((Category c) => c.name)),
       _part('purity', purity.purities.map((Purity p) => p.name)),
       'sorting=${sorting.name}',

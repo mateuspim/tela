@@ -13,7 +13,7 @@ import 'package:tela/domain/models/purity.dart';
 /// app holding its own wallpaper history, which is exactly the ungated index
 /// the private tier exists to prevent.
 ///
-/// A public *link* is not an export and never asks this — the Wallhaven page is
+/// A public *link* is not an export and never asks this — the source page is
 /// public at any purity, so it reveals nothing tela is holding back.
 ///
 /// `sketchy` is not explicit here, matching `Wallpaper.isNsfw`,

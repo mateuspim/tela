@@ -12,34 +12,49 @@ import 'package:tela/domain/models/share_option.dart';
 ///
 /// ```dart
 /// final ShareOption? choice =
-///     await chooseShareOption(context, shareOptionsFor(wallpaper.purity));
+///     await chooseShareOption(
+///       context,
+///       shareOptionsFor(wallpaper.purity),
+///       sourceName: 'Konachan',
+///     );
 /// ```
 Future<ShareOption?> chooseShareOption(
   BuildContext context,
-  List<ShareOption> options,
-) {
+  List<ShareOption> options, {
+  required String sourceName,
+}) {
   return showModalBottomSheet<ShareOption>(
     context: context,
-    builder: (BuildContext context) => _shareSheet(context, options),
+    builder: (BuildContext context) =>
+        _shareSheet(context, options, sourceName),
   );
 }
 
-Widget _shareSheet(BuildContext context, List<ShareOption> options) {
+Widget _shareSheet(
+  BuildContext context,
+  List<ShareOption> options,
+  String sourceName,
+) {
   final AppLocalizations l10n = AppLocalizations.of(context);
   return SafeArea(
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         SheetHeader(title: l10n.detailShareTitle),
-        for (final ShareOption option in options) _shareTile(context, option),
+        for (final ShareOption option in options)
+          _shareTile(context, option, sourceName),
       ],
     ),
   );
 }
 
-Widget _shareTile(BuildContext context, ShareOption option) {
+Widget _shareTile(
+  BuildContext context,
+  ShareOption option,
+  String sourceName,
+) {
   final AppLocalizations l10n = AppLocalizations.of(context);
-  final _ShareTileCopy copy = _copyFor(option, l10n);
+  final _ShareTileCopy copy = _copyFor(option, l10n, sourceName);
   return ListTile(
     leading: Icon(copy.icon),
     title: Text(copy.title),
@@ -48,12 +63,16 @@ Widget _shareTile(BuildContext context, ShareOption option) {
   );
 }
 
-_ShareTileCopy _copyFor(ShareOption option, AppLocalizations l10n) {
+_ShareTileCopy _copyFor(
+  ShareOption option,
+  AppLocalizations l10n,
+  String sourceName,
+) {
   return switch (option) {
     ShareOption.link => _ShareTileCopy(
       Icons.link_outlined,
       l10n.detailShareLink,
-      l10n.detailShareLinkDetail,
+      l10n.detailShareLinkDetail(sourceName),
     ),
     ShareOption.image => _ShareTileCopy(
       Icons.image_outlined,

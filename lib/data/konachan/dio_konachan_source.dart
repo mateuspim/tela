@@ -21,9 +21,17 @@ import 'package:tela/domain/ports/wallpaper_source.dart';
 /// explicit image into a safe browse (PLAN §18.2).
 class DioKonachanSource implements WallpaperSource {
   /// Creates the adapter over a configured [Dio] (see `KonachanClient`).
-  const DioKonachanSource(this._dio);
+  DioKonachanSource(
+    this._dio, {
+    Future<void> Function(Duration) delay = Future<void>.delayed,
+  }) : _delay = delay;
 
   final Dio _dio;
+  final Future<void> Function(Duration) _delay;
+
+  /// One short retry turns the transient timeout seen on hardware into a
+  /// slightly slower successful fetch without hiding a persistent outage.
+  static const Duration _networkRetryDelay = Duration(milliseconds: 500);
 
   @override
   SourceId get id => SourceId.konachan;
@@ -59,7 +67,7 @@ class DioKonachanSource implements WallpaperSource {
   Future<WallpaperPage> search(SearchQuery query) async {
     final String host = KonachanHost.forPurity(query.purity);
     try {
-      final Response<List<dynamic>> response = await _dio.get<List<dynamic>>(
+      final Response<List<dynamic>> response = await _getPosts(
         'https://$host/post.json',
         queryParameters: konachanQueryParameters(query),
       );
@@ -67,6 +75,41 @@ class DioKonachanSource implements WallpaperSource {
     } on DioException catch (error) {
       throw _toFailure(error);
     }
+  }
+
+  /// Retries one idempotent listing read after a transport-level failure.
+  ///
+  /// Konachan sits behind Cloudflare and the tablet produced one receive
+  /// timeout that succeeded immediately when retried. Status responses are not
+  /// retried here: 429 has its own limiter path, and repeating a 4xx/5xx would
+  /// spend source budget without changing the answer.
+  Future<Response<List<dynamic>>> _getPosts(
+    String url, {
+    required Map<String, String> queryParameters,
+  }) async {
+    try {
+      return await _dio.get<List<dynamic>>(
+        url,
+        queryParameters: queryParameters,
+      );
+    } on DioException catch (error) {
+      if (!_isTransientNetworkFailure(error)) rethrow;
+      await _delay(_networkRetryDelay);
+      return _dio.get<List<dynamic>>(
+        url,
+        queryParameters: queryParameters,
+      );
+    }
+  }
+
+  bool _isTransientNetworkFailure(DioException error) {
+    return switch (error.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.receiveTimeout ||
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.connectionError => true,
+      _ => false,
+    };
   }
 
   @override

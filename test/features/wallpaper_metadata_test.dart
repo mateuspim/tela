@@ -41,7 +41,7 @@ void main() {
     expect(opened, Uri.parse('https://example.com/source'));
   });
 
-  testWidgets('View on Wallhaven opens the wallpaper page', (
+  testWidgets('the source-aware page action opens the wallpaper page', (
     WidgetTester tester,
   ) async {
     Uri? opened;
@@ -50,6 +50,15 @@ void main() {
     await tester.tap(find.text('View on Wallhaven'));
 
     expect(opened, Uri.parse('https://wallhaven.cc/w/e7jvjd'));
+  });
+
+  testWidgets('a Konachan detail names Konachan, never Wallhaven', (
+    WidgetTester tester,
+  ) async {
+    await _pumpMetadata(tester, sourceName: 'Konachan');
+
+    expect(find.text('View on Konachan'), findsOneWidget);
+    expect(find.textContaining('Wallhaven'), findsNothing);
   });
 
   testWidgets('every scalar fact is a tile, not a key-value row', (
@@ -127,6 +136,7 @@ Future<void> _pumpMetadata(
   ValueChanged<WallpaperLink>? onFollow,
   ValueChanged<Uri>? onOpenLink,
   String source = 'https://example.com/source',
+  String sourceName = 'Wallhaven',
   bool sparse = false,
 }) async {
   await tester.pumpWidget(
@@ -140,6 +150,7 @@ Future<void> _pumpMetadata(
         body: SingleChildScrollView(
           child: WallpaperMetadata(
             details: _details(source: source, sparse: sparse),
+            sourceName: sourceName,
             onFollow: onFollow ?? (_) {},
             onBlockTag: (_) {},
             onOpenLink: onOpenLink ?? (_) {},

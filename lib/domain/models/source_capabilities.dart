@@ -28,6 +28,9 @@ enum SourceFilter {
   /// Tags demanded or forbidden by name.
   tags,
 
+  /// Ascending or descending result order.
+  order,
+
   /// The look-back window of a toplist sorting.
   topRange,
 }

@@ -14,6 +14,7 @@ import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
+import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/downloads/download_immersive_session.dart';
 
 import '../fakes/fake_download_history.dart';
@@ -82,6 +83,34 @@ void main() {
     expect(applier.receivedSources, <Uri>[_locationOf('e7jvjd')]);
     expect(applier.receivedTarget, WallpaperTarget.both);
     expect(find.text('Wallpaper set.'), findsOneWidget);
+  });
+
+  testWidgets('Open details replaces the viewer with the shown wallpaper', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      _session(<DownloadRecord>[
+        _download('first'),
+        _download('selected'),
+      ], initialIndex: 1),
+    );
+
+    await tester.tap(find.byKey(const Key('immersive-viewer-open-details')));
+    // Detail's full-resolution network image intentionally keeps a progress
+    // indicator alive in this harness, so settle can never reach quiescence.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.byType(DownloadImmersiveSession), findsNothing);
+    expect(find.byType(WallpaperDetailScreen), findsOneWidget);
+    expect(
+      tester
+          .widget<WallpaperDetailScreen>(find.byType(WallpaperDetailScreen))
+          .wallpaper!
+          .id,
+      'selected',
+    );
   });
 
   testWidgets('Set and forget follow the item shown after Next', (

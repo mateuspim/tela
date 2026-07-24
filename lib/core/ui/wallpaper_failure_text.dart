@@ -11,13 +11,23 @@ import 'package:tela/domain/models/source_failure.dart';
 /// same failures, and `core` may not import a feature.
 ///
 /// ```dart
-/// Text(localizedFailure(AppLocalizations.of(context), failure));
+/// Text(
+///   localizedFailure(
+///     AppLocalizations.of(context),
+///     failure,
+///     sourceName: 'Konachan',
+///   ),
+/// );
 /// ```
-String localizedFailure(AppLocalizations l10n, SourceFailure failure) {
+String localizedFailure(
+  AppLocalizations l10n,
+  SourceFailure failure, {
+  required String sourceName,
+}) {
   return switch (failure) {
-    InvalidApiKeyFailure() => l10n.errorInvalidApiKey,
-    RateLimitedFailure() => l10n.errorRateLimited,
-    NetworkFailure() => l10n.errorOffline,
+    InvalidApiKeyFailure() => l10n.errorInvalidApiKey(sourceName),
+    RateLimitedFailure() => l10n.errorRateLimited(sourceName),
+    NetworkFailure() => l10n.errorOffline(sourceName),
     UnexpectedResponseFailure() => l10n.errorUnexpected,
   };
 }

@@ -49,7 +49,11 @@ void main() {
     await _follow(tester, find.text('pym'));
 
     expect(find.text('Uploads by this user'), findsOneWidget);
-    expect(source.receivedQueries.last.term, '@pym');
+    expect(source.receivedQueries.last.uploader, 'pym');
+    expect(
+      wallhavenQueryParameters(source.receivedQueries.last)['q'],
+      '@pym',
+    );
   });
 
   testWidgets(

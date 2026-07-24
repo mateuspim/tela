@@ -4,6 +4,7 @@ import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/source_capabilities.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/features/browse/browse_filter_scope.dart';
 
@@ -159,13 +160,22 @@ Set<T> toggledChoice<T>(Set<T> selected, T value) {
   return <T>{...selected}..remove(value);
 }
 
-/// The purities the filter sheet may offer: NSFW only once a key is stored.
+/// The purities the active source can serve with the credentials on hand.
 ///
-/// Not a matter of taste — Wallhaven answers an NSFW listing with 401 when no
-/// key is sent, so an offered chip would simply fail.
-List<Purity> offerablePurities({required bool hasApiKey}) {
-  if (hasApiKey) return Purity.values;
-  return <Purity>[Purity.sfw, Purity.sketchy];
+/// Wallhaven withholds explicit until a key exists; Konachan serves all three
+/// anonymously. Both decisions come from [capabilities], never a site name.
+List<Purity> offerablePurities({
+  required SourceCapabilities capabilities,
+  required bool hasApiKey,
+}) {
+  return <Purity>[
+    for (final Purity purity in Purity.values)
+      if (capabilities.purities.contains(purity) &&
+          (purity != Purity.nsfw ||
+              hasApiKey ||
+              capabilities.credentials == SourceCredentials.none))
+        purity,
+  ];
 }
 
 /// The sortings the browse tabs may offer: Relevance only with a search term.
@@ -182,9 +192,15 @@ List<Purity> offerablePurities({required bool hasApiKey}) {
 /// ```dart
 /// offerableSortings(hasTerm: false); // no Sorting.relevance
 /// ```
-List<Sorting> offerableSortings({required bool hasTerm}) {
-  if (hasTerm) return <Sorting>[Sorting.relevance, ..._termlessSortings];
-  return _termlessSortings;
+List<Sorting> offerableSortings({
+  required bool hasTerm,
+  required Set<Sorting> supported,
+}) {
+  return <Sorting>[
+    if (hasTerm && supported.contains(Sorting.relevance)) Sorting.relevance,
+    for (final Sorting sorting in _termlessSortings)
+      if (supported.contains(sorting)) sorting,
+  ];
 }
 
 /// The sortings that mean something with no search term behind them.
