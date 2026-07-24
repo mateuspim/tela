@@ -151,7 +151,10 @@ class DriftSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> saveAccountDefaults(AccountSettings account) async {
-    await _db.putSetting(_accountCategoriesKey, account.categories.toApiBits());
+    await _db.putSetting(
+      _accountCategoriesKey,
+      account.categories.encodeStored(),
+    );
     await _db.putSetting(_accountTopRangeKey, account.topRange.apiValue);
     // A re-sync is also the moment to drop what an older build wrote here.
     await _db.deleteSettings(<String>[_legacyAccountPurityKey]);
@@ -203,7 +206,10 @@ class DriftSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> saveDeviceDefaults(BrowseDefaults defaults) async {
-    await _db.putSetting(_deviceCategoriesKey, defaults.categories.toApiBits());
+    await _db.putSetting(
+      _deviceCategoriesKey,
+      defaults.categories.encodeStored(),
+    );
     await _db.putSetting(_deviceTopRangeKey, defaults.topRange.apiValue);
     await _db.putSetting(_deviceRatiosKey, defaults.encodedRatios());
     await _db.putSetting(_deviceOrderKey, defaults.order.name);

@@ -46,7 +46,7 @@ class AccountSettings {
     required String storedCategories,
     required String storedTopRange,
   }) {
-    final CategoryFilter? categories = CategoryFilter.tryFromApiBits(
+    final CategoryFilter? categories = CategoryFilter.tryParseStored(
       storedCategories,
     );
     final TopRange? topRange = TopRange.tryFromApiValue(storedTopRange);
@@ -71,7 +71,7 @@ class AccountSettings {
     return BrowseDefaults(categories: categories, topRange: topRange);
   }
 
-  /// Value equality over the *encoded* filter.
+  /// Value equality over the *stored* encoding.
   ///
   /// The bit mask is the canonical form of a category filter — same members in
   /// any order encode identically — so comparing it is both element-wise and
@@ -79,10 +79,10 @@ class AccountSettings {
   @override
   bool operator ==(Object other) {
     return other is AccountSettings &&
-        other.categories.toApiBits() == categories.toApiBits() &&
+        other.categories.encodeStored() == categories.encodeStored() &&
         other.topRange == topRange;
   }
 
   @override
-  int get hashCode => Object.hash(categories.toApiBits(), topRange);
+  int get hashCode => Object.hash(categories.encodeStored(), topRange);
 }

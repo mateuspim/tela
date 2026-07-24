@@ -321,62 +321,39 @@ class SearchQuery {
     return a.length == b.length && a.toSet().containsAll(b);
   }
 
-  /// The `q` value: the free-text [term] with the [tags] tokens folded in after
-  /// it, or null when there is nothing to search.
+  /// A stable string identifying this listing, independent of page number and
+  /// of any source's URL shape.
   ///
-  /// Null rather than `''` on purpose — the same distinction [color] and
-  /// [ratios] draw: an *absent* `q` is a browse, where an empty `q=` is a
-  /// search for the empty string. `sunset` plus a `+nature` tag reads
-  /// `sunset +"nature"`; the tag alone reads `+"nature"`, which Wallhaven
-  /// accepts as a leading sign.
+  /// What a shelf is cached and keyed by (`wallpaperListingIdentity`). It used
+  /// to be the encoded query string, which made a *feature* file depend
+  /// transitively on Wallhaven's params; two sources would then have given the
+  /// same filters two identities.
   ///
-  /// [term] goes out *alone*, with [tags] and [blockedTagNames] withheld,
-  /// when it is one of Wallhaven's two query-replacing operators — see
-  /// [_isExclusiveOperator].
-  String? get _query {
-    if (_isExclusiveOperator) return term;
+  /// Order-insensitive where the query is: tags and ratios are sets in meaning,
+  /// so `+a +b` and `+b +a` are one listing and must key alike.
+  String get key {
     final List<String> parts = <String>[
-      if (term.isNotEmpty) term,
-      for (final SearchTag tag in tags) tag.token,
-      // Same [SearchTag] encoding as [tags], not a hand-rolled `-$name`:
-      // Wallhaven needs the quotes a multi-word tag name requires, and this
-      // is the one place that already gets that right.
-      for (final String name in blockedTagNames)
-        SearchTag(name, TagSense.exclude).token,
+      'term=$term',
+      _part('categories', categories.categories.map((Category c) => c.name)),
+      _part('purity', purity.purities.map((Purity p) => p.name)),
+      'sorting=${sorting.name}',
+      'order=${order.name}',
+      if (sorting.usesTopRange) 'topRange=${topRange.name}',
+      'resolution=${resolution.encode()}',
+      _part('ratios', ratios.map((RatioChoice r) => r.toApiValue())),
+      _part(
+        'tags',
+        tags.map((SearchTag t) => '${t.sense.name}:${t.name}'),
+      ),
+      if (color case final WallpaperColor color) 'color=${color.hex}',
+      _part('blocked', blockedTagNames),
+      if (seed case final String seed) 'seed=$seed',
     ];
-    return parts.isEmpty ? null : parts.join(' ');
+    return parts.join('&');
   }
 
-  /// Whether [term] is one of Wallhaven's two operators that *replace* the
-  /// whole query rather than compose with it.
-  ///
-  /// Confirmed live against Wallhaven, 2026-07-15: `id:{n}` and `like:{id}`
-  /// return **zero** results the instant anything else shares `q` with them —
-  /// a tag, a blocked tag's `-name`, even bare free text. `@user`, `+tag`,
-  /// `-tag`, and plain keywords all compose normally; only these two don't.
-  /// This is why following a tag chip (which searches `id:{n}`) went blank
-  /// the moment a single tag was blocked: the blocklist was silently turning
-  /// every exact-tag lookup into a self-contradicting, zero-result query.
-  bool get _isExclusiveOperator =>
-      term.startsWith('id:') || term.startsWith('like:');
-
-  /// Encodes to Wallhaven's `/search` query params.
-  ///
-  /// Note what is absent: the API key. It travels only in the `X-API-Key`
-  /// header (CLAUDE.md, hard rule) so it can never leak into a logged URL.
-  Map<String, String> toQueryParameters() {
-    return <String, String>{
-      'q': ?_query,
-      'categories': categories.toApiBits(),
-      'purity': purity.toApiBits(),
-      'sorting': sorting.apiValue,
-      'order': order.apiValue,
-      if (sorting.usesTopRange) 'topRange': topRange.apiValue,
-      ...resolution.toQueryParameters(),
-      'ratios': ?RatioChoice.encode(ratios),
-      if (color != null) 'colors': color!.toApiValue(),
-      'page': '$page',
-      'seed': ?seed,
-    };
-  }
+  /// One `name=a,b,c` part, sorted so a set's iteration order cannot change
+  /// the key.
+  static String _part(String name, Iterable<String> values) =>
+      '$name=${(values.toList()..sort()).join(',')}';
 }

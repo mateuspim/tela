@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:tela/data/wallhaven/wallhaven_mapper.dart';
+import 'package:tela/data/wallhaven/wallhaven_query.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_failure.dart';
@@ -24,7 +25,7 @@ class DioWallhavenApi implements WallhavenApi {
       final Response<Map<String, dynamic>> response = await _dio
           .get<Map<String, dynamic>>(
             '/search',
-            queryParameters: query.toQueryParameters(),
+            queryParameters: wallhavenQueryParameters(query),
           );
       return _mapped(response.data, WallhavenMapper.toPage);
     } on DioException catch (error) {

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/data/wallhaven/wallhaven_query.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -470,8 +471,8 @@ void main() {
     // Kept, as the device's snapshot, and browsed on — a "save as default" that
     // left the grid on the old filters would be a button that does nothing.
     expect(settings.sourceSaved, BrowseDefaultsSource.device);
-    expect(settings.deviceSaved?.categories.toApiBits(), '101');
-    expect(api.receivedQueries.last.categories.toApiBits(), '101');
+    expect(settings.deviceSaved?.categories.encodeStored(), '101');
+    expect(api.receivedQueries.last.categories.encodeStored(), '101');
     expect(find.text('Saved as your browse defaults.'), findsOneWidget);
   });
 
@@ -497,7 +498,7 @@ void main() {
     final SearchQuery reopened = settings.deviceSaved!.applyTo(
       const SearchQuery(),
     );
-    expect(reopened.purity.toApiBits(), '100');
+    expect(reopened.purity.purities, <Purity>{Purity.sfw});
   });
 
   testWidgets('offers the shape of the screen the user is actually holding', (
@@ -820,7 +821,8 @@ Future<void> _tapSwatch(WidgetTester tester, WallpaperColor color) {
 /// Reads the wire-level facts of a query without reaching into the API adapter.
 class SearchQueryFacts {
   /// Encodes [query] the way the HTTP client would.
-  SearchQueryFacts(SearchQuery query) : _params = query.toQueryParameters();
+  SearchQueryFacts(SearchQuery query)
+    : _params = wallhavenQueryParameters(query);
 
   final Map<String, String> _params;
 

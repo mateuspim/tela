@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/use_cases/load_account_defaults.dart';
@@ -34,12 +35,8 @@ void main() {
     final AccountSettings? defaults = await load();
 
     expect(
-      defaults
-          ?.toBrowseDefaults()
-          .applyTo(const SearchQuery())
-          .purity
-          .toApiBits(),
-      '100',
+      defaults?.toBrowseDefaults().applyTo(const SearchQuery()).purity.purities,
+      <Purity>{Purity.sfw},
     );
   });
 

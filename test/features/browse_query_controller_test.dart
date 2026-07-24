@@ -21,8 +21,8 @@ void main() {
 
       final SearchQuery query = container.read(browseQueryProvider);
 
-      expect(query.purity.toApiBits(), '100');
-      expect(query.categories.toApiBits(), '111');
+      expect(query.purity.purities, <Purity>{Purity.sfw});
+      expect(query.categories.encodeStored(), '111');
       expect(query.ratios, <RatioChoice>[const ExactRatio(9, 16)]);
       expect(query.term, isEmpty);
     });
@@ -33,11 +33,11 @@ void main() {
 
       final SearchQuery query = container.read(browseQueryProvider);
 
-      expect(query.categories.toApiBits(), '010');
+      expect(query.categories.encodeStored(), '010');
       expect(query.topRange, TopRange.oneWeek);
       // The account has no say over the rest of the query — least of all the
       // purity, which always opens on safe.
-      expect(query.purity.toApiBits(), '100');
+      expect(query.purity.purities, <Purity>{Purity.sfw});
       expect(query.ratios, <RatioChoice>[const ExactRatio(9, 16)]);
     });
 
@@ -50,7 +50,7 @@ void main() {
 
       final SearchQuery query = container.read(browseQueryProvider);
       expect(query.term, 'sunset');
-      expect(query.categories.toApiBits(), '010');
+      expect(query.categories.encodeStored(), '010');
     });
 
     test('never overrides a filter the user set by hand', () async {
@@ -69,7 +69,7 @@ void main() {
 
       // The sync landed underneath, but the choice on screen is the user's.
       expect(
-        container.read(browseQueryProvider).categories.toApiBits(),
+        container.read(browseQueryProvider).categories.encodeStored(),
         '001',
       );
     });
@@ -91,7 +91,7 @@ void main() {
           ..clearFilters();
 
         expect(
-          container.read(browseQueryProvider).categories.toApiBits(),
+          container.read(browseQueryProvider).categories.encodeStored(),
           '010',
         );
       },
@@ -107,12 +107,12 @@ void main() {
 
       final SearchQuery query = container.read(browseQueryProvider);
 
-      expect(query.categories.toApiBits(), '001');
+      expect(query.categories.encodeStored(), '001');
       expect(query.topRange, TopRange.oneYear);
       expect(query.ratios, <RatioChoice>[const ExactRatio(16, 9)]);
       expect(query.order, SortOrder.asc);
       // A saved snapshot cannot carry a purity either. Browse still opens safe.
-      expect(query.purity.toApiBits(), '100');
+      expect(query.purity.purities, <Purity>{Purity.sfw});
     });
 
     test(
@@ -139,7 +139,7 @@ void main() {
 
         // Unlike a *sync* landing underneath, which must not.
         expect(
-          container.read(browseQueryProvider).categories.toApiBits(),
+          container.read(browseQueryProvider).categories.encodeStored(),
           '001',
         );
       },
@@ -169,8 +169,8 @@ void main() {
         // The snapshot carries no purity, so it must not switch the grid back
         // to safe under someone who turned sketchy on a moment ago.
         final SearchQuery query = container.read(browseQueryProvider);
-        expect(query.purity.toApiBits(), '110');
-        expect(query.categories.toApiBits(), '001');
+        expect(query.purity.purities, <Purity>{Purity.sfw, Purity.sketchy});
+        expect(query.categories.encodeStored(), '001');
       },
     );
 
@@ -191,7 +191,7 @@ void main() {
         await container.read(browseDefaultsProvider.future);
 
         final SearchQuery query = container.read(browseQueryProvider);
-        expect(query.categories.toApiBits(), '100');
+        expect(query.categories.encodeStored(), '100');
         expect(query.topRange, TopRange.oneDay);
         // Saving without switching would be a button that does nothing.
         expect(
@@ -217,7 +217,7 @@ void main() {
 
       final SearchQuery query = container.read(browseQueryProvider);
       expect(query.term, 'sunset');
-      expect(query.purity.toApiBits(), '001');
+      expect(query.purity.purities, <Purity>{Purity.nsfw});
     });
 
     test('resetting the filters leaves the term alone', () {
@@ -231,7 +231,7 @@ void main() {
 
       final SearchQuery query = container.read(browseQueryProvider);
       expect(query.term, 'sunset');
-      expect(query.categories.toApiBits(), '111');
+      expect(query.categories.encodeStored(), '111');
     });
   });
 

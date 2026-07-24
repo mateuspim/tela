@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/use_cases/load_account_defaults.dart';
@@ -65,7 +66,9 @@ void main() {
         const SearchQuery(),
       );
 
-      expect(query.purity.toApiBits(), '100', reason: 'source: ${source.name}');
+      expect(query.purity.purities, <Purity>{
+        Purity.sfw,
+      }, reason: 'source: ${source.name}');
     }
   });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tela/data/wallhaven/wallhaven_query.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
@@ -9,24 +10,27 @@ void main() {
     test('automatic asks for no size at all', () {
       // It cannot: the domain has no idea how big the screen is. `forScreen` is
       // what answers it, at the one place that can.
-      expect(const AutomaticResolution().toQueryParameters(), isEmpty);
+      final Map<String, String> params = _params(const AutomaticResolution());
+
+      expect(params.containsKey('atleast'), isFalse);
+      expect(params.containsKey('resolutions'), isFalse);
     });
 
     test('at-least sends `atleast`', () {
       expect(
-        const AtLeastResolution(
-          Resolution(1080, 2400),
-        ).toQueryParameters()['atleast'],
+        _params(const AtLeastResolution(Resolution(1080, 2400)))['atleast'],
         '1080x2400',
       );
     });
 
     test('exactly sends `resolutions`, unioned', () {
       expect(
-        ExactResolutions(const <Resolution>[
-          Resolution(1920, 1080),
-          Resolution(2560, 1440),
-        ]).toQueryParameters()['resolutions'],
+        _params(
+          ExactResolutions(const <Resolution>[
+            Resolution(1920, 1080),
+            Resolution(2560, 1440),
+          ]),
+        )['resolutions'],
         '1920x1080,2560x1440',
       );
     });
@@ -41,7 +45,7 @@ void main() {
         const AtLeastResolution(Resolution(1080, 2400)),
         ExactResolutions(const <Resolution>[Resolution(1920, 1080)]),
       ]) {
-        final Map<String, String> params = filter.toQueryParameters();
+        final Map<String, String> params = _params(filter);
         expect(
           params.containsKey('atleast') && params.containsKey('resolutions'),
           isFalse,
@@ -107,7 +111,7 @@ void main() {
       final SearchQuery query = const SearchQuery().forScreen(_phone);
 
       expect(query.resolution, const AtLeastResolution(_phone));
-      expect(query.toQueryParameters()['atleast'], '1080x2400');
+      expect(wallhavenQueryParameters(query)['atleast'], '1080x2400');
     });
 
     test('leaves a filter the user chose exactly as it is', () {
@@ -119,7 +123,7 @@ void main() {
 
       expect(chosen.forScreen(_phone), chosen);
       expect(
-        chosen.forScreen(_phone).toQueryParameters()['atleast'],
+        wallhavenQueryParameters(chosen.forScreen(_phone))['atleast'],
         '3840x2160',
       );
     });
@@ -131,7 +135,7 @@ void main() {
         ]),
       ).forScreen(_phone);
 
-      final Map<String, String> params = exact.toQueryParameters();
+      final Map<String, String> params = wallhavenQueryParameters(exact);
       expect(params['resolutions'], '1920x1080');
       expect(params.containsKey('atleast'), isFalse);
     });
@@ -203,3 +207,8 @@ void main() {
 
 /// A modern phone: 9x20, a shape with no standard resolution ladder.
 const Resolution _phone = Resolution(1080, 2400);
+
+/// The size params one filter produces, read off a whole query — the encoder
+/// takes a [SearchQuery], since only a query knows which source is asking.
+Map<String, String> _params(ResolutionFilter filter) =>
+    wallhavenQueryParameters(SearchQuery(resolution: filter));

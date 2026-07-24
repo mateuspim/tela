@@ -1,10 +1,10 @@
-import 'package:tela/domain/models/api_bits.dart';
+import 'package:tela/domain/models/stored_bits.dart';
 
-/// Wallhaven's top-level content buckets.
+/// The top-level content buckets Wallhaven files a wallpaper under.
 ///
-/// Same two-dialect problem as `Purity`: a wallpaper's JSON says `"general"`,
-/// the `/search` param wants a 3-bit mask in the fixed order
-/// `general anime people`.
+/// Not every source has such an axis at all — a booru has none, which is why
+/// `Wallpaper.category` is nullable — and the ones that do spell it their own
+/// way, so the *encoding* of a category belongs to each adapter.
 ///
 /// ```dart
 /// Category.fromApiName('anime'); // Category.anime
@@ -42,10 +42,10 @@ enum Category {
   }
 }
 
-/// The set of categories a search asks for, as Wallhaven's 3-bit mask.
+/// The set of categories a search asks for.
 ///
 /// ```dart
-/// const CategoryFilter({Category.general}).toApiBits(); // '100'
+/// const CategoryFilter({Category.general}).encodeStored(); // '100'
 /// ```
 extension type const CategoryFilter(Set<Category> categories) {
   /// The default: everything Wallhaven has.
@@ -55,23 +55,17 @@ extension type const CategoryFilter(Set<Category> categories) {
     Category.people,
   });
 
-  /// Encodes to the 3-bit `categories` query param.
-  String toApiBits() {
-    final String bits = Category.values
-        .map((Category c) => categories.contains(c) ? '1' : '0')
-        .join();
-    if (bits == '000') {
-      throw ArgumentError(
-        'category filter must select at least one of '
-        'general|anime|people, got none',
-      );
-    }
-    return bits;
-  }
+  /// Encodes to the 3-bit mask tela stores a saved filter as.
+  ///
+  /// A storage format, not a request: the `categories` param that happens to
+  /// look identical is built in `data/wallhaven/`, and the two are free to
+  /// diverge — this one may not, because rows already on disk are written in
+  /// it.
+  String encodeStored() => encodeStoredBits(Category.values, categories);
 
-  /// Reads back a mask [toApiBits] wrote, or null if [bits] is not one.
-  static CategoryFilter? tryFromApiBits(String bits) {
-    final Set<Category>? selected = decodeApiBits(bits, Category.values);
+  /// Reads back a mask [encodeStored] wrote, or null if [bits] is not one.
+  static CategoryFilter? tryParseStored(String bits) {
+    final Set<Category>? selected = decodeStoredBits(bits, Category.values);
     return selected == null ? null : CategoryFilter(selected);
   }
 }

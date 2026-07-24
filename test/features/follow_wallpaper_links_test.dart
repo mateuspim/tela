@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/app.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/data/wallhaven/wallhaven_query.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
@@ -73,7 +74,7 @@ void main() {
       await _follow(tester, find.text('nature'));
 
       expect(
-        api.receivedQueries.last.toQueryParameters()['q'],
+        wallhavenQueryParameters(api.receivedQueries.last)['q'],
         'id:37',
       );
     },

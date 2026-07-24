@@ -164,7 +164,7 @@ void main() {
         _fixture('account_settings.json'),
       );
 
-      expect(account.categories.toApiBits(), '110');
+      expect(account.categories.encodeStored(), '110');
       expect(account.topRange, TopRange.oneWeek);
     });
 
@@ -178,12 +178,8 @@ void main() {
       });
 
       expect(
-        account
-            .toBrowseDefaults()
-            .applyTo(const SearchQuery())
-            .purity
-            .toApiBits(),
-        '100',
+        account.toBrowseDefaults().applyTo(const SearchQuery()).purity.purities,
+        <Purity>{Purity.sfw},
       );
     });
 
@@ -193,7 +189,7 @@ void main() {
         'toplist_range': '1w',
       });
 
-      expect(account.categories.toApiBits(), '010');
+      expect(account.categories.encodeStored(), '010');
       expect(account.topRange, TopRange.oneWeek);
     });
 
@@ -204,7 +200,7 @@ void main() {
         'categories': <String>[],
       });
 
-      expect(account.categories.toApiBits(), '111');
+      expect(account.categories.encodeStored(), '111');
     });
 
     test('an unreadable toplist range costs the range', () {

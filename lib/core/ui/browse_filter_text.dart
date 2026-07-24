@@ -135,8 +135,11 @@ String topRangeLabel(AppLocalizations l10n, TopRange range) {
 int activeBrowseFilterCount(SearchQuery query) {
   const SearchQuery baseline = SearchQuery();
   return <bool>[
-    query.categories.toApiBits() != baseline.categories.toApiBits(),
-    query.purity.toApiBits() != baseline.purity.toApiBits(),
+    !_sameFilterMembers(
+      query.categories.categories,
+      baseline.categories.categories,
+    ),
+    !_sameFilterMembers(query.purity.purities, baseline.purity.purities),
     !_sameFilterMembers(query.ratios, baseline.ratios),
     query.resolution != baseline.resolution,
     query.tags.isNotEmpty,

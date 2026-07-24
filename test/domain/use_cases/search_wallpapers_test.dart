@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tela/data/wallhaven/wallhaven_query.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_failure.dart';
@@ -77,7 +78,7 @@ void main() {
 
       final SearchQuery sent = api.receivedQueries.single;
       expect(sent.blockedTagNames, <String>{'nature'});
-      expect(sent.toQueryParameters()['q'], 'forest -"nature"');
+      expect(wallhavenQueryParameters(sent)['q'], 'forest -"nature"');
     });
 
     test('sends no exclude at all with an empty blocklist', () async {

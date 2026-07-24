@@ -5,6 +5,7 @@ import 'package:tela/app/browse_defaults.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
@@ -21,18 +22,21 @@ import '../fakes/fake_wallhaven_api.dart';
 void main() {
   test('saving a key adopts the account it belongs to', () async {
     final ProviderContainer container = _container(account: _explicitAccount);
-    expect(container.read(browseQueryProvider).categories.toApiBits(), '111');
+    expect(
+      container.read(browseQueryProvider).categories.encodeStored(),
+      '111',
+    );
 
     await container.read(apiKeyProvider.notifier).save('abc123');
     await container.read(browseDefaultsProvider.future);
 
     final SearchQuery query = container.read(browseQueryProvider);
-    expect(query.categories.toApiBits(), '010');
+    expect(query.categories.encodeStored(), '010');
     expect(query.topRange, TopRange.oneWeek);
     // The account browses explicit. The front page still opens on safe: sketchy
     // and explicit are per-session choices in the filter sheet, and no account
     // gets to make them for you.
-    expect(query.purity.toApiBits(), '100');
+    expect(query.purity.purities, <Purity>{Purity.sfw});
   });
 
   test('forgetting the key takes the account back out of browse', () async {
@@ -46,7 +50,7 @@ void main() {
     // Back to tela's own: the defaults belong to an account this device can no
     // longer reach.
     final SearchQuery query = container.read(browseQueryProvider);
-    expect(query.categories.toApiBits(), '111');
+    expect(query.categories.encodeStored(), '111');
     expect(query.topRange, TopRange.oneMonth);
   });
 
@@ -64,7 +68,10 @@ void main() {
     await container.read(browseDefaultsProvider.future);
 
     // The account seeds the defaults; it does not overrule a live choice.
-    expect(container.read(browseQueryProvider).categories.toApiBits(), '001');
+    expect(
+      container.read(browseQueryProvider).categories.encodeStored(),
+      '001',
+    );
   });
 }
 
