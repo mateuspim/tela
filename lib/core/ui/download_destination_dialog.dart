@@ -100,9 +100,14 @@ Future<DownloadDestinationChoice?> chooseDownloadDestination(
 /// destination genuinely governs all of them. It has no streak or "Always" — a
 /// bulk action is not a per-item habit — but it does carry the "Keep sending
 /// here" switch, since pinning is exactly a "put everything here" decision.
+///
+/// [count] is how many wallpapers this one answer governs, and it goes in the
+/// heading: the bare "Download to" of the single chooser made a nine-item batch
+/// look like one download, with no hint that the tap moves all nine.
 Future<DownloadDestinationChoice?> chooseBatchDownloadDestination(
   BuildContext context, {
   required Set<Purity> purities,
+  required int count,
   StorageTier? pinnedTier,
 }) {
   return _show(
@@ -112,6 +117,7 @@ Future<DownloadDestinationChoice?> chooseBatchDownloadDestination(
     configuredTier: null,
     streak: null,
     pinnedTier: pinnedTier,
+    batchCount: count,
   );
 }
 
@@ -131,6 +137,7 @@ Future<DownloadDestinationChoice?> _show(
   required StorageTier? configuredTier,
   required DownloadDestinationStreak? streak,
   required StorageTier? pinnedTier,
+  int? batchCount,
 }) {
   if (!context.mounted) {
     return Future<DownloadDestinationChoice?>.value();
@@ -143,6 +150,7 @@ Future<DownloadDestinationChoice?> _show(
       configuredTier: configuredTier,
       streak: streak,
       pinnedTier: pinnedTier,
+      batchCount: batchCount,
     ),
   );
 }
@@ -157,6 +165,7 @@ class _DestinationDialog extends StatefulWidget {
     required this.configuredTier,
     required this.streak,
     required this.pinnedTier,
+    this.batchCount,
   });
 
   /// The tiers to offer, already narrowed to what every purity present allows.
@@ -177,6 +186,10 @@ class _DestinationDialog extends StatefulWidget {
   /// The "Keep sending here" pin already in force, or null when none is set.
   final StorageTier? pinnedTier;
 
+  /// How many wallpapers this answer governs, or null for a single download —
+  /// which needs no count, since the thing being placed is the one on screen.
+  final int? batchCount;
+
   @override
   State<_DestinationDialog> createState() => _DestinationDialogState();
 }
@@ -195,7 +208,7 @@ class _DestinationDialogState extends State<_DestinationDialog> {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: Text(l10n.detailDownloadChooseTier),
+      title: Text(_title(l10n)),
       content: _content(context, l10n),
       actions: <Widget>[
         TextButton(
@@ -205,6 +218,16 @@ class _DestinationDialogState extends State<_DestinationDialog> {
         ?_stopAction(context, l10n),
       ],
     );
+  }
+
+  /// "Download to" for one wallpaper; "Download 9 wallpapers to" for a batch.
+  ///
+  /// The count is the only thing on screen that says how far the tap reaches —
+  /// the cards below name destinations, not quantities.
+  String _title(AppLocalizations l10n) {
+    final int? count = widget.batchCount;
+    if (count == null) return l10n.detailDownloadChooseTier;
+    return l10n.batchDownloadChooseTier(count);
   }
 
   /// Caps the measure at [_maxWidth] and scrolls rather than clipping, since an
@@ -368,14 +391,22 @@ class _DestinationDialogState extends State<_DestinationDialog> {
     );
   }
 
-  /// The "Always save … here" button, present only when there is a suggestion.
+  /// The "Make this the default for …" button, present only when there is a
+  /// suggestion and no pin is in force.
   ///
   /// Because the chooser is only ever reached by a deliberate long press, this
   /// is never an unsolicited nag: it waits in the sheet the user chose to open,
   /// and disappears the moment they take it or route elsewhere.
+  ///
+  /// It deliberately wears neither the pin icon nor the pin's words. Two
+  /// different promises were reading as one: this sets the *per-purity default*
+  /// (I3, the same value Settings writes), while the switch below sets the
+  /// purity-flat *pin* (K2). A pin also outranks the default — so while one is
+  /// in force this stands down entirely rather than offer a change the user
+  /// would not see until they Stop.
   Widget? _alwaysAction(BuildContext context, AppLocalizations l10n) {
     final StorageTier? tier = _suggestedTier;
-    if (tier == null) return null;
+    if (tier == null || widget.pinnedTier != null) return null;
     return Align(
       alignment: Alignment.centerLeft,
       child: TextButton.icon(
@@ -383,9 +414,11 @@ class _DestinationDialogState extends State<_DestinationDialog> {
           context,
           DownloadDestinationChoice(tier: tier, remember: true),
         ),
-        icon: const Icon(Icons.push_pin_outlined, size: 18),
+        icon: const Icon(Icons.tune, size: 18),
         label: Text(
-          l10n.detailDownloadAlways(purityLabel(l10n, widget.strongestPurity)),
+          l10n.detailDownloadMakeDefault(
+            purityLabel(l10n, widget.strongestPurity),
+          ),
         ),
       ),
     );

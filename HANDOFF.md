@@ -2,11 +2,81 @@
 
 Updated: 2026-07-24
 
-> **START HERE — J (the hard delete) IS BUILT on branch `feat/j-hard-delete`,
-> both suites green locally; device pass + merge owed.** `flutter analyze` clean,
+> **START HERE — J IS MERGED (`e967175`). Two more things sit BUILT on branch
+> `fix/clear-image-cache-orphans`; device pass + merge owed.** Nothing pushed
+> (`origin` has none of I, J, or K).
+>
+> **J is on `master`.** The merge gate ran both suites on the merge and reported
+> **both green**. Its device walk was done 2026-07-24 (below); the one thing
+> still unwalked is the private library's selection tick, which needs the
+> owner's eye — the app lock wants a fingerprint no remote adb can give, and
+> `FLAG_SECURE` blanks the screenshot.
+>
+> **On the branch, two commits, `flutter analyze` clean and Dart 925 green:**
+>
+> - **`6cbe7cd` — the "Clear image cache" bug is fixed.** Cause confirmed as the
+>   logged hypothesis: `clear()` called `CacheManager.emptyCache()`, which walks
+>   the store's rows and deletes only the files those rows point at, while
+>   `sizeInBytes()` `stat`s the folders and counts every byte. An orphan was
+>   therefore reported forever and cleared never — 3.6 GB before, 3.6 GB after.
+>   `clear()` now empties the indexes **and** deletes the bucket folders
+>   outright, the way `purgeLegacyCache()` already deletes the legacy one. Order
+>   is load-bearing (rows first, through the live sqflite connection, then the
+>   folder); `IOFileSystem.createFile` re-creates a missing bucket directory on
+>   the next write, so dropping it costs nothing. **The regression test is the
+>   one the old suite lacked**: an *untracked* file in a bucket folder. Every
+>   existing clear test used files the store knew about, which is exactly why
+>   this passed CI — reverting the fix fails 2 of the 12.
+> - **`134a207` — K's two open flags, both closed.** #2: the batch chooser's
+>   heading was the single chooser's bare "Download to", so a nine-item batch
+>   looked like one download; it now reads **"Download 9 wallpapers to"**. #3
+>   (**owner settled it today — split the vocabulary**): the pin keeps the pin
+>   icon and the pin's words; I3's per-purity offer becomes **"Make this the
+>   default for Sketchy"** under `Icons.tune`, and **stands down entirely while a
+>   pin is in force** — the pin outranks the configured default, so an offer to
+>   change it there promises something the user cannot see until they Stop. The
+>   streak's "Last 4 saved here" mark stays either way: the run is still worth
+>   noting, only the offer was misleading. (`detailDownloadAlways` was renamed
+>   `detailDownloadMakeDefault` with it.) The two rejected shapes, for the
+>   record: a merged "Remember this?" scope group, and dropping I3's offer from
+>   the chooser back into Settings.
+>
+> **DEVICE-VERIFIED (2026-07-24, tablet `192.168.50.151`, SM-X730 / One UI),
+> deployed with `./tool/tela deploy`:**
+> - **The cache bug is dead. 3.7 GB → 0 B**, with the "Image cache cleared."
+>   toast. Then Browse → back into Settings, which re-mounts the tile and
+>   re-runs the autoDispose `cachedImageBytesProvider`: still **0 B**. That
+>   second read is the test — it is the exact check that caught the bug (the
+>   figure used to survive it) and the one that proves this is not a stale UI.
+>   The bytes had grown 3.6 → 3.7 GB in the meantime, i.e. the orphans were
+>   still accumulating.
+>   **Read the tile twice:** the first frame after mounting says **0 B** while
+>   the folder walk is still running, so a screenshot taken too early looks like
+>   an empty cache. Wait for it to settle before believing a figure.
+> - **The batch heading counts.** Two ticked sketchy wallpapers → **"Download 2
+>   wallpapers to"**, over the red *Sketchy* line, the three tiers, and the
+>   "Keep sending here" switch — with **no** "Always", which a batch never gets.
+>   Cancelled, so nothing downloaded.
+> - **The single chooser still carries no count** — long-pressing a sketchy
+>   detail's (red) download glyph gives the bare **"Download to"**.
+> - **Not walkable as the device stood:** the ⚙ "Make this the default for
+>   Sketchy" offer. It only appears with a streak of **3** downloads diverging
+>   from the configured tier, and the device has none — the chooser showed no
+>   "Last N saved here" either. Summoning it means making three real downloads
+>   somewhere other than Gallery, which this session chose not to leave behind.
+>   Both the new wording and the stand-down-while-pinned rule are under widget
+>   test in `download_destination_dialog_test.dart`.
+>
+> **The tablet was left as it was found.** Its browse purity filter is
+> **Safe-only** (1 active filter); Sketchy was switched on for the batch walk
+> and switched back off, and **"Save as default" was never touched**, so the
+> persisted default never changed. Nothing was downloaded, nothing deleted.
+>
+> **The J trail follows.**
+>
+> **J (the hard delete) WAS BUILT on branch `feat/j-hard-delete`** — `df005fd`,
+> merged into `master` as `e967175`. `flutter analyze` clean,
 > **Dart 917** and **Kotlin 22 (ImageStorageTest) / suite BUILD SUCCESSFUL**.
-> Nothing committed yet — the work sits in the working tree on the branch.
-> Nothing pushed (`origin` still has none of I, J, or K).
 >
 > **The owner settled J's three parked questions (2026-07-24):**
 > 1. **One button or two? → Keep both.** *Remove from history* (soft, list-only)
@@ -85,7 +155,12 @@ Updated: 2026-07-24
 >
 > ---
 >
-> ### OPEN BUG — "Clear image cache" frees nothing (owner-reported, 2026-07-24)
+> ### BUG, FIXED — "Clear image cache" frees nothing (owner-reported 2026-07-24;
+> fixed the same day in `6cbe7cd`, on the branch, device check owed)
+>
+> The hypothesis below was right, and the fix is the one it names. Kept whole
+> because the *reasoning* is the reusable part: whenever a size and a delete are
+> computed by different halves of a cache, they will disagree eventually.
 >
 > **What happens.** Tapping *Settings → Storage → Clear image cache* shows the
 > "Image cache cleared." toast, but the tile's own figure never moves: **3.6 GB

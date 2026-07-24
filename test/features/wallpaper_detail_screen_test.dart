@@ -453,7 +453,7 @@ void main() {
   // The memory paying off: a run of private-library downloads offers to become
   // the default, and taking the offer writes the setting so the next plain tap
   // needs no long press at all.
-  testWidgets('"Always save here" persists the streak tier as the default', (
+  testWidgets('"Make this the default" persists the streak tier', (
     WidgetTester tester,
   ) async {
     final FakeSettingsRepository repository = FakeSettingsRepository(
@@ -474,9 +474,9 @@ void main() {
 
     await tester.longPress(find.bySemanticsLabel('Download'));
     await tester.pumpAndSettle();
-    final Finder always = find.text('Always save Sketchy here');
-    await tester.ensureVisible(always);
-    await tester.tap(always);
+    final Finder makeDefault = find.text('Make this the default for Sketchy');
+    await tester.ensureVisible(makeDefault);
+    await tester.tap(makeDefault);
     await tester.pumpAndSettle();
 
     // Sketchy writes the safe bucket — two knobs, not three.

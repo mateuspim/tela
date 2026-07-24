@@ -485,6 +485,16 @@
     "description": "Heading above the one-download storage destination choices."
   },
 
+  "batchDownloadChooseTier": "{count, plural, =1{Download 1 wallpaper to} other{Download {count} wallpapers to}}",
+  "@batchDownloadChooseTier": {
+    "description": "Heading above the storage destination choices when a whole selection is being downloaded. Carries the count so a nine-item batch does not read like a single download.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
   "detailDownloadStreak": "{count, plural, other{Last {count} saved here}}",
   "@detailDownloadStreak": {
     "description": "Marks the destination a run of recent downloads has been going to, in the download-destination chooser.",
@@ -495,9 +505,9 @@
     }
   },
 
-  "detailDownloadAlways": "Always save {purity} here",
-  "@detailDownloadAlways": {
-    "description": "Action that makes the streak destination the default for this wallpaper's kind. {purity} is a localized purity name like Sketchy.",
+  "detailDownloadMakeDefault": "Make this the default for {purity}",
+  "@detailDownloadMakeDefault": {
+    "description": "Action that makes the streak destination the default for this wallpaper's kind. Deliberately not pin vocabulary: the pin is the separate, purity-flat 'Keep sending here'. {purity} is a localized purity name like Sketchy.",
     "placeholders": {
       "purity": {
         "type": "String",

@@ -286,7 +286,11 @@ Future<({bool proceed, StorageTier? tier})> _resolveBatchDestination(
   }
   if (!context.mounted) return (proceed: false, tier: null);
   final DownloadDestinationChoice? choice =
-      await chooseBatchDownloadDestination(context, purities: purities);
+      await chooseBatchDownloadDestination(
+        context,
+        purities: purities,
+        count: wallpapers.length,
+      );
   if (choice == null || choice.stopsPin) return (proceed: false, tier: null);
   if (choice.pin) await settings.setPinnedDownloadTier(choice.tier);
   return (proceed: true, tier: choice.tier);
