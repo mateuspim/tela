@@ -2,11 +2,23 @@
 
 Updated: 2026-07-23
 
-> **START HERE — I (the download destination decision) is COMPLETE, all four
-> slices, on branch `feat/download-destination` off `master` (`ee09b3b`).** Not
-> merged, not pushed. **877 Dart tests**, and the full gate (`make ci`) is green
-> both ways — no `android/` change, so the 34 Kotlin tests pass untouched. Ready
-> to merge into `master` through the gate when called. The slices, newest first:
+> **START HERE — I IS MERGED. The next feature to build is K (a pinned "Keep
+> sending here" destination + a batch chooser).** The download-destination
+> decision (I1–I4) went into `master` as `e693346` (2026-07-23), a real merge
+> commit off `ee09b3b`; the gate ran both suites (**877 Dart, 34 Kotlin**).
+> **Nothing is pushed** — `origin` has seen none of I, J's plan, or K's.
+>
+> **What to do next:** open a branch off `master` and build **K** (its section is
+> below *J*). Its four questions are already **answered by the owner
+> (2026-07-23)** — a "Keep sending here" toggle in the chooser that pins one
+> destination, persists until changed, and governs every download (single tap and
+> batch) so downloading needs no press-and-hold or Settings trip; opt-in via the
+> toggle; purity-flat but the NSFW invariant still wins (explicit under a Gallery
+> pin falls back to private). **J** (the hard delete) stays **parked** on its
+> three questions and owes native/Kotlin work — do not start it until answered.
+>
+> The record of the just-merged I follows, newest first.
+>
 > - `1b837a5` **I4 — the grid's download gets a destination.** The browse
 >   long-press sheet's Download row had no destination choice at all; it now
 >   wears the purity tint and, for a not-safe wallpaper, its tap opens the same
@@ -40,17 +52,11 @@ Updated: 2026-07-23
 > row, the private library. Planned as **J** below; **not started**, and it needs
 > native work (see the section for why `forget()` can't already do this).
 >
-> **Next:** merge `feat/download-destination` into `master` through the gate
-> (`merge.ff false`). Two features are planned below: **J** — the hard
-> delete — is **parked on its three questions** (owner will answer before it is
-> built; needs native/Kotlin work). **K** — a batch-download chooser plus a
-> **"Keep sending here" pinned destination** that stays until changed and
-> governs every download (no more press-and-hold or Settings trip) — has its
-> **questions answered (2026-07-23)** and is **ready to build**; it is the
-> natural next feature after this merge. Older START-HERE for H follows.
+> Older START-HERE for H follows.
 >
-> **What to do next:** open a branch off `master` and build **I — the download
-> destination decision** (its own section, just below H). The owner settled its
+> **(Superseded — kept for the H trail.)** Open a branch off `master` and build
+> **I — the download destination decision** (its own section, just below H). The
+> owner settled its
 > three design questions on 2026-07-23 — centred dialog, "Always save X here" in
 > the chooser only, and H merges before I opens. All three are recorded in I's
 > *Settled by the owner* block; do not re-litigate them.
