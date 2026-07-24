@@ -236,8 +236,9 @@ void main() {
     await _settle(tester);
 
     // The intersection: one sketchy wallpaper keeps the gallery on offer, but
-    // the chooser is up rather than the download running silently.
-    expect(find.text('Download to'), findsOneWidget);
+    // the chooser is up rather than the download running silently. The heading
+    // counts the selection, so the tap does not read as one download.
+    expect(find.text('Download 2 wallpapers to'), findsOneWidget);
     expect(find.text('Private library'), findsOneWidget);
   });
 
