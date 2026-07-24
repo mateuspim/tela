@@ -1,10 +1,14 @@
 package cc.pym.tela
 
 import android.content.Intent
+import android.content.IntentSender
 import android.graphics.Rect
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.app.WallpaperManager
 import android.view.WindowManager
+import androidx.annotation.RequiresApi
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -24,6 +28,7 @@ class MainActivity : FlutterFragmentActivity() {
     private val imageStoreExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val shareExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var pendingOutsideGalleryGrant: PendingOutsideGalleryGrant? = null
+    private var pendingGalleryDeletion: PendingGalleryDeletion? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -216,7 +221,10 @@ class MainActivity : FlutterFragmentActivity() {
         when (call.method) {
             "storeImage" -> handleStoreImage(call, result)
             "listPrivateImages" -> onStorageThread(result) { ImageStorage(this).listPrivate() }
-            "deletePrivateImage" -> handleDeletePrivateImage(call, result)
+            "deleteDownload" -> handleDeleteDownload(call, result)
+            "deleteDownloads" -> handleDeleteDownloads(call, result)
+            "galleryDeleteConfirmedBySystem" ->
+                result.success(mapOf("confirmed" to systemConfirmsGalleryDelete()))
             "canReadImage" -> handleCanReadImage(call, result)
             "materializeImage" -> handleMaterializeImage(call, result)
             "releasePreview" -> handleReleasePreview(call, result)
@@ -310,12 +318,108 @@ class MainActivity : FlutterFragmentActivity() {
         requestOutsideGalleryDirectory(result, intent)
     }
 
-    private fun handleDeletePrivateImage(call: MethodCall, result: MethodChannel.Result) {
-        val id = call.argument<String>("id") ?: run {
+    /**
+     * Hard-deletes a downloaded file, routing the gallery tier by API level.
+     *
+     * appPrivate and the SAF document delete synchronously off the UI thread.
+     * The gallery tier on API 30+ cannot: `MediaStore.createDeleteRequest`
+     * shows the OS's own confirmation and returns through onActivityResult, so
+     * it is launched like the folder grant. On API 29 a direct delete works, so
+     * it stays on the storage thread with the other two.
+     */
+    private fun handleDeleteDownload(call: MethodCall, result: MethodChannel.Result) {
+        val tier = call.argument<String>("tier")
+        val location = call.argument<String>("location")
+        if (tier == null || location == null) {
             result.success(imageStoreFailure("unavailable"))
             return
         }
-        onStorageThread(result) { ImageStorage(this).deletePrivate(id) }
+        val uri = Uri.parse(location)
+        if (tier == "sharedGallery" && systemConfirmsGalleryDelete()) {
+            requestGalleryDeletions(listOf(uri), emptyList(), result)
+            return
+        }
+        onStorageThread(result) { ImageStorage(this).deleteDownload(tier, uri) }
+    }
+
+    /**
+     * Hard-deletes a whole selection, batching the gallery tier into one prompt.
+     *
+     * The files and SAF documents delete on the storage thread; the gallery
+     * items (on API 30+) are gathered and handed to a single
+     * `createDeleteRequest`, so a selection of twenty gallery downloads is one
+     * OS prompt rather than twenty. The already-deleted locations are carried
+     * into that prompt so the final answer is the whole batch's outcome.
+     */
+    private fun handleDeleteDownloads(call: MethodCall, result: MethodChannel.Result) {
+        val items = readDeletionItems(call) ?: run {
+            result.success(imageStoreFailure("unavailable"))
+            return
+        }
+        imageStoreExecutor.execute {
+            val storage = ImageStorage(this)
+            val galleryUris = mutableListOf<Uri>()
+            val deleted = mutableListOf<String>()
+            for ((tier, uri) in items) {
+                if (tier == "sharedGallery" && systemConfirmsGalleryDelete()) {
+                    galleryUris.add(uri)
+                } else if (storage.deleteDownload(tier, uri)["success"] == true) {
+                    deleted.add(uri.toString())
+                }
+            }
+            runOnUiThread {
+                if (galleryUris.isEmpty()) {
+                    result.success(mapOf("success" to true, "deleted" to deleted))
+                } else {
+                    requestGalleryDeletions(galleryUris, deleted, result)
+                }
+            }
+        }
+    }
+
+    private fun readDeletionItems(call: MethodCall): List<Pair<String, Uri>>? {
+        val raw = call.argument<List<Map<String, String>>>("items") ?: return null
+        return raw.mapNotNull { item ->
+            val tier = item["tier"]
+            val location = item["location"]
+            if (tier == null || location == null) null else tier to Uri.parse(location)
+        }
+    }
+
+    /** True on API 30+, where every gallery delete goes through the OS prompt. */
+    private fun systemConfirmsGalleryDelete(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+
+    /**
+     * Launches one system confirmation for every gallery delete in the batch.
+     *
+     * One at a time, exactly like [requestOutsideGalleryDirectory]: a second
+     * request while one is pending is refused rather than overwriting it. The
+     * user accepts or declines the whole set at once; [alreadyDeleted] are the
+     * non-gallery files already removed, kept in the answer either way.
+     */
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun requestGalleryDeletions(
+        galleryUris: List<Uri>,
+        alreadyDeleted: List<String>,
+        result: MethodChannel.Result,
+    ) {
+        if (pendingGalleryDeletion != null) {
+            result.success(imageStoreFailure("unavailable"))
+            return
+        }
+        val request = MediaStore.createDeleteRequest(contentResolver, galleryUris)
+        pendingGalleryDeletion = PendingGalleryDeletion(
+            result,
+            galleryUris.map { it.toString() },
+            alreadyDeleted,
+        )
+        try {
+            startIntentSenderForResult(request.intentSender, GALLERY_DELETE_REQUEST, null, 0, 0, 0)
+        } catch (_: IntentSender.SendIntentException) {
+            pendingGalleryDeletion = null
+            result.success(mapOf("success" to true, "deleted" to alreadyDeleted))
+        }
     }
 
     /** Runs filesystem work off the UI thread, answering on it. */
@@ -368,7 +472,29 @@ class MainActivity : FlutterFragmentActivity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != OUTSIDE_GALLERY_DIRECTORY_REQUEST) return
+        when (requestCode) {
+            OUTSIDE_GALLERY_DIRECTORY_REQUEST -> onOutsideGalleryGrant(resultCode, data)
+            GALLERY_DELETE_REQUEST -> onGalleryDeletion(resultCode)
+        }
+    }
+
+    /**
+     * Reads the system delete prompt's outcome and answers the whole batch.
+     *
+     * RESULT_OK means every gallery file in the prompt is gone; anything else
+     * means the user dismissed it and none of that subset went — not a failure,
+     * so the non-gallery files already deleted are still reported. The Dart use
+     * case forgets exactly the rows whose locations come back here.
+     */
+    private fun onGalleryDeletion(resultCode: Int) {
+        val pending = pendingGalleryDeletion ?: return
+        pendingGalleryDeletion = null
+        val deleted = pending.alreadyDeleted +
+            if (resultCode == RESULT_OK) pending.galleryLocations else emptyList()
+        pending.result.success(mapOf("success" to true, "deleted" to deleted))
+    }
+
+    private fun onOutsideGalleryGrant(resultCode: Int, data: Intent?) {
         val pending = pendingOutsideGalleryGrant ?: return
         pendingOutsideGalleryGrant = null
         val tree = data?.data
@@ -506,12 +632,26 @@ class MainActivity : FlutterFragmentActivity() {
         val result: MethodChannel.Result,
     )
 
+    /**
+     * A system gallery-delete prompt in flight, awaiting the user's answer.
+     *
+     * [galleryLocations] go into the deleted set only if the user accepts;
+     * [alreadyDeleted] — the non-gallery files removed before the prompt — are
+     * kept either way.
+     */
+    private data class PendingGalleryDeletion(
+        val result: MethodChannel.Result,
+        val galleryLocations: List<String>,
+        val alreadyDeleted: List<String>,
+    )
+
     private companion object {
         const val WALLPAPER_CHANNEL = "cc.pym.tela/wallpaper"
         const val IMAGE_STORE_CHANNEL = "cc.pym.tela/images"
         const val SCREEN_CHANNEL = "cc.pym.tela/screen"
         const val SHARE_CHANNEL = "cc.pym.tela/share"
         const val OUTSIDE_GALLERY_DIRECTORY_REQUEST = 401
+        const val GALLERY_DELETE_REQUEST = 402
         const val PREFERENCES = "tela.storage"
         const val OUTSIDE_GALLERY_TREE = "outsideGalleryTree"
         const val EXTERNAL_STORAGE_PROVIDER = "com.android.externalstorage.documents"

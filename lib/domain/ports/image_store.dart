@@ -1,3 +1,4 @@
+import 'package:tela/domain/models/download_deletion.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/private_image.dart';
@@ -30,10 +31,51 @@ abstract interface class ImageStore {
   /// write-only, and uninstalling is the only way to get them back out.
   Future<List<PrivateImage>> privateImages();
 
-  /// Deletes the app-private image with [id].
+  /// Hard-deletes a downloaded file from its storage [tier] — the one action
+  /// that reaches the file itself, not just an index of it.
   ///
-  /// Throws a safe `ImageStoreFailure` when there is nothing to delete.
-  Future<void> deletePrivateImage(String id);
+  /// This is the loud counterpart to `DownloadHistory.forget`, which only drops
+  /// a list row. Routing is by tier: the app-private file tela owns, the SAF
+  /// document under the user's granted tree, or the MediaStore image. That last
+  /// case is why this can return without deleting: on Android 30+ a gallery
+  /// delete goes through the system's own confirmation, which the user may
+  /// dismiss — a [DownloadDeletion.declined], not a failure.
+  ///
+  /// [location] is the tier's own URI (a `file:`, document, or MediaStore URI),
+  /// exactly as [StoredImage.location] and [PrivateImage.location] carry it.
+  ///
+  /// Throws a safe `ImageStoreFailure` for a delete that was meant to happen
+  /// and could not; never one containing the path.
+  Future<DownloadDeletion> deleteDownload({
+    required StorageTier tier,
+    required Uri location,
+  });
+
+  /// Hard-deletes several downloads at once, and reports which files went.
+  ///
+  /// The bulk counterpart to [deleteDownload], and the reason it is not just a
+  /// loop over it: the gallery tier's system confirmation takes a *collection*,
+  /// so a whole selection of gallery downloads is one OS prompt rather than one
+  /// per file. The files and SAF documents delete individually; the gallery
+  /// items ride that single prompt, all-or-nothing.
+  ///
+  /// Returns the locations actually deleted — a subset of the requested ones
+  /// when some failed or the user declined the gallery prompt — so the caller
+  /// forgets exactly those rows and no others. Never throws for a partial
+  /// result; an empty set is an ordinary "nothing went" outcome.
+  Future<Set<Uri>> deleteDownloads(
+    List<({StorageTier tier, Uri location})> targets,
+  );
+
+  /// Whether the platform shows its own confirmation for a gallery-tier delete.
+  ///
+  /// True on Android 30+, where `MediaStore.createDeleteRequest` is mandatory
+  /// and puts a system "allow tela to delete?" prompt in front of every gallery
+  /// delete. The UI reads this to avoid stacking tela's own confirmation on top
+  /// of the OS one — and, just as importantly, to keep tela's confirmation on
+  /// the older path (API 29) where a gallery delete is silent and tela's dialog
+  /// is the *only* thing standing between a tap and a lost file.
+  Future<bool> galleryDeleteConfirmedBySystem();
 
   /// Whether the file at [location] can still be opened.
   ///

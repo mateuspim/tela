@@ -143,6 +143,82 @@ void main() {
     expect(find.text('grid'), findsOneWidget);
   });
 
+  testWidgets(
+    'overflow hard-deletes a gallery row and leans on the OS confirm',
+    (WidgetTester tester) async {
+      // Gallery on API 30+ carries Android's own delete prompt, so tela's is
+      // suppressed here — one confirmation, not two — and the file plus its row
+      // go together.
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[_download('e7jvjd')],
+      );
+      final FakeImageStore imageStore = FakeImageStore();
+      await _pump(
+        tester,
+        _session(<DownloadRecord>[_download('e7jvjd')]),
+        history: history,
+        imageStore: imageStore,
+      );
+
+      await tester.tap(find.byKey(const Key('download-viewer-overflow')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete from device'));
+      await tester.pumpAndSettle();
+
+      // No tela dialog: the gallery tier leans on the system's own prompt.
+      expect(find.text('Delete from device?'), findsNothing);
+      expect(imageStore.deletedLocations, <Uri>[_locationOf('e7jvjd')]);
+      expect(history.recorded, isEmpty);
+      // The record it was showing is gone, so it leaves.
+      expect(find.byType(DownloadImmersiveSession), findsNothing);
+      expect(find.text('grid'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a files-tier delete confirms first, in words that name the file',
+    (WidgetTester tester) async {
+      // No OS prompt for the files tier, so tela's confirmation is the only
+      // warning — and it must say, unlike "Remove from history", that the file
+      // really is being deleted.
+      final DownloadRecord record = _download(
+        'e7jvjd',
+        tier: StorageTier.filesOutsideGallery,
+      );
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[record],
+      );
+      final FakeImageStore imageStore = FakeImageStore();
+      await _pump(
+        tester,
+        _session(<DownloadRecord>[record]),
+        history: history,
+        imageStore: imageStore,
+      );
+
+      await tester.tap(find.byKey(const Key('download-viewer-overflow')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete from device'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete from device?'), findsOneWidget);
+      expect(
+        find.textContaining('deletes the file from your device'),
+        findsOneWidget,
+      );
+      // Not deleted until confirmed.
+      expect(imageStore.deletedLocations, isEmpty);
+      expect(history.recorded, hasLength(1));
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+
+      expect(imageStore.deletedLocations, <Uri>[_locationOf('e7jvjd')]);
+      expect(history.recorded, isEmpty);
+      expect(find.byType(DownloadImmersiveSession), findsNothing);
+    },
+  );
+
   testWidgets('releases every temporary preview it materialised', (
     WidgetTester tester,
   ) async {
@@ -249,7 +325,10 @@ GallerySessionController<DownloadRecord> _session(
 Uri _locationOf(String id) =>
     Uri.parse('content://media/external/images/media/$id');
 
-DownloadRecord _download(String id) => DownloadRecord(
+DownloadRecord _download(
+  String id, {
+  StorageTier tier = StorageTier.sharedGallery,
+}) => DownloadRecord(
   wallpaper: Wallpaper(
     id: id,
     fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
@@ -262,7 +341,7 @@ DownloadRecord _download(String id) => DownloadRecord(
     category: Category.general,
     colors: const <String>[],
   ),
-  tier: StorageTier.sharedGallery,
+  tier: tier,
   location: _locationOf(id),
   downloadedAt: DateTime(2026, 7, 14),
 );

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/configured_download.dart';
+import 'package:tela/app/delete_download_action.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
@@ -23,6 +24,7 @@ import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/bitmap_export_rule.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/share_option.dart';
@@ -100,6 +102,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   bool _isDownloading = false;
   bool _isSharing = false;
   bool _isAdjusting = false;
+  bool _isDeleting = false;
 
   Wallpaper get _wallpaper => _gallery.selectedItem;
 
@@ -301,6 +304,41 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     }
   }
 
+  /// The history row for the shown wallpaper, or null when it is not a download
+  /// tela can reach from here.
+  ///
+  /// The "free" lookup J leans on: the history already carries the tier and the
+  /// location a hard delete needs, so the detail screen offers *Delete from
+  /// device* only for a wallpaper that is in it. Explicit and app-private
+  /// downloads are deliberately absent — they live behind the private library's
+  /// lock, and offering their delete on this ungated screen would leak that
+  /// they exist.
+  DownloadRecord? _downloadedRecord() {
+    final List<DownloadRecord> recent =
+        ref.watch(recentDownloadsProvider).value ?? const <DownloadRecord>[];
+    for (final DownloadRecord record in recent) {
+      if (record.wallpaper.id == _wallpaper.id) return record;
+    }
+    return null;
+  }
+
+  /// Hard-deletes the downloaded file, then refreshes so the button that opened
+  /// this retires itself — the wallpaper stays browsable, only its download is
+  /// gone.
+  Future<void> _deleteFromDevice(DownloadRecord record) async {
+    setState(() => _isDeleting = true);
+    final bool deleted = await confirmAndDeleteDownload(
+      context: context,
+      ref: ref,
+      id: record.wallpaper.id,
+      tier: record.tier,
+      location: record.location,
+    );
+    if (!mounted) return;
+    setState(() => _isDeleting = false);
+    if (deleted) refreshDownloads(ref);
+  }
+
   /// Offers only the share options this wallpaper's purity allows, so an
   /// explicit wallpaper is never given the chance to send its image file — the
   /// menu and the use case enforce the same rule (see [shareOptionsFor]).
@@ -422,11 +460,13 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   static const double _expandedWidth = 840;
 
   List<Widget> _compactActions(AppLocalizations l10n) {
+    final DownloadRecord? downloaded = _downloadedRecord();
     return <Widget>[
       FavoriteButton(wallpaper: _wallpaper),
       _adjustButton(l10n),
       _shareButton(l10n),
       _downloadButton(l10n),
+      if (downloaded != null) _deleteButton(l10n, downloaded),
     ];
   }
 
@@ -635,6 +675,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   }
 
   Widget _expandedActions(AppLocalizations l10n) {
+    final DownloadRecord? downloaded = _downloadedRecord();
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Row(
@@ -644,6 +685,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
           _adjustButton(l10n),
           _shareButton(l10n),
           _downloadButton(l10n),
+          if (downloaded != null) _deleteButton(l10n, downloaded),
         ],
       ),
     );
@@ -759,6 +801,23 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
               : Icon(Icons.download_outlined, color: tint),
         ),
       ),
+    );
+  }
+
+  /// Shown only for a wallpaper already in the download history: the file and
+  /// its row, deleted together. Its own confirmation lives in
+  /// [confirmAndDeleteDownload], suppressed where Android's own takes over.
+  Widget _deleteButton(AppLocalizations l10n, DownloadRecord record) {
+    return IconButton(
+      key: const Key('detail-delete'),
+      onPressed: _isDeleting ? null : () => _deleteFromDevice(record),
+      tooltip: l10n.downloadDeleteMenu,
+      icon: _isDeleting
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.delete_outline),
     );
   }
 }

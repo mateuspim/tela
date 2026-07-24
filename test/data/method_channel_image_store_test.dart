@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/data/storage/method_channel_image_store.dart';
+import 'package:tela/domain/models/download_deletion.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
@@ -201,19 +202,46 @@ void main() {
     });
   });
 
-  group('deletePrivateImage', () {
-    test('sends the id to the native delete', () async {
+  group('deleteDownload', () {
+    const String location = 'content://media/external/images/media/42';
+
+    test('sends the tier and location, and reads the deleted result', () async {
       final _FakeImageStoreChannel fake = _FakeImageStoreChannel(
-        response: <Object?, Object?>{'success': true},
+        response: <Object?, Object?>{
+          'success': true,
+          'deleted': <String>[location],
+        },
       );
       final MethodChannelImageStore store = MethodChannelImageStore(
         invokeMethod: fake.call,
       );
 
-      await store.deletePrivateImage('e7jvjd');
+      final DownloadDeletion outcome = await store.deleteDownload(
+        tier: StorageTier.sharedGallery,
+        location: Uri.parse(location),
+      );
 
-      expect(fake.receivedMethod, 'deletePrivateImage');
-      expect(fake.receivedArguments, <String, String>{'id': 'e7jvjd'});
+      expect(outcome, DownloadDeletion.deleted);
+      expect(fake.receivedMethod, 'deleteDownload');
+      expect(fake.receivedArguments, <String, String>{
+        'tier': 'sharedGallery',
+        'location': location,
+      });
+    });
+
+    test('an empty result is the user declining the prompt', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: <Object?, Object?>{'success': true, 'deleted': <String>[]},
+        ).call,
+      );
+
+      final DownloadDeletion outcome = await store.deleteDownload(
+        tier: StorageTier.sharedGallery,
+        location: Uri.parse(location),
+      );
+
+      expect(outcome, DownloadDeletion.declined);
     });
 
     test('maps a refused delete to a safe failure', () async {
@@ -227,9 +255,83 @@ void main() {
       );
 
       await expectLater(
-        store.deletePrivateImage('e7jvjd'),
+        store.deleteDownload(
+          tier: StorageTier.filesOutsideGallery,
+          location: Uri.parse('content://tree/doc/1'),
+        ),
         throwsA(_failureWith(ImageStoreProblem.unavailable)),
       );
+    });
+  });
+
+  group('deleteDownloads', () {
+    test('sends the whole batch and returns the deleted locations', () async {
+      const String gallery = 'content://media/external/images/media/1';
+      const String document = 'content://tree/doc/2';
+      final _FakeImageStoreChannel fake = _FakeImageStoreChannel(
+        // The gallery item was declined; only the document came back.
+        response: <Object?, Object?>{
+          'success': true,
+          'deleted': <String>[document],
+        },
+      );
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: fake.call,
+      );
+
+      final Set<Uri> deleted = await store.deleteDownloads(
+        <({StorageTier tier, Uri location})>[
+          (tier: StorageTier.sharedGallery, location: Uri.parse(gallery)),
+          (
+            tier: StorageTier.filesOutsideGallery,
+            location: Uri.parse(document),
+          ),
+        ],
+      );
+
+      expect(deleted, <Uri>{Uri.parse(document)});
+      expect(fake.receivedMethod, 'deleteDownloads');
+      expect(fake.receivedArguments, <String, Object?>{
+        'items': <Map<String, String>>[
+          <String, String>{'tier': 'sharedGallery', 'location': gallery},
+          <String, String>{'tier': 'filesOutsideGallery', 'location': document},
+        ],
+      });
+    });
+
+    test('an empty batch never touches the channel', () async {
+      final _FakeImageStoreChannel fake = _FakeImageStoreChannel();
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: fake.call,
+      );
+
+      final Set<Uri> deleted = await store.deleteDownloads(
+        const <({StorageTier tier, Uri location})>[],
+      );
+
+      expect(deleted, isEmpty);
+      expect(fake.receivedMethod, isNull);
+    });
+  });
+
+  group('galleryDeleteConfirmedBySystem', () {
+    test('reports whether the platform confirms a gallery delete', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: <Object?, Object?>{'confirmed': true},
+        ).call,
+      );
+
+      expect(await store.galleryDeleteConfirmedBySystem(), isTrue);
+    });
+
+    test('guesses false when the native side cannot answer', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: (String method, Map<String, Object?> arguments) =>
+            throw PlatformException(code: 'error'),
+      );
+
+      expect(await store.galleryDeleteConfirmedBySystem(), isFalse);
     });
   });
 
@@ -470,9 +572,9 @@ class _FakeImageStoreChannel {
   final Object? response;
   final PlatformException? platformError;
   String? receivedMethod;
-  Map<String, String>? receivedArguments;
+  Map<String, Object?>? receivedArguments;
 
-  Future<Object?> call(String method, Map<String, String> arguments) async {
+  Future<Object?> call(String method, Map<String, Object?> arguments) async {
     receivedMethod = method;
     receivedArguments = arguments;
     final PlatformException? toThrow = platformError;

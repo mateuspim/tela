@@ -19,6 +19,7 @@ import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/features/private_library/private_secure_access.dart';
 
 /// The app-private tier, which nothing but tela can open.
@@ -194,17 +195,43 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
 
   /// One at a time, counting the ones that failed rather than hiding them:
   /// "deleted 3 of 5" and "deleted 5" are different facts about the device.
+  ///
+  /// Routes through [deleteDownloadProvider] — the same hard-delete path the
+  /// download history and detail screen use (J). For the app-private tier that
+  /// is a file delete plus a history `forget` that no-ops, since nothing
+  /// private is ever recorded there.
   Future<int> _deleteAll(List<String> ids) async {
+    final Map<String, Uri> locations = _locationsFor(ids);
     int deleted = 0;
     for (final String id in ids) {
-      try {
-        await ref.read(imageStoreProvider).deletePrivateImage(id);
-        deleted++;
-      } on ImageStoreFailure {
-        continue;
-      }
+      final Uri? location = locations[id];
+      if (location != null && await _deleteOne(id, location)) deleted++;
     }
     return deleted;
+  }
+
+  /// The on-disk location of each selected id, from the listing already loaded.
+  Map<String, Uri> _locationsFor(List<String> ids) {
+    final List<PrivateImage> stored =
+        ref.read(privateImagesProvider).value ?? const <PrivateImage>[];
+    final Set<String> wanted = ids.toSet();
+    return <String, Uri>{
+      for (final PrivateImage image in stored)
+        if (wanted.contains(image.id)) image.id: image.location,
+    };
+  }
+
+  Future<bool> _deleteOne(String id, Uri location) async {
+    try {
+      await ref.read(deleteDownloadProvider)(
+        id: id,
+        tier: StorageTier.appPrivate,
+        location: location,
+      );
+      return true;
+    } on ImageStoreFailure {
+      return false;
+    }
   }
 
   String _deleteOutcome(AppLocalizations l10n, int deleted, int total) {
@@ -260,6 +287,11 @@ class _PrivateTile extends StatelessWidget {
       container: true,
       button: true,
       image: true,
+      // Null outside selection so the tile is not announced as "not selected"
+      // in ordinary browsing — the same rule WallpaperTile follows.
+      selected: WallpaperSelectionScope.isActive(context)
+          ? WallpaperSelectionScope.isSelected(context, image.id)
+          : null,
       label: l10n.privateLibraryImageLabel(image.id),
       child: Material(
         clipBehavior: Clip.antiAlias,
@@ -271,7 +303,16 @@ class _PrivateTile extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           onLongPress: onLongPress,
-          child: _thumbnail(context),
+          // The wash-and-tick the shelf shares with every other selectable
+          // grid; without it a ticked private tile looked identical to an
+          // untouched one.
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              _thumbnail(context),
+              WallpaperSelectionOverlay(wallpaperId: image.id),
+            ],
+          ),
         ),
       ),
     );

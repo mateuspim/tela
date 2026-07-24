@@ -169,6 +169,59 @@ class ImageStorageTest {
         assertEquals("unavailable", errorCodeOf(result))
     }
 
+    // --- deleteDownload, the hard delete (J) --------------------------------
+
+    /**
+     * The app-private branch recovers the id from the file's own name and reuses
+     * [ImageStorage.deletePrivate], so its listing-filter guard still stands —
+     * the only tier Robolectric can exercise, the other two being MediaStore and
+     * SAF (device-only, as elsewhere in this file).
+     */
+    @Test
+    fun `deleteDownload removes an app-private file and reports it deleted`() {
+        val file = writePrivateImage("wallhaven-abc123.jpg")
+
+        val result = storage.deleteDownload("appPrivate", Uri.fromFile(file))
+
+        assertEquals(true, result["success"])
+        assertEquals(listOf(Uri.fromFile(file).toString()), result["deleted"])
+        assertFalse(file.exists())
+    }
+
+    /** A location whose name is not one tela wrote yields no id, so nothing is
+     *  deleted — the guard against a method-channel path becoming a file delete. */
+    @Test
+    fun `deleteDownload refuses an app-private location tela did not write`() {
+        val outside = File(context.filesDir, "tela.db").apply { writeText("database") }
+
+        val result = storage.deleteDownload("appPrivate", Uri.fromFile(outside))
+
+        assertEquals(false, result["success"])
+        assertEquals("unavailable", errorCodeOf(result))
+        assertTrue("the file outside the tier survived", outside.exists())
+    }
+
+    @Test
+    fun `deleteDownload reports an app-private id it holds no file for`() {
+        writePrivateImage("wallhaven-abc123.jpg")
+
+        val result = storage.deleteDownload(
+            "appPrivate",
+            Uri.parse("file:///data/user/0/cc.pym.tela/files/wallpapers/wallhaven-zzz999.jpg"),
+        )
+
+        assertEquals(false, result["success"])
+        assertEquals("unavailable", errorCodeOf(result))
+    }
+
+    @Test
+    fun `deleteDownload refuses an unknown tier rather than guessing`() {
+        val result = storage.deleteDownload("downloads", Uri.parse("file:///x.jpg"))
+
+        assertEquals(false, result["success"])
+        assertEquals("unavailable", errorCodeOf(result))
+    }
+
     // --- listPrivate --------------------------------------------------------
 
     @Test

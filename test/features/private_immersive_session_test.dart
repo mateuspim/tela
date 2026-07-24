@@ -12,6 +12,7 @@ import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/features/private_library/private_immersive_session.dart';
 
 import '../fakes/fake_app_lock.dart';
+import '../fakes/fake_download_history.dart';
 import '../fakes/fake_image_store.dart';
 import '../fakes/fake_immersive_system_ui.dart';
 import '../fakes/fake_local_preview_cache.dart';
@@ -274,6 +275,7 @@ Future<void> _open(
         appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
         screenGuardProvider.overrideWithValue(guard ?? FakeScreenGuard()),
         imageStoreProvider.overrideWithValue(store ?? FakeImageStore()),
+        downloadHistoryProvider.overrideWithValue(FakeDownloadHistory()),
         wallpaperApplierProvider.overrideWithValue(
           applier ?? FakeWallpaperApplier(),
         ),

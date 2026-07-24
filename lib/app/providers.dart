@@ -41,6 +41,8 @@ import 'package:tela/domain/use_cases/apply_download.dart';
 import 'package:tela/domain/use_cases/apply_private_image.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
 import 'package:tela/domain/use_cases/confirm_nsfw_on_removable.dart';
+import 'package:tela/domain/use_cases/delete_download.dart';
+import 'package:tela/domain/use_cases/delete_downloads.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
 import 'package:tela/domain/use_cases/forget_api_key.dart';
 import 'package:tela/domain/use_cases/load_account_defaults.dart';
@@ -237,6 +239,24 @@ final Provider<ConfirmNsfwOnRemovable> confirmNsfwOnRemovableProvider =
 final Provider<ApplyDownload> applyDownloadProvider = Provider<ApplyDownload>(
   (Ref ref) => ApplyDownload(applier: ref.watch(wallpaperApplierProvider)),
 );
+
+/// Hard-deletes a download: its file and its history row. One delete path.
+final Provider<DeleteDownload> deleteDownloadProvider =
+    Provider<DeleteDownload>(
+      (Ref ref) => DeleteDownload(
+        imageStore: ref.watch(imageStoreProvider),
+        history: ref.watch(downloadHistoryProvider),
+      ),
+    );
+
+/// Hard-deletes a whole selection at once, one system prompt for the gallery.
+final Provider<DeleteDownloads> deleteDownloadsProvider =
+    Provider<DeleteDownloads>(
+      (Ref ref) => DeleteDownloads(
+        imageStore: ref.watch(imageStoreProvider),
+        history: ref.watch(downloadHistoryProvider),
+      ),
+    );
 
 /// Sets an app-private wallpaper, from the file only tela can open.
 final Provider<ApplyPrivateImage> applyPrivateImageProvider =

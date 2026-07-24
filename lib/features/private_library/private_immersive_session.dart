@@ -14,6 +14,7 @@ import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/features/private_library/private_gallery_source.dart';
@@ -220,7 +221,11 @@ class _PrivateImmersiveSessionState
   Future<void> _delete(PrivateImage image) async {
     final AppLocalizations l10n = AppLocalizations.of(context);
     try {
-      await ref.read(imageStoreProvider).deletePrivateImage(image.id);
+      await ref.read(deleteDownloadProvider)(
+        id: image.id,
+        tier: StorageTier.appPrivate,
+        location: image.location,
+      );
     } on ImageStoreFailure {
       if (mounted) {
         _show(l10n.privateLibraryDeleteFailure, kind: ToastKind.failure);

@@ -1,3 +1,4 @@
+import 'package:tela/domain/models/download_deletion.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
@@ -20,9 +21,12 @@ class FakeImageStore implements ImageStore {
     List<PrivateImage> privateLibrary = const <PrivateImage>[],
     Set<Uri> unreadable = const <Uri>{},
     Set<String> failingIds = const <String>{},
+    Set<Uri> declined = const <Uri>{},
+    this.galleryDeleteConfirmed = true,
   }) : _privateLibrary = List<PrivateImage>.of(privateLibrary),
        _unreadable = Set<Uri>.of(unreadable),
-       _failingIds = Set<String>.of(failingIds);
+       _failingIds = Set<String>.of(failingIds),
+       _declined = Set<Uri>.of(declined);
 
   /// Ids whose write throws while the rest succeed.
   ///
@@ -34,6 +38,13 @@ class FakeImageStore implements ImageStore {
   /// back, from Photos or a file manager.
   final Set<Uri> _unreadable;
 
+  /// Locations whose [deleteDownload] answers [DownloadDeletion.declined] —
+  /// standing in for the user dismissing the system delete prompt.
+  final Set<Uri> _declined;
+
+  /// What [galleryDeleteConfirmedBySystem] answers; true is the modern default.
+  final bool galleryDeleteConfirmed;
+
   /// Failure thrown by every write when supplied.
   final ImageStoreFailure? failure;
 
@@ -43,8 +54,21 @@ class FakeImageStore implements ImageStore {
   /// What the app-private tier currently holds, newest first.
   final List<PrivateImage> _privateLibrary;
 
-  /// Ids passed to [deletePrivateImage], oldest first.
+  /// Ids of private images passed to [deleteDownload], oldest first.
   final List<String> deletedIds = <String>[];
+
+  /// Every location [deleteDownload] actually removed, oldest first.
+  final List<Uri> deletedLocations = <Uri>[];
+
+  /// Tiers passed to [deleteDownload], oldest first.
+  final List<StorageTier> deletedTiers = <StorageTier>[];
+
+  /// The size of each [deleteDownloads] batch, in call order.
+  ///
+  /// Records the *shape* of the calls, not just their effect: the bulk delete
+  /// exists to hand the whole selection over at once (one gallery prompt), and
+  /// a loop over the single delete would leave every other expectation intact.
+  final List<int> batchSizes = <int>[];
 
   /// Latest source image URL.
   String? receivedImageUrl;
@@ -86,12 +110,48 @@ class FakeImageStore implements ImageStore {
   }
 
   @override
-  Future<void> deletePrivateImage(String id) async {
-    deletedIds.add(id);
+  Future<DownloadDeletion> deleteDownload({
+    required StorageTier tier,
+    required Uri location,
+  }) async {
     final ImageStoreFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
-    _privateLibrary.removeWhere((PrivateImage image) => image.id == id);
+    return _remove(tier, location)
+        ? DownloadDeletion.deleted
+        : DownloadDeletion.declined;
   }
+
+  @override
+  Future<Set<Uri>> deleteDownloads(
+    List<({StorageTier tier, Uri location})> targets,
+  ) async {
+    batchSizes.add(targets.length);
+    final ImageStoreFailure? toThrow = failure;
+    if (toThrow != null) throw toThrow;
+    return <Uri>{
+      for (final ({StorageTier tier, Uri location}) target in targets)
+        if (_remove(target.tier, target.location)) target.location,
+    };
+  }
+
+  /// Deletes one location unless it is in [_declined], recording what it did.
+  /// Returns whether it deleted, so both delete methods share the bookkeeping.
+  bool _remove(StorageTier tier, Uri location) {
+    if (_declined.contains(location)) return false;
+    deletedTiers.add(tier);
+    deletedLocations.add(location);
+    final int index = _privateLibrary.indexWhere(
+      (PrivateImage image) => image.location == location,
+    );
+    if (index >= 0) {
+      deletedIds.add(_privateLibrary[index].id);
+      _privateLibrary.removeAt(index);
+    }
+    return true;
+  }
+
+  @override
+  Future<bool> galleryDeleteConfirmedBySystem() async => galleryDeleteConfirmed;
 
   @override
   Future<bool> canRead(Uri location) async => !_unreadable.contains(location);

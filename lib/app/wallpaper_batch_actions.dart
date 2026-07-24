@@ -7,6 +7,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/tela_toast.dart';
+import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -35,15 +36,21 @@ enum WallpaperBatchAction {
 
   /// Forget every ticked download-history row. Destructive; confirms first.
   forget,
+
+  /// Hard-delete every ticked download — the files and their rows. Destructive;
+  /// confirms first, and batches the gallery tier into one system prompt.
+  delete,
 }
 
 /// Whether [action] asks before it acts.
 ///
-/// Only [WallpaperBatchAction.forget] does. The other three are one tap from
-/// being undone by the opposite action, and a confirmation on each would train
-/// the user to dismiss the one that matters.
+/// The two destructive ones do — [WallpaperBatchAction.forget] and
+/// [WallpaperBatchAction.delete]. The others are one tap from being undone by
+/// the opposite action, and a confirmation on each would train the user to
+/// dismiss the one that matters.
 bool wallpaperBatchActionConfirms(WallpaperBatchAction action) =>
-    action == WallpaperBatchAction.forget;
+    action == WallpaperBatchAction.forget ||
+    action == WallpaperBatchAction.delete;
 
 /// Performs [action] on every wallpaper in [wallpapers], reporting the outcome.
 ///
@@ -67,7 +74,11 @@ Future<bool> runWallpaperBatchAction({
 }) async {
   if (wallpapers.isEmpty) return false;
   if (wallpaperBatchActionConfirms(action)) {
-    final bool confirmed = await _confirmForget(context, wallpapers.length);
+    final bool confirmed = await _confirmDestructive(
+      context,
+      action,
+      wallpapers.length,
+    );
     if (!confirmed || !context.mounted) return false;
   }
   // Read before the first await: every branch reports across an async gap, and
@@ -103,7 +114,66 @@ Future<bool> _perform(
       await _forgetAll(ref, wallpapers);
       _say(messenger, l10n.batchForgetDone(wallpapers.length));
       return true;
+    case WallpaperBatchAction.delete:
+      return _deleteAll(ref, wallpapers, messenger, l10n);
   }
+}
+
+/// Hard-deletes every ticked download — files and rows — through the one bulk
+/// use case, so the gallery tier resolves to a single system prompt.
+///
+/// Reports the honest tally: a declined prompt or a failed delete leaves that
+/// subset, and "deleted 3 of 5" is a different fact than "deleted 5". Reads the
+/// records from the history listing, since a hard delete needs each file's tier
+/// and location, not just its id.
+Future<bool> _deleteAll(
+  WidgetRef ref,
+  List<Wallpaper> wallpapers,
+  ScaffoldMessengerState messenger,
+  AppLocalizations l10n,
+) async {
+  final List<DownloadRecord> records = await _recordsFor(ref, wallpapers);
+  final int deleted = await ref.read(deleteDownloadsProvider)(records);
+  refreshDownloads(ref);
+  _sayDeleteOutcome(messenger, l10n, deleted, wallpapers.length);
+  return true;
+}
+
+/// The history records for [wallpapers], in the selection's order, dropping any
+/// whose row has since left the listing.
+Future<List<DownloadRecord>> _recordsFor(
+  WidgetRef ref,
+  List<Wallpaper> wallpapers,
+) async {
+  final List<DownloadRecord> recent = await ref.read(
+    recentDownloadsProvider.future,
+  );
+  final Map<String, DownloadRecord> byId = <String, DownloadRecord>{
+    for (final DownloadRecord record in recent) record.wallpaper.id: record,
+  };
+  return <DownloadRecord>[
+    for (final Wallpaper wallpaper in wallpapers)
+      if (byId[wallpaper.id] case final DownloadRecord record) record,
+  ];
+}
+
+void _sayDeleteOutcome(
+  ScaffoldMessengerState messenger,
+  AppLocalizations l10n,
+  int deleted,
+  int total,
+) {
+  if (deleted == total) {
+    _say(messenger, l10n.batchDeleteDone(total));
+    return;
+  }
+  _say(
+    messenger,
+    l10n.batchDeletePartial(deleted, total, total - deleted),
+    // Some are still on the device — a declined prompt, or a failure — and that
+    // is the outcome the user may need to act on, so no success tick.
+    kind: ToastKind.failure,
+  );
 }
 
 /// Writes through the repository's [FavoritesRepository.save], **not** through
@@ -250,17 +320,27 @@ Future<void> _forgetAll(WidgetRef ref, List<Wallpaper> wallpapers) async {
 
 /// Says what will and will not happen, in the plural.
 ///
-/// The wording is the feature, exactly as it is for the single-row confirm this
-/// mirrors: these tiles look like files, and a batch button reading "Remove"
-/// over nine of them is the moment a user most needs telling that their
-/// downloads are staying put.
-Future<bool> _confirmForget(BuildContext context, int count) async {
+/// The wording is the feature. For *forget*, these tiles look like files and a
+/// button reading "Remove" over nine of them is the moment a user most needs
+/// telling their downloads are staying put; for *delete*, it is the opposite
+/// promise — the files really are going — and the copy has to be as plain about
+/// that as the single-row confirm is.
+Future<bool> _confirmDestructive(
+  BuildContext context,
+  WallpaperBatchAction action,
+  int count,
+) async {
   final AppLocalizations l10n = AppLocalizations.of(context);
+  final bool deleting = action == WallpaperBatchAction.delete;
   final bool? confirmed = await showDialog<bool>(
     context: context,
     builder: (BuildContext context) => AlertDialog(
-      title: Text(l10n.batchForgetTitle(count)),
-      content: Text(l10n.batchForgetBody(count)),
+      title: Text(
+        deleting ? l10n.batchDeleteTitle(count) : l10n.batchForgetTitle(count),
+      ),
+      content: Text(
+        deleting ? l10n.batchDeleteBody(count) : l10n.batchForgetBody(count),
+      ),
       actions: <Widget>[
         TextButton(
           onPressed: () => Navigator.pop(context, false),
@@ -268,7 +348,9 @@ Future<bool> _confirmForget(BuildContext context, int count) async {
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
-          child: Text(l10n.downloadHistoryForget),
+          child: Text(
+            deleting ? l10n.downloadDelete : l10n.downloadHistoryForget,
+          ),
         ),
       ],
     ),

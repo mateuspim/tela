@@ -78,12 +78,14 @@ class DownloadHistoryScreen extends ConsumerWidget {
         for (final DownloadRecord record in recent) record.wallpaper,
       ],
       // The mirror of this shelf's marks again: everything here is downloaded,
-      // so re-downloading is the one batch that says nothing. Forgetting rows
-      // is what this screen is *for*, and it is the only destructive batch in
-      // the app — hence the confirmation `runWallpaperBatchAction` insists on.
+      // so re-downloading is the one batch that says nothing. The two
+      // destructive batches sit side by side and mean different things: forget
+      // drops the list rows and leaves the files; delete removes both. Each
+      // confirms, in its own words, through `runWallpaperBatchAction`.
       actions: const <WallpaperBatchAction>[
         WallpaperBatchAction.favorite,
         WallpaperBatchAction.forget,
+        WallpaperBatchAction.delete,
       ],
       child: JustifiedWallpaperGrid(
         itemCount: recent.length,

@@ -12,6 +12,7 @@ import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -748,7 +749,94 @@ void main() {
     expect(history.recorded, hasLength(1));
     expect(await container.read(recentDownloadsProvider.future), hasLength(1));
   });
+
+  // Bounded pumps, never pumpAndSettle: the detail screen keeps a perpetual
+  // animation (why _pumpDetail settles by hand), so waiting for quiescence with
+  // a delete toast in flight never returns.
+  group('Delete from device (J)', () {
+    testWidgets('is offered only for a wallpaper already downloaded', (
+      WidgetTester tester,
+    ) async {
+      await _pumpDetail(tester, _details());
+      await tester.pump();
+
+      expect(find.byKey(const Key('detail-delete')), findsNothing);
+    });
+
+    testWidgets('deletes a downloaded gallery file and retires its button', (
+      WidgetTester tester,
+    ) async {
+      final WallpaperDetails details = _details();
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[_recordFor(details.wallpaper)],
+      );
+      final FakeImageStore imageStore = FakeImageStore();
+      await _pumpDetail(
+        tester,
+        details,
+        history: history,
+        imageStore: imageStore,
+      );
+      await tester.pump();
+
+      expect(find.byKey(const Key('detail-delete')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('detail-delete')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      // Gallery on API 30+: the OS prompt (the fake) confirms, not tela.
+      expect(find.text('Delete from device?'), findsNothing);
+      expect(imageStore.deletedLocations, hasLength(1));
+      expect(history.recorded, isEmpty);
+      // The wallpaper is still browsable; only its download is gone, so the
+      // button that offered the delete retires itself.
+      expect(find.byKey(const Key('detail-delete')), findsNothing);
+    });
+
+    testWidgets('a files-tier delete asks first, and names the file', (
+      WidgetTester tester,
+    ) async {
+      final WallpaperDetails details = _details();
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[
+          _recordFor(details.wallpaper, tier: StorageTier.filesOutsideGallery),
+        ],
+      );
+      final FakeImageStore imageStore = FakeImageStore();
+      await _pumpDetail(
+        tester,
+        details,
+        history: history,
+        imageStore: imageStore,
+      );
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('detail-delete')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Delete from device?'), findsOneWidget);
+      expect(imageStore.deletedLocations, isEmpty);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(imageStore.deletedLocations, hasLength(1));
+      expect(history.recorded, isEmpty);
+    });
+  });
 }
+
+DownloadRecord _recordFor(
+  Wallpaper wallpaper, {
+  StorageTier tier = StorageTier.sharedGallery,
+}) => DownloadRecord(
+  wallpaper: wallpaper,
+  tier: tier,
+  location: Uri.parse('content://media/external/images/media/${wallpaper.id}'),
+  downloadedAt: DateTime.utc(2026, 7, 14),
+);
 
 /// The action-bar download glyph, scoped so the fullscreen viewer's own
 /// download button can never be the one that answers.
@@ -806,6 +894,7 @@ Future<void> _pumpDetail(
   FakeWallpaperApplier? applier,
   FakeExternalLink? externalLink,
   FakeFavoritesRepository? favorites,
+  FakeDownloadHistory? history,
   bool disableAnimations = false,
 }) async {
   await tester.pumpWidget(
@@ -824,7 +913,9 @@ Future<void> _pumpDetail(
           favorites ?? FakeFavoritesRepository(),
         ),
         // Downloading records where the file landed — the same database again.
-        downloadHistoryProvider.overrideWithValue(FakeDownloadHistory()),
+        downloadHistoryProvider.overrideWithValue(
+          history ?? FakeDownloadHistory(),
+        ),
         // The share button would otherwise reach the real method channel.
         wallpaperSharerProvider.overrideWithValue(
           sharer ?? FakeWallpaperSharer(),
