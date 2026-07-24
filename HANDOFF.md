@@ -1,22 +1,42 @@
 # tela handoff
 
-Updated: 2026-07-23
+Updated: 2026-07-24
 
-> **START HERE — K IS BUILT on branch `feat/k-pinned-destination` (off
-> `master`, `d7184ef`, 2026-07-23), NOT YET MERGED and NOT YET DEVICE-VERIFIED.**
-> The pinned "Keep sending here" destination + the batch chooser. `flutter
-> analyze` is clean and the Dart suite is **894** (was 877, +17 for K); the
-> Kotlin suite is untouched at **34**. The merge gate has **not** run yet — it
-> fires on the merge into `master`, which is still owed. **Nothing is pushed** —
-> `origin` has seen none of I, J's plan, or K.
+> **START HERE — K IS MERGED (`26ac8ba`, 2026-07-24) and DEVICE-VERIFIED.** The
+> merge gate ran both suites on the merge into `master` and reported **both
+> suites green** (Dart 894, Kotlin 34). **Nothing is pushed** — `origin` has seen
+> none of I, J's plan, or K.
 >
-> **What to do next, in order:** (1) put K on the tablet (`make deploy`) and walk
-> it — see the device-flags below. (2) Merge `feat/k-pinned-destination` into
-> `master` (the gate runs both suites then). Then **J** (the hard delete) is the
-> next build: it stays **parked** on its three questions and owes native/Kotlin
-> work — do not start it until the owner answers them.
+> **What to do next:** **J** (the hard delete) is the next build. It stays
+> **parked** on its three questions and owes native/Kotlin work — do not start it
+> until the owner answers them. Its section is below.
 >
-> **What K does** (its section is below *J*, marked BUILT):
+> **K's device walk (2026-07-24, tablet `192.168.50.151`).** Every path verified:
+> wholly-safe batch routes silently; a mixed (SFW+sketchy) batch opens the batch
+> chooser (heading "Download to", "Sketchy" warning, the tier intersection, the
+> "Keep sending here" switch); setting the pin from the batch chooser persists it;
+> a later chooser shows the active-pin line + **Stop** with the switch pre-on
+> (alongside I3's streak + "Always"); **Stop** clears the pin and downloads
+> nothing; and with a pin set, a plain single download — including the grid
+> quick-sheet on a *sketchy* wallpaper, which normally opens the chooser — routes
+> silently. Re-pinning replaces the prior pin. The NSFW-invariant fallback
+> (Gallery pin + explicit → private) was left to the domain unit tests: Explicit
+> needs an API key the tablet has none of.
+>
+> **Flags resolved on the walk (owner chose "merge now"; #2/#3 are optional
+> follow-up branches, not blockers):**
+> - **#1 — wholly-safe batch routes silently.** Confirmed working; kept as-is
+>   (symmetry with the single safe tap).
+> - **#2 — batch heading "Download to"** carries no wallpaper count, so a 9-item
+>   batch looks like a single-item chooser. Open follow-up: a count in the heading
+>   (`chooseBatchDownloadDestination` in `download_destination_dialog.dart`).
+> - **#3 — "Always" vs pin.** In the detail chooser with a streak, **three**
+>   pin-flavoured affordances stack: the 📌 active-pin line, the 📌 "Always save
+>   Sketchy here" button, and the "Keep sending here" switch — two concepts (K2's
+>   purity-flat pin, I3's per-bucket default) sharing the pin icon. Genuinely
+>   busy; a fold is the open design call.
+>
+> **What K did** (its section is below *J*, marked BUILT):
 > - **The pin** — purity-flat, persisted until changed, opt-in via a "Keep
 >   sending here" switch in the chooser. It governs *every* download, single tap
 >   and batch, so downloading needs no long-press or Settings trip. Precedence
@@ -31,18 +51,6 @@ Updated: 2026-07-23
 >   the *intersection* of tiers legal for every selected purity, so one explicit
 >   item takes Gallery off the table for all. A pin makes the batch skip the
 >   chooser entirely.
->
-> **Flag on the device (owner calls these):**
-> - A **wholly-safe batch routes silently** rather than asking (the build's one
->   judgement call, chosen for symmetry with the single safe tap — safe already
->   never asks). If an all-safe batch *should* also offer a chooser, that is a
->   one-line change in `_resolveBatchDestination`.
-> - The batch heading is still the plain **"Download to"** with the strongest
->   purity's warning line; the handoff floated a neutral "N wallpapers" heading —
->   decide on the tablet.
-> - Whether the per-download **"Always"** (I3, per-bucket default) now feels
->   redundant beside the **pin** (purity-flat, above it). They coexist under the
->   precedence above; the owner may want them folded.
 >
 > The record of the merged I follows, newest first.
 >
@@ -2325,10 +2333,12 @@ Do not guess them into a build.
 3. **Scope of the first cut** — history + private library tiles only, or the
    detail screen as well?
 
-## K — a pinned download destination + a batch chooser, scoped 2026-07-23; BUILT (`d7184ef`), device pass + merge owed
+## K — a pinned download destination + a batch chooser, scoped 2026-07-23; MERGED (`26ac8ba`, 2026-07-24), device-verified
 
-> **BUILT on `feat/k-pinned-destination` (`d7184ef`), not yet merged, not yet
-> device-verified.** What shipped, against the slices below:
+> **MERGED into `master` (`26ac8ba`, 2026-07-24), both suites green on the gate,
+> device-verified on the tablet.** The walk record and the flag findings (#2 batch
+> heading, #3 Always-vs-pin) live in the START-HERE block at the top. What shipped,
+> against the slices below:
 >
 > - **K2 (the pin).** `SettingsRepository.load/setPinnedDownloadTier` (nullable;
 >   unreadable → null = no pin), Drift row `downloads.pinned` — a `sharedGallery`
