@@ -6,6 +6,7 @@ import 'package:tela/core/ui/wallpaper_marks_scope.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
@@ -43,8 +44,8 @@ void main() {
       late Set<WallpaperMark> neither;
       await tester.pumpWidget(
         WallpaperMarksScope(
-          favorited: const <String>{'fav'},
-          downloaded: const <String>{'fav', 'dl'},
+          favorited: const <String>{'wallhaven-fav'},
+          downloaded: const <String>{'wallhaven-fav', 'wallhaven-dl'},
           child: Builder(
             builder: (BuildContext context) {
               Set<WallpaperMark> ask(String id) => WallpaperMarksScope.marksFor(
@@ -52,9 +53,9 @@ void main() {
                 id,
                 WallpaperMark.values.toSet(),
               );
-              both = ask('fav');
-              onlyDownloaded = ask('dl');
-              neither = ask('stranger');
+              both = ask('wallhaven-fav');
+              onlyDownloaded = ask('wallhaven-dl');
+              neither = ask('wallhaven-stranger');
               return const SizedBox.shrink();
             },
           ),
@@ -77,13 +78,13 @@ void main() {
       late Set<WallpaperMark> narrowed;
       await tester.pumpWidget(
         WallpaperMarksScope(
-          favorited: const <String>{'x'},
-          downloaded: const <String>{'x'},
+          favorited: const <String>{'wallhaven-x'},
+          downloaded: const <String>{'wallhaven-x'},
           child: Builder(
             builder: (BuildContext context) {
               narrowed = WallpaperMarksScope.marksFor(
                 context,
-                'x',
+                'wallhaven-x',
                 const <WallpaperMark>{WallpaperMark.downloaded},
               );
               return const SizedBox.shrink();
@@ -134,7 +135,7 @@ void main() {
     ) async {
       await tester.pumpWidget(
         _host(
-          favorited: const <String>{'fav'},
+          favorited: const <String>{'wallhaven-fav'},
           downloaded: const <String>{},
           children: <Widget>[
             WallpaperTile(wallpaper: _wallpaper('fav')),
@@ -152,8 +153,8 @@ void main() {
     ) async {
       await tester.pumpWidget(
         _host(
-          favorited: const <String>{'both'},
-          downloaded: const <String>{'both'},
+          favorited: const <String>{'wallhaven-both'},
+          downloaded: const <String>{'wallhaven-both'},
           children: <Widget>[WallpaperTile(wallpaper: _wallpaper('both'))],
         ),
       );
@@ -172,8 +173,8 @@ void main() {
     ) async {
       await tester.pumpWidget(
         _host(
-          favorited: const <String>{'x'},
-          downloaded: const <String>{'x'},
+          favorited: const <String>{'wallhaven-x'},
+          downloaded: const <String>{'wallhaven-x'},
           children: <Widget>[
             WallpaperTile(
               wallpaper: _wallpaper('x'),
@@ -192,7 +193,7 @@ void main() {
       // and lands on top of the full preview. This is the test that catches it.
       await tester.pumpWidget(
         _host(
-          favorited: const <String>{'fav'},
+          favorited: const <String>{'wallhaven-fav'},
           downloaded: const <String>{},
           children: <Widget>[
             WallpaperTile(wallpaper: _wallpaper('fav'), heroTag: 'tag-fav'),
@@ -242,6 +243,7 @@ Widget _host({
 
 Wallpaper _wallpaper(String id) => Wallpaper(
   id: id,
+  source: SourceId.wallhaven,
   fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',

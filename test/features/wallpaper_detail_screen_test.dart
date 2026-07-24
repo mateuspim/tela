@@ -17,10 +17,12 @@ import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/favorites/favorite_button.dart';
 
@@ -103,7 +105,12 @@ void main() {
     await tester.tap(find.byKey(const Key('immersive-viewer-favorite')));
     await tester.pumpAndSettle();
 
-    expect(await favorites.isFavorite('e7jvjd'), isTrue);
+    expect(
+      await favorites.isFavorite(
+        const WallpaperRef(SourceId.wallhaven, 'e7jvjd'),
+      ),
+      isTrue,
+    );
     // And the heart fills without leaving the viewer, which is the half a
     // repository assertion cannot show.
     expect(find.bySemanticsLabel('Remove from favorites'), findsOneWidget);
@@ -966,6 +973,7 @@ Future<void> _pumpDetail(
 WallpaperDetails _details({Purity purity = Purity.sfw}) {
   final Wallpaper wallpaper = Wallpaper(
     id: 'e7jvjd',
+    source: SourceId.wallhaven,
     fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
@@ -998,6 +1006,7 @@ WallpaperDetails _details({Purity purity = Purity.sfw}) {
 WallpaperDetails _otherDetails() {
   const Wallpaper wallpaper = Wallpaper(
     id: 'bbb222',
+    source: SourceId.wallhaven,
     fullImageUrl: 'https://w.wallhaven.cc/full/bb/wallhaven-bbb222.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/bb/bbb222.jpg',
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/bb/bbb222.jpg',

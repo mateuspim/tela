@@ -38,7 +38,7 @@ class DeleteDownloads {
     );
     for (final DownloadRecord record in records) {
       if (deleted.contains(record.location)) {
-        await _history.forget(record.wallpaper.id);
+        await _history.forget(record.wallpaper.ref);
       }
     }
     return deleted.length;

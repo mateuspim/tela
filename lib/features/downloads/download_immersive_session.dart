@@ -103,7 +103,7 @@ class _DownloadImmersiveSessionState
         systemUi: widget.systemUi,
         heroTag: shelfHeroTag(
           session.identity,
-          record.wallpaper.id,
+          record.wallpaper.ref.key,
           session.selectedIndex,
         ),
         barActions: <Widget>[_setButton(l10n)],
@@ -122,7 +122,7 @@ class _DownloadImmersiveSessionState
   bool _isMissing(DownloadRecord record) {
     final Set<String> missing =
         ref.watch(missingDownloadsProvider).value ?? const <String>{};
-    return missing.contains(record.wallpaper.id);
+    return missing.contains(record.wallpaper.ref.key);
   }
 
   Widget _setButton(AppLocalizations l10n) {
@@ -170,7 +170,7 @@ class _DownloadImmersiveSessionState
     final bool deleted = await confirmAndDeleteDownload(
       context: context,
       ref: ref,
-      id: record.wallpaper.id,
+      wallpaper: record.wallpaper.ref,
       tier: record.tier,
       location: record.location,
     );
@@ -250,7 +250,7 @@ class _DownloadImmersiveSessionState
       ),
     );
     if (!(confirmed ?? false) || !mounted) return;
-    await ref.read(downloadHistoryProvider).forget(record.wallpaper.id);
+    await ref.read(downloadHistoryProvider).forget(record.wallpaper.ref);
     ref.invalidate(recentDownloadsProvider);
     if (mounted) await Navigator.of(context).maybePop();
   }

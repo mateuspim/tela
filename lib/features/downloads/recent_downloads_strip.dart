@@ -82,13 +82,14 @@ class RecentDownloadsStrip extends ConsumerWidget {
   /// It carries no missing-file badge, unlike the history grid's tile. That
   /// badge marks the difference between setting a file you have and paying for
   /// a re-download, and the history screen is where that difference changes
-  /// what a tap costs — the same argument `downloadedIdsProvider` already makes
+  /// what a tap costs — the same argument `downloadedKeysProvider` already
+  /// makes
   /// for not subtracting `missingDownloadsProvider` on the browse wall.
   Widget _tile(BuildContext context, List<DownloadRecord> recent, int index) {
     final DownloadRecord download = recent[index];
     final gestures = selectableTileGestures(
       context: context,
-      wallpaperId: download.wallpaper.id,
+      wallpaperKey: download.wallpaper.ref.key,
       onOpen: () => openDownloadViewer(context, recent, index),
       // The same rule every library shelf follows, and the reason this strip
       // needed it: without a long press here the only way to batch your
@@ -102,7 +103,7 @@ class RecentDownloadsStrip extends ConsumerWidget {
         wallpaper: download.wallpaper,
         heroTag: shelfHeroTag(
           'library-downloads',
-          download.wallpaper.id,
+          download.wallpaper.ref.key,
           index,
         ),
         onTap: gestures.onTap,

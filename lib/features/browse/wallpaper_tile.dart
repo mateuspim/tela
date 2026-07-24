@@ -57,7 +57,7 @@ class WallpaperTile extends StatelessWidget {
       image: true,
       button: onTap != null,
       selected: WallpaperSelectionScope.isActive(context)
-          ? WallpaperSelectionScope.isSelected(context, wallpaper.id)
+          ? WallpaperSelectionScope.isSelected(context, wallpaper.ref.key)
           : null,
       label: AppLocalizations.of(context).detailPreviewLabel(wallpaper.id),
       child: Material(
@@ -104,7 +104,7 @@ class WallpaperTile extends StatelessWidget {
 
     final Set<WallpaperMark> marks = WallpaperMarksScope.marksFor(
       context,
-      wallpaper.id,
+      wallpaper.ref.key,
       visibleMarks,
     );
     final Widget? selection = _selectionOverlay(context);
@@ -136,7 +136,7 @@ class WallpaperTile extends StatelessWidget {
   /// collide on a history tile that is missing, marked and ticked at once.
   Widget? _selectionOverlay(BuildContext context) {
     if (!WallpaperSelectionScope.isActive(context)) return null;
-    return WallpaperSelectionOverlay(wallpaperId: wallpaper.id);
+    return WallpaperSelectionOverlay(wallpaperKey: wallpaper.ref.key);
   }
 
   /// The marks as one pill, in the corner the missing badge leaves free.

@@ -3,6 +3,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/image_store.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
@@ -32,23 +33,28 @@ final FutureProvider<List<PrivateImage>> privateImagesProvider =
       return images.privateImages();
     });
 
-/// The ids of every favorited wallpaper, as a set a tile can ask in O(1).
+/// The keys of every favorited wallpaper, as a set a tile can ask in O(1).
+///
+/// [WallpaperRef.key], not a bare id: the library is the one place wallpapers
+/// from different sources sit side by side, so an id alone could mark the
+/// wrong tile the day two sources issue the same one.
 ///
 /// Set-shaped on purpose. A tile mark needs "is this one of mine?" for every
 /// tile on a wall that can run to hundreds, and [isFavoriteProvider] answers
-/// that one id at a time — a family watch and a SQLite round trip per tile.
-/// This is the shape [missingDownloadsProvider] already uses for the same job.
+/// that one wallpaper at a time — a family watch and a SQLite round trip per
+/// tile. This is the shape [missingDownloadsProvider] already uses for the
+/// same job.
 ///
 /// Derived from [favoritesProvider] rather than querying separately, so the
 /// invalidation `refreshFavorites` already performs re-marks every shelf; a
 /// third provider queried in parallel would need remembering there.
-final FutureProvider<Set<String>> favoritedIdsProvider =
+final FutureProvider<Set<String>> favoritedKeysProvider =
     FutureProvider<Set<String>>((Ref ref) async {
       final List<Wallpaper> saved = await ref.watch(favoritesProvider.future);
-      return <String>{for (final Wallpaper w in saved) w.id};
+      return <String>{for (final Wallpaper w in saved) w.ref.key};
     });
 
-/// The ids of every wallpaper tela has downloaded, as a set a tile can ask.
+/// The keys of every wallpaper tela has downloaded, as a set a tile can ask.
 ///
 /// Two things it deliberately does not do:
 ///
@@ -62,12 +68,14 @@ final FutureProvider<Set<String>> favoritedIdsProvider =
 ///   excludes explicit downloads, and that exclusion is load-bearing here: a
 ///   mark fed from [privateImagesProvider] would let the browse grid — a screen
 ///   with no app-lock in front of it — disclose what is in the private library.
-final FutureProvider<Set<String>> downloadedIdsProvider =
+final FutureProvider<Set<String>> downloadedKeysProvider =
     FutureProvider<Set<String>>((Ref ref) async {
       final List<DownloadRecord> recent = await ref.watch(
         recentDownloadsProvider.future,
       );
-      return <String>{for (final DownloadRecord d in recent) d.wallpaper.id};
+      return <String>{
+        for (final DownloadRecord d in recent) d.wallpaper.ref.key,
+      };
     });
 
 /// Re-reads every listing a finished download may have changed.
@@ -81,7 +89,7 @@ final FutureProvider<Set<String>> downloadedIdsProvider =
 /// they were first opened. It presented as "the download did not save", and
 /// only a relaunch made it appear (found on hardware, 2026-07-14).
 ///
-/// [downloadedIdsProvider] needs no mention: it derives from
+/// [downloadedKeysProvider] needs no mention: it derives from
 /// [recentDownloadsProvider], so the tile marks re-draw for free.
 void refreshDownloads(WidgetRef ref) {
   ref
@@ -89,7 +97,7 @@ void refreshDownloads(WidgetRef ref) {
     ..invalidate(privateImagesProvider);
 }
 
-/// The ids in [recentDownloadsProvider] whose downloaded file is gone.
+/// The keys in [recentDownloadsProvider] whose downloaded file is gone.
 ///
 /// The history calls itself "wallpapers already on this device", and for a row
 /// whose file was deleted from Photos or a file manager that is simply untrue —
@@ -112,6 +120,6 @@ final FutureProvider<Set<String>> missingDownloadsProvider =
       );
       return <String>{
         for (int i = 0; i < recent.length; i++)
-          if (!readable[i]) recent[i].wallpaper.id,
+          if (!readable[i]) recent[i].wallpaper.ref.key,
       };
     });

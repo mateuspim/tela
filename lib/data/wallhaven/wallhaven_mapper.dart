@@ -3,6 +3,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
@@ -123,6 +124,7 @@ abstract final class WallhavenMapper {
     }
     return Wallpaper(
       id: _readString(raw, 'id'),
+      source: SourceId.wallhaven,
       fullImageUrl: _readString(raw, 'path'),
       thumbSmallUrl: _readThumb(raw, 'small'),
       thumbLargeUrl: _readThumb(raw, 'large'),

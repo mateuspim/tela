@@ -35,11 +35,11 @@ class WallpaperSelection extends ChangeNotifier {
   /// How many wallpapers are ticked.
   int get count => _ids.length;
 
-  /// The ticked ids, in no meaningful order.
+  /// The ticked keys, in no meaningful order.
   Set<String> get ids => Set<String>.unmodifiable(_ids);
 
-  /// Whether [wallpaperId] is ticked.
-  bool contains(String wallpaperId) => _ids.contains(wallpaperId);
+  /// Whether [wallpaperKey] is ticked.
+  bool contains(String wallpaperKey) => _ids.contains(wallpaperKey);
 
   /// Enters selection mode with nothing ticked — what a *Select* button does.
   void enter() {
@@ -48,25 +48,25 @@ class WallpaperSelection extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Enters selection mode with [wallpaperId] as the only tick.
-  void selectOnly(String wallpaperId) {
+  /// Enters selection mode with [wallpaperKey] as the only tick.
+  void selectOnly(String wallpaperKey) {
     _active = true;
     _ids
       ..clear()
-      ..add(wallpaperId);
+      ..add(wallpaperKey);
     notifyListeners();
   }
 
-  /// Ticks or unticks [wallpaperId], staying in the mode either way.
-  void toggle(String wallpaperId) {
-    if (!_ids.remove(wallpaperId)) _ids.add(wallpaperId);
+  /// Ticks or unticks [wallpaperKey], staying in the mode either way.
+  void toggle(String wallpaperKey) {
+    if (!_ids.remove(wallpaperKey)) _ids.add(wallpaperKey);
     notifyListeners();
   }
 
-  /// Ticks every id in [wallpaperIds] that is not already ticked.
-  void addAll(Iterable<String> wallpaperIds) {
+  /// Ticks every key in [wallpaperKeys] that is not already ticked.
+  void addAll(Iterable<String> wallpaperKeys) {
     final int before = _ids.length;
-    _ids.addAll(wallpaperIds);
+    _ids.addAll(wallpaperKeys);
     if (_ids.length != before) notifyListeners();
   }
 
@@ -108,9 +108,9 @@ class WallpaperSelectionScope extends InheritedNotifier<WallpaperSelection> {
   /// Whether a shelf above [context] is in selection mode.
   static bool isActive(BuildContext context) => of(context)?.isActive ?? false;
 
-  /// Whether [wallpaperId] is ticked on the shelf above [context].
-  static bool isSelected(BuildContext context, String wallpaperId) {
-    return of(context)?.contains(wallpaperId) ?? false;
+  /// Whether [wallpaperKey] is ticked on the shelf above [context].
+  static bool isSelected(BuildContext context, String wallpaperKey) {
+    return of(context)?.contains(wallpaperKey) ?? false;
   }
 }
 
@@ -128,11 +128,11 @@ class WallpaperSelectionScope extends InheritedNotifier<WallpaperSelection> {
 /// sits in the top-left corner, the one the missing badge (top-right) and C4's
 /// marks (bottom-right) leave free.
 class WallpaperSelectionOverlay extends StatelessWidget {
-  /// Draws the selection state of [wallpaperId] on the shelf above it.
-  const WallpaperSelectionOverlay({required this.wallpaperId, super.key});
+  /// Draws the selection state of [wallpaperKey] on the shelf above it.
+  const WallpaperSelectionOverlay({required this.wallpaperKey, super.key});
 
   /// The id whose ticked state this overlay reflects.
-  final String wallpaperId;
+  final String wallpaperKey;
 
   @override
   Widget build(BuildContext context) {
@@ -141,7 +141,7 @@ class WallpaperSelectionOverlay extends StatelessWidget {
     }
     final bool selected = WallpaperSelectionScope.isSelected(
       context,
-      wallpaperId,
+      wallpaperKey,
     );
     final ColorScheme colors = Theme.of(context).colorScheme;
     return Stack(
@@ -193,14 +193,14 @@ class WallpaperSelectionOverlay extends StatelessWidget {
 /// ```dart
 /// final gestures = selectableTileGestures(
 ///   context: context,
-///   wallpaperId: wallpaper.id,
+///   wallpaperKey: wallpaper.ref.key,
 ///   onOpen: () => _openDetail(context, loaded, index),
 /// );
 /// WallpaperTile(onTap: gestures.onTap, onLongPress: gestures.onLongPress);
 /// ```
 ({VoidCallback onTap, VoidCallback? onLongPress}) selectableTileGestures({
   required BuildContext context,
-  required String wallpaperId,
+  required String wallpaperKey,
   required VoidCallback onOpen,
   VoidCallback? onLongPress,
   bool longPressSelects = false,
@@ -211,10 +211,10 @@ class WallpaperSelectionOverlay extends StatelessWidget {
     return (
       onTap: onOpen,
       onLongPress: longPressSelects
-          ? () => selection.selectOnly(wallpaperId)
+          ? () => selection.selectOnly(wallpaperKey)
           : onLongPress,
     );
   }
-  void tick() => selection.toggle(wallpaperId);
+  void tick() => selection.toggle(wallpaperKey);
   return (onTap: tick, onLongPress: tick);
 }

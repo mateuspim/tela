@@ -9,9 +9,11 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 
@@ -140,8 +142,18 @@ void main() {
     await tester.tap(find.byIcon(Icons.favorite_border));
     await _settle(tester);
 
-    expect(await favorites.isFavorite('e7jvjd'), isTrue);
-    expect(await favorites.isFavorite('7j1mzo'), isTrue);
+    expect(
+      await favorites.isFavorite(
+        const WallpaperRef(SourceId.wallhaven, 'e7jvjd'),
+      ),
+      isTrue,
+    );
+    expect(
+      await favorites.isFavorite(
+        const WallpaperRef(SourceId.wallhaven, '7j1mzo'),
+      ),
+      isTrue,
+    );
     expect(find.text('2 added to favorites'), findsOneWidget);
     // The batch is over, so the shelf is a shelf again.
     expect(find.text('2 selected'), findsNothing);
@@ -165,8 +177,18 @@ void main() {
     await tester.tap(find.byIcon(Icons.favorite_border));
     await _settle(tester);
 
-    expect(await favorites.isFavorite('e7jvjd'), isTrue);
-    expect(await favorites.isFavorite('7j1mzo'), isTrue);
+    expect(
+      await favorites.isFavorite(
+        const WallpaperRef(SourceId.wallhaven, 'e7jvjd'),
+      ),
+      isTrue,
+    );
+    expect(
+      await favorites.isFavorite(
+        const WallpaperRef(SourceId.wallhaven, '7j1mzo'),
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('a batch download reports the ones that failed', (
@@ -361,6 +383,7 @@ Future<void> _settle(WidgetTester tester) async {
 
 Wallpaper _wallpaper(String id, {Purity purity = Purity.sfw}) => Wallpaper(
   id: id,
+  source: SourceId.wallhaven,
   fullImageUrl: 'https://w.wallhaven.cc/full/xx/wallhaven-$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/xx/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/xx/$id.jpg',

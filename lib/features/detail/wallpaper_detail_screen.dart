@@ -330,7 +330,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     final bool deleted = await confirmAndDeleteDownload(
       context: context,
       ref: ref,
-      id: record.wallpaper.id,
+      wallpaper: record.wallpaper.ref,
       tier: record.tier,
       location: record.location,
     );
@@ -591,7 +591,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       wallpaper: wallpaper,
       fillLetterbox: true,
       heroTag: index == _gallery.selectedIndex
-          ? shelfHeroTag(_gallery.identity, wallpaper.id, index)
+          ? shelfHeroTag(_gallery.identity, wallpaper.ref.key, index)
           : null,
     );
   }

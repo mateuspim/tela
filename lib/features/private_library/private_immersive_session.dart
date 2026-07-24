@@ -222,7 +222,8 @@ class _PrivateImmersiveSessionState
     final AppLocalizations l10n = AppLocalizations.of(context);
     try {
       await ref.read(deleteDownloadProvider)(
-        id: image.id,
+        // An app-private image has no history row, by design.
+        ref: null,
         tier: StorageTier.appPrivate,
         location: image.location,
       );

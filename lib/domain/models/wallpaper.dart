@@ -2,6 +2,8 @@ import 'package:meta/meta.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 /// A wallpaper as the app knows it — the domain shape, never the API's.
 ///
@@ -21,6 +23,7 @@ class Wallpaper {
   /// [fullImageUrl] cannot be applied, which is the whole point of the app.
   const Wallpaper({
     required this.id,
+    required this.source,
     required this.fullImageUrl,
     required this.thumbSmallUrl,
     required this.thumbLargeUrl,
@@ -32,8 +35,12 @@ class Wallpaper {
     required this.colors,
   });
 
-  /// Wallhaven's id, e.g. `"e7jvjd"`. Unique across the site.
+  /// The id the source issued, e.g. `"e7jvjd"`. Unique within [source] only —
+  /// anything that *stores* or *ticks* a wallpaper keys on [ref].
   final String id;
+
+  /// Which site it came from. Two sources can issue the same [id].
+  final SourceId source;
 
   /// Full-resolution image — what we download and what we set as the wallpaper.
   final String fullImageUrl;
@@ -66,6 +73,10 @@ class Wallpaper {
   /// Dominant colours as hex strings (`"#660000"`), in Wallhaven's order.
   final List<String> colors;
 
+  /// What identifies this wallpaper across sources — the storage key, the
+  /// selection key, and the stem of its downloaded file name.
+  WallpaperRef get ref => WallpaperRef(source, id);
+
   /// True when this image may not be shown or stored without the NSFW rules.
   ///
   /// Storage adapters branch on this, never on a UI flag — CLAUDE.md's hard
@@ -81,11 +92,11 @@ class Wallpaper {
   Uri get pageUrl => Uri.parse('https://wallhaven.cc/w/$id');
 
   @override
-  bool operator ==(Object other) => other is Wallpaper && other.id == id;
+  bool operator ==(Object other) => other is Wallpaper && other.ref == ref;
 
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode => ref.hashCode;
 
   @override
-  String toString() => 'Wallpaper($id, $resolution, ${purity.name})';
+  String toString() => 'Wallpaper($ref, $resolution, ${purity.name})';
 }

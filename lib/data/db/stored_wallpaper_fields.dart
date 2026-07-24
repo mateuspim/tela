@@ -1,5 +1,6 @@
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 
 /// How the enum and list fields of a stored wallpaper are read back.
@@ -7,6 +8,18 @@ import 'package:tela/domain/models/storage_tier.dart';
 /// Shared by every table that keeps a whole wallpaper (favorites, downloads):
 /// the fail-safe rules below are the load-bearing part of the mapping, and a
 /// second copy of them is a second chance to get one of them wrong.
+
+/// Reads a stored source, treating an empty cell as Wallhaven.
+///
+/// Empty is the one value that has a meaning: a row written before schema v6
+/// predates the column entirely, and Wallhaven was the only source there was.
+/// Anything else is taken at face value rather than validated — a source id
+/// this build does not know is a wallpaper from a version that did, and losing
+/// the whole listing over it would be a worse answer than an unrenderable tile.
+SourceId storedSource(String stored) {
+  if (stored.isEmpty) return SourceId.wallhaven;
+  return SourceId(stored);
+}
 
 /// Reads a stored purity, treating an unrecognised one as [Purity.nsfw].
 ///

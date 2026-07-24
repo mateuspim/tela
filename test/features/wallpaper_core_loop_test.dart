@@ -7,6 +7,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
@@ -83,6 +84,7 @@ Future<void> _finishTransition(WidgetTester tester) async {
 
 Wallpaper _wallpaper() => const Wallpaper(
   id: 'e7jvjd',
+  source: SourceId.wallhaven,
   fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',

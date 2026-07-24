@@ -6,7 +6,9 @@ import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 void main() {
   late TelaDatabase db;
@@ -29,7 +31,7 @@ void main() {
   group('DriftFavoritesRepository', () {
     test('has no favorites before anything is saved', () async {
       expect(await favorites.favorites(), isEmpty);
-      expect(await favorites.isFavorite('e7jvjd'), isFalse);
+      expect(await favorites.isFavorite(_ref('e7jvjd')), isFalse);
     });
 
     test('round-trips every field a saved wallpaper needs', () async {
@@ -78,14 +80,14 @@ void main() {
     test('forgets a saved wallpaper', () async {
       await favorites.save(_wallpaper('e7jvjd'));
 
-      await favorites.forget('e7jvjd');
+      await favorites.forget(_ref('e7jvjd'));
 
-      expect(await favorites.isFavorite('e7jvjd'), isFalse);
+      expect(await favorites.isFavorite(_ref('e7jvjd')), isFalse);
       expect(await favorites.favorites(), isEmpty);
     });
 
     test('forgetting a wallpaper that was never saved is a no-op', () async {
-      await favorites.forget('never-there');
+      await favorites.forget(_ref('never-there'));
 
       expect(await favorites.favorites(), isEmpty);
     });
@@ -126,6 +128,7 @@ Wallpaper _wallpaper(
   List<String> colors = const <String>[],
 }) => Wallpaper(
   id: id,
+  source: SourceId.wallhaven,
   fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',
@@ -136,3 +139,5 @@ Wallpaper _wallpaper(
   category: Category.general,
   colors: colors,
 );
+
+WallpaperRef _ref(String id) => WallpaperRef(SourceId.wallhaven, id);

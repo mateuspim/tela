@@ -8,10 +8,15 @@ import 'package:tela/data/downloads/drift_download_history.dart';
 import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/data/tag_blocklist/drift_tag_blocklist_repository.dart';
+import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/download_record.dart';
+import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 /// The v1 schema, exactly as it shipped: settings only, no favorites.
 ///
@@ -102,6 +107,36 @@ void _createV3(File file) {
     ..dispose();
 }
 
+/// The v5 schema, exactly as it shipped: every table, and no `source` column.
+///
+/// This is the state a device that installed the last release is really in, so
+/// it is the upgrade v6 has to survive. The app-private download is dropped
+/// rather than carried, because a real v5 device already had it purged — v6's
+/// upgrade never re-runs that purge.
+void _createV5(File file) {
+  _createV3(file);
+  sqlite3.open(file.path)
+    ..execute(
+      'CREATE TABLE blocked_tags ( '
+      'id INTEGER NOT NULL, name TEXT NOT NULL, '
+      'blocked_at INTEGER NOT NULL, PRIMARY KEY (id));',
+    )
+    ..execute("DELETE FROM downloaded_wallpapers WHERE tier = 'appPrivate';")
+    ..execute('PRAGMA user_version = 5;')
+    ..dispose();
+}
+
+/// Reads one column of one table straight out of SQLite.
+List<String> _rawColumn(File file, String table, String column) {
+  final Database db = sqlite3.open(file.path);
+  final ResultSet rows = db.select('SELECT $column FROM $table;');
+  final List<String> values = rows
+      .map((Row row) => row[column] as String)
+      .toList(growable: false);
+  db.dispose();
+  return values;
+}
+
 /// Reads the download rows straight out of SQLite, past the adapter's filter.
 ///
 /// The filter would hide a purged row and an unpurged one alike, so proving
@@ -130,7 +165,7 @@ void main() {
 
   group('TelaDatabase migration', () {
     test(
-      'v1 → v5 adds every new table without touching saved settings',
+      'v1 → v6 adds every new table without touching saved settings',
       () async {
         // The device carries a real API key and real download destinations. A
         // migration that recreates the database instead of altering it presents
@@ -166,7 +201,7 @@ void main() {
       },
     );
 
-    test('v2 → v5 adds downloads and blocked tags, keeps favorites', () async {
+    test('v2 → v6 adds downloads and blocked tags, keeps favorites', () async {
       _createV2(file);
 
       final TelaDatabase db = TelaDatabase(NativeDatabase(file));
@@ -189,7 +224,7 @@ void main() {
       await db.close();
     });
 
-    test('v3 → v5 adds blocked tags and keeps the download history', () async {
+    test('v3 → v6 adds blocked tags and keeps the download history', () async {
       _createV3(file);
 
       final TelaDatabase db = TelaDatabase(NativeDatabase(file));
@@ -207,7 +242,7 @@ void main() {
       await db.close();
     });
 
-    test('v3 → v5 purges the app-private rows, not just hides them', () async {
+    test('v3 → v6 purges the app-private rows, not just hides them', () async {
       _createV3(file);
       expect(
         _rawDownloadIds(file),
@@ -225,6 +260,62 @@ void main() {
       expect(_rawDownloadIds(file), <String>['e7jvjd']);
     });
 
+    test('v5 → v6 keeps every row and attributes it to Wallhaven', () async {
+      // Wallhaven was the only source there was, so the backfill is a fact
+      // about the past, not a guess. A migration that dropped these rows would
+      // present as "the app forgot my favorites" — the one thing an offline
+      // library exists to survive.
+      _createV5(file);
+
+      final TelaDatabase db = TelaDatabase(NativeDatabase(file));
+
+      final List<Wallpaper> favorites = await DriftFavoritesRepository(
+        db,
+      ).favorites();
+      expect(favorites.single.ref, _wallhaven('e7jvjd'));
+      final List<DownloadRecord> downloads = await DriftDownloadHistory(
+        db,
+      ).downloads();
+      expect(downloads.single.wallpaper.ref, _wallhaven('e7jvjd'));
+      // Asked of the row itself, not of the mapper: a `storedSource` that
+      // defaults to Wallhaven would answer the same on an unwritten column.
+      expect(await db.hasFavorite(_wallhaven('e7jvjd')), isTrue);
+
+      await db.close();
+
+      expect(_rawColumn(file, 'favorite_wallpapers', 'source'), <String>[
+        'wallhaven',
+      ]);
+      expect(_rawColumn(file, 'downloaded_wallpapers', 'source'), <String>[
+        'wallhaven',
+      ]);
+    });
+
+    test('v6 keys on the source too, so two sites cannot collide', () async {
+      // The reason the column exists: Konachan #12345 and yande.re #12345 are
+      // two wallpapers, and the old id-only key would have kept one.
+      _createV5(file);
+      final TelaDatabase db = TelaDatabase(NativeDatabase(file));
+      final DriftFavoritesRepository favorites = DriftFavoritesRepository(db);
+
+      await favorites.save(_wallpaperFrom(const SourceId('konachan'), '12345'));
+      await favorites.save(_wallpaperFrom(const SourceId('yandere'), '12345'));
+
+      expect(await favorites.favorites(), hasLength(3));
+      await favorites.forget(
+        const WallpaperRef(SourceId('konachan'), '12345'),
+      );
+      expect(
+        (await favorites.favorites()).map((Wallpaper w) => w.ref),
+        containsAll(<WallpaperRef>[
+          const WallpaperRef(SourceId('yandere'), '12345'),
+          _wallhaven('e7jvjd'),
+        ]),
+      );
+
+      await db.close();
+    });
+
     test('a fresh install creates every table', () async {
       final TelaDatabase db = TelaDatabase(NativeDatabase(file));
 
@@ -240,3 +331,21 @@ void main() {
     });
   });
 }
+
+/// A Wallhaven ref, the shape every pre-v6 row is expected to carry.
+WallpaperRef _wallhaven(String id) => WallpaperRef(SourceId.wallhaven, id);
+
+/// A wallpaper from [source], for the collision the composite key prevents.
+Wallpaper _wallpaperFrom(SourceId source, String id) => Wallpaper(
+  id: id,
+  source: source,
+  fullImageUrl: 'https://example.test/full/$id.jpg',
+  thumbSmallUrl: 'https://example.test/small/$id.jpg',
+  thumbLargeUrl: 'https://example.test/lg/$id.jpg',
+  thumbOriginalUrl: 'https://example.test/orig/$id.jpg',
+  resolution: const Resolution(1080, 2400),
+  fileSizeBytes: 1024,
+  purity: Purity.sfw,
+  category: Category.anime,
+  colors: const <String>[],
+);

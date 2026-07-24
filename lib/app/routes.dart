@@ -7,7 +7,7 @@ abstract final class TelaRoutes {
   static const String browseName = 'browse';
 
   /// Detail path, including the Wallhaven id parameter.
-  static const String detailPath = '/wallpaper/:wallpaperId';
+  static const String detailPath = '/wallpaper/:wallpaperKey';
 
   /// Detail route name.
   static const String detailName = 'wallpaper-detail';

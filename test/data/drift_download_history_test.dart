@@ -6,8 +6,10 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 void main() {
   late TelaDatabase db;
@@ -162,7 +164,7 @@ void main() {
       await _record(history, _wallpaper('e7jvjd'));
       await _record(history, _wallpaper('7j1mzo'));
 
-      await history.forget('e7jvjd');
+      await history.forget(_ref('e7jvjd'));
 
       expect(
         (await history.downloads()).map((DownloadRecord d) => d.wallpaper.id),
@@ -173,7 +175,7 @@ void main() {
     test('forgetting a row that is not there is not an error', () async {
       await _record(history, _wallpaper('e7jvjd'));
 
-      await history.forget('nothere');
+      await history.forget(_ref('nothere'));
 
       expect(await history.downloads(), hasLength(1));
     });
@@ -214,6 +216,7 @@ Wallpaper _wallpaper(
 }) {
   return Wallpaper(
     id: id,
+    source: SourceId.wallhaven,
     fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-$id.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/$id.jpg',
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/$id.jpg',
@@ -225,3 +228,5 @@ Wallpaper _wallpaper(
     colors: colors,
   );
 }
+
+WallpaperRef _ref(String id) => WallpaperRef(SourceId.wallhaven, id);

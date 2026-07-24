@@ -78,14 +78,14 @@ class FavoritesGrid extends ConsumerWidget {
   Widget _tile(BuildContext context, List<Wallpaper> saved, int index) {
     final gestures = selectableTileGestures(
       context: context,
-      wallpaperId: saved[index].id,
+      wallpaperKey: saved[index].ref.key,
       onOpen: () => _openDetail(context, saved, index),
       // This shelf has no other use for the gesture, so it enters selection.
       longPressSelects: true,
     );
     return WallpaperTile(
       wallpaper: saved[index],
-      heroTag: shelfHeroTag('favorites', saved[index].id, index),
+      heroTag: shelfHeroTag('favorites', saved[index].ref.key, index),
       onTap: gestures.onTap,
       onLongPress: gestures.onLongPress,
       // Every tile here is favorited, so that mark would be decoration.
@@ -119,7 +119,7 @@ class FavoritesGrid extends ConsumerWidget {
       await context.pushNamed<void>(
         TelaRoutes.detailName,
         pathParameters: <String, String>{
-          'wallpaperId': session.selectedItem.id,
+          'wallpaperKey': session.selectedItem.ref.key,
         },
         // No origin filters: a curated shelf has no browse query to inherit, so
         // a tag followed from here falls back to Browse's own (see B1).

@@ -8,9 +8,11 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
@@ -87,7 +89,12 @@ void main() {
     await tester.tap(find.text('Add to favorites'));
     await _settle(tester);
 
-    expect(await favorites.isFavorite('e7jvjd'), isTrue);
+    expect(
+      await favorites.isFavorite(
+        const WallpaperRef(SourceId.wallhaven, 'e7jvjd'),
+      ),
+      isTrue,
+    );
     // And the tile says so straight away. The mark is the only feedback this
     // action gives — it shows no snackbar — so a stale wall would leave the
     // user unable to tell whether the press landed.
@@ -268,6 +275,7 @@ Future<void> _settle(WidgetTester tester) async {
 
 Wallpaper _wallpaper({Purity purity = Purity.sfw}) => Wallpaper(
   id: 'e7jvjd',
+  source: SourceId.wallhaven,
   fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',

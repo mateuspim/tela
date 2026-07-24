@@ -1,6 +1,7 @@
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_history.dart';
 
 /// In-memory [DownloadHistory], newest download first.
@@ -24,8 +25,8 @@ class FakeDownloadHistory implements DownloadHistory {
   Future<List<DownloadRecord>> downloads() async => _recorded.reversed.toList();
 
   @override
-  Future<void> forget(String id) async {
-    _recorded.removeWhere((DownloadRecord d) => d.wallpaper.id == id);
+  Future<void> forget(WallpaperRef ref) async {
+    _recorded.removeWhere((DownloadRecord d) => d.wallpaper.ref == ref);
   }
 
   @override

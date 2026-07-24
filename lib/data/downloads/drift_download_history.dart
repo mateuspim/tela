@@ -5,6 +5,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_history.dart';
 
 /// Stores the download history as whole wallpaper rows in tela's database.
@@ -65,7 +66,7 @@ class DriftDownloadHistory implements DownloadHistory {
   /// Drops the row and nothing else — the downloaded file is not tela's to
   /// delete from here. See [DownloadHistory.forget].
   @override
-  Future<void> forget(String id) => _db.deleteDownload(id);
+  Future<void> forget(WallpaperRef ref) => _db.deleteDownload(ref);
 
   DownloadedWallpapersCompanion _toRow(
     Wallpaper wallpaper,
@@ -73,6 +74,7 @@ class DriftDownloadHistory implements DownloadHistory {
     Uri location,
   ) {
     return DownloadedWallpapersCompanion.insert(
+      source: wallpaper.source.value,
       id: wallpaper.id,
       fullImageUrl: wallpaper.fullImageUrl,
       thumbSmallUrl: wallpaper.thumbSmallUrl,
@@ -102,6 +104,7 @@ class DriftDownloadHistory implements DownloadHistory {
   Wallpaper _toWallpaper(DownloadRow row) {
     return Wallpaper(
       id: row.id,
+      source: storedSource(row.source),
       fullImageUrl: row.fullImageUrl,
       thumbSmallUrl: row.thumbSmallUrl,
       thumbLargeUrl: row.thumbLargeUrl,

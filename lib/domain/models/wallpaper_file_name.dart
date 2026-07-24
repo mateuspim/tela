@@ -2,10 +2,14 @@ import 'package:tela/domain/models/wallpaper.dart';
 
 /// The file name to suggest when handing [wallpaper]'s image to another app.
 ///
-/// Taken from the image URL rather than composed, so the extension matches the
-/// real type (`.jpg` vs `.png`) instead of guessing. Falls back to the id when
-/// the URL carries no usable last segment, which keeps the name unique and
-/// still recognisably Wallhaven's.
+/// Composed from [Wallpaper.ref] — `wallhaven-e7jvjd`, `konachan-406484` — with
+/// the extension taken from the image URL rather than guessed, so the real type
+/// (`.png` vs `.jpg`) reaches the receiving app, which believes it.
+///
+/// Composed rather than lifted whole from the URL's last segment, even though
+/// Wallhaven's own files are already named exactly this: a booru names its
+/// files after the *tags* on the image, which would put an explicit tag list in
+/// a file name tela hands to another app.
 ///
 /// Shared by every hand-off that names a file — the share sheet and the system
 /// wallpaper editor — because they want the identical name and a second copy
@@ -15,9 +19,15 @@ import 'package:tela/domain/models/wallpaper.dart';
 /// wallpaperFileName(wallpaper); // 'wallhaven-e7jvjd.jpg'
 /// ```
 String wallpaperFileName(Wallpaper wallpaper) {
-  final Uri image = Uri.parse(wallpaper.fullImageUrl);
-  if (image.pathSegments.isEmpty || image.pathSegments.last.isEmpty) {
-    return 'wallhaven-${wallpaper.id}';
-  }
-  return image.pathSegments.last;
+  return '${wallpaper.ref.key}${_extensionOf(wallpaper.fullImageUrl)}';
+}
+
+/// The `.ext` of [url]'s last path segment, or an empty string when it has
+/// none — an extensionless name beats a wrong one.
+String _extensionOf(String url) {
+  final List<String> segments = Uri.parse(url).pathSegments;
+  final String last = segments.isEmpty ? '' : segments.last;
+  final int dot = last.lastIndexOf('.');
+  if (dot <= 0) return '';
+  return last.substring(dot);
 }

@@ -114,7 +114,7 @@ class _WallpaperImmersiveSessionState
     // reason `FavoriteButton` gives: the answer is one local SQLite round trip
     // away, and a flicker of progress reads worse than an outline that fills.
     final bool isFavorite =
-        ref.watch(isFavoriteProvider(wallpaper.id)).value ?? false;
+        ref.watch(isFavoriteProvider(wallpaper.ref)).value ?? false;
     return <Widget>[
       _action(
         key: const Key('immersive-viewer-favorite'),

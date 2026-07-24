@@ -148,12 +148,13 @@ Future<List<DownloadRecord>> _recordsFor(
   final List<DownloadRecord> recent = await ref.read(
     recentDownloadsProvider.future,
   );
-  final Map<String, DownloadRecord> byId = <String, DownloadRecord>{
-    for (final DownloadRecord record in recent) record.wallpaper.id: record,
+  final Map<String, DownloadRecord> byKey = <String, DownloadRecord>{
+    for (final DownloadRecord record in recent)
+      record.wallpaper.ref.key: record,
   };
   return <DownloadRecord>[
     for (final Wallpaper wallpaper in wallpapers)
-      if (byId[wallpaper.id] case final DownloadRecord record) record,
+      if (byKey[wallpaper.ref.key] case final DownloadRecord record) record,
   ];
 }
 
@@ -195,7 +196,7 @@ Future<void> _favoriteAll(WidgetRef ref, List<Wallpaper> wallpapers) async {
 Future<void> _unfavoriteAll(WidgetRef ref, List<Wallpaper> wallpapers) async {
   final FavoritesRepository favorites = ref.read(favoritesRepositoryProvider);
   for (final Wallpaper wallpaper in wallpapers) {
-    await favorites.forget(wallpaper.id);
+    await favorites.forget(wallpaper.ref);
   }
   _refreshFavorites(ref, wallpapers);
 }
@@ -206,7 +207,7 @@ Future<void> _unfavoriteAll(WidgetRef ref, List<Wallpaper> wallpapers) async {
 /// hearted detail screen behind an unfavorited grid.
 void _refreshFavorites(WidgetRef ref, List<Wallpaper> wallpapers) {
   for (final Wallpaper wallpaper in wallpapers) {
-    refreshFavorites(ref, wallpaper.id);
+    refreshFavorites(ref, wallpaper.ref);
   }
 }
 
@@ -317,7 +318,7 @@ void _sayDownloadOutcome(
 
 Future<void> _forgetAll(WidgetRef ref, List<Wallpaper> wallpapers) async {
   for (final Wallpaper wallpaper in wallpapers) {
-    await ref.read(downloadHistoryProvider).forget(wallpaper.id);
+    await ref.read(downloadHistoryProvider).forget(wallpaper.ref);
   }
   ref.invalidate(recentDownloadsProvider);
 }
