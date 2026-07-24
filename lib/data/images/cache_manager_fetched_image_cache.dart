@@ -61,10 +61,29 @@ class CacheManagerFetchedImageCache implements FetchedImageCache {
     return total;
   }
 
+  /// Empties the buckets' indexes **and** deletes the folders under them.
+  ///
+  /// `emptyCache()` alone is not a clear: it walks the store's rows and deletes
+  /// the file each one points at, so a file whose row was evicted or lost is
+  /// invisible to it — and fully visible to [sizeInBytes], which `stat`s the
+  /// folder. Orphans therefore accumulate, get reported, and cannot be cleared:
+  /// the tablet sat at **3.6 GB before and after** a "cleared" toast
+  /// (2026-07-24), against a 600-thumbnail + 10-original budget. Same shape as
+  /// the legacy bucket — a bucket nobody's store tracks is a bucket that never
+  /// shrinks.
+  ///
+  /// Order is load-bearing: rows first, through the live sqflite connection,
+  /// then the folder. `IOFileSystem.createFile` re-creates a missing bucket
+  /// directory on the next write, so deleting it costs nothing but the bytes.
   @override
   Future<void> clear() async {
     for (final CacheManager bucket in _buckets) {
       await bucket.emptyCache();
+    }
+    final Directory temp = await _temporaryDirectory();
+    for (final String key in _bucketKeys) {
+      final Directory folder = Directory('${temp.path}/$key');
+      if (folder.existsSync()) await folder.delete(recursive: true);
     }
     await purgeLegacyCache();
   }

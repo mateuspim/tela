@@ -59,6 +59,57 @@ void main() {
     expect(full.emptied, isTrue, reason: 'both buckets, or the tile lies');
   });
 
+  test('clearing takes files no store row points at', () async {
+    // The bug the tablet found (2026-07-24): "Image cache cleared." toasted and
+    // the tile stayed at 3.6 GB. `emptyCache()` only deletes what the store
+    // still has rows for, and `sizeInBytes` counts every byte on disk — so an
+    // orphan is reported forever and clears never. _FakeBucket stands in for a
+    // store that knows about none of these files, which is the whole point.
+    _writeBytes('${temp.path}/thumbs/orphan.jpg', 4000);
+    _writeBytes('${temp.path}/full/ab/cd/orphan.jpg', 9000);
+    final CacheManagerFetchedImageCache cache = _cacheWith(
+      <CacheManager>[_FakeBucket(), _FakeBucket()],
+      temp,
+      support,
+    );
+
+    await cache.clear();
+
+    expect(await cache.sizeInBytes(), 0, reason: 'a cleared cache is empty');
+  });
+
+  test(
+    'clearing a bucket nothing was ever written to is not an error',
+    () async {
+      final CacheManagerFetchedImageCache cache = _cacheWith(
+        <CacheManager>[_FakeBucket()],
+        temp,
+        support,
+      );
+
+      await cache.clear();
+
+      expect(await cache.sizeInBytes(), 0);
+    },
+  );
+
+  test('clearing leaves the legacy bucket gone too', () async {
+    _writeBytes('${temp.path}/thumbs/orphan.jpg', 400);
+    _writeBytes('${temp.path}/libCachedImageData/old.jpg', 5000);
+    _writeBytes('${support.path}/libCachedImageData.db', 2500);
+    final CacheManagerFetchedImageCache cache = _cacheWith(
+      <CacheManager>[_FakeBucket()],
+      temp,
+      support,
+    );
+
+    await cache.clear();
+
+    expect(Directory('${temp.path}/libCachedImageData').existsSync(), isFalse);
+    expect(File('${support.path}/libCachedImageData.db').existsSync(), isFalse);
+    expect(await cache.sizeInBytes(), 0);
+  });
+
   group('the bucket an older tela left behind', () {
     // Nothing reads or writes libCachedImageData any more, so it never evicts:
     // whatever it grew to — ~2GB on the tablet — it keeps forever. Found on the
@@ -121,8 +172,16 @@ void main() {
 }
 
 CacheManagerFetchedImageCache _cache(Directory temp, Directory support) {
+  return _cacheWith(const <CacheManager>[], temp, support);
+}
+
+CacheManagerFetchedImageCache _cacheWith(
+  List<CacheManager> buckets,
+  Directory temp,
+  Directory support,
+) {
   return CacheManagerFetchedImageCache(
-    buckets: const <CacheManager>[],
+    buckets: buckets,
     bucketKeys: const <String>['thumbs', 'full'],
     temporaryDirectory: () async => temp,
     supportDirectory: () async => support,
