@@ -41,9 +41,12 @@ Updated: 2026-07-23
 > native work (see the section for why `forget()` can't already do this).
 >
 > **Next:** merge `feat/download-destination` into `master` through the gate
-> (`merge.ff false`), then **J** — the hard delete (owner request, planned
-> below; needs its three open questions answered and owes native/Kotlin work).
-> Older START-HERE for H follows.
+> (`merge.ff false`). Two features are planned and **parked on their open
+> questions** (owner will answer before either is built): **J** — the hard
+> delete (needs native/Kotlin work); **K** — a destination chooser for
+> multi-select downloads *and* a session-sticky destination ("send everything
+> here this session, whatever its purity"). Both sections are below, each ending
+> in parked questions. Older START-HERE for H follows.
 >
 > **What to do next:** open a branch off `master` and build **I — the download
 > destination decision** (its own section, just below H). The owner settled its
@@ -2274,7 +2277,10 @@ row. The hard delete has to reach both, and the file deletion differs by tier:
    "is this downloaded, and where" lookup the history/private-library screens
    already have for free — decide when building.
 
-### Open questions for the owner (do not guess)
+### Open questions for the owner — PARKED 2026-07-23, do not build J until answered
+
+The owner chose (2026-07-23) to park J behind these rather than answer them yet.
+Do not guess them into a build.
 
 1. **One button or two?** Keep *Remove from history* (list-only) as a separate,
    softer action, or replace it entirely with the hard delete? The docstring
@@ -2284,6 +2290,107 @@ row. The hard delete has to reach both, and the file deletion differs by tier:
    double confirm, or suppress tela's for that tier and lean on the OS one?
 3. **Scope of the first cut** — history + private library tiles only, or the
    detail screen as well?
+
+## K — where a batch (and a session) of downloads go, scoped 2026-07-23; NOT STARTED
+
+Two linked complaints from the owner, 2026-07-23:
+
+1. **Multi-select download offers no destination choice.** `_downloadAll` in
+   `lib/app/wallpaper_batch_actions.dart` routes every ticked wallpaper to its
+   per-purity *configured* tier, silently — the batch equivalent of the gap I
+   just closed for single downloads. There is no batch chooser.
+2. **No session memory of "put everything here."** The I2 streak is per-bucket
+   and resets the moment a different tier is used, so downloading a run to the
+   private library and then one thing elsewhere "resets the count" — the app
+   never learns "for now, everything I download goes to Private, whatever its
+   purity." The owner wants to **pick a destination once and have it stick for
+   the session, independent of purity.**
+
+### Resolve first: "independent of purity" vs the NSFW invariant
+
+The only forbidden routing is **explicit → `sharedGallery`** (MediaStore). Both
+`filesOutsideGallery` and `appPrivate` are legal for *every* purity — so a
+session destination of Private or Files genuinely is purity-independent and has
+no conflict. The tension is only Gallery: if the session/batch destination is
+Gallery and the set includes an explicit wallpaper, that item cannot obey it.
+
+Recommended resolution: any batch/session chooser offers only the tiers legal
+for **all** purities present — the **intersection of `StorageSettings.choicesFor`
+over the selection** — so a mixed set containing an explicit wallpaper simply
+does not offer Gallery, and "one destination for all of them" stays literally
+true. This keeps the invariant in the domain (as it already is) rather than
+bolting on a per-item exception.
+
+### Slice K1 — the batch download gets a chooser
+
+- `_downloadAll` opens `chooseDownloadDestination` **once** before its loop, then
+  passes the chosen `tier:` to every `configuredDownloadProvider` call (the
+  param already exists and single downloads already use it).
+- Options = the intersection described above, not `choicesFor` of one wallpaper.
+  `chooseDownloadDestination` currently takes a single `purity`; K1 either adds a
+  batch entry point or teaches it to take a set of purities. Prefer a thin
+  `chooseBatchDownloadDestination(context, {required Set<Purity> purities})`
+  beside it, sharing the card widgets.
+- The purity line: show the strongest purity present (nsfw > sketchy > sfw), or a
+  neutral "N wallpapers" heading — decide on the device.
+- **No "Always" in the batch chooser.** The streak/Always affordance is a
+  per-item habit signal; a batch is a one-off bulk action, and persisting a
+  bucket default from it would be a surprise. The batch chooser is I1's dialog
+  minus the streak parts.
+
+### Slice K2 — a session destination
+
+A new **in-memory, not persisted** override — "for this session, send downloads
+here" — that supersedes per-purity routing until changed or the process ends,
+and is independent of purity (honouring the invariant via the intersection rule
+above: a session destination that some item can't take falls back to that item's
+configured tier, or is simply never offered while such an item is in scope).
+
+- **Where it lives:** a Riverpod `StateProvider<StorageTier?>` (or a small
+  notifier) in `app/`, next to the other download providers — *not* persisted
+  through `SettingsRepository`, because "session" means it dies with the process.
+  This is the deliberate difference from I3's *Always* (permanent, per-bucket)
+  and from the configured tier (persistent, per-bucket): the session override is
+  temporary and purity-flat.
+- **How it is set:** picking a destination in the batch chooser (K1) can seed it,
+  and/or a distinct "keep sending here this session" affordance. Decide (Q2).
+- **What it governs:** subsequent downloads — single *and* batch — route to the
+  session tier instead of the configured one, when the item's purity allows it.
+  The chooser, when a session override is active, shows it and a way to clear it
+  ("Sending everything here this session · Stop").
+- **Order of precedence** (write this down so it is not re-derived): a
+  per-download explicit pick (the chooser's card) > the session override > the
+  per-purity configured tier. The streak/Always feeds the *configured* tier, at
+  the bottom, unchanged.
+
+### Open questions for the owner — parked, do not guess
+
+1. **Session scope.** App-process lifetime (until relaunch or an explicit
+   change), or narrower — this one selection batch only, or "until you leave
+   Browse"? The owner's wording ("for that session… i dont want to download
+   anywhere else") leans app-process; confirm.
+2. **Auto-seed or opt-in.** Does picking a destination in the batch chooser
+   *automatically* become the session override, or is that a separate toggle so a
+   one-off batch elsewhere doesn't silently change where everything goes?
+3. **Does the session override govern the plain single tap too**, or only
+   batches? The owner's "independent of purity… anywhere else" implies it should
+   govern everything, which also means the single-tap download stops being
+   silent-to-configured while a session override is active — a real behaviour
+   change worth confirming.
+4. **Mixed selection + Gallery.** With the intersection rule, a selection
+   containing an explicit wallpaper never offers Gallery. Confirm that is
+   preferred over offering Gallery and quietly routing the explicit item to its
+   private tier.
+
+### Tests this will owe
+
+- Batch chooser offers only the intersection (all-safe → 3 tiers; any explicit →
+  no gallery); the chosen tier reaches every `configuredDownloadProvider` call.
+- Session override: set → subsequent single and batch downloads use it; an
+  explicit item under a Gallery session override falls back (or the case is
+  unreachable per Q4); cleared → routing returns to configured; not persisted
+  (a fresh container has none).
+- Precedence: explicit pick > session > configured.
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 
