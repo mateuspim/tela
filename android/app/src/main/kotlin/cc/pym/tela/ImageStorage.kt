@@ -259,6 +259,53 @@ class ImageStorage(private val context: Context) {
     }
 
     /**
+     * Hard-deletes a downloaded file from its [tier] — the file, not an index.
+     *
+     * The gallery tier on API 30+ is deliberately **not** here: it needs an
+     * Activity to launch `MediaStore.createDeleteRequest`, which MainActivity
+     * owns. This handles the app-private file, the SAF document, and the direct
+     * gallery delete the older API (29) still permits. appPrivate reuses the
+     * guarded [deletePrivate] by recovering the id from the file's own name.
+     */
+    fun deleteDownload(tier: String, location: Uri): Map<String, Any> {
+        return when (tier) {
+            "appPrivate" -> deletePrivateAt(location)
+            "filesOutsideGallery" -> deleteDocumentAt(location)
+            "sharedGallery" -> deleteGalleryDirectly(location)
+            else -> failure("unavailable")
+        }
+    }
+
+    /** Recovers the id from the private file's name so [deletePrivate]'s listing
+     *  guard still stands — a location is a `file:` URI tela itself wrote. */
+    private fun deletePrivateAt(location: Uri): Map<String, Any> {
+        val id = location.lastPathSegment?.let(::idOf) ?: return failure("unavailable")
+        val result = deletePrivate(id)
+        return if (result["success"] == true) deleted(location) else result
+    }
+
+    /** Deletes the SAF document tela created under the user's granted tree. */
+    private fun deleteDocumentAt(location: Uri): Map<String, Any> {
+        val removed = try {
+            DocumentsContract.deleteDocument(context.contentResolver, location)
+        } catch (_: Exception) {
+            false
+        }
+        return if (removed) deleted(location) else failure("unavailable")
+    }
+
+    /**
+     * Deletes a MediaStore image directly — API 29 only.
+     *
+     * On 30+ this throws `RecoverableSecurityException` and the caller never
+     * routes here; MainActivity launches the system delete request instead.
+     */
+    private fun deleteGalleryDirectly(location: Uri): Map<String, Any> {
+        val removed = context.contentResolver.delete(location, null, null)
+        return if (removed > 0) deleted(location) else failure("unavailable")
+    }
+
+    /**
      * Whether the file at [location] can still be opened.
      *
      * Opens it rather than asking whether it exists: a MediaStore row can
@@ -440,6 +487,17 @@ class ImageStorage(private val context: Context) {
     private fun success(location: Uri): Map<String, Any> = mapOf(
         "success" to true,
         "location" to location.toString(),
+    )
+
+    /**
+     * A completed hard delete, reporting the location that went.
+     *
+     * The `deleted` list is the shape the single and bulk deletes share, so Dart
+     * reads one contract: a single delete is the one-item case of the batch one.
+     */
+    private fun deleted(location: Uri): Map<String, Any> = mapOf(
+        "success" to true,
+        "deleted" to listOf(location.toString()),
     )
 
     private fun failure(code: String): Map<String, Any> = mapOf(

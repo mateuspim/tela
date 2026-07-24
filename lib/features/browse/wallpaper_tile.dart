@@ -136,39 +136,7 @@ class WallpaperTile extends StatelessWidget {
   /// collide on a history tile that is missing, marked and ticked at once.
   Widget? _selectionOverlay(BuildContext context) {
     if (!WallpaperSelectionScope.isActive(context)) return null;
-    final bool selected = WallpaperSelectionScope.isSelected(
-      context,
-      wallpaper.id,
-    );
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    return Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        if (selected) ColoredBox(color: colors.primary.withValues(alpha: 0.28)),
-        Positioned(top: 6, left: 6, child: _tick(colors, selected)),
-      ],
-    );
-  }
-
-  Widget _tick(ColorScheme colors, bool selected) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        // The same 0.82 the marks pill uses, and for the same reason: legible
-        // over a wallpaper of any luminance.
-        color: selected
-            ? colors.primary
-            : colors.surface.withValues(alpha: .82),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(2),
-        child: Icon(
-          selected ? Icons.check : Icons.radio_button_unchecked,
-          size: 16,
-          color: selected ? colors.onPrimary : colors.onSurfaceVariant,
-        ),
-      ),
-    );
+    return WallpaperSelectionOverlay(wallpaperId: wallpaper.id);
   }
 
   /// The marks as one pill, in the corner the missing badge leaves free.

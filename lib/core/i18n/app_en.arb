@@ -1096,6 +1096,36 @@
     "description": "Confirms forgetting a download-history row. Deliberately not 'Delete', which would name the wrong object."
   },
 
+  "downloadDeleteMenu": "Delete from device",
+  "@downloadDeleteMenu": {
+    "description": "The hard-delete action (J), beside 'Remove from history'. Names the file, not the list — the opposite of downloadHistoryForgetMenu."
+  },
+
+  "downloadDeleteTitle": "Delete from device?",
+  "@downloadDeleteTitle": {
+    "description": "Title of the confirmation for the hard delete of one downloaded wallpaper."
+  },
+
+  "downloadDeleteBody": "This deletes the file from your device and removes it from your history. This cannot be undone.",
+  "@downloadDeleteBody": {
+    "description": "The hard delete's confirmation. Honest about scope: unlike 'Remove from history', this really does delete the file. Shown for the tiers tela can delete without an OS prompt; the gallery tier on Android 30+ leans on the system's own prompt instead."
+  },
+
+  "downloadDelete": "Delete",
+  "@downloadDelete": {
+    "description": "Confirms the hard delete of a downloaded wallpaper. Names the file being deleted, unlike downloadHistoryForget's 'Remove'."
+  },
+
+  "downloadDeleteDone": "Wallpaper deleted.",
+  "@downloadDeleteDone": {
+    "description": "Toast after a downloaded wallpaper's file is deleted from the device."
+  },
+
+  "downloadDeleteFailure": "Couldn't delete this wallpaper.",
+  "@downloadDeleteFailure": {
+    "description": "Toast when the hard delete failed and the file is still on the device."
+  },
+
   "downloadHistorySetAgain": "Set wallpaper {wallpaperId} again",
   "@downloadHistorySetAgain": {
     "description": "Accessibility label for one tile in the download history. Tapping it re-applies the downloaded file.",
@@ -1502,6 +1532,52 @@
     "description": "Confirms a batch of rows was dropped from the download history.",
     "placeholders": {
       "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "batchDeleteTitle": "{count, plural, =1{Delete from device?} other{Delete {count} from device?}}",
+  "@batchDeleteTitle": {
+    "description": "Confirmation title before hard-deleting several downloads at once.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "batchDeleteBody": "{count, plural, =1{This deletes the file from your device and removes it from your history. This cannot be undone.} other{This deletes the {count} files from your device and removes them from your history. This cannot be undone.}}",
+  "@batchDeleteBody": {
+    "description": "Confirmation body before a batch hard delete, honest that the files are deleted (unlike batchForgetBody).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "batchDeleteDone": "{count, plural, =1{Wallpaper deleted} other{{count} wallpapers deleted}}",
+  "@batchDeleteDone": {
+    "description": "Confirms a batch of downloads was deleted from the device.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "batchDeletePartial": "Deleted {done} of {total} — {failed} kept",
+  "@batchDeletePartial": {
+    "description": "Reports a batch hard delete where some were not deleted — a declined system prompt or a failure.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "failed": {
         "type": "int"
       }
     }

@@ -177,6 +177,72 @@ void main() {
       expect(find.byType(WallpaperTile), findsOneWidget);
     });
 
+    testWidgets('a batch delete says it deletes files, not rows', (
+      WidgetTester tester,
+    ) async {
+      // The batch's two destructive actions sit side by side on one shelf, and
+      // the only thing telling them apart before the tap lands is the sentence
+      // — so it is pinned, exactly as the single forget's is above.
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[_download('e7jvjd'), _download('7j1mzo')],
+      );
+      await _pump(tester, history);
+
+      await _deleteSelected(tester);
+
+      expect(find.text('Delete from device?'), findsOneWidget);
+      expect(
+        find.textContaining('deletes the file from your device'),
+        findsOneWidget,
+      );
+      expect(history.recorded, hasLength(2));
+    });
+
+    testWidgets('a confirmed batch delete removes the files and the rows', (
+      WidgetTester tester,
+    ) async {
+      final FakeImageStore imageStore = FakeImageStore();
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[_download('e7jvjd'), _download('7j1mzo')],
+      );
+      await _pump(tester, history, imageStore: imageStore);
+
+      await _deleteSelected(tester, count: 2);
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+
+      // One batch, not one call per file: that is what keeps the gallery tier
+      // to a single system prompt.
+      expect(imageStore.batchSizes, <int>[2]);
+      expect(history.recorded, isEmpty);
+      expect(find.byType(WallpaperTile), findsNothing);
+      expect(find.text('2 wallpapers deleted'), findsOneWidget);
+    });
+
+    testWidgets('a partly declined batch reports the honest tally', (
+      WidgetTester tester,
+    ) async {
+      // A declined system prompt is not a failure, but it is not a deletion
+      // either — "deleted 1 of 2" is the only true thing to say.
+      final FakeImageStore imageStore = FakeImageStore(
+        declined: <Uri>{_locationOf('e7jvjd')},
+      );
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[_download('e7jvjd'), _download('7j1mzo')],
+      );
+      await _pump(tester, history, imageStore: imageStore);
+
+      await _deleteSelected(tester, count: 2);
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Deleted 1 of 2'), findsOneWidget);
+      expect(
+        history.recorded.map((DownloadRecord d) => d.wallpaper.id),
+        <String>['e7jvjd'],
+      );
+    });
+
     testWidgets('returns to the same scrolled grid after the viewer', (
       WidgetTester tester,
     ) async {
@@ -355,5 +421,21 @@ Future<void> _forgetSelected(WidgetTester tester) async {
   await tester.longPress(find.byType(WallpaperTile).first);
   await tester.pumpAndSettle();
   await tester.tap(find.byIcon(Icons.playlist_remove));
+  await tester.pumpAndSettle();
+}
+
+/// Ticks the [count] newest tiles and taps *Delete from device*, stopping at
+/// the confirmation for the caller to answer.
+///
+/// The hard delete's sibling of [_forgetSelected]: same walk, other action, and
+/// it takes a count because the batch's whole point is more than one row.
+Future<void> _deleteSelected(WidgetTester tester, {int count = 1}) async {
+  await tester.longPress(find.byType(WallpaperTile).first);
+  await tester.pumpAndSettle();
+  for (int index = 1; index < count; index++) {
+    await tester.tap(find.byType(WallpaperTile).at(index));
+    await tester.pumpAndSettle();
+  }
+  await tester.tap(find.byIcon(Icons.delete_outline));
   await tester.pumpAndSettle();
 }

@@ -6,11 +6,13 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
 
 import '../fakes/fake_app_lock.dart';
+import '../fakes/fake_download_history.dart';
 import '../fakes/fake_image_store.dart';
 import '../fakes/fake_screen_guard.dart';
 import '../fakes/fake_settings_repository.dart';
@@ -186,6 +188,31 @@ void main() {
       expect(find.textContaining('Nothing here'), findsOneWidget);
     });
 
+    testWidgets('a ticked private tile shows the selection it is in', (
+      WidgetTester tester,
+    ) async {
+      // The bug this pins: the private grid drew its own tile and so never wore
+      // the wash-and-tick every other shelf has, leaving a selection you could
+      // make but not see. One shared overlay now, drawn from one id.
+      final FakeImageStore store = FakeImageStore(
+        privateLibrary: <PrivateImage>[_image('e7jvjd'), _image('7j1mzo')],
+      );
+      await _pump(tester, store);
+
+      // The overlay sits on every tile from the start and draws nothing until
+      // the shelf is selecting, so it is the tick that says the mode changed.
+      expect(find.byType(WallpaperSelectionOverlay), findsNWidgets(2));
+      expect(find.byIcon(Icons.radio_button_unchecked), findsNothing);
+
+      await tester.longPress(find.bySemanticsLabel('Private wallpaper e7jvjd'));
+      await tester.pumpAndSettle();
+
+      // Every tile now shows a mark — the empty circles are what say the whole
+      // shelf changed mode — but only the ticked one draws a check.
+      expect(find.byIcon(Icons.check), findsOneWidget);
+      expect(find.byIcon(Icons.radio_button_unchecked), findsOneWidget);
+    });
+
     testWidgets('says so, without naming a path, when it cannot be read', (
       WidgetTester tester,
     ) async {
@@ -212,6 +239,7 @@ Future<void> _pump(
     ProviderScope(
       overrides: <Override>[
         imageStoreProvider.overrideWithValue(store),
+        downloadHistoryProvider.overrideWithValue(FakeDownloadHistory()),
         screenGuardProvider.overrideWithValue(guard ?? FakeScreenGuard()),
         appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
         settingsRepositoryProvider.overrideWithValue(

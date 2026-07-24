@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:tela/domain/models/download_deletion.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
@@ -10,8 +11,12 @@ import 'package:tela/domain/models/stored_image.dart';
 import 'package:tela/domain/ports/image_store.dart';
 
 /// Signature of tela's native image-storage method.
+///
+/// Arguments are `Map<String, Object?>`, not `Map<String, String>`: the bulk
+/// delete sends a list of {tier, location} maps, which the method channel
+/// carries but a string-only map cannot type.
 typedef InvokeImageStoreMethod =
-    Future<Object?> Function(String method, Map<String, String> arguments);
+    Future<Object?> Function(String method, Map<String, Object?> arguments);
 
 /// [ImageStore] backed by tela's Android Storage Access Framework adapter.
 ///
@@ -63,22 +68,83 @@ class MethodChannelImageStore implements ImageStore {
   }
 
   @override
-  Future<void> deletePrivateImage(String id) async {
+  Future<DownloadDeletion> deleteDownload({
+    required StorageTier tier,
+    required Uri location,
+  }) async {
     try {
       final Object? raw = await _invokeMethod(
-        'deletePrivateImage',
+        'deleteDownload',
         <String, String>{
-          'id': id,
+          'tier': tier.name,
+          'location': location.toString(),
         },
       );
-      if (raw is Map<Object?, Object?> && raw['success'] == true) return;
-      final Object? code = raw is Map<Object?, Object?>
-          ? raw['errorCode']
-          : null;
-      throw ImageStoreFailure(_problemFor(code));
+      // One item in, so a non-empty result means it went; an empty one is the
+      // user declining the gallery prompt, never a failure (that throws below).
+      return _deletedLocationsFrom(raw).isNotEmpty
+          ? DownloadDeletion.deleted
+          : DownloadDeletion.declined;
     } on PlatformException catch (error) {
       throw ImageStoreFailure(_problemFor(error.code));
     }
+  }
+
+  @override
+  Future<Set<Uri>> deleteDownloads(
+    List<({StorageTier tier, Uri location})> targets,
+  ) async {
+    if (targets.isEmpty) return const <Uri>{};
+    try {
+      final Object? raw = await _invokeMethod(
+        'deleteDownloads',
+        <String, Object?>{
+          'items': <Map<String, String>>[
+            for (final ({StorageTier tier, Uri location}) target in targets)
+              <String, String>{
+                'tier': target.tier.name,
+                'location': target.location.toString(),
+              },
+          ],
+        },
+      );
+      return _deletedLocationsFrom(raw);
+    } on PlatformException catch (error) {
+      throw ImageStoreFailure(_problemFor(error.code));
+    }
+  }
+
+  @override
+  Future<bool> galleryDeleteConfirmedBySystem() async {
+    try {
+      final Object? raw = await _invokeMethod(
+        'galleryDeleteConfirmedBySystem',
+        const <String, String>{},
+      );
+      return raw is Map<Object?, Object?> && raw['confirmed'] == true;
+    } on PlatformException {
+      // The safe guess keeps tela's own confirmation on: worst case is one
+      // extra tap, never a silent delete.
+      return false;
+    }
+  }
+
+  /// The locations the native side reports it deleted, as a set.
+  ///
+  /// Both the single and the bulk delete answer the same shape — a `deleted`
+  /// list — so a single delete is just the one-or-zero-item case of the bulk
+  /// one. A refused delete (`success:false`) throws instead.
+  Set<Uri> _deletedLocationsFrom(Object? raw) {
+    if (raw is Map<Object?, Object?> && raw['success'] == true) {
+      final Object? deleted = raw['deleted'];
+      if (deleted is! List<Object?>) return const <Uri>{};
+      return <Uri>{
+        for (final Object? entry in deleted)
+          if (entry is String) Uri.parse(entry),
+      };
+    }
+    final Object? code = raw is Map<Object?, Object?> ? raw['errorCode'] : null;
+    throw ImageStoreFailure(_problemFor(code));
   }
 
   /// Answers false for every way a file can fail to open, and never throws.
@@ -158,7 +224,7 @@ class MethodChannelImageStore implements ImageStore {
 
   static Future<Object?> _invokeNativeMethod(
     String method,
-    Map<String, String> arguments,
+    Map<String, Object?> arguments,
   ) {
     return _channel.invokeMethod<Object?>(method, arguments);
   }

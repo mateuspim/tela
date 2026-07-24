@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 /// Which wallpapers the user has ticked on one shelf, and whether the shelf is
 /// selecting at all.
@@ -111,6 +111,67 @@ class WallpaperSelectionScope extends InheritedNotifier<WallpaperSelection> {
   /// Whether [wallpaperId] is ticked on the shelf above [context].
   static bool isSelected(BuildContext context, String wallpaperId) {
     return of(context)?.contains(wallpaperId) ?? false;
+  }
+}
+
+/// The wash-and-tick a selectable tile wears while its shelf is selecting.
+///
+/// Extracted so every shelf shows selection identically: `WallpaperTile` (the
+/// browse, favorites and history shelves) and the private library's own tile
+/// both draw this one widget, rather than each owning a copy that could drift —
+/// which is exactly how the private tiles came to show no selection at all.
+///
+/// Draws nothing until the shelf above it is selecting, and an empty tick on
+/// the untouched tiles once it is: that empty circle is what says the shelf
+/// changed mode, so the first tap on an unticked tile does not read as "open".
+/// Place it in an expanded [Stack] over the thumbnail — it fills the tile, and
+/// sits in the top-left corner, the one the missing badge (top-right) and C4's
+/// marks (bottom-right) leave free.
+class WallpaperSelectionOverlay extends StatelessWidget {
+  /// Draws the selection state of [wallpaperId] on the shelf above it.
+  const WallpaperSelectionOverlay({required this.wallpaperId, super.key});
+
+  /// The id whose ticked state this overlay reflects.
+  final String wallpaperId;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!WallpaperSelectionScope.isActive(context)) {
+      return const SizedBox.shrink();
+    }
+    final bool selected = WallpaperSelectionScope.isSelected(
+      context,
+      wallpaperId,
+    );
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        if (selected) ColoredBox(color: colors.primary.withValues(alpha: 0.28)),
+        Positioned(top: 6, left: 6, child: _tick(colors, selected)),
+      ],
+    );
+  }
+
+  Widget _tick(ColorScheme colors, bool selected) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        // The same 0.82 the marks pill uses, and for the same reason: legible
+        // over a wallpaper of any luminance.
+        color: selected
+            ? colors.primary
+            : colors.surface.withValues(alpha: .82),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(2),
+        child: Icon(
+          selected ? Icons.check : Icons.radio_button_unchecked,
+          size: 16,
+          color: selected ? colors.onPrimary : colors.onSurfaceVariant,
+        ),
+      ),
+    );
   }
 }
 

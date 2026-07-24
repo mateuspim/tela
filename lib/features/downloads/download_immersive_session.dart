@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/delete_download_action.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
@@ -149,8 +150,33 @@ class _DownloadImmersiveSessionState
           onTap: _confirmForget,
           child: Text(l10n.downloadHistoryForgetMenu),
         ),
+        PopupMenuItem<void>(
+          key: const Key('download-viewer-delete'),
+          onTap: _deleteFromDevice,
+          child: Text(l10n.downloadDeleteMenu),
+        ),
       ],
     );
+  }
+
+  /// Hard-deletes the shown record — the file and its history row — then leaves
+  /// the viewer, since the record it was showing is gone.
+  ///
+  /// Sits beside "Remove from history" on purpose: the two are the whole point
+  /// of keeping both, one dropping the list row and one deleting the file. A
+  /// declined system prompt or a failure leaves the viewer where it was.
+  Future<void> _deleteFromDevice() async {
+    final DownloadRecord record = _record;
+    final bool deleted = await confirmAndDeleteDownload(
+      context: context,
+      ref: ref,
+      id: record.wallpaper.id,
+      tier: record.tier,
+      location: record.location,
+    );
+    if (!deleted || !mounted) return;
+    ref.invalidate(recentDownloadsProvider);
+    await Navigator.of(context).maybePop();
   }
 
   Widget _missingBadge(AppLocalizations l10n) {

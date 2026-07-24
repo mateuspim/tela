@@ -2,7 +2,122 @@
 
 Updated: 2026-07-24
 
-> **START HERE — K IS MERGED (`26ac8ba`, 2026-07-24) and DEVICE-VERIFIED.** The
+> **START HERE — J (the hard delete) IS BUILT on branch `feat/j-hard-delete`,
+> both suites green locally; device pass + merge owed.** `flutter analyze` clean,
+> **Dart 917** and **Kotlin 22 (ImageStorageTest) / suite BUILD SUCCESSFUL**.
+> Nothing committed yet — the work sits in the working tree on the branch.
+> Nothing pushed (`origin` still has none of I, J, or K).
+>
+> **The owner settled J's three parked questions (2026-07-24):**
+> 1. **One button or two? → Keep both.** *Remove from history* (soft, list-only)
+>    stays; *Delete from device* (the hard delete) is new, beside it.
+> 2. **The MediaStore OS dialog → suppress tela's for the gallery tier.** On API
+>    30+ the gallery delete leans on Android's own prompt (no confirm-on-confirm);
+>    every other case — the private and files tiers, and API 29 where a gallery
+>    delete is silent — keeps tela's dialog, since it is then the only warning.
+> 3. **Scope → full.** History, private library, **and** the detail screen.
+>
+> **What J built:**
+> - **Port + use case.** `ImageStore.deleteDownload({tier, location})` (routes to
+>   the private-file, SAF-document, or MediaStore delete) and
+>   `galleryDeleteConfirmedBySystem()` (true on API 30+). `deletePrivateImage` was
+>   *removed* from the port — there is now **one delete path**. `DeleteDownload`
+>   deletes the file then `forget`s the row (order is load-bearing; a declined OS
+>   prompt or a real failure leaves both alone; an already-gone file still forgets
+>   its dead row).
+> - **Native (Kotlin).** `ImageStorage.deleteDownload` (appPrivate reuses the
+>   guarded `deletePrivate` via the filename; SAF `deleteDocument`; API-29 direct
+>   gallery delete). `MainActivity` launches `MediaStore.createDeleteRequest` on
+>   API 30+ and reads the result in `onActivityResult` (parked one-at-a-time like
+>   the folder grant; `GALLERY_DELETE_REQUEST = 402`).
+> - **UI (three surfaces).** A shared `confirmAndDeleteDownload` (in `app/`) does
+>   confirm-unless-OS-will → delete → toast, returning whether it deleted. Wired
+>   into: the **download viewer overflow** ("Delete from device" beside "Remove
+>   from history"), the **detail screen** (a delete icon shown only when the
+>   wallpaper has a history row — explicit/private stay behind the private lock),
+>   and the **private library** (its existing batch + viewer deletes folded onto
+>   the one use case).
+> - **Bulk delete.** `ImageStore.deleteDownloads([{tier, location}])` +
+>   `DeleteDownloads`, and a *Delete from device* action on the history's
+>   multi-select shelf beside *Remove from history*. Not a loop over the single
+>   delete: `MediaStore.createDeleteRequest` takes a **collection**, so a whole
+>   gallery selection is **one** system prompt. Native and Dart therefore share
+>   one response shape — `{success, deleted: [locations]}` — and one parked
+>   `PendingGalleryDeletion`; a single delete is the one-item case of the batch.
+>   The tally is honest: a declined prompt leaves those files *and* their rows,
+>   and the shelf says "Deleted 1 of 2 — 1 kept".
+> - **Selection visibility fix.** The private grid drew its own tile and so never
+>   wore the wash-and-tick — a selection you could make but not see (owner-
+>   reported). `WallpaperSelectionOverlay` is now one widget in `core/ui`, drawn
+>   by both `WallpaperTile` and the private tile.
+>
+> **DEVICE-VERIFIED (2026-07-24, tablet `192.168.50.151`, SM-X730 / One UI).**
+> Robolectric can't emulate MediaStore/SAF, so the appPrivate delete is the only
+> tier under Kotlin unit test and everything below was walked by hand:
+> - **Batch gallery delete → ONE system prompt.** Two ticked rows produced a
+>   single *"Allow tela to delete 2 photos?"*. The whole point of
+>   `deleteDownloads` taking a collection, confirmed on the device.
+> - **Declined batch.** *Deny* → "Deleted 0 of 2 — 2 kept", all four tiles still
+>   there, both files still on disk. The honest tally is honest.
+> - **Accepted batch.** *Allow* → "2 wallpapers deleted", tiles gone,
+>   `Pictures/tela` went 12 → 10 files. Files **and** rows.
+> - **Single gallery delete (viewer overflow).** Both items present ("Remove from
+>   history" **and** "Delete from device"); the hard delete goes **straight** to
+>   Android's prompt — no tela dialog, no confirm-on-confirm. Q2 as designed.
+> - **Files tier (SAF, on the SD card).** tela's own *"Delete from device?"*
+>   dialog appears — the tier has no OS prompt, so this is the only warning.
+>   Confirming removed the file and its row.
+> - **Detail screen.** No delete icon before downloading; it appears the moment
+>   the download lands; deleting through it toasts and **retires the icon**.
+> - **`FLAG_SECURE`** still holds: `screencap` of the private library is blank.
+>
+> **The one thing still unwalked:** the private library's new selection tick.
+> The app lock wants a fingerprint, which a remote adb session cannot give, and
+> `FLAG_SECURE` blanks the screenshot anyway — so the owner has to eyeball it:
+> open Private library, long-press a tile, confirm ticked tiles now show a check
+> and the others an empty circle. It is under widget test
+> (`private_library_screen_test.dart`), just not under a human eye.
+>
+> **Note for whoever walks this again:** the device's SFW destination is pinned
+> to **Private library**, so an SFW download records **no** history row (correct
+> — nothing app-private is recorded). Switch it to Gallery in Settings first, and
+> switch it back after; this session left it as it found it.
+>
+> ---
+>
+> ### OPEN BUG — "Clear image cache" frees nothing (owner-reported, 2026-07-24)
+>
+> **What happens.** Tapping *Settings → Storage → Clear image cache* shows the
+> "Image cache cleared." toast, but the tile's own figure never moves: **3.6 GB
+> before, 3.6 GB after**. Not a stale-UI problem — it still reads 3.6 GB after
+> leaving Settings and coming back, which re-mounts the tile and re-runs the
+> autoDispose `cachedImageBytesProvider`. The bytes are really still there.
+>
+> **The likely cause** (strong hypothesis, not yet proven — the release build is
+> not debuggable, so the cache dir cannot be `ls`ed from adb). The two halves
+> disagree about what "the cache" is:
+> - `sizeInBytes()` **stats the folders** under the temp dir, so it counts every
+>   byte on disk.
+> - `clear()` calls `CacheManager.emptyCache()`, which deletes only the files
+>   `flutter_cache_manager` still **has store rows for**.
+>
+> Any file whose row was evicted or lost is invisible to `emptyCache()` and fully
+> visible to `sizeInBytes()` — so orphans accumulate, are reported, and cannot be
+> cleared. That is the same shape as the legacy-bucket problem already documented
+> on `legacyImageCacheKey`: a bucket nobody's store tracks is a bucket that never
+> shrinks. 3.6 GB against a 600-thumbnail + 10-original budget is itself the
+> evidence that most of what is down there is no longer tracked.
+>
+> **The likely fix.** Make `clear()` delete the bucket **folders** outright, the
+> way `purgeLegacyCache()` already deletes the legacy one, instead of trusting
+> `emptyCache()` — then re-create/reset the buckets. Needs a regression test that
+> puts an *untracked* file in a bucket folder and asserts `clear()` removes it;
+> the current tests only cover files the store knows about, which is exactly why
+> this passed CI.
+>
+> **Older START-HERE (K) follows.**
+>
+> **K IS MERGED (`26ac8ba`, 2026-07-24) and DEVICE-VERIFIED.** The
 > merge gate ran both suites on the merge into `master` and reported **both
 > suites green** (Dart 894, Kotlin 34). **Nothing is pushed** — `origin` has seen
 > none of I, J's plan, or K.
@@ -2259,7 +2374,16 @@ because I3 moved `storageSettingsProvider` to `app/`.
   clears itself the moment they take it or route elsewhere. No dismiss state to
   track. (`download_destination_dialog.dart`, `_alwaysAction`.)
 
-## J — delete a download, everywhere it is, scoped 2026-07-23; NOT STARTED
+## J — delete a download, everywhere it is, scoped 2026-07-23; BUILT on branch `feat/j-hard-delete` 2026-07-24 (device pass + merge owed)
+
+> **BUILT.** The three parked questions were answered by the owner (keep both
+> buttons; suppress tela's confirm for the gallery tier and lean on the OS prompt;
+> full scope incl. detail screen) and the whole slice is implemented — port, use
+> case, native, l10n, and all three UI surfaces — with Dart + Kotlin tests green.
+> See the START-HERE block at the top for the summary and what to device-verify.
+> The original design notes below stand as written; the *Open questions* at the
+> end are now resolved.
+
 
 Owner request, 2026-07-23 (mid-I3): *"a delete button on a downloaded image to
 remove from storage, remove from history, remove from everything."* New
