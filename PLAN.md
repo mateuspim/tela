@@ -448,9 +448,14 @@ Each stage ends green on `make ci` and is mergeable alone.
    `FakeWallpaperSource` with `narrowCapabilities` proves the seam. **Owed on a
    device:** the v6 migration on a real accumulated database, and watching the
    sheet re-render on a switch — both wait for a second real source.
-3. **Konachan adapter.** The first real second source — designed in §18, whose
-   paging, rating and operator behaviour was **verified live on 2026-07-24**
-   before any of it was planned against. **This is the next build.**
+3. ~~**Konachan adapter.**~~ **Built** (`ffb2e95`, 2026-07-24). The first real
+   second source — designed in §18, whose paging, rating and operator behaviour
+   was **verified live on 2026-07-24** before any of it was planned against.
+   `data/konachan/` holds the query encoder, the mapper and the adapter;
+   `SourceId.konachan` and one registry entry wire it in. `make ci` green (Dart
+   1007). **Owed on a device:** the §18.6 walk — the NSFW invariant on the new
+   source, and observing `.net` actually serve safe mode — plus the v6 migration
+   and the filter sheet re-rendering on a switch that stages 1–2 also owe.
 4. **Cross-source polish.** Source badge on tiles and in library grids, per-source
    rate limits, source-aware failure text.
 
@@ -462,10 +467,14 @@ source's arrival.
 
 ## 18. Konachan — the second source
 
-**Status:** designed, not built. Implements §17 stage 3. API behaviour below was
-**probed live on 2026-07-24**, not read from documentation — Moebooru forks
-differ from each other and from their docs, and this project's standing rule is
-that query operators get confirmed against the live service.
+**Status:** **built** (`ffb2e95`, 2026-07-24), device verification owed.
+Implements §17 stage 3. API behaviour below was **probed live on 2026-07-24**,
+not read from documentation — Moebooru forks differ from each other and from
+their docs, and this project's standing rule is that query operators get
+confirmed against the live service. The build followed this design closely; two
+refinements worth noting are recorded where they land (the `.net`-returns-`[]`
+detail trap is handled by always querying `.com`; `ExactResolutions` is dropped
+rather than mis-encoded, since Konachan has no exact-size list).
 
 Konachan is Moebooru: `GET /post.json`, no versioned API root, no OpenAPI, and
 a query language that lives entirely inside the `tags` parameter.
