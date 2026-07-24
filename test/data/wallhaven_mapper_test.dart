@@ -8,6 +8,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
@@ -87,6 +88,13 @@ void main() {
       expect(page.lastPage, 37);
       expect(page.seed, 'abc123');
       expect(page.hasMore, isTrue);
+      // The permalink comes off the wire; the model no longer composes one,
+      // because only the adapter knows its site's URL shape.
+      expect(
+        page.wallpapers.first.pageUrl,
+        Uri.parse('https://wallhaven.cc/w/e7jvjd'),
+      );
+      expect(page.wallpapers.first.source, SourceId.wallhaven);
     });
 
     test('maps each wallpaper to the domain shape, not the wire shape', () {

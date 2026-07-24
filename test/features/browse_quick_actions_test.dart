@@ -234,6 +234,7 @@ Future<void> _pumpWall(
   final FakeWallhavenApi api = FakeWallhavenApi(
     page: WallpaperPage(
       wallpapers: <Wallpaper>[_wallpaper(purity: purity)],
+      hasMore: false,
       currentPage: 1,
       lastPage: 1,
     ),
@@ -276,6 +277,7 @@ Future<void> _settle(WidgetTester tester) async {
 Wallpaper _wallpaper({Purity purity = Purity.sfw}) => Wallpaper(
   id: 'e7jvjd',
   source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
   fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',

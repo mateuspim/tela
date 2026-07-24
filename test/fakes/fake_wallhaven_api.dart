@@ -84,6 +84,7 @@ class FakeWallhavenApi implements WallhavenApi {
         page ??
         const WallpaperPage(
           wallpapers: <Wallpaper>[],
+          hasMore: false,
           currentPage: 1,
           lastPage: 1,
         );

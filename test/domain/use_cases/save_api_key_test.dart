@@ -192,6 +192,7 @@ class KeyCheckingWallhavenApi implements WallhavenApi {
 
   static const WallpaperPage _empty = WallpaperPage(
     wallpapers: <Wallpaper>[],
+    hasMore: false,
     currentPage: 1,
     lastPage: 1,
   );

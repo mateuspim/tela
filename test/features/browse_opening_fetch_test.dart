@@ -274,6 +274,7 @@ WallpaperPage _page({
     wallpapers: <Wallpaper>[
       for (int i = 0; i < count; i++) _wallpaper('p${currentPage}w$i'),
     ],
+    hasMore: currentPage < lastPage,
     currentPage: currentPage,
     lastPage: lastPage,
   );
@@ -282,6 +283,7 @@ WallpaperPage _page({
 Wallpaper _wallpaper(String id) => Wallpaper(
   id: id,
   source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',

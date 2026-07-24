@@ -974,6 +974,7 @@ WallpaperDetails _details({Purity purity = Purity.sfw}) {
   final Wallpaper wallpaper = Wallpaper(
     id: 'e7jvjd',
     source: SourceId.wallhaven,
+    pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
     fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
@@ -1004,25 +1005,26 @@ WallpaperDetails _details({Purity purity = Purity.sfw}) {
 }
 
 WallpaperDetails _otherDetails() {
-  const Wallpaper wallpaper = Wallpaper(
+  final Wallpaper wallpaper = Wallpaper(
     id: 'bbb222',
     source: SourceId.wallhaven,
+    pageUrl: Uri.parse('https://wallhaven.cc/w/bbb222'),
     fullImageUrl: 'https://w.wallhaven.cc/full/bb/wallhaven-bbb222.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/bb/bbb222.jpg',
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/bb/bbb222.jpg',
     thumbOriginalUrl: 'https://th.wallhaven.cc/orig/bb/bbb222.jpg',
-    resolution: Resolution(2160, 3840),
+    resolution: const Resolution(2160, 3840),
     fileSizeBytes: 2048,
     purity: Purity.sfw,
     category: Category.general,
-    colors: <String>['#0066cc'],
+    colors: const <String>['#0066cc'],
   );
-  return const WallpaperDetails(
+  return WallpaperDetails(
     wallpaper: wallpaper,
     ratio: '0.56',
     fileType: 'image/jpeg',
-    tags: <WallpaperTag>[WallpaperTag(id: 303, name: 'portrait')],
-    uploader: WallpaperUploader(
+    tags: const <WallpaperTag>[WallpaperTag(id: 303, name: 'portrait')],
+    uploader: const WallpaperUploader(
       username: 'second-uploader',
       group: 'User',
       avatarUrl: 'https://example.com/second-avatar.jpg',

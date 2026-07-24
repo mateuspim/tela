@@ -61,6 +61,7 @@ Wallpaper _wallpaper({
 }) => Wallpaper(
   id: id,
   source: source,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: url,
   thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',

@@ -217,6 +217,7 @@ Wallpaper _wallpaper(
   return Wallpaper(
     id: id,
     source: SourceId.wallhaven,
+    pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
     fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-$id.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/$id.jpg',
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/$id.jpg',

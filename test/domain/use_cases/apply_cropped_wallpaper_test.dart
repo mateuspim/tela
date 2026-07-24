@@ -54,6 +54,7 @@ void main() {
 Wallpaper _wallpaper(Purity purity) => Wallpaper(
   id: 'e7jvjd',
   source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
   fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',

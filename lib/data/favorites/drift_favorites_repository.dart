@@ -44,6 +44,7 @@ class DriftFavoritesRepository implements FavoritesRepository {
   FavoriteWallpapersCompanion _toRow(Wallpaper wallpaper) {
     return FavoriteWallpapersCompanion.insert(
       source: wallpaper.source.value,
+      pageUrl: wallpaper.pageUrl.toString(),
       id: wallpaper.id,
       fullImageUrl: wallpaper.fullImageUrl,
       thumbSmallUrl: wallpaper.thumbSmallUrl,
@@ -53,7 +54,7 @@ class DriftFavoritesRepository implements FavoritesRepository {
       height: wallpaper.resolution.height,
       fileSizeBytes: wallpaper.fileSizeBytes,
       purity: wallpaper.purity.name,
-      category: wallpaper.category.name,
+      category: storableCategory(wallpaper.category),
       colors: joinedColors(wallpaper.colors),
       savedAt: _now(),
     );
@@ -63,6 +64,7 @@ class DriftFavoritesRepository implements FavoritesRepository {
     return Wallpaper(
       id: row.id,
       source: storedSource(row.source),
+      pageUrl: Uri.parse(row.pageUrl),
       fullImageUrl: row.fullImageUrl,
       thumbSmallUrl: row.thumbSmallUrl,
       thumbLargeUrl: row.thumbLargeUrl,

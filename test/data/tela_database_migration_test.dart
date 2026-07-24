@@ -273,6 +273,10 @@ void main() {
         db,
       ).favorites();
       expect(favorites.single.ref, _wallhaven('e7jvjd'));
+      expect(
+        favorites.single.pageUrl,
+        Uri.parse('https://wallhaven.cc/w/e7jvjd'),
+      );
       final List<DownloadRecord> downloads = await DriftDownloadHistory(
         db,
       ).downloads();
@@ -285,6 +289,11 @@ void main() {
 
       expect(_rawColumn(file, 'favorite_wallpapers', 'source'), <String>[
         'wallhaven',
+      ]);
+      // The permalink the model used to compose from the id, now a column —
+      // a row that lost it would have no "View on Wallhaven" offline.
+      expect(_rawColumn(file, 'favorite_wallpapers', 'page_url'), <String>[
+        'https://wallhaven.cc/w/e7jvjd',
       ]);
       expect(_rawColumn(file, 'downloaded_wallpapers', 'source'), <String>[
         'wallhaven',
@@ -339,6 +348,7 @@ WallpaperRef _wallhaven(String id) => WallpaperRef(SourceId.wallhaven, id);
 Wallpaper _wallpaperFrom(SourceId source, String id) => Wallpaper(
   id: id,
   source: source,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://example.test/full/$id.jpg',
   thumbSmallUrl: 'https://example.test/small/$id.jpg',
   thumbLargeUrl: 'https://example.test/lg/$id.jpg',

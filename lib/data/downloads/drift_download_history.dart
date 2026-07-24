@@ -75,6 +75,7 @@ class DriftDownloadHistory implements DownloadHistory {
   ) {
     return DownloadedWallpapersCompanion.insert(
       source: wallpaper.source.value,
+      pageUrl: wallpaper.pageUrl.toString(),
       id: wallpaper.id,
       fullImageUrl: wallpaper.fullImageUrl,
       thumbSmallUrl: wallpaper.thumbSmallUrl,
@@ -84,7 +85,7 @@ class DriftDownloadHistory implements DownloadHistory {
       height: wallpaper.resolution.height,
       fileSizeBytes: wallpaper.fileSizeBytes,
       purity: wallpaper.purity.name,
-      category: wallpaper.category.name,
+      category: storableCategory(wallpaper.category),
       colors: joinedColors(wallpaper.colors),
       tier: tier.name,
       location: location.toString(),
@@ -105,6 +106,7 @@ class DriftDownloadHistory implements DownloadHistory {
     return Wallpaper(
       id: row.id,
       source: storedSource(row.source),
+      pageUrl: Uri.parse(row.pageUrl),
       fullImageUrl: row.fullImageUrl,
       thumbSmallUrl: row.thumbSmallUrl,
       thumbLargeUrl: row.thumbLargeUrl,

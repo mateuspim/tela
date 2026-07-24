@@ -32,6 +32,7 @@ import '../fakes/fake_wallhaven_api.dart';
 Wallpaper _wallpaper(String id) => Wallpaper(
   id: id,
   source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',
@@ -129,6 +130,7 @@ void main() {
     final FakeWallhavenApi api = FakeWallhavenApi(
       page: WallpaperPage(
         wallpapers: <Wallpaper>[_wallpaper('aaa111'), _wallpaper('bbb222')],
+        hasMore: false,
         currentPage: 1,
         lastPage: 1,
       ),
@@ -145,6 +147,7 @@ void main() {
     final FakeWallhavenApi api = FakeWallhavenApi(
       page: WallpaperPage(
         wallpapers: <Wallpaper>[_wallpaper('aaa111')],
+        hasMore: false,
         currentPage: 1,
         lastPage: 1,
       ),
@@ -634,11 +637,13 @@ void main() {
                   _wallpaper('aaa111'),
                   _wallpaper('bbb222'),
                 ],
+                hasMore: false,
                 currentPage: 1,
                 lastPage: 1,
               )
             : WallpaperPage(
                 wallpapers: <Wallpaper>[_wallpaper('aaa111')],
+                hasMore: false,
                 currentPage: 1,
                 lastPage: 1,
               ),
@@ -669,6 +674,7 @@ void main() {
       final FakeWallhavenApi api = FakeWallhavenApi(
         page: WallpaperPage(
           wallpapers: <Wallpaper>[_wallpaper('aaa111')],
+          hasMore: false,
           currentPage: 1,
           lastPage: 1,
         ),

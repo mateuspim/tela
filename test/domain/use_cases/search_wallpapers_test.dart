@@ -106,6 +106,7 @@ void main() {
         );
         const WallpaperPage first = WallpaperPage(
           wallpapers: <Wallpaper>[],
+          hasMore: true,
           currentPage: 1,
           lastPage: 5,
           seed: 'xyz789',
@@ -133,6 +134,7 @@ void main() {
       );
       const WallpaperPage first = WallpaperPage(
         wallpapers: <Wallpaper>[],
+        hasMore: true,
         currentPage: 3,
         lastPage: 9,
       );
@@ -158,6 +160,7 @@ void main() {
       );
       const WallpaperPage first = WallpaperPage(
         wallpapers: <Wallpaper>[],
+        hasMore: true,
         currentPage: 1,
         lastPage: 5,
       );

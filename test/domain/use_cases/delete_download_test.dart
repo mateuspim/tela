@@ -143,18 +143,19 @@ DownloadRecord _record() => DownloadRecord(
   downloadedAt: DateTime.utc(2026, 7, 14),
 );
 
-const Wallpaper _wallpaper = Wallpaper(
+Wallpaper _wallpaper = Wallpaper(
   id: 'e7jvjd',
   source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
   fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
   thumbOriginalUrl: 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg',
-  resolution: Resolution(1440, 3200),
+  resolution: const Resolution(1440, 3200),
   fileSizeBytes: 2048,
   purity: Purity.sfw,
   category: Category.general,
-  colors: <String>[],
+  colors: const <String>[],
 );
 
 /// The one wallpaper every case here deletes.

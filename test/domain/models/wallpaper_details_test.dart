@@ -19,5 +19,30 @@ void main() {
 
       expect(one, isNot(other));
     });
+
+    test('falls back to the name where the source issues no ids', () {
+      // A booru's tag names *are* the identifier, and fetching an id per tag
+      // costs a request per tag for nothing (PLAN §18.4). Two id-less tags
+      // reading the same are therefore the same constraint.
+      const WallpaperTag named = WallpaperTag(name: 'landscape');
+      const WallpaperTag same = WallpaperTag(name: 'landscape');
+      const WallpaperTag different = WallpaperTag(name: 'portrait');
+
+      expect(named, same);
+      expect(named.hashCode, same.hashCode);
+      expect(named, isNot(different));
+    });
+
+    test(
+      'an id-less tag is compared by name even against an identified one',
+      () {
+        // The mixed case can only happen across sources, and name is the only
+        // thing the two have in common — better than calling them equal.
+        const WallpaperTag identified = WallpaperTag(id: 37, name: 'nature');
+
+        expect(identified, const WallpaperTag(name: 'nature'));
+        expect(identified, isNot(const WallpaperTag(name: 'forest')));
+      },
+    );
   });
 }

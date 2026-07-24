@@ -111,6 +111,7 @@ FakeWallhavenApi _paginatedApi() {
           _wallpaper('b'),
           _wallpaper('c'),
         ],
+        hasMore: true,
         currentPage: 1,
         lastPage: 2,
         seed: 'seed-1',
@@ -121,6 +122,7 @@ FakeWallhavenApi _paginatedApi() {
           _wallpaper('d'),
           _wallpaper('e'),
         ],
+        hasMore: false,
         currentPage: 2,
         lastPage: 2,
         seed: 'seed-1',
@@ -190,6 +192,7 @@ GoRouter _router({
 Wallpaper _wallpaper(String id) => Wallpaper(
   id: id,
   source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',

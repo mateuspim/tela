@@ -40,6 +40,13 @@ mixin WallpaperColumns on Table {
   /// The id that source issued, e.g. `"e7jvjd"`.
   TextColumn get id => text()();
 
+  /// The wallpaper's public page on its own site.
+  ///
+  /// Stored rather than composed on read for the same reason the model stopped
+  /// composing it: only the source's adapter knows its URL shape, and a stored
+  /// row must render offline without one.
+  TextColumn get pageUrl => text()();
+
   /// Full-resolution source — what apply and download stream from.
   TextColumn get fullImageUrl => text()();
 
@@ -64,7 +71,7 @@ mixin WallpaperColumns on Table {
   /// Purity enum name. Routes storage, so its read has a fail-safe parse.
   TextColumn get purity => text()();
 
-  /// Category enum name.
+  /// Category enum name, or empty for a source that has no such axis.
   TextColumn get category => text()();
 
   /// Dominant colours, comma-joined in Wallhaven's order.
@@ -179,14 +186,18 @@ class TelaDatabase extends _$TelaDatabase {
     );
   }
 
-  /// Adds the `source` column to both wallpaper tables and backfills it.
+  /// Adds the `source` and `page_url` columns to both wallpaper tables and
+  /// backfills them.
   ///
   /// Every row written before v6 came from Wallhaven — it was the only source
-  /// tela had — so the backfill is a literal, not a guess. The string is
-  /// spelled out rather than read from `SourceId.wallhaven` for the same reason
-  /// [purgePrivateDownloads] hardcodes `'appPrivate'`: a migration is frozen at
-  /// the moment it shipped and must keep writing the value that was really
-  /// written, whatever the code is renamed to later.
+  /// tela had — so both backfills are facts about the past, not guesses: the
+  /// source is the literal `'wallhaven'`, and the page URL is the one
+  /// `Wallpaper.pageUrl` used to compose from the id before the model stopped
+  /// knowing any site's URL shape. Both are spelled out rather than read from
+  /// the code for the same reason [purgePrivateDownloads] hardcodes
+  /// `'appPrivate'`: a migration is frozen at the moment it shipped and must
+  /// keep writing the value that was really written, whatever the code is
+  /// renamed to later.
   ///
   /// [Migrator.alterTable] rather than `addColumn`, because the primary key
   /// changes too — SQLite cannot alter one, so the table is recreated and its
@@ -205,14 +216,18 @@ class TelaDatabase extends _$TelaDatabase {
   /// more place for the schema to drift from the tables above.
   Future<void> _addSourceColumn(Migrator m, TableInfo<Table, Object?> table) {
     final GeneratedColumn<Object> source = table.columnsByName['source']!;
+    final GeneratedColumn<Object> pageUrl = table.columnsByName['page_url']!;
     return m.alterTable(
       // ignore: experimental_member_use, drift's only recreate-and-copy path
       TableMigration(
         table,
         columnTransformer: <GeneratedColumn<Object>, Expression<Object>>{
           source: const Constant<String>('wallhaven'),
+          pageUrl: const CustomExpression<String>(
+            "'https://wallhaven.cc/w/' || id",
+          ),
         },
-        newColumns: <GeneratedColumn<Object>>[source],
+        newColumns: <GeneratedColumn<Object>>[source, pageUrl],
       ),
     );
   }

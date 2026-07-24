@@ -60,6 +60,7 @@ void main() {
 Wallpaper _wallpaper(String id) => Wallpaper(
   id: id,
   source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',

@@ -34,13 +34,20 @@ Purity storedPurity(String stored) {
       Purity.nsfw;
 }
 
-/// Reads a stored category, falling back to [Category.general].
-Category storedCategory(String stored) {
+/// Reads a stored category, answering null for a source that has none.
+///
+/// An empty cell is a wallpaper from a source with no category axis, and an
+/// unreadable one is treated the same way: a wrong category is a claim tela
+/// would be making on the source's behalf, where no category is merely silent.
+Category? storedCategory(String stored) {
+  if (stored.isEmpty) return null;
   return Category.values
-          .where((Category category) => category.name == stored)
-          .firstOrNull ??
-      Category.general;
+      .where((Category category) => category.name == stored)
+      .firstOrNull;
 }
+
+/// Writes a category, or the empty cell that means the source has none.
+String storableCategory(Category? category) => category?.name ?? '';
 
 /// Reads a stored storage tier, falling back to [StorageTier.sharedGallery].
 ///

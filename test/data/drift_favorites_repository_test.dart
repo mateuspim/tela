@@ -109,7 +109,7 @@ void main() {
       expect((await favorites.favorites()).single.purity, Purity.nsfw);
     });
 
-    test('reads an unrecognised stored category as general', () async {
+    test('reads an unrecognised stored category as no category', () async {
       await favorites.save(_wallpaper('e7jvjd'));
       await db
           .update(db.favoriteWallpapers)
@@ -117,7 +117,9 @@ void main() {
             const FavoriteWallpapersCompanion(category: Value<String>('memes')),
           );
 
-      expect((await favorites.favorites()).single.category, Category.general);
+      // Null, not a guess: filing it under General would be tela claiming a
+      // classification the row does not support.
+      expect((await favorites.favorites()).single.category, null);
     });
   });
 }
@@ -129,6 +131,7 @@ Wallpaper _wallpaper(
 }) => Wallpaper(
   id: id,
   source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',

@@ -24,6 +24,7 @@ class Wallpaper {
   const Wallpaper({
     required this.id,
     required this.source,
+    required this.pageUrl,
     required this.fullImageUrl,
     required this.thumbSmallUrl,
     required this.thumbLargeUrl,
@@ -41,6 +42,19 @@ class Wallpaper {
 
   /// Which site it came from. Two sources can issue the same [id].
   final SourceId source;
+
+  /// The wallpaper's public page on the site it came from, e.g.
+  /// `https://wallhaven.cc/w/e7jvjd`.
+  ///
+  /// Supplied by the mapper, not composed here: only the adapter knows its
+  /// site's URL shape, and Konachan's even depends on the wallpaper's rating
+  /// (a safe post links to `.net`, so sharing one never sends anyone to the
+  /// NSFW-capable host).
+  ///
+  /// Public whatever the purity: it is the same page anyone reaches on the
+  /// site, so linking to it exports nothing tela is holding back (see
+  /// `ShareWallpaper.link`).
+  final Uri pageUrl;
 
   /// Full-resolution image — what we download and what we set as the wallpaper.
   final String fullImageUrl;
@@ -67,8 +81,10 @@ class Wallpaper {
   /// How explicit the image is; drives storage routing and API-key gating.
   final Purity purity;
 
-  /// Which Wallhaven bucket it came from.
-  final Category category;
+  /// Which bucket the source filed it under, or null where the source has no
+  /// such axis at all — a booru has no general/anime/people distinction, and
+  /// asserting one on its behalf would be tela inventing metadata.
+  final Category? category;
 
   /// Dominant colours as hex strings (`"#660000"`), in Wallhaven's order.
   final List<String> colors;
@@ -82,14 +98,6 @@ class Wallpaper {
   /// Storage adapters branch on this, never on a UI flag — CLAUDE.md's hard
   /// invariant is that NSFW files are never MediaStore-indexed in any tier.
   bool get isNsfw => purity == Purity.nsfw;
-
-  /// The wallpaper's public page on wallhaven.cc, e.g.
-  /// `https://wallhaven.cc/w/e7jvjd`.
-  ///
-  /// Public whatever the purity: it is the same page anyone reaches on the
-  /// site, so linking to it exports nothing tela is holding back (see
-  /// `ShareWallpaper.link`).
-  Uri get pageUrl => Uri.parse('https://wallhaven.cc/w/$id');
 
   @override
   bool operator ==(Object other) => other is Wallpaper && other.ref == ref;

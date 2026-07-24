@@ -238,6 +238,17 @@ class $FavoriteWallpapersTable extends FavoriteWallpapers
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _pageUrlMeta = const VerificationMeta(
+    'pageUrl',
+  );
+  @override
+  late final GeneratedColumn<String> pageUrl = GeneratedColumn<String>(
+    'page_url',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _fullImageUrlMeta = const VerificationMeta(
     'fullImageUrl',
   );
@@ -355,6 +366,7 @@ class $FavoriteWallpapersTable extends FavoriteWallpapers
   List<GeneratedColumn> get $columns => [
     source,
     id,
+    pageUrl,
     fullImageUrl,
     thumbSmallUrl,
     thumbLargeUrl,
@@ -391,6 +403,14 @@ class $FavoriteWallpapersTable extends FavoriteWallpapers
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('page_url')) {
+      context.handle(
+        _pageUrlMeta,
+        pageUrl.isAcceptableOrUnknown(data['page_url']!, _pageUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pageUrlMeta);
     }
     if (data.containsKey('full_image_url')) {
       context.handle(
@@ -512,6 +532,10 @@ class $FavoriteWallpapersTable extends FavoriteWallpapers
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      pageUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}page_url'],
+      )!,
       fullImageUrl: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}full_image_url'],
@@ -577,6 +601,13 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
   /// The id that source issued, e.g. `"e7jvjd"`.
   final String id;
 
+  /// The wallpaper's public page on its own site.
+  ///
+  /// Stored rather than composed on read for the same reason the model stopped
+  /// composing it: only the source's adapter knows its URL shape, and a stored
+  /// row must render offline without one.
+  final String pageUrl;
+
   /// Full-resolution source — what apply and download stream from.
   final String fullImageUrl;
 
@@ -601,7 +632,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
   /// Purity enum name. Routes storage, so its read has a fail-safe parse.
   final String purity;
 
-  /// Category enum name.
+  /// Category enum name, or empty for a source that has no such axis.
   final String category;
 
   /// Dominant colours, comma-joined in Wallhaven's order.
@@ -612,6 +643,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
   const FavoriteRow({
     required this.source,
     required this.id,
+    required this.pageUrl,
     required this.fullImageUrl,
     required this.thumbSmallUrl,
     required this.thumbLargeUrl,
@@ -629,6 +661,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
     final map = <String, Expression>{};
     map['source'] = Variable<String>(source);
     map['id'] = Variable<String>(id);
+    map['page_url'] = Variable<String>(pageUrl);
     map['full_image_url'] = Variable<String>(fullImageUrl);
     map['thumb_small_url'] = Variable<String>(thumbSmallUrl);
     map['thumb_large_url'] = Variable<String>(thumbLargeUrl);
@@ -647,6 +680,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
     return FavoriteWallpapersCompanion(
       source: Value(source),
       id: Value(id),
+      pageUrl: Value(pageUrl),
       fullImageUrl: Value(fullImageUrl),
       thumbSmallUrl: Value(thumbSmallUrl),
       thumbLargeUrl: Value(thumbLargeUrl),
@@ -669,6 +703,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
     return FavoriteRow(
       source: serializer.fromJson<String>(json['source']),
       id: serializer.fromJson<String>(json['id']),
+      pageUrl: serializer.fromJson<String>(json['pageUrl']),
       fullImageUrl: serializer.fromJson<String>(json['fullImageUrl']),
       thumbSmallUrl: serializer.fromJson<String>(json['thumbSmallUrl']),
       thumbLargeUrl: serializer.fromJson<String>(json['thumbLargeUrl']),
@@ -688,6 +723,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
     return <String, dynamic>{
       'source': serializer.toJson<String>(source),
       'id': serializer.toJson<String>(id),
+      'pageUrl': serializer.toJson<String>(pageUrl),
       'fullImageUrl': serializer.toJson<String>(fullImageUrl),
       'thumbSmallUrl': serializer.toJson<String>(thumbSmallUrl),
       'thumbLargeUrl': serializer.toJson<String>(thumbLargeUrl),
@@ -705,6 +741,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
   FavoriteRow copyWith({
     String? source,
     String? id,
+    String? pageUrl,
     String? fullImageUrl,
     String? thumbSmallUrl,
     String? thumbLargeUrl,
@@ -719,6 +756,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
   }) => FavoriteRow(
     source: source ?? this.source,
     id: id ?? this.id,
+    pageUrl: pageUrl ?? this.pageUrl,
     fullImageUrl: fullImageUrl ?? this.fullImageUrl,
     thumbSmallUrl: thumbSmallUrl ?? this.thumbSmallUrl,
     thumbLargeUrl: thumbLargeUrl ?? this.thumbLargeUrl,
@@ -735,6 +773,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
     return FavoriteRow(
       source: data.source.present ? data.source.value : this.source,
       id: data.id.present ? data.id.value : this.id,
+      pageUrl: data.pageUrl.present ? data.pageUrl.value : this.pageUrl,
       fullImageUrl: data.fullImageUrl.present
           ? data.fullImageUrl.value
           : this.fullImageUrl,
@@ -764,6 +803,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
     return (StringBuffer('FavoriteRow(')
           ..write('source: $source, ')
           ..write('id: $id, ')
+          ..write('pageUrl: $pageUrl, ')
           ..write('fullImageUrl: $fullImageUrl, ')
           ..write('thumbSmallUrl: $thumbSmallUrl, ')
           ..write('thumbLargeUrl: $thumbLargeUrl, ')
@@ -783,6 +823,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
   int get hashCode => Object.hash(
     source,
     id,
+    pageUrl,
     fullImageUrl,
     thumbSmallUrl,
     thumbLargeUrl,
@@ -801,6 +842,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
       (other is FavoriteRow &&
           other.source == this.source &&
           other.id == this.id &&
+          other.pageUrl == this.pageUrl &&
           other.fullImageUrl == this.fullImageUrl &&
           other.thumbSmallUrl == this.thumbSmallUrl &&
           other.thumbLargeUrl == this.thumbLargeUrl &&
@@ -817,6 +859,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
 class FavoriteWallpapersCompanion extends UpdateCompanion<FavoriteRow> {
   final Value<String> source;
   final Value<String> id;
+  final Value<String> pageUrl;
   final Value<String> fullImageUrl;
   final Value<String> thumbSmallUrl;
   final Value<String> thumbLargeUrl;
@@ -832,6 +875,7 @@ class FavoriteWallpapersCompanion extends UpdateCompanion<FavoriteRow> {
   const FavoriteWallpapersCompanion({
     this.source = const Value.absent(),
     this.id = const Value.absent(),
+    this.pageUrl = const Value.absent(),
     this.fullImageUrl = const Value.absent(),
     this.thumbSmallUrl = const Value.absent(),
     this.thumbLargeUrl = const Value.absent(),
@@ -848,6 +892,7 @@ class FavoriteWallpapersCompanion extends UpdateCompanion<FavoriteRow> {
   FavoriteWallpapersCompanion.insert({
     required String source,
     required String id,
+    required String pageUrl,
     required String fullImageUrl,
     required String thumbSmallUrl,
     required String thumbLargeUrl,
@@ -862,6 +907,7 @@ class FavoriteWallpapersCompanion extends UpdateCompanion<FavoriteRow> {
     this.rowid = const Value.absent(),
   }) : source = Value(source),
        id = Value(id),
+       pageUrl = Value(pageUrl),
        fullImageUrl = Value(fullImageUrl),
        thumbSmallUrl = Value(thumbSmallUrl),
        thumbLargeUrl = Value(thumbLargeUrl),
@@ -876,6 +922,7 @@ class FavoriteWallpapersCompanion extends UpdateCompanion<FavoriteRow> {
   static Insertable<FavoriteRow> custom({
     Expression<String>? source,
     Expression<String>? id,
+    Expression<String>? pageUrl,
     Expression<String>? fullImageUrl,
     Expression<String>? thumbSmallUrl,
     Expression<String>? thumbLargeUrl,
@@ -892,6 +939,7 @@ class FavoriteWallpapersCompanion extends UpdateCompanion<FavoriteRow> {
     return RawValuesInsertable({
       if (source != null) 'source': source,
       if (id != null) 'id': id,
+      if (pageUrl != null) 'page_url': pageUrl,
       if (fullImageUrl != null) 'full_image_url': fullImageUrl,
       if (thumbSmallUrl != null) 'thumb_small_url': thumbSmallUrl,
       if (thumbLargeUrl != null) 'thumb_large_url': thumbLargeUrl,
@@ -910,6 +958,7 @@ class FavoriteWallpapersCompanion extends UpdateCompanion<FavoriteRow> {
   FavoriteWallpapersCompanion copyWith({
     Value<String>? source,
     Value<String>? id,
+    Value<String>? pageUrl,
     Value<String>? fullImageUrl,
     Value<String>? thumbSmallUrl,
     Value<String>? thumbLargeUrl,
@@ -926,6 +975,7 @@ class FavoriteWallpapersCompanion extends UpdateCompanion<FavoriteRow> {
     return FavoriteWallpapersCompanion(
       source: source ?? this.source,
       id: id ?? this.id,
+      pageUrl: pageUrl ?? this.pageUrl,
       fullImageUrl: fullImageUrl ?? this.fullImageUrl,
       thumbSmallUrl: thumbSmallUrl ?? this.thumbSmallUrl,
       thumbLargeUrl: thumbLargeUrl ?? this.thumbLargeUrl,
@@ -949,6 +999,9 @@ class FavoriteWallpapersCompanion extends UpdateCompanion<FavoriteRow> {
     }
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (pageUrl.present) {
+      map['page_url'] = Variable<String>(pageUrl.value);
     }
     if (fullImageUrl.present) {
       map['full_image_url'] = Variable<String>(fullImageUrl.value);
@@ -994,6 +1047,7 @@ class FavoriteWallpapersCompanion extends UpdateCompanion<FavoriteRow> {
     return (StringBuffer('FavoriteWallpapersCompanion(')
           ..write('source: $source, ')
           ..write('id: $id, ')
+          ..write('pageUrl: $pageUrl, ')
           ..write('fullImageUrl: $fullImageUrl, ')
           ..write('thumbSmallUrl: $thumbSmallUrl, ')
           ..write('thumbLargeUrl: $thumbLargeUrl, ')
@@ -1030,6 +1084,17 @@ class $DownloadedWallpapersTable extends DownloadedWallpapers
   @override
   late final GeneratedColumn<String> id = GeneratedColumn<String>(
     'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pageUrlMeta = const VerificationMeta(
+    'pageUrl',
+  );
+  @override
+  late final GeneratedColumn<String> pageUrl = GeneratedColumn<String>(
+    'page_url',
     aliasedName,
     false,
     type: DriftSqlType.string,
@@ -1172,6 +1237,7 @@ class $DownloadedWallpapersTable extends DownloadedWallpapers
   List<GeneratedColumn> get $columns => [
     source,
     id,
+    pageUrl,
     fullImageUrl,
     thumbSmallUrl,
     thumbLargeUrl,
@@ -1210,6 +1276,14 @@ class $DownloadedWallpapersTable extends DownloadedWallpapers
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('page_url')) {
+      context.handle(
+        _pageUrlMeta,
+        pageUrl.isAcceptableOrUnknown(data['page_url']!, _pageUrlMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pageUrlMeta);
     }
     if (data.containsKey('full_image_url')) {
       context.handle(
@@ -1350,6 +1424,10 @@ class $DownloadedWallpapersTable extends DownloadedWallpapers
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      pageUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}page_url'],
+      )!,
       fullImageUrl: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}full_image_url'],
@@ -1423,6 +1501,13 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
   /// The id that source issued, e.g. `"e7jvjd"`.
   final String id;
 
+  /// The wallpaper's public page on its own site.
+  ///
+  /// Stored rather than composed on read for the same reason the model stopped
+  /// composing it: only the source's adapter knows its URL shape, and a stored
+  /// row must render offline without one.
+  final String pageUrl;
+
   /// Full-resolution source — what apply and download stream from.
   final String fullImageUrl;
 
@@ -1447,7 +1532,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
   /// Purity enum name. Routes storage, so its read has a fail-safe parse.
   final String purity;
 
-  /// Category enum name.
+  /// Category enum name, or empty for a source that has no such axis.
   final String category;
 
   /// Dominant colours, comma-joined in Wallhaven's order.
@@ -1464,6 +1549,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
   const DownloadRow({
     required this.source,
     required this.id,
+    required this.pageUrl,
     required this.fullImageUrl,
     required this.thumbSmallUrl,
     required this.thumbLargeUrl,
@@ -1483,6 +1569,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
     final map = <String, Expression>{};
     map['source'] = Variable<String>(source);
     map['id'] = Variable<String>(id);
+    map['page_url'] = Variable<String>(pageUrl);
     map['full_image_url'] = Variable<String>(fullImageUrl);
     map['thumb_small_url'] = Variable<String>(thumbSmallUrl);
     map['thumb_large_url'] = Variable<String>(thumbLargeUrl);
@@ -1503,6 +1590,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
     return DownloadedWallpapersCompanion(
       source: Value(source),
       id: Value(id),
+      pageUrl: Value(pageUrl),
       fullImageUrl: Value(fullImageUrl),
       thumbSmallUrl: Value(thumbSmallUrl),
       thumbLargeUrl: Value(thumbLargeUrl),
@@ -1527,6 +1615,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
     return DownloadRow(
       source: serializer.fromJson<String>(json['source']),
       id: serializer.fromJson<String>(json['id']),
+      pageUrl: serializer.fromJson<String>(json['pageUrl']),
       fullImageUrl: serializer.fromJson<String>(json['fullImageUrl']),
       thumbSmallUrl: serializer.fromJson<String>(json['thumbSmallUrl']),
       thumbLargeUrl: serializer.fromJson<String>(json['thumbLargeUrl']),
@@ -1548,6 +1637,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
     return <String, dynamic>{
       'source': serializer.toJson<String>(source),
       'id': serializer.toJson<String>(id),
+      'pageUrl': serializer.toJson<String>(pageUrl),
       'fullImageUrl': serializer.toJson<String>(fullImageUrl),
       'thumbSmallUrl': serializer.toJson<String>(thumbSmallUrl),
       'thumbLargeUrl': serializer.toJson<String>(thumbLargeUrl),
@@ -1567,6 +1657,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
   DownloadRow copyWith({
     String? source,
     String? id,
+    String? pageUrl,
     String? fullImageUrl,
     String? thumbSmallUrl,
     String? thumbLargeUrl,
@@ -1583,6 +1674,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
   }) => DownloadRow(
     source: source ?? this.source,
     id: id ?? this.id,
+    pageUrl: pageUrl ?? this.pageUrl,
     fullImageUrl: fullImageUrl ?? this.fullImageUrl,
     thumbSmallUrl: thumbSmallUrl ?? this.thumbSmallUrl,
     thumbLargeUrl: thumbLargeUrl ?? this.thumbLargeUrl,
@@ -1601,6 +1693,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
     return DownloadRow(
       source: data.source.present ? data.source.value : this.source,
       id: data.id.present ? data.id.value : this.id,
+      pageUrl: data.pageUrl.present ? data.pageUrl.value : this.pageUrl,
       fullImageUrl: data.fullImageUrl.present
           ? data.fullImageUrl.value
           : this.fullImageUrl,
@@ -1634,6 +1727,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
     return (StringBuffer('DownloadRow(')
           ..write('source: $source, ')
           ..write('id: $id, ')
+          ..write('pageUrl: $pageUrl, ')
           ..write('fullImageUrl: $fullImageUrl, ')
           ..write('thumbSmallUrl: $thumbSmallUrl, ')
           ..write('thumbLargeUrl: $thumbLargeUrl, ')
@@ -1655,6 +1749,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
   int get hashCode => Object.hash(
     source,
     id,
+    pageUrl,
     fullImageUrl,
     thumbSmallUrl,
     thumbLargeUrl,
@@ -1675,6 +1770,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
       (other is DownloadRow &&
           other.source == this.source &&
           other.id == this.id &&
+          other.pageUrl == this.pageUrl &&
           other.fullImageUrl == this.fullImageUrl &&
           other.thumbSmallUrl == this.thumbSmallUrl &&
           other.thumbLargeUrl == this.thumbLargeUrl &&
@@ -1693,6 +1789,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
 class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
   final Value<String> source;
   final Value<String> id;
+  final Value<String> pageUrl;
   final Value<String> fullImageUrl;
   final Value<String> thumbSmallUrl;
   final Value<String> thumbLargeUrl;
@@ -1710,6 +1807,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
   const DownloadedWallpapersCompanion({
     this.source = const Value.absent(),
     this.id = const Value.absent(),
+    this.pageUrl = const Value.absent(),
     this.fullImageUrl = const Value.absent(),
     this.thumbSmallUrl = const Value.absent(),
     this.thumbLargeUrl = const Value.absent(),
@@ -1728,6 +1826,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
   DownloadedWallpapersCompanion.insert({
     required String source,
     required String id,
+    required String pageUrl,
     required String fullImageUrl,
     required String thumbSmallUrl,
     required String thumbLargeUrl,
@@ -1744,6 +1843,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
     this.rowid = const Value.absent(),
   }) : source = Value(source),
        id = Value(id),
+       pageUrl = Value(pageUrl),
        fullImageUrl = Value(fullImageUrl),
        thumbSmallUrl = Value(thumbSmallUrl),
        thumbLargeUrl = Value(thumbLargeUrl),
@@ -1760,6 +1860,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
   static Insertable<DownloadRow> custom({
     Expression<String>? source,
     Expression<String>? id,
+    Expression<String>? pageUrl,
     Expression<String>? fullImageUrl,
     Expression<String>? thumbSmallUrl,
     Expression<String>? thumbLargeUrl,
@@ -1778,6 +1879,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
     return RawValuesInsertable({
       if (source != null) 'source': source,
       if (id != null) 'id': id,
+      if (pageUrl != null) 'page_url': pageUrl,
       if (fullImageUrl != null) 'full_image_url': fullImageUrl,
       if (thumbSmallUrl != null) 'thumb_small_url': thumbSmallUrl,
       if (thumbLargeUrl != null) 'thumb_large_url': thumbLargeUrl,
@@ -1798,6 +1900,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
   DownloadedWallpapersCompanion copyWith({
     Value<String>? source,
     Value<String>? id,
+    Value<String>? pageUrl,
     Value<String>? fullImageUrl,
     Value<String>? thumbSmallUrl,
     Value<String>? thumbLargeUrl,
@@ -1816,6 +1919,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
     return DownloadedWallpapersCompanion(
       source: source ?? this.source,
       id: id ?? this.id,
+      pageUrl: pageUrl ?? this.pageUrl,
       fullImageUrl: fullImageUrl ?? this.fullImageUrl,
       thumbSmallUrl: thumbSmallUrl ?? this.thumbSmallUrl,
       thumbLargeUrl: thumbLargeUrl ?? this.thumbLargeUrl,
@@ -1841,6 +1945,9 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
     }
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (pageUrl.present) {
+      map['page_url'] = Variable<String>(pageUrl.value);
     }
     if (fullImageUrl.present) {
       map['full_image_url'] = Variable<String>(fullImageUrl.value);
@@ -1892,6 +1999,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
     return (StringBuffer('DownloadedWallpapersCompanion(')
           ..write('source: $source, ')
           ..write('id: $id, ')
+          ..write('pageUrl: $pageUrl, ')
           ..write('fullImageUrl: $fullImageUrl, ')
           ..write('thumbSmallUrl: $thumbSmallUrl, ')
           ..write('thumbLargeUrl: $thumbLargeUrl, ')
@@ -2330,6 +2438,7 @@ typedef $$FavoriteWallpapersTableCreateCompanionBuilder =
     FavoriteWallpapersCompanion Function({
       required String source,
       required String id,
+      required String pageUrl,
       required String fullImageUrl,
       required String thumbSmallUrl,
       required String thumbLargeUrl,
@@ -2347,6 +2456,7 @@ typedef $$FavoriteWallpapersTableUpdateCompanionBuilder =
     FavoriteWallpapersCompanion Function({
       Value<String> source,
       Value<String> id,
+      Value<String> pageUrl,
       Value<String> fullImageUrl,
       Value<String> thumbSmallUrl,
       Value<String> thumbLargeUrl,
@@ -2377,6 +2487,11 @@ class $$FavoriteWallpapersTableFilterComposer
 
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pageUrl => $composableBuilder(
+    column: $table.pageUrl,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2455,6 +2570,11 @@ class $$FavoriteWallpapersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get pageUrl => $composableBuilder(
+    column: $table.pageUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get fullImageUrl => $composableBuilder(
     column: $table.fullImageUrl,
     builder: (column) => ColumnOrderings(column),
@@ -2525,6 +2645,9 @@ class $$FavoriteWallpapersTableAnnotationComposer
 
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get pageUrl =>
+      $composableBuilder(column: $table.pageUrl, builder: (column) => column);
 
   GeneratedColumn<String> get fullImageUrl => $composableBuilder(
     column: $table.fullImageUrl,
@@ -2612,6 +2735,7 @@ class $$FavoriteWallpapersTableTableManager
               ({
                 Value<String> source = const Value.absent(),
                 Value<String> id = const Value.absent(),
+                Value<String> pageUrl = const Value.absent(),
                 Value<String> fullImageUrl = const Value.absent(),
                 Value<String> thumbSmallUrl = const Value.absent(),
                 Value<String> thumbLargeUrl = const Value.absent(),
@@ -2627,6 +2751,7 @@ class $$FavoriteWallpapersTableTableManager
               }) => FavoriteWallpapersCompanion(
                 source: source,
                 id: id,
+                pageUrl: pageUrl,
                 fullImageUrl: fullImageUrl,
                 thumbSmallUrl: thumbSmallUrl,
                 thumbLargeUrl: thumbLargeUrl,
@@ -2644,6 +2769,7 @@ class $$FavoriteWallpapersTableTableManager
               ({
                 required String source,
                 required String id,
+                required String pageUrl,
                 required String fullImageUrl,
                 required String thumbSmallUrl,
                 required String thumbLargeUrl,
@@ -2659,6 +2785,7 @@ class $$FavoriteWallpapersTableTableManager
               }) => FavoriteWallpapersCompanion.insert(
                 source: source,
                 id: id,
+                pageUrl: pageUrl,
                 fullImageUrl: fullImageUrl,
                 thumbSmallUrl: thumbSmallUrl,
                 thumbLargeUrl: thumbLargeUrl,
@@ -2701,6 +2828,7 @@ typedef $$DownloadedWallpapersTableCreateCompanionBuilder =
     DownloadedWallpapersCompanion Function({
       required String source,
       required String id,
+      required String pageUrl,
       required String fullImageUrl,
       required String thumbSmallUrl,
       required String thumbLargeUrl,
@@ -2720,6 +2848,7 @@ typedef $$DownloadedWallpapersTableUpdateCompanionBuilder =
     DownloadedWallpapersCompanion Function({
       Value<String> source,
       Value<String> id,
+      Value<String> pageUrl,
       Value<String> fullImageUrl,
       Value<String> thumbSmallUrl,
       Value<String> thumbLargeUrl,
@@ -2752,6 +2881,11 @@ class $$DownloadedWallpapersTableFilterComposer
 
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get pageUrl => $composableBuilder(
+    column: $table.pageUrl,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2840,6 +2974,11 @@ class $$DownloadedWallpapersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get pageUrl => $composableBuilder(
+    column: $table.pageUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get fullImageUrl => $composableBuilder(
     column: $table.fullImageUrl,
     builder: (column) => ColumnOrderings(column),
@@ -2920,6 +3059,9 @@ class $$DownloadedWallpapersTableAnnotationComposer
 
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get pageUrl =>
+      $composableBuilder(column: $table.pageUrl, builder: (column) => column);
 
   GeneratedColumn<String> get fullImageUrl => $composableBuilder(
     column: $table.fullImageUrl,
@@ -3018,6 +3160,7 @@ class $$DownloadedWallpapersTableTableManager
               ({
                 Value<String> source = const Value.absent(),
                 Value<String> id = const Value.absent(),
+                Value<String> pageUrl = const Value.absent(),
                 Value<String> fullImageUrl = const Value.absent(),
                 Value<String> thumbSmallUrl = const Value.absent(),
                 Value<String> thumbLargeUrl = const Value.absent(),
@@ -3035,6 +3178,7 @@ class $$DownloadedWallpapersTableTableManager
               }) => DownloadedWallpapersCompanion(
                 source: source,
                 id: id,
+                pageUrl: pageUrl,
                 fullImageUrl: fullImageUrl,
                 thumbSmallUrl: thumbSmallUrl,
                 thumbLargeUrl: thumbLargeUrl,
@@ -3054,6 +3198,7 @@ class $$DownloadedWallpapersTableTableManager
               ({
                 required String source,
                 required String id,
+                required String pageUrl,
                 required String fullImageUrl,
                 required String thumbSmallUrl,
                 required String thumbLargeUrl,
@@ -3071,6 +3216,7 @@ class $$DownloadedWallpapersTableTableManager
               }) => DownloadedWallpapersCompanion.insert(
                 source: source,
                 id: id,
+                pageUrl: pageUrl,
                 fullImageUrl: fullImageUrl,
                 thumbSmallUrl: thumbSmallUrl,
                 thumbLargeUrl: thumbLargeUrl,

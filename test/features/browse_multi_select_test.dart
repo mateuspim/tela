@@ -349,6 +349,7 @@ Future<void> _pumpWall(
           ],
       currentPage: 1,
       lastPage: 1,
+      hasMore: false,
     ),
   );
   await tester.pumpWidget(
@@ -384,6 +385,7 @@ Future<void> _settle(WidgetTester tester) async {
 Wallpaper _wallpaper(String id, {Purity purity = Purity.sfw}) => Wallpaper(
   id: id,
   source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://w.wallhaven.cc/full/xx/wallhaven-$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/xx/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/xx/$id.jpg',

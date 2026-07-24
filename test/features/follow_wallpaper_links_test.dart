@@ -152,17 +152,18 @@ Future<void> _finishTransition(WidgetTester tester) async {
 }
 
 FakeWallhavenApi _api() => FakeWallhavenApi(
-  page: const WallpaperPage(
+  page: WallpaperPage(
     wallpapers: <Wallpaper>[_wallpaper],
+    hasMore: false,
     currentPage: 1,
     lastPage: 1,
   ),
-  details: const WallpaperDetails(
+  details: WallpaperDetails(
     wallpaper: _wallpaper,
     ratio: '0.45',
     fileType: 'image/jpeg',
-    tags: <WallpaperTag>[WallpaperTag(id: 37, name: 'nature')],
-    uploader: WallpaperUploader(
+    tags: const <WallpaperTag>[WallpaperTag(id: 37, name: 'nature')],
+    uploader: const WallpaperUploader(
       username: 'pym',
       group: 'User',
       avatarUrl: 'https://wallhaven.cc/avatar/pym.jpg',
@@ -173,16 +174,17 @@ FakeWallhavenApi _api() => FakeWallhavenApi(
   ),
 );
 
-const Wallpaper _wallpaper = Wallpaper(
+Wallpaper _wallpaper = Wallpaper(
   id: 'e7jvjd',
   source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
   fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
   thumbOriginalUrl: 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg',
-  resolution: Resolution(1440, 3200),
+  resolution: const Resolution(1440, 3200),
   fileSizeBytes: 2048,
   purity: Purity.sfw,
   category: Category.general,
-  colors: <String>[],
+  colors: const <String>[],
 );

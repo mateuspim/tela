@@ -92,6 +92,22 @@ void main() {
     expect(swatches, lessThan(tester.getTopLeft(find.text('Tags')).dy));
   });
 
+  testWidgets('a source with no category or counts omits those tiles', (
+    WidgetTester tester,
+  ) async {
+    // A booru has no general/anime/people axis and no view count. An empty
+    // "Category" tile would read as "uncategorised" and a "Views 0" tile as a
+    // wallpaper nobody looked at — two claims the source never made.
+    await _pumpMetadata(tester, sparse: true);
+
+    expect(find.byKey(const Key('metadata-fact-Category')), findsNothing);
+    expect(find.byKey(const Key('metadata-fact-Views')), findsNothing);
+    expect(find.byKey(const Key('metadata-fact-Favorites')), findsNothing);
+    // The facts the source did supply are untouched.
+    expect(find.byKey(const Key('metadata-fact-Resolution')), findsOneWidget);
+    expect(find.byKey(const Key('metadata-fact-Purity')), findsOneWidget);
+  });
+
   testWidgets('a non-URL source stays plain, copyable text', (
     WidgetTester tester,
   ) async {
@@ -111,6 +127,7 @@ Future<void> _pumpMetadata(
   ValueChanged<WallpaperLink>? onFollow,
   ValueChanged<Uri>? onOpenLink,
   String source = 'https://example.com/source',
+  bool sparse = false,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -122,7 +139,7 @@ Future<void> _pumpMetadata(
       home: Scaffold(
         body: SingleChildScrollView(
           child: WallpaperMetadata(
-            details: _details(source: source),
+            details: _details(source: source, sparse: sparse),
             onFollow: onFollow ?? (_) {},
             onBlockTag: (_) {},
             onOpenLink: onOpenLink ?? (_) {},
@@ -134,30 +151,33 @@ Future<void> _pumpMetadata(
   await tester.pump();
 }
 
-WallpaperDetails _details({String source = 'https://example.com/source'}) =>
-    WallpaperDetails(
-      wallpaper: const Wallpaper(
-        id: 'e7jvjd',
-        source: SourceId.wallhaven,
-        fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
-        thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
-        thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
-        thumbOriginalUrl: 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg',
-        resolution: Resolution(3840, 2160),
-        fileSizeBytes: 1048576,
-        purity: Purity.sfw,
-        category: Category.general,
-        colors: <String>['#0066cc'],
-      ),
-      ratio: '1.78',
-      fileType: 'image/jpeg',
-      tags: const <WallpaperTag>[WallpaperTag(id: 101, name: 'landscape')],
-      uploader: const WallpaperUploader(
-        username: 'tela-fixture',
-        group: 'User',
-        avatarUrl: 'https://example.com/avatar.jpg',
-      ),
-      source: source,
-      views: 4523,
-      favorites: 128,
-    );
+WallpaperDetails _details({
+  String source = 'https://example.com/source',
+  bool sparse = false,
+}) => WallpaperDetails(
+  wallpaper: Wallpaper(
+    id: 'e7jvjd',
+    source: SourceId.wallhaven,
+    pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
+    fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
+    thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
+    thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
+    thumbOriginalUrl: 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg',
+    resolution: const Resolution(3840, 2160),
+    fileSizeBytes: 1048576,
+    purity: Purity.sfw,
+    category: sparse ? null : Category.general,
+    colors: const <String>['#0066cc'],
+  ),
+  ratio: '1.78',
+  fileType: 'image/jpeg',
+  tags: const <WallpaperTag>[WallpaperTag(id: 101, name: 'landscape')],
+  uploader: const WallpaperUploader(
+    username: 'tela-fixture',
+    group: 'User',
+    avatarUrl: 'https://example.com/avatar.jpg',
+  ),
+  source: source,
+  views: sparse ? null : 4523,
+  favorites: sparse ? null : 128,
+);
