@@ -41,12 +41,13 @@ Updated: 2026-07-23
 > native work (see the section for why `forget()` can't already do this).
 >
 > **Next:** merge `feat/download-destination` into `master` through the gate
-> (`merge.ff false`). Two features are planned and **parked on their open
-> questions** (owner will answer before either is built): **J** — the hard
-> delete (needs native/Kotlin work); **K** — a destination chooser for
-> multi-select downloads *and* a session-sticky destination ("send everything
-> here this session, whatever its purity"). Both sections are below, each ending
-> in parked questions. Older START-HERE for H follows.
+> (`merge.ff false`). Two features are planned below: **J** — the hard
+> delete — is **parked on its three questions** (owner will answer before it is
+> built; needs native/Kotlin work). **K** — a batch-download chooser plus a
+> **"Keep sending here" pinned destination** that stays until changed and
+> governs every download (no more press-and-hold or Settings trip) — has its
+> **questions answered (2026-07-23)** and is **ready to build**; it is the
+> natural next feature after this merge. Older START-HERE for H follows.
 >
 > **What to do next:** open a branch off `master` and build **I — the download
 > destination decision** (its own section, just below H). The owner settled its
@@ -2291,7 +2292,7 @@ Do not guess them into a build.
 3. **Scope of the first cut** — history + private library tiles only, or the
    detail screen as well?
 
-## K — where a batch (and a session) of downloads go, scoped 2026-07-23; NOT STARTED
+## K — a pinned download destination + a batch chooser, scoped 2026-07-23; questions ANSWERED, NOT STARTED
 
 Two linked complaints from the owner, 2026-07-23:
 
@@ -2299,12 +2300,13 @@ Two linked complaints from the owner, 2026-07-23:
    `lib/app/wallpaper_batch_actions.dart` routes every ticked wallpaper to its
    per-purity *configured* tier, silently — the batch equivalent of the gap I
    just closed for single downloads. There is no batch chooser.
-2. **No session memory of "put everything here."** The I2 streak is per-bucket
-   and resets the moment a different tier is used, so downloading a run to the
-   private library and then one thing elsewhere "resets the count" — the app
-   never learns "for now, everything I download goes to Private, whatever its
-   purity." The owner wants to **pick a destination once and have it stick for
-   the session, independent of purity.**
+2. **No memory of "put everything here."** The I2 streak is per-bucket and resets
+   the moment a different tier is used, so downloading a run to the private
+   library and then one thing elsewhere "resets the count" — the app never
+   learns "everything I download goes to Private, whatever its purity." The owner
+   wants to **pick a destination once and have it stick until they change it,
+   governing every download**, so downloading no longer needs a press-and-hold or
+   a Settings trip. (Answered 2026-07-23 — see K2's decisions block.)
 
 ### Resolve first: "independent of purity" vs the NSFW invariant
 
@@ -2338,59 +2340,71 @@ bolting on a per-item exception.
   bucket default from it would be a surprise. The batch chooser is I1's dialog
   minus the streak parts.
 
-### Slice K2 — a session destination
+### Slice K2 — a pinned download destination ("Keep sending here")
 
-A new **in-memory, not persisted** override — "for this session, send downloads
-here" — that supersedes per-purity routing until changed or the process ends,
-and is independent of purity (honouring the invariant via the intersection rule
-above: a session destination that some item can't take falls back to that item's
-configured tier, or is simply never offered while such an item is in scope).
+**Settled by the owner, 2026-07-23** (see the decisions block below): this is a
+**"Keep sending here" toggle** that pins a destination which **stays until the
+user changes it** — not a session that dies on restart — and, while pinned,
+governs **every** download (single tap *and* batch), so the owner never has to
+long-press or open Settings to steer where images land. That is the whole point
+in their words: *"make it easier to download and choose where to save the images
+without having to press and hold or change in settings."*
 
-- **Where it lives:** a Riverpod `StateProvider<StorageTier?>` (or a small
-  notifier) in `app/`, next to the other download providers — *not* persisted
-  through `SettingsRepository`, because "session" means it dies with the process.
-  This is the deliberate difference from I3's *Always* (permanent, per-bucket)
-  and from the configured tier (persistent, per-bucket): the session override is
-  temporary and purity-flat.
-- **How it is set:** picking a destination in the batch chooser (K1) can seed it,
-  and/or a distinct "keep sending here this session" affordance. Decide (Q2).
-- **What it governs:** subsequent downloads — single *and* batch — route to the
-  session tier instead of the configured one, when the item's purity allows it.
-  The chooser, when a session override is active, shows it and a way to clear it
-  ("Sending everything here this session · Stop").
+- **The toggle lives in the chooser.** The destination dialog (I1) gains a
+  "Keep sending here" switch. Pick a tier + flip it on → that tier becomes the
+  pin. It is **opt-in**: picking a destination for one download does *not* pin
+  it; only the toggle does. So a one-off batch to Files elsewhere cannot
+  silently redirect everything.
+- **Persisted until changed**, so it survives relaunch — "until i change" means
+  durable, not session-scoped. A new `SettingsRepository` pair
+  (`loadPinnedDownloadTier` / `setPinnedDownloadTier`, nullable; null = no pin,
+  route by the per-purity config as today). Never throws; an unreadable row
+  answers null (no pin), the safe reading.
+- **Purity-flat, but the invariant still wins.** The pin is one tier for all
+  purities. `appPrivate` and `filesOutsideGallery` are legal for every purity,
+  so those pin cleanly. A pin of `sharedGallery` **cannot** apply to an explicit
+  wallpaper — so an explicit download under a Gallery pin falls back to that
+  item's configured (private) tier. Enforce in the routing, not just the UI; the
+  `StorageSettings` constructor already refuses `nsfw → sharedGallery`, so this
+  is the same rule surfaced one layer up.
+- **While a pin is active**, the chooser shows it and offers to clear it
+  ("Sending everything here · Stop"), and the download affordances can say where
+  things are going without a press-and-hold.
 - **Order of precedence** (write this down so it is not re-derived): a
-  per-download explicit pick (the chooser's card) > the session override > the
-  per-purity configured tier. The streak/Always feeds the *configured* tier, at
+  per-download explicit pick (a chooser card, this one time) > **the pin** > the
+  per-purity configured tier. The streak/*Always* feeds the *configured* tier at
   the bottom, unchanged.
 
-### Open questions for the owner — parked, do not guess
+**Relationship to I3's *Always*** — resolve at build time, do not leave both
+unexplained: *Always save X here* sets the **per-bucket configured** default
+(permanent, per purity); the pin is **purity-flat and above it**. They can
+coexist under the precedence above, but consider whether the pin makes the
+per-download "Always" redundant enough to fold together. Flag on the device.
 
-1. **Session scope.** App-process lifetime (until relaunch or an explicit
-   change), or narrower — this one selection batch only, or "until you leave
-   Browse"? The owner's wording ("for that session… i dont want to download
-   anywhere else") leans app-process; confirm.
-2. **Auto-seed or opt-in.** Does picking a destination in the batch chooser
-   *automatically* become the session override, or is that a separate toggle so a
-   one-off batch elsewhere doesn't silently change where everything goes?
-3. **Does the session override govern the plain single tap too**, or only
-   batches? The owner's "independent of purity… anywhere else" implies it should
-   govern everything, which also means the single-tap download stops being
-   silent-to-configured while a session override is active — a real behaviour
-   change worth confirming.
-4. **Mixed selection + Gallery.** With the intersection rule, a selection
-   containing an explicit wallpaper never offers Gallery. Confirm that is
-   preferred over offering Gallery and quietly routing the explicit item to its
-   private tier.
+### Settled by the owner, 2026-07-23 — do not re-open
+
+1. **Scope: until the user changes it.** Persisted, survives relaunch. Not
+   session-scoped, no auto-expiry.
+2. **Opt-in via a "Keep sending here" toggle**, not auto-seeded from a one-off
+   pick.
+3. **Governs the plain single tap too**, not just batches — the explicit goal is
+   to *avoid* the long-press and the Settings trip. A single tap under a pin goes
+   to the pin (invariant permitting), silently.
+4. **Intersection rule stands** (recommended, not contradicted): a batch chooser
+   offers only tiers legal for every selected purity, so a set containing an
+   explicit wallpaper never offers Gallery.
 
 ### Tests this will owe
 
 - Batch chooser offers only the intersection (all-safe → 3 tiers; any explicit →
   no gallery); the chosen tier reaches every `configuredDownloadProvider` call.
-- Session override: set → subsequent single and batch downloads use it; an
-  explicit item under a Gallery session override falls back (or the case is
-  unreachable per Q4); cleared → routing returns to configured; not persisted
-  (a fresh container has none).
-- Precedence: explicit pick > session > configured.
+- Pin round-trips through `SettingsRepository` (Drift + fake), null = no pin,
+  unreadable = null.
+- Routing precedence: a per-download pick wins over the pin; the pin wins over
+  the configured tier; **an explicit download under a `sharedGallery` pin falls
+  back to its configured private tier** (the invariant case).
+- With a pin set, a plain single tap and a batch both route to it (no long
+  press, no chooser) — the behaviour the owner asked for.
 
 ## Wave 4 — crop done; auto-rotate, collections, and Omarchy sync still open
 
