@@ -18,8 +18,8 @@ class ToggleFavorite {
   /// Returns the new state rather than void so the caller can render the heart
   /// from the answer instead of re-reading the store to find out what it did.
   Future<bool> call(Wallpaper wallpaper) async {
-    if (await _favorites.isFavorite(wallpaper.id)) {
-      await _favorites.forget(wallpaper.id);
+    if (await _favorites.isFavorite(wallpaper.ref)) {
+      await _favorites.forget(wallpaper.ref);
       return false;
     }
     await _favorites.save(wallpaper);

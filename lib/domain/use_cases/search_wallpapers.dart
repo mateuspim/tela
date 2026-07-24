@@ -1,16 +1,17 @@
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/tag_blocklist_repository.dart';
-import 'package:tela/domain/ports/wallhaven_api.dart';
+import 'package:tela/domain/ports/wallpaper_source.dart';
 
 /// Fetches a page of wallpapers for a query.
 ///
-/// Three things happen here that a bare [WallhavenApi] call would get wrong:
-/// an NSFW query with no key is refused locally instead of burning one of the
-/// 45 requests/min on a guaranteed 401, the shuffle seed of a `random` listing
-/// is carried into subsequent pages so scrolling doesn't repeat images, and
+/// Three things happen here that a bare [WallpaperSource] call would get
+/// wrong: an NSFW query with no key is refused locally — on a source that says
+/// a key is needed — instead of burning a request on a guaranteed 401, the
+/// shuffle seed of a `random` listing is carried into subsequent pages so
+/// scrolling doesn't repeat images, and
 /// every tag on the user's blocklist is folded in as an exclude — so blocking
 /// a tag once keeps it out of the search box, every browse tab, and every
 /// followed listing alike, with no feature having to remember to ask.
@@ -22,14 +23,14 @@ class SearchWallpapers {
   /// Creates the use case. Every collaborator is injected (CLAUDE.md: no
   /// global singletons).
   const SearchWallpapers({
-    required WallhavenApi api,
+    required WallpaperSource source,
     required SecretStore secrets,
     required TagBlocklistRepository blocklist,
-  }) : _api = api,
+  }) : _source = source,
        _secrets = secrets,
        _blocklist = blocklist;
 
-  final WallhavenApi _api;
+  final WallpaperSource _source;
   final SecretStore _secrets;
   final TagBlocklistRepository _blocklist;
 
@@ -40,7 +41,7 @@ class SearchWallpapers {
   Future<WallpaperPage> call(SearchQuery query) async {
     await _guardNsfwRequiresKey(query);
     final Set<String> blocked = await _blocklist.blockedNames();
-    return _api.search(query.copyWith(blockedTagNames: blocked));
+    return _source.search(query.copyWith(blockedTagNames: blocked));
   }
 
   /// Runs [query] at the page after [previous], preserving its shuffle seed.
@@ -58,11 +59,18 @@ class SearchWallpapers {
     return call(next);
   }
 
+  /// Refuses an NSFW query the *active source* would only 401 on.
+  ///
+  /// Asks the source's capabilities rather than assuming Wallhaven's rule:
+  /// Konachan serves explicit content anonymously (verified live 2026-07-24),
+  /// so a hardcoded guard would refuse a request that source would happily
+  /// answer.
   Future<void> _guardNsfwRequiresKey(SearchQuery query) async {
-    if (!query.purity.requiresApiKey) return;
+    if (!_source.capabilities.needsKeyFor(query.purity)) return;
     if (await _secrets.hasApiKey()) return;
-    throw const InvalidApiKeyFailure(
-      'nsfw purity requires a Wallhaven API key, but none is stored',
+    throw InvalidApiKeyFailure(
+      'nsfw purity requires an API key for "${_source.id}", '
+      'but none is stored',
     );
   }
 }

@@ -11,7 +11,7 @@ import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
 
 /// Chooses where browse takes its opening filters from.
@@ -160,7 +160,7 @@ class _RefreshButtonState extends ConsumerState<_RefreshButton> {
     ToastKind kind = ToastKind.success;
     try {
       await ref.read(browseDefaultsProvider.notifier).refreshFromAccount();
-    } on WallhavenFailure catch (failure) {
+    } on SourceFailure catch (failure) {
       message = localizedFailure(l10n, failure);
       kind = ToastKind.failure;
     }

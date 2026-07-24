@@ -2,6 +2,8 @@ import 'package:meta/meta.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 /// A wallpaper as the app knows it — the domain shape, never the API's.
 ///
@@ -21,6 +23,8 @@ class Wallpaper {
   /// [fullImageUrl] cannot be applied, which is the whole point of the app.
   const Wallpaper({
     required this.id,
+    required this.source,
+    required this.pageUrl,
     required this.fullImageUrl,
     required this.thumbSmallUrl,
     required this.thumbLargeUrl,
@@ -32,8 +36,25 @@ class Wallpaper {
     required this.colors,
   });
 
-  /// Wallhaven's id, e.g. `"e7jvjd"`. Unique across the site.
+  /// The id the source issued, e.g. `"e7jvjd"`. Unique within [source] only —
+  /// anything that *stores* or *ticks* a wallpaper keys on [ref].
   final String id;
+
+  /// Which site it came from. Two sources can issue the same [id].
+  final SourceId source;
+
+  /// The wallpaper's public page on the site it came from, e.g.
+  /// `https://wallhaven.cc/w/e7jvjd`.
+  ///
+  /// Supplied by the mapper, not composed here: only the adapter knows its
+  /// site's URL shape, and Konachan's even depends on the wallpaper's rating
+  /// (a safe post links to `.net`, so sharing one never sends anyone to the
+  /// NSFW-capable host).
+  ///
+  /// Public whatever the purity: it is the same page anyone reaches on the
+  /// site, so linking to it exports nothing tela is holding back (see
+  /// `ShareWallpaper.link`).
+  final Uri pageUrl;
 
   /// Full-resolution image — what we download and what we set as the wallpaper.
   final String fullImageUrl;
@@ -60,11 +81,17 @@ class Wallpaper {
   /// How explicit the image is; drives storage routing and API-key gating.
   final Purity purity;
 
-  /// Which Wallhaven bucket it came from.
-  final Category category;
+  /// Which bucket the source filed it under, or null where the source has no
+  /// such axis at all — a booru has no general/anime/people distinction, and
+  /// asserting one on its behalf would be tela inventing metadata.
+  final Category? category;
 
   /// Dominant colours as hex strings (`"#660000"`), in Wallhaven's order.
   final List<String> colors;
+
+  /// What identifies this wallpaper across sources — the storage key, the
+  /// selection key, and the stem of its downloaded file name.
+  WallpaperRef get ref => WallpaperRef(source, id);
 
   /// True when this image may not be shown or stored without the NSFW rules.
   ///
@@ -72,20 +99,12 @@ class Wallpaper {
   /// invariant is that NSFW files are never MediaStore-indexed in any tier.
   bool get isNsfw => purity == Purity.nsfw;
 
-  /// The wallpaper's public page on wallhaven.cc, e.g.
-  /// `https://wallhaven.cc/w/e7jvjd`.
-  ///
-  /// Public whatever the purity: it is the same page anyone reaches on the
-  /// site, so linking to it exports nothing tela is holding back (see
-  /// `ShareWallpaper.link`).
-  Uri get pageUrl => Uri.parse('https://wallhaven.cc/w/$id');
+  @override
+  bool operator ==(Object other) => other is Wallpaper && other.ref == ref;
 
   @override
-  bool operator ==(Object other) => other is Wallpaper && other.id == id;
+  int get hashCode => ref.hashCode;
 
   @override
-  int get hashCode => id.hashCode;
-
-  @override
-  String toString() => 'Wallpaper($id, $resolution, ${purity.name})';
+  String toString() => 'Wallpaper($ref, $resolution, ${purity.name})';
 }

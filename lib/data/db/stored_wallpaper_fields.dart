@@ -1,5 +1,6 @@
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 
 /// How the enum and list fields of a stored wallpaper are read back.
@@ -7,6 +8,18 @@ import 'package:tela/domain/models/storage_tier.dart';
 /// Shared by every table that keeps a whole wallpaper (favorites, downloads):
 /// the fail-safe rules below are the load-bearing part of the mapping, and a
 /// second copy of them is a second chance to get one of them wrong.
+
+/// Reads a stored source, treating an empty cell as Wallhaven.
+///
+/// Empty is the one value that has a meaning: a row written before schema v6
+/// predates the column entirely, and Wallhaven was the only source there was.
+/// Anything else is taken at face value rather than validated — a source id
+/// this build does not know is a wallpaper from a version that did, and losing
+/// the whole listing over it would be a worse answer than an unrenderable tile.
+SourceId storedSource(String stored) {
+  if (stored.isEmpty) return SourceId.wallhaven;
+  return SourceId(stored);
+}
 
 /// Reads a stored purity, treating an unrecognised one as [Purity.nsfw].
 ///
@@ -21,13 +34,20 @@ Purity storedPurity(String stored) {
       Purity.nsfw;
 }
 
-/// Reads a stored category, falling back to [Category.general].
-Category storedCategory(String stored) {
+/// Reads a stored category, answering null for a source that has none.
+///
+/// An empty cell is a wallpaper from a source with no category axis, and an
+/// unreadable one is treated the same way: a wrong category is a claim tela
+/// would be making on the source's behalf, where no category is merely silent.
+Category? storedCategory(String stored) {
+  if (stored.isEmpty) return null;
   return Category.values
-          .where((Category category) => category.name == stored)
-          .firstOrNull ??
-      Category.general;
+      .where((Category category) => category.name == stored)
+      .firstOrNull;
 }
+
+/// Writes a category, or the empty cell that means the source has none.
+String storableCategory(Category? category) => category?.name ?? '';
 
 /// Reads a stored storage tier, falling back to [StorageTier.sharedGallery].
 ///

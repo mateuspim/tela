@@ -1,9 +1,12 @@
-/// How explicit a wallpaper is, as Wallhaven classifies it.
+/// How explicit a wallpaper is.
 ///
-/// Wallhaven speaks two dialects for purity and they are *not* the same shape:
-/// a wallpaper's own JSON carries a name (`"sfw"`), while the `/search` query
-/// param carries a 3-bit mask (`"110"` = sfw+sketchy). Hence [fromApiName] and
-/// [PurityFilter.toApiBits] rather than one `toString`.
+/// Nearly isomorphic to a booru's safe/questionable/explicit, which is lucky
+/// and load-bearing: CLAUDE.md's NSFW rules key on [Purity.nsfw], so every
+/// source's adapter maps its own vocabulary onto these three — failing closed,
+/// an unrecognised rating becoming [Purity.nsfw] (PLAN §17.4).
+///
+/// Sources spell the names differently, so the *encoding* of a purity — and of
+/// a whole [PurityFilter] — belongs to each adapter, not here.
 ///
 /// ```dart
 /// Purity.fromApiName('sketchy'); // Purity.sketchy
@@ -46,34 +49,22 @@ enum Purity {
     };
   }
 
-  /// Whether a Wallhaven API key is required to see wallpapers of this purity.
+  /// Whether an API key is required to see wallpapers of this purity.
+  ///
+  /// True of Wallhaven; a source that serves explicit content anonymously —
+  /// Konachan does, verified live — reads this through its own capabilities
+  /// rather than being refused locally.
   bool get requiresApiKey => this == Purity.nsfw;
 }
 
-/// The set of purities a search asks for, encoded as Wallhaven's 3-bit mask.
-///
-/// Bit order is fixed by the API: `sfw sketchy nsfw`, so `"100"` is sfw-only
-/// and `"111"` is everything.
+/// The set of purities a search asks for.
 ///
 /// ```dart
-/// const PurityFilter({Purity.sfw, Purity.sketchy}).toApiBits(); // '110'
+/// const PurityFilter({Purity.sfw, Purity.sketchy}).requiresApiKey; // false
 /// ```
 extension type const PurityFilter(Set<Purity> purities) {
   /// The default: safe content only, which needs no API key.
   static const PurityFilter sfwOnly = PurityFilter({Purity.sfw});
-
-  /// Encodes to the 3-bit `purity` query param.
-  String toApiBits() {
-    final String bits = Purity.values
-        .map((Purity p) => purities.contains(p) ? '1' : '0')
-        .join();
-    if (bits == '000') {
-      throw ArgumentError(
-        'purity filter must select at least one of sfw|sketchy|nsfw, got none',
-      );
-    }
-    return bits;
-  }
 
   /// True when this filter cannot be served without an API key.
   bool get requiresApiKey => purities.any((Purity p) => p.requiresApiKey);

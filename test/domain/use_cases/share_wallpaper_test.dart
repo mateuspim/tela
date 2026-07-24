@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/use_cases/share_wallpaper.dart';
 
@@ -67,6 +68,8 @@ void main() {
 
 Wallpaper _wallpaper({Purity purity = Purity.sfw}) => Wallpaper(
   id: 'e7jvjd',
+  source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
   fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.png',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',

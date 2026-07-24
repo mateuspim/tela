@@ -9,9 +9,11 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 
@@ -21,7 +23,7 @@ import '../fakes/fake_image_store.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 /// D4 — selecting several wallpapers on the wall and acting on them at once.
 ///
@@ -140,8 +142,18 @@ void main() {
     await tester.tap(find.byIcon(Icons.favorite_border));
     await _settle(tester);
 
-    expect(await favorites.isFavorite('e7jvjd'), isTrue);
-    expect(await favorites.isFavorite('7j1mzo'), isTrue);
+    expect(
+      await favorites.isFavorite(
+        const WallpaperRef(SourceId.wallhaven, 'e7jvjd'),
+      ),
+      isTrue,
+    );
+    expect(
+      await favorites.isFavorite(
+        const WallpaperRef(SourceId.wallhaven, '7j1mzo'),
+      ),
+      isTrue,
+    );
     expect(find.text('2 added to favorites'), findsOneWidget);
     // The batch is over, so the shelf is a shelf again.
     expect(find.text('2 selected'), findsNothing);
@@ -165,8 +177,18 @@ void main() {
     await tester.tap(find.byIcon(Icons.favorite_border));
     await _settle(tester);
 
-    expect(await favorites.isFavorite('e7jvjd'), isTrue);
-    expect(await favorites.isFavorite('7j1mzo'), isTrue);
+    expect(
+      await favorites.isFavorite(
+        const WallpaperRef(SourceId.wallhaven, 'e7jvjd'),
+      ),
+      isTrue,
+    );
+    expect(
+      await favorites.isFavorite(
+        const WallpaperRef(SourceId.wallhaven, '7j1mzo'),
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('a batch download reports the ones that failed', (
@@ -316,7 +338,7 @@ Future<void> _pumpWall(
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
-  final FakeWallhavenApi api = FakeWallhavenApi(
+  final FakeWallpaperSource source = FakeWallpaperSource(
     page: WallpaperPage(
       wallpapers:
           wallpapers ??
@@ -327,12 +349,13 @@ Future<void> _pumpWall(
           ],
       currentPage: 1,
       lastPage: 1,
+      hasMore: false,
     ),
   );
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(api),
+        wallhavenSourceProvider.overrideWithValue(source),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         settingsRepositoryProvider.overrideWithValue(
           settings ?? FakeSettingsRepository(),
@@ -361,6 +384,8 @@ Future<void> _settle(WidgetTester tester) async {
 
 Wallpaper _wallpaper(String id, {Purity purity = Purity.sfw}) => Wallpaper(
   id: id,
+  source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://w.wallhaven.cc/full/xx/wallhaven-$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/xx/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/xx/$id.jpg',

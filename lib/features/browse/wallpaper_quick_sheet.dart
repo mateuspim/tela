@@ -107,7 +107,7 @@ Future<void> runWallpaperQuickAction({
     case WallpaperQuickAction.openDetail:
       openDetail();
     case WallpaperQuickAction.select:
-      WallpaperSelectionScope.of(context)?.selectOnly(wallpaper.id);
+      WallpaperSelectionScope.of(context)?.selectOnly(wallpaper.ref.key);
   }
 }
 
@@ -115,7 +115,7 @@ Future<void> runWallpaperQuickAction({
 /// the user's finger, which says it better than a snackbar over the wall would.
 Future<void> _toggleFavorite(WidgetRef ref, Wallpaper wallpaper) async {
   await ref.read(toggleFavoriteProvider)(wallpaper);
-  refreshFavorites(ref, wallpaper.id);
+  refreshFavorites(ref, wallpaper.ref);
 }
 
 Future<void> _download(
@@ -245,7 +245,7 @@ class _QuickActionSheet extends ConsumerWidget {
     // away, and a flicker of progress in a menu row reads worse than an outline
     // that fills in.
     final bool isFavorite =
-        ref.watch(isFavoriteProvider(wallpaper.id)).value ?? false;
+        ref.watch(isFavoriteProvider(wallpaper.ref)).value ?? false;
     // Scrolls rather than clips. A modal sheet is capped at a fraction of the
     // screen, and five rows do not fit that cap on a short viewport — a phone
     // in landscape, or the 800x600 the widget tests run at, where this first

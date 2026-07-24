@@ -116,10 +116,10 @@ class DownloadHistoryScreen extends ConsumerWidget {
     final DownloadRecord download = recent[index];
     final Set<String> missing =
         ref.watch(missingDownloadsProvider).value ?? const <String>{};
-    final bool isMissing = missing.contains(download.wallpaper.id);
+    final bool isMissing = missing.contains(download.wallpaper.ref.key);
     final gestures = selectableTileGestures(
       context: context,
-      wallpaperId: download.wallpaper.id,
+      wallpaperKey: download.wallpaper.ref.key,
       onOpen: () => openDownloadViewer(context, recent, index),
       // Forgetting one row is now the batch forget at a count of one — the
       // plural strings render the identical sentence there, so the wording
@@ -149,7 +149,7 @@ class DownloadHistoryScreen extends ConsumerWidget {
               wallpaper: download.wallpaper,
               heroTag: shelfHeroTag(
                 'download-history',
-                download.wallpaper.id,
+                download.wallpaper.ref.key,
                 index,
               ),
               onTap: gestures.onTap,

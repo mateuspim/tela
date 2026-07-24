@@ -20,7 +20,7 @@ class FavoriteButton extends ConsumerWidget {
     // answer arrives in a frame or two from local SQLite, and a flicker of
     // progress indicator in an app bar is worse than an outline that fills in.
     final bool isFavorite =
-        ref.watch(isFavoriteProvider(wallpaper.id)).value ?? false;
+        ref.watch(isFavoriteProvider(wallpaper.ref)).value ?? false;
 
     return IconButton(
       icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
@@ -31,6 +31,6 @@ class FavoriteButton extends ConsumerWidget {
 
   Future<void> _toggle(WidgetRef ref) async {
     await ref.read(toggleFavoriteProvider)(wallpaper);
-    refreshFavorites(ref, wallpaper.id);
+    refreshFavorites(ref, wallpaper.ref);
   }
 }

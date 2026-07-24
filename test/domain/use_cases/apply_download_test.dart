@@ -3,6 +3,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
@@ -71,17 +72,19 @@ final Uri _location = Uri.parse(
 );
 
 DownloadRecord _download() => DownloadRecord(
-  wallpaper: const Wallpaper(
+  wallpaper: Wallpaper(
     id: 'e7jvjd',
+    source: SourceId.wallhaven,
+    pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
     fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
     thumbOriginalUrl: 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg',
-    resolution: Resolution(1440, 3200),
+    resolution: const Resolution(1440, 3200),
     fileSizeBytes: 2048,
     purity: Purity.sfw,
     category: Category.general,
-    colors: <String>[],
+    colors: const <String>[],
   ),
   tier: StorageTier.sharedGallery,
   location: _location,

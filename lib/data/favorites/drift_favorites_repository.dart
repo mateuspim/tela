@@ -2,6 +2,7 @@ import 'package:tela/data/db/stored_wallpaper_fields.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 
 /// Stores favorites as whole wallpaper rows in tela's SQLite database.
@@ -32,16 +33,18 @@ class DriftFavoritesRepository implements FavoritesRepository {
   }
 
   @override
-  Future<bool> isFavorite(String wallpaperId) => _db.hasFavorite(wallpaperId);
+  Future<bool> isFavorite(WallpaperRef ref) => _db.hasFavorite(ref);
 
   @override
   Future<void> save(Wallpaper wallpaper) => _db.putFavorite(_toRow(wallpaper));
 
   @override
-  Future<void> forget(String wallpaperId) => _db.deleteFavorite(wallpaperId);
+  Future<void> forget(WallpaperRef ref) => _db.deleteFavorite(ref);
 
   FavoriteWallpapersCompanion _toRow(Wallpaper wallpaper) {
     return FavoriteWallpapersCompanion.insert(
+      source: wallpaper.source.value,
+      pageUrl: wallpaper.pageUrl.toString(),
       id: wallpaper.id,
       fullImageUrl: wallpaper.fullImageUrl,
       thumbSmallUrl: wallpaper.thumbSmallUrl,
@@ -51,7 +54,7 @@ class DriftFavoritesRepository implements FavoritesRepository {
       height: wallpaper.resolution.height,
       fileSizeBytes: wallpaper.fileSizeBytes,
       purity: wallpaper.purity.name,
-      category: wallpaper.category.name,
+      category: storableCategory(wallpaper.category),
       colors: joinedColors(wallpaper.colors),
       savedAt: _now(),
     );
@@ -60,6 +63,8 @@ class DriftFavoritesRepository implements FavoritesRepository {
   Wallpaper _toWallpaper(FavoriteRow row) {
     return Wallpaper(
       id: row.id,
+      source: storedSource(row.source),
+      pageUrl: Uri.parse(row.pageUrl),
       fullImageUrl: row.fullImageUrl,
       thumbSmallUrl: row.thumbSmallUrl,
       thumbLargeUrl: row.thumbLargeUrl,

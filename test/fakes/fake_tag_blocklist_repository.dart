@@ -31,7 +31,8 @@ class FakeTagBlocklistRepository implements TagBlocklistRepository {
 
   /// Every currently blocked id — what tests assert on to prove a block
   /// (or unblock) actually reached the store.
-  Set<int> blockedIds() => _blocked.map((WallpaperTag tag) => tag.id).toSet();
+  Set<int> blockedIds() =>
+      _blocked.map((WallpaperTag tag) => tag.id).nonNulls.toSet();
 
   @override
   Future<void> block(WallpaperTag tag) async {

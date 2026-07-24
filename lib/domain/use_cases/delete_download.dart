@@ -1,6 +1,7 @@
 import 'package:tela/domain/models/download_deletion.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/image_store.dart';
 
@@ -13,7 +14,7 @@ import 'package:tela/domain/ports/image_store.dart';
 /// order and the history order are decided.
 ///
 /// ```dart
-/// await deleteDownload(id: record.wallpaper.id, tier: record.tier,
+/// await deleteDownload(ref: record.wallpaper.ref, tier: record.tier,
 ///     location: record.location);
 /// ```
 class DeleteDownload {
@@ -31,18 +32,26 @@ class DeleteDownload {
   ///
   /// The order is load-bearing: forgetting first would strand the file with no
   /// row to reach it from if the delete then failed. And `forget` is a no-op
-  /// for an id it never held (every app-private download, which is never
-  /// recorded), so the private library shares this path for free.
+  /// for a wallpaper it never held (every app-private download, which is
+  /// never recorded), so the private library shares this path for free.
+  ///
+  /// [ref] is null for a file with no history row to forget — every
+  /// app-private image, which is deliberately never recorded. Required rather
+  /// than defaulted, so a caller that *does* hold one cannot quietly skip it
+  /// and strand a row pointing at a file that is gone.
   ///
   /// A [DownloadDeletion.declined] — the user dismissing the system prompt —
   /// leaves both the file and the row exactly as they were.
   Future<DownloadDeletion> call({
-    required String id,
+    required WallpaperRef? ref,
     required StorageTier tier,
     required Uri location,
   }) async {
     final DownloadDeletion deletion = await _deleteFile(tier, location);
-    if (deletion == DownloadDeletion.deleted) await _history.forget(id);
+    final WallpaperRef? recorded = ref;
+    if (deletion == DownloadDeletion.deleted && recorded != null) {
+      await _history.forget(recorded);
+    }
     return deletion;
   }
 

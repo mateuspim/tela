@@ -12,6 +12,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
@@ -209,6 +210,8 @@ GoRoute _stub(String path, String name, String label) => GoRoute(
 DownloadRecord _record(String id) => DownloadRecord(
   wallpaper: Wallpaper(
     id: id,
+    source: SourceId.wallhaven,
+    pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
     fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-$id.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/$id.jpg',
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/$id.jpg',

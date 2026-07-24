@@ -38,9 +38,19 @@ class DriftTagBlocklistRepository implements TagBlocklistRepository {
 
   @override
   Future<void> block(WallpaperTag tag) {
+    final int? tagId = tag.id;
+    if (tagId == null) {
+      // This table's key *is* the numeric id, so a tag without one cannot be
+      // stored here at all. Only a source whose tags are identified by name
+      // can produce one, and none is wired up yet — PLAN §17.3.
+      throw ArgumentError(
+        "a blocked tag needs its source's numeric id, got none for "
+        '"${tag.name}"',
+      );
+    }
     return _db.putBlockedTag(
       BlockedTagsCompanion.insert(
-        id: Value(tag.id),
+        id: Value(tagId),
         name: tag.name,
         blockedAt: _now(),
       ),

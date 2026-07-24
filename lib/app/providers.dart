@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/configured_download.dart';
+import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/network/wallhaven_client.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/downloads/drift_download_history.dart';
@@ -13,7 +14,7 @@ import 'package:tela/data/storage/method_channel_image_store.dart';
 import 'package:tela/data/storage/method_channel_local_preview_cache.dart';
 import 'package:tela/data/storage/method_channel_screen_guard.dart';
 import 'package:tela/data/tag_blocklist/drift_tag_blocklist_repository.dart';
-import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
+import 'package:tela/data/wallhaven/dio_wallhaven_source.dart';
 import 'package:tela/data/wallpaper/method_channel_system_wallpaper_editor.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_sharer.dart';
@@ -32,9 +33,9 @@ import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/ports/system_wallpaper_editor.dart';
 import 'package:tela/domain/ports/tag_blocklist_repository.dart';
-import 'package:tela/domain/ports/wallhaven_api.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
 import 'package:tela/domain/ports/wallpaper_sharer.dart';
+import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/domain/use_cases/adjust_wallpaper.dart';
 import 'package:tela/domain/use_cases/apply_cropped_wallpaper.dart';
 import 'package:tela/domain/use_cases/apply_download.dart';
@@ -68,10 +69,14 @@ final Provider<Dio> wallhavenDioProvider = Provider<Dio>(
   (Ref ref) => WallhavenClient.create(secrets: ref.watch(secretStoreProvider)),
 );
 
-/// The Wallhaven port, bound to its Dio adapter.
-final Provider<WallhavenApi> wallhavenApiProvider = Provider<WallhavenApi>(
-  (Ref ref) => DioWallhavenApi(ref.watch(wallhavenDioProvider)),
-);
+/// Wallhaven as a source, bound to its Dio adapter.
+///
+/// Registered in `wallpaper_sources.dart`; features read the *active* source
+/// from there rather than naming this one.
+final Provider<WallpaperSource> wallhavenSourceProvider =
+    Provider<WallpaperSource>(
+      (Ref ref) => DioWallhavenSource(ref.watch(wallhavenDioProvider)),
+    );
 
 /// The Android wallpaper port, bound to the native method-channel adapter.
 final Provider<WallpaperApplier> wallpaperApplierProvider =
@@ -287,20 +292,28 @@ final Provider<ApplyCroppedWallpaper> applyCroppedWallpaperProvider =
     );
 
 /// The search use case, the only thing the browse feature actually calls.
+///
+/// Bound to the *active* source, so switching sources rebuilds it and every
+/// listing that watches it.
 final Provider<SearchWallpapers> searchWallpapersProvider =
     Provider<SearchWallpapers>(
       (Ref ref) => SearchWallpapers(
-        api: ref.watch(wallhavenApiProvider),
+        source: ref.watch(activeWallpaperSourceProvider),
         secrets: ref.watch(secretStoreProvider),
         blocklist: ref.watch(tagBlocklistRepositoryProvider),
       ),
     );
 
 /// Pulls the Wallhaven account's browse defaults and stores them.
+///
+/// Bound to Wallhaven itself rather than the active source, and deliberately:
+/// these are *that account's* defaults, and Wallhaven is the only source that
+/// declares `syncsAccountDefaults`. Browsing Konachan does not make a
+/// Wallhaven account's settings stale.
 final Provider<SyncAccountDefaults> syncAccountDefaultsProvider =
     Provider<SyncAccountDefaults>(
       (Ref ref) => SyncAccountDefaults(
-        api: ref.watch(wallhavenApiProvider),
+        source: ref.watch(wallhavenSourceProvider),
         settings: ref.watch(settingsRepositoryProvider),
       ),
     );

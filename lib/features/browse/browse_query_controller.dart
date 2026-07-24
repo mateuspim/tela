@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/browse_defaults.dart';
+import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/features/browse/browse_filter_scope.dart';
 
 /// The listing the browse tabs are currently showing.
@@ -37,10 +39,12 @@ class BrowseQueryController extends Notifier<SearchQuery>
 
   @override
   SearchQuery build() {
-    ref.listen<AsyncValue<ActiveBrowseDefaults>>(
-      browseDefaultsProvider,
-      _onDefaults,
-    );
+    ref
+      ..listen<AsyncValue<ActiveBrowseDefaults>>(
+        browseDefaultsProvider,
+        _onDefaults,
+      )
+      ..listen<AsyncValue<SourceId>>(activeSourceProvider, _onSourceChanged);
 
     // Read rather than watch: the listener re-seeds the *filters*, where a
     // rebuild would throw away the query the user is currently browsing on.
@@ -83,6 +87,26 @@ class BrowseQueryController extends Notifier<SearchQuery>
   @override
   void clearFilters() {
     state = defaultQuery.copyWith(term: state.term);
+  }
+
+  /// Resets the listing when the *site* changes.
+  ///
+  /// Filters are not portable between sources: one site's tags, categories and
+  /// sortings mean nothing on another, and carrying them across would silently
+  /// drop the halves the new source cannot honour. The term goes too — it was
+  /// typed against a different index.
+  ///
+  /// Only a change between two *known* ids counts. The first resolution of the
+  /// stored setting arrives as loading → data, and treating that as a switch
+  /// would wipe filters the user set before the read landed.
+  void _onSourceChanged(
+    AsyncValue<SourceId>? previous,
+    AsyncValue<SourceId> next,
+  ) {
+    final SourceId? before = previous?.value;
+    final SourceId? after = next.value;
+    if (before == null || after == null || before == after) return;
+    state = defaultQuery;
   }
 
   void _onDefaults(

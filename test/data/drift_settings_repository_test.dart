@@ -158,7 +158,7 @@ void main() {
       );
 
       final AccountSettings? loaded = await settings.loadAccountDefaults();
-      expect(loaded?.categories.toApiBits(), '111');
+      expect(loaded?.categories.encodeStored(), '111');
       expect(loaded?.topRange, TopRange.oneYear);
     });
 

@@ -13,6 +13,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/gallery_paging_bridge.dart';
@@ -21,7 +22,7 @@ import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/detail/wallpaper_detail_args.dart';
 
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   test(
@@ -66,14 +67,14 @@ void main() {
   testWidgets('the appended page inherits the live query and shuffle seed', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = _paginatedApi();
+    final FakeWallpaperSource source = _paginatedApi();
     await _openLastTile(
       tester,
-      api,
+      source,
       (GallerySessionController<Wallpaper> _) {},
     );
 
-    final List<SearchQuery> pageTwo = api.receivedQueries
+    final List<SearchQuery> pageTwo = source.receivedQueries
         .where((SearchQuery query) => query.page == 2)
         .toList();
     expect(pageTwo, hasLength(1), reason: 'exactly one page-2 request');
@@ -101,8 +102,8 @@ Future<void> _settle(PagingController<int, Wallpaper> paging) async {
 }
 
 /// A fake whose two pages overlap on 'c' and carry a `random` shuffle seed.
-FakeWallhavenApi _paginatedApi() {
-  return FakeWallhavenApi(
+FakeWallpaperSource _paginatedApi() {
+  return FakeWallpaperSource(
     pagesByNumber: <int, WallpaperPage>{
       1: WallpaperPage(
         wallpapers: <Wallpaper>[
@@ -110,6 +111,7 @@ FakeWallhavenApi _paginatedApi() {
           _wallpaper('b'),
           _wallpaper('c'),
         ],
+        hasMore: true,
         currentPage: 1,
         lastPage: 2,
         seed: 'seed-1',
@@ -120,6 +122,7 @@ FakeWallhavenApi _paginatedApi() {
           _wallpaper('d'),
           _wallpaper('e'),
         ],
+        hasMore: false,
         currentPage: 2,
         lastPage: 2,
         seed: 'seed-1',
@@ -130,7 +133,7 @@ FakeWallhavenApi _paginatedApi() {
 
 Future<void> _openLastTile(
   WidgetTester tester,
-  FakeWallhavenApi api,
+  FakeWallpaperSource source,
   ValueChanged<GallerySessionController<Wallpaper>> onDetail,
 ) async {
   final GoRouter router = _router(onDetail: onDetail);
@@ -138,7 +141,7 @@ Future<void> _openLastTile(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(api),
+        wallhavenSourceProvider.overrideWithValue(source),
         // The grid re-filters against the blocklist on mount; keep that off
         // real Drift so this paging test only exercises the paging bridge.
         tagBlocklistRepositoryProvider.overrideWithValue(
@@ -188,6 +191,8 @@ GoRouter _router({
 
 Wallpaper _wallpaper(String id) => Wallpaper(
   id: id,
+  source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',

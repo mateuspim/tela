@@ -9,15 +9,17 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/favorites/favorites_grid.dart';
 
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_secret_store.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   group('FavoritesGrid', () {
@@ -76,7 +78,12 @@ void main() {
       await tester.tap(find.byIcon(Icons.favorite_border));
       await tester.pumpAndSettle();
 
-      expect(await favorites.isFavorite('e7jvjd'), isTrue);
+      expect(
+        await favorites.isFavorite(
+          const WallpaperRef(SourceId.wallhaven, 'e7jvjd'),
+        ),
+        isTrue,
+      );
       expect(find.byIcon(Icons.favorite), findsOneWidget);
     });
 
@@ -104,7 +111,12 @@ void main() {
       await tester.tap(find.byIcon(Icons.favorite));
       await tester.pumpAndSettle();
 
-      expect(await favorites.isFavorite('e7jvjd'), isFalse);
+      expect(
+        await favorites.isFavorite(
+          const WallpaperRef(SourceId.wallhaven, 'e7jvjd'),
+        ),
+        isFalse,
+      );
       expect(find.byIcon(Icons.favorite_border), findsOneWidget);
     });
   });
@@ -135,8 +147,8 @@ Future<void> _pumpDetail(
     ProviderScope(
       overrides: <Override>[
         favoritesRepositoryProvider.overrideWithValue(favorites),
-        wallhavenApiProvider.overrideWithValue(
-          FakeWallhavenApi(details: _details()),
+        wallhavenSourceProvider.overrideWithValue(
+          FakeWallpaperSource(details: _details()),
         ),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
       ],
@@ -175,6 +187,8 @@ WallpaperDetails _details() => WallpaperDetails(
 
 Wallpaper _wallpaper(String id) => Wallpaper(
   id: id,
+  source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',

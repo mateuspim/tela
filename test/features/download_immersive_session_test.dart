@@ -10,6 +10,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
@@ -331,6 +332,8 @@ DownloadRecord _download(
 }) => DownloadRecord(
   wallpaper: Wallpaper(
     id: id,
+    source: SourceId.wallhaven,
+    pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
     fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',

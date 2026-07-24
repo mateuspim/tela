@@ -136,7 +136,7 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   Widget _tile(BuildContext context, List<PrivateImage> stored, int index) {
     final gestures = selectableTileGestures(
       context: context,
-      wallpaperId: stored[index].id,
+      wallpaperKey: stored[index].id,
       onOpen: () => _open(context, stored, index),
       longPressSelects: true,
     );
@@ -224,7 +224,8 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   Future<bool> _deleteOne(String id, Uri location) async {
     try {
       await ref.read(deleteDownloadProvider)(
-        id: id,
+        // An app-private image has no history row, by design.
+        ref: null,
         tier: StorageTier.appPrivate,
         location: location,
       );
@@ -310,7 +311,7 @@ class _PrivateTile extends StatelessWidget {
             fit: StackFit.expand,
             children: <Widget>[
               _thumbnail(context),
-              WallpaperSelectionOverlay(wallpaperId: image.id),
+              WallpaperSelectionOverlay(wallpaperKey: image.id),
             ],
           ),
         ),

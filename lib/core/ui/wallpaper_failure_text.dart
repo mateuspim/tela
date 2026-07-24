@@ -1,7 +1,7 @@
 import 'package:tela/core/i18n/generated/app_localizations.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
 
-/// Turns a [WallhavenFailure] into a localized sentence.
+/// Turns a [SourceFailure] into a localized sentence.
 ///
 /// Lives in the UI layer, not the domain: the domain knows *what* failed, the
 /// UI decides what to say about it. Exhaustive over the sealed failure type, so
@@ -13,7 +13,7 @@ import 'package:tela/domain/models/wallhaven_failure.dart';
 /// ```dart
 /// Text(localizedFailure(AppLocalizations.of(context), failure));
 /// ```
-String localizedFailure(AppLocalizations l10n, WallhavenFailure failure) {
+String localizedFailure(AppLocalizations l10n, SourceFailure failure) {
   return switch (failure) {
     InvalidApiKeyFailure() => l10n.errorInvalidApiKey,
     RateLimitedFailure() => l10n.errorRateLimited,

@@ -1,4 +1,5 @@
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 /// The wallpapers the user kept, stored on this device only.
 ///
@@ -11,12 +12,12 @@ abstract interface class FavoritesRepository {
   /// Every saved wallpaper, most recently saved first.
   Future<List<Wallpaper>> favorites();
 
-  /// Whether [wallpaperId] is currently saved.
-  Future<bool> isFavorite(String wallpaperId);
+  /// Whether [ref] is currently saved.
+  Future<bool> isFavorite(WallpaperRef ref);
 
-  /// Saves [wallpaper], replacing any earlier copy of the same id.
+  /// Saves [wallpaper], replacing any earlier copy of the same [Wallpaper.ref].
   Future<void> save(Wallpaper wallpaper);
 
-  /// Drops the wallpaper with [wallpaperId]. A no-op when it was never saved.
-  Future<void> forget(String wallpaperId);
+  /// Drops the wallpaper [ref] names. A no-op when it was never saved.
+  Future<void> forget(WallpaperRef ref);
 }

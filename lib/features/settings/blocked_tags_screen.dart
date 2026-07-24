@@ -82,7 +82,11 @@ class BlockedTagsScreen extends ConsumerWidget {
   }
 
   Future<void> _unblock(WidgetRef ref, WallpaperTag tag) async {
-    await ref.read(tagBlocklistRepositoryProvider).unblock(tag.id);
+    // Every tag on this screen was read back out of the blocked-tags table,
+    // whose primary key is that id, so it is never absent here.
+    final int? tagId = tag.id;
+    if (tagId == null) return;
+    await ref.read(tagBlocklistRepositoryProvider).unblock(tagId);
     refreshBlockedTags(ref);
   }
 }

@@ -135,7 +135,7 @@ class BrowseDefaults {
     String? storedColor,
     String? storedResolution,
   }) {
-    final CategoryFilter? categories = CategoryFilter.tryFromApiBits(
+    final CategoryFilter? categories = CategoryFilter.tryParseStored(
       storedCategories,
     );
     final TopRange? topRange = TopRange.tryFromApiValue(storedTopRange);
@@ -221,7 +221,7 @@ class BrowseDefaults {
   @override
   bool operator ==(Object other) {
     return other is BrowseDefaults &&
-        other.categories.toApiBits() == categories.toApiBits() &&
+        other.categories.encodeStored() == categories.encodeStored() &&
         other.topRange == topRange &&
         other.encodedRatios() == encodedRatios() &&
         other.resolution == resolution &&
@@ -232,7 +232,7 @@ class BrowseDefaults {
   @override
   int get hashCode {
     return Object.hash(
-      categories.toApiBits(),
+      categories.encodeStored(),
       topRange,
       encodedRatios(),
       resolution,

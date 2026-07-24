@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 part 'tela_database.g.dart';
 
@@ -28,8 +29,23 @@ class SettingEntries extends Table {
 /// would have to re-fetch. Sharing the columns keeps the two tables from
 /// drifting apart field by field.
 mixin WallpaperColumns on Table {
-  /// Wallhaven's id, e.g. `"e7jvjd"`.
+  /// `SourceId` value of the site it came from, e.g. `"wallhaven"`.
+  ///
+  /// Half the primary key, and the reason there is one: an id is unique to its
+  /// source, so two sources can issue the same one — Konachan #12345 and
+  /// yande.re #12345 are two wallpapers, and a table keyed on the number alone
+  /// would let the second silently overwrite the first.
+  TextColumn get source => text()();
+
+  /// The id that source issued, e.g. `"e7jvjd"`.
   TextColumn get id => text()();
+
+  /// The wallpaper's public page on its own site.
+  ///
+  /// Stored rather than composed on read for the same reason the model stopped
+  /// composing it: only the source's adapter knows its URL shape, and a stored
+  /// row must render offline without one.
+  TextColumn get pageUrl => text()();
 
   /// Full-resolution source — what apply and download stream from.
   TextColumn get fullImageUrl => text()();
@@ -55,14 +71,14 @@ mixin WallpaperColumns on Table {
   /// Purity enum name. Routes storage, so its read has a fail-safe parse.
   TextColumn get purity => text()();
 
-  /// Category enum name.
+  /// Category enum name, or empty for a source that has no such axis.
   TextColumn get category => text()();
 
   /// Dominant colours, comma-joined in Wallhaven's order.
   TextColumn get colors => text()();
 
   @override
-  Set<Column<Object>> get primaryKey => <Column<Object>>{id};
+  Set<Column<Object>> get primaryKey => <Column<Object>>{source, id};
 }
 
 /// One favorited wallpaper, stored whole rather than as a bare id.
@@ -79,7 +95,7 @@ class FavoriteWallpapers extends Table with WallpaperColumns {
 
 /// One wallpaper this device downloaded, and where the file landed.
 ///
-/// Keyed by wallpaper id, so downloading the same wallpaper twice updates one
+/// Keyed by source and id, so downloading the same wallpaper twice updates one
 /// row rather than stacking duplicates in the history.
 ///
 /// **Never holds an explicit wallpaper, and never an app-private one.** Both
@@ -145,7 +161,7 @@ class TelaDatabase extends _$TelaDatabase {
   }
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   /// Adds tables to an existing database instead of recreating it.
   ///
@@ -153,7 +169,9 @@ class TelaDatabase extends _$TelaDatabase {
   /// at v2, and downloads at v3. A blocked-tags table arriving at v4 must not
   /// cost anyone either — each version only ever adds what the one before it
   /// lacked. v5 is the exception that proves the shape: it adds nothing and
-  /// *removes* rows, because those rows should never have been written.
+  /// *removes* rows, because those rows should never have been written. v6 is
+  /// the other exception: it rewrites two tables, and every row they hold is
+  /// kept.
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
@@ -163,7 +181,54 @@ class TelaDatabase extends _$TelaDatabase {
         if (from < 3) await m.createTable(downloadedWallpapers);
         if (from < 4) await m.createTable(blockedTags);
         if (from < 5) await purgePrivateDownloads();
+        if (from < 6) await _qualifyWallpapersBySource(m);
       },
+    );
+  }
+
+  /// Adds the `source` and `page_url` columns to both wallpaper tables and
+  /// backfills them.
+  ///
+  /// Every row written before v6 came from Wallhaven — it was the only source
+  /// tela had — so both backfills are facts about the past, not guesses: the
+  /// source is the literal `'wallhaven'`, and the page URL is the one
+  /// `Wallpaper.pageUrl` used to compose from the id before the model stopped
+  /// knowing any site's URL shape. Both are spelled out rather than read from
+  /// the code for the same reason [purgePrivateDownloads] hardcodes
+  /// `'appPrivate'`: a migration is frozen at the moment it shipped and must
+  /// keep writing the value that was really written, whatever the code is
+  /// renamed to later.
+  ///
+  /// [Migrator.alterTable] rather than `addColumn`, because the primary key
+  /// changes too — SQLite cannot alter one, so the table is recreated and its
+  /// rows copied across.
+  Future<void> _qualifyWallpapersBySource(Migrator m) async {
+    await _addSourceColumn(m, favoriteWallpapers);
+    await _addSourceColumn(m, downloadedWallpapers);
+  }
+
+  /// Recreates [table] with its `source` column added, backfilled to
+  /// `'wallhaven'`.
+  ///
+  /// `TableMigration` is drift's experimental API and the only one that can do
+  /// this: the alternative is hand-written `CREATE`/`INSERT SELECT`/`DROP` SQL,
+  /// which is the same operation with the column list copied out by hand — one
+  /// more place for the schema to drift from the tables above.
+  Future<void> _addSourceColumn(Migrator m, TableInfo<Table, Object?> table) {
+    final GeneratedColumn<Object> source = table.columnsByName['source']!;
+    final GeneratedColumn<Object> pageUrl = table.columnsByName['page_url']!;
+    return m.alterTable(
+      // ignore: experimental_member_use, drift's only recreate-and-copy path
+      TableMigration(
+        table,
+        columnTransformer: <GeneratedColumn<Object>, Expression<Object>>{
+          source: const Constant<String>('wallhaven'),
+          pageUrl: const CustomExpression<String>(
+            "'https://wallhaven.cc/w/' || id",
+          ),
+        },
+        newColumns: <GeneratedColumn<Object>>[source, pageUrl],
+      ),
     );
   }
 
@@ -204,11 +269,11 @@ class TelaDatabase extends _$TelaDatabase {
     return into(downloadedWallpapers).insertOnConflictUpdate(row);
   }
 
-  /// Drops the download row for [id]. The file it points at is not touched.
-  Future<void> deleteDownload(String id) {
+  /// Drops the download row for [ref]. The file it points at is not touched.
+  Future<void> deleteDownload(WallpaperRef ref) {
     final DeleteStatement<$DownloadedWallpapersTable, DownloadRow> statement =
         delete(downloadedWallpapers)
-          ..where(($DownloadedWallpapersTable row) => row.id.equals(id));
+          ..where(($DownloadedWallpapersTable row) => _matches(row, ref));
     return statement.go();
   }
 
@@ -222,11 +287,11 @@ class TelaDatabase extends _$TelaDatabase {
     return query.get();
   }
 
-  /// True when [id] is currently favorited.
-  Future<bool> hasFavorite(String id) async {
+  /// True when [ref] is currently favorited.
+  Future<bool> hasFavorite(WallpaperRef ref) async {
     final SimpleSelectStatement<$FavoriteWallpapersTable, FavoriteRow> query =
         select(favoriteWallpapers)
-          ..where(($FavoriteWallpapersTable row) => row.id.equals(id));
+          ..where(($FavoriteWallpapersTable row) => _matches(row, ref));
     return await query.getSingleOrNull() != null;
   }
 
@@ -235,12 +300,21 @@ class TelaDatabase extends _$TelaDatabase {
     return into(favoriteWallpapers).insertOnConflictUpdate(row);
   }
 
-  /// Removes one favorite. A no-op when [id] was never saved.
-  Future<void> deleteFavorite(String id) {
+  /// Removes one favorite. A no-op when [ref] was never saved.
+  Future<void> deleteFavorite(WallpaperRef ref) {
     final DeleteStatement<$FavoriteWallpapersTable, FavoriteRow> statement =
         delete(favoriteWallpapers)
-          ..where(($FavoriteWallpapersTable row) => row.id.equals(id));
+          ..where(($FavoriteWallpapersTable row) => _matches(row, ref));
     return statement.go();
+  }
+
+  /// Matches the one row [ref] names, on both halves of the key.
+  ///
+  /// Shared by every wallpaper-keyed statement: matching on the id alone still
+  /// *looks* correct while there is one source, which is exactly how a
+  /// half-migrated key survives a test suite.
+  static Expression<bool> _matches(WallpaperColumns row, WallpaperRef ref) {
+    return row.source.equals(ref.source.value) & row.id.equals(ref.id);
   }
 
   /// Every blocked tag, most recently blocked first.

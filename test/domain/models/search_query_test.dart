@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tela/data/wallhaven/wallhaven_query.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
@@ -9,234 +10,49 @@ import 'package:tela/domain/models/search_tag.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 
 void main() {
-  group('PurityFilter.toApiBits', () {
-    test('encodes in Wallhaven bit order: sfw sketchy nsfw', () {
-      expect(PurityFilter.sfwOnly.toApiBits(), '100');
-      expect(
-        const PurityFilter({Purity.sfw, Purity.sketchy}).toApiBits(),
-        '110',
-      );
-      expect(
-        const PurityFilter({
-          Purity.sfw,
-          Purity.sketchy,
-          Purity.nsfw,
-        }).toApiBits(),
-        '111',
-      );
-      // Non-contiguous selections must not collapse to a prefix.
-      expect(const PurityFilter({Purity.nsfw}).toApiBits(), '001');
-    });
-
-    test('rejects an empty selection instead of sending "000"', () {
-      expect(
-        const PurityFilter(<Purity>{}).toApiBits,
-        throwsA(isA<ArgumentError>()),
-      );
-    });
-
+  group('PurityFilter', () {
     test('knows when a key is needed', () {
       expect(PurityFilter.sfwOnly.requiresApiKey, isFalse);
       expect(const PurityFilter({Purity.nsfw}).requiresApiKey, isTrue);
     });
   });
 
-  group('CategoryFilter.toApiBits', () {
-    test('encodes in Wallhaven bit order: general anime people', () {
-      expect(CategoryFilter.all.toApiBits(), '111');
-      expect(const CategoryFilter({Category.general}).toApiBits(), '100');
-      expect(const CategoryFilter({Category.people}).toApiBits(), '001');
-    });
-
-    test('rejects an empty selection', () {
-      expect(
-        const CategoryFilter(<Category>{}).toApiBits,
-        throwsA(isA<ArgumentError>()),
+  group('SearchQuery.key', () {
+    test('is the same string for two queries that are one listing', () {
+      // Tags and ratios are sets in meaning, so their order must not reach the
+      // key — a shelf keyed by it would otherwise reload on a reordering.
+      const SearchQuery one = SearchQuery(
+        tags: <SearchTag>[SearchTag('nature'), SearchTag('forest')],
+        purity: PurityFilter({Purity.sfw, Purity.sketchy}),
       );
-    });
-  });
+      const SearchQuery other = SearchQuery(
+        tags: <SearchTag>[SearchTag('forest'), SearchTag('nature')],
+        purity: PurityFilter({Purity.sketchy, Purity.sfw}),
+      );
 
-  group('SearchQuery.toQueryParameters', () {
-    test('defaults to a safe, portrait, newest-first browse', () {
-      final Map<String, String> params = const SearchQuery()
-          .toQueryParameters();
-
-      expect(params['purity'], '100');
-      expect(params['categories'], '111');
-      expect(params['sorting'], 'date_added');
-      expect(params['order'], 'desc');
-      expect(params['ratios'], '9x16');
-      expect(params['page'], '1');
+      expect(one.key, other.key);
     });
 
-    test('unions the ratios, because that is what the API does with them', () {
-      final Map<String, String> params = const SearchQuery(
-        ratios: <RatioChoice>[ExactRatio(9, 16), ShapeRatio.landscape],
-      ).toQueryParameters();
-
-      expect(params['ratios'], '9x16,landscape');
-    });
-
-    test('sends no `ratios` at all for "any shape"', () {
-      // Not an empty `ratios=`, which is not how you ask for every shape.
-      final Map<String, String> params = const SearchQuery(
-        ratios: <RatioChoice>[],
-      ).toQueryParameters();
-
-      expect(params.containsKey('ratios'), isFalse);
-    });
-
-    test('never puts the API key in the query string', () {
-      final Map<String, String> params = const SearchQuery(
-        term: 'forest',
-      ).toQueryParameters();
-
-      expect(params.keys, isNot(contains('apikey')));
-      expect(params.keys, isNot(contains('api_key')));
-    });
-
-    test('omits an empty term rather than sending q=', () {
-      expect(const SearchQuery().toQueryParameters().containsKey('q'), isFalse);
-      expect(const SearchQuery(term: 'cats').toQueryParameters()['q'], 'cats');
-    });
-
-    test('sends topRange only for toplist, which is the only sorting that '
-        'honours it', () {
-      final Map<String, String> hot = const SearchQuery(
-        sorting: Sorting.hot,
-      ).toQueryParameters();
-      final Map<String, String> top = const SearchQuery(
-        sorting: Sorting.toplist,
-        topRange: TopRange.oneWeek,
-      ).toQueryParameters();
-
-      expect(hot.containsKey('topRange'), isFalse);
-      expect(top['topRange'], '1w');
-    });
-
-    test('sends atleast only when set', () {
+    test('a changed filter is a different listing', () {
       expect(
-        const SearchQuery().toQueryParameters().containsKey('atleast'),
-        isFalse,
+        const SearchQuery().key,
+        isNot(const SearchQuery(sorting: Sorting.toplist).key),
       );
       expect(
-        const SearchQuery(
-          resolution: AtLeastResolution(Resolution(1080, 2400)),
-        ).toQueryParameters()['atleast'],
-        '1080x2400',
+        const SearchQuery().key,
+        isNot(const SearchQuery(term: 'cats').key),
       );
     });
 
-    test(
-      'carries the seed so a random listing does not reshuffle mid-scroll',
-      () {
-        final Map<String, String> params = const SearchQuery(
-          sorting: Sorting.random,
-          seed: 'abc123',
-        ).toQueryParameters();
+    test('carries no source URL shape at all', () {
+      // The point of the move: a shelf identity that named Wallhaven's params
+      // made a feature file depend on them, and would have given two sources
+      // one identity for the same filters.
+      final String key = const SearchQuery(term: 'cats').key;
 
-        expect(params['seed'], 'abc123');
-      },
-    );
-
-    test('folds the tags into q, after the free-text term', () {
-      final Map<String, String> params = const SearchQuery(
-        term: 'sunset',
-        tags: <SearchTag>[
-          SearchTag('nature'),
-          SearchTag('people', TagSense.exclude),
-        ],
-      ).toQueryParameters();
-
-      expect(params['q'], 'sunset +"nature" -"people"');
-    });
-
-    test('sends a tag-only q with no free-text term', () {
-      // A leading + is a query Wallhaven accepts; the tag alone is still a
-      // search, not a browse.
-      final Map<String, String> params = const SearchQuery(
-        tags: <SearchTag>[SearchTag('nature')],
-      ).toQueryParameters();
-
-      expect(params['q'], '+"nature"');
-    });
-
-    test('sends id: alone, withholding tags and the blocklist', () {
-      // Confirmed live against Wallhaven (2026-07-15): id:{n} returns *zero*
-      // results the moment anything else shares q with it — this is what
-      // made following a tag chip go blank the instant one tag was blocked.
-      final Map<String, String> params = const SearchQuery(
-        term: 'id:37',
-        tags: <SearchTag>[SearchTag('nature')],
-        blockedTagNames: <String>{'spoilers'},
-      ).toQueryParameters();
-
-      expect(params['q'], 'id:37');
-    });
-
-    test('sends like: alone, withholding tags and the blocklist', () {
-      // Same exclusive-operator rule as id:, confirmed live the same way.
-      final Map<String, String> params = const SearchQuery(
-        term: 'like:123',
-        tags: <SearchTag>[SearchTag('nature')],
-        blockedTagNames: <String>{'spoilers'},
-      ).toQueryParameters();
-
-      expect(params['q'], 'like:123');
-    });
-
-    test('sends no q at all for a browse with no term and no tags', () {
-      expect(const SearchQuery().toQueryParameters().containsKey('q'), isFalse);
-    });
-
-    test('folds the blocklist into q, as -name after the tags', () {
-      // Not -id:{n}: confirmed live against Wallhaven (2026-07-15) that the
-      // exact-id operator has no exclude side and is silently ignored, where
-      // -name genuinely filters.
-      final Map<String, String> params = const SearchQuery(
-        term: 'sunset',
-        tags: <SearchTag>[SearchTag('nature')],
-        blockedTagNames: <String>{'spoilers'},
-      ).toQueryParameters();
-
-      expect(params['q'], 'sunset +"nature" -"spoilers"');
-    });
-
-    test('sends a blocklist-only q with no term and no tags', () {
-      final Map<String, String> params = const SearchQuery(
-        blockedTagNames: <String>{'spoilers'},
-      ).toQueryParameters();
-
-      expect(params['q'], '-"spoilers"');
-    });
-
-    test('quotes a multi-word blocked tag name, not just single words', () {
-      // The bug this guards: unquoted, Wallhaven reads `-anime girls` as
-      // excluding "anime" *and* weakly matching the bare word "girls" —
-      // never as excluding the one tag. Two of those stacked crushed a real
-      // listing to near zero (found live, 2026-07-15).
-      final Map<String, String> params = const SearchQuery(
-        blockedTagNames: <String>{'anime girls'},
-      ).toQueryParameters();
-
-      expect(params['q'], '-"anime girls"');
-    });
-
-    test('sends no colour at all when none is chosen', () {
-      // Not an empty `colors=`, which Wallhaven reads as a filter that matches
-      // nothing rather than as the absence of one.
-      expect(
-        const SearchQuery().toQueryParameters().containsKey('colors'),
-        isFalse,
-      );
-    });
-
-    test('sends a chosen colour without its leading hash', () {
-      final Map<String, String> params = const SearchQuery()
-          .withColor(WallpaperColor('#0066cc'))
-          .toQueryParameters();
-
-      expect(params['colors'], '0066cc');
+      expect(key, contains('term=cats'));
+      expect(key, isNot(contains('q=')));
+      expect(key, isNot(contains('100')));
     });
   });
 
@@ -339,7 +155,9 @@ void main() {
       expect(filtered.copyWith().color, WallpaperColor('#0066cc'));
       expect(filtered.withColor(null).color, isNull);
       expect(
-        filtered.withColor(null).toQueryParameters().containsKey('colors'),
+        wallhavenQueryParameters(
+          filtered.withColor(null),
+        ).containsKey('colors'),
         isFalse,
       );
     });

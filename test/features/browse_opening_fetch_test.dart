@@ -13,6 +13,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/browse_screen.dart';
@@ -22,7 +23,7 @@ import 'package:tela/features/browse/wallpaper_tile.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 /// The startup hang, pinned at the two altitudes it lives at.
 ///
@@ -34,7 +35,7 @@ void main() {
   testWidgets('a query change lands even before the opening fetch has drawn', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       page: _page(count: 2, currentPage: 1, lastPage: 1),
     );
     final FakeTagBlocklistRepository blocklist = FakeTagBlocklistRepository();
@@ -43,7 +44,7 @@ void main() {
     // no frame has drawn that fetch's `isLoading` state yet, so as far as the
     // paging layout is concerned the state is still the pristine one it was
     // built with.
-    await _pumpGrid(tester, api, blocklist, const SearchQuery());
+    await _pumpGrid(tester, source, blocklist, const SearchQuery());
 
     // Now the query changes underneath it, which is what browse defaults
     // resolving asynchronously at startup does. `refresh()` clears the paging
@@ -53,7 +54,7 @@ void main() {
     // discarded as stale on arrival. Nobody is left to ask again.
     await _pumpGrid(
       tester,
-      api,
+      source,
       blocklist,
       const SearchQuery(categories: CategoryFilter({Category.anime})),
     );
@@ -65,7 +66,7 @@ void main() {
       reason: 'the grid must reach content, not spin forever',
     );
     expect(
-      api.receivedQueries.last.categories,
+      source.receivedQueries.last.categories,
       const CategoryFilter({Category.anime}),
       reason: 'and it must be the new query that was fetched',
     );
@@ -78,7 +79,7 @@ void main() {
     // in flight when the query changed, dawdling past the fetch that superseded
     // it. `PagingController` drops its items, but nothing was stopping it from
     // writing its own `hasMore: false` over the new listing's page.
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       pageFor: (SearchQuery query) => _isAnime(query)
           // Enough to fill the viewport, so the grid asks for page 2 only when
           // this test does — and never to fill a gap under the last row.
@@ -89,8 +90,8 @@ void main() {
     );
     final FakeTagBlocklistRepository blocklist = FakeTagBlocklistRepository();
 
-    await _pumpGrid(tester, api, blocklist, const SearchQuery());
-    await _pumpGrid(tester, api, blocklist, _anime);
+    await _pumpGrid(tester, source, blocklist, const SearchQuery());
+    await _pumpGrid(tester, source, blocklist, _anime);
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(WallpaperTile), findsWidgets);
 
@@ -114,7 +115,7 @@ void main() {
   testWidgets('browse loads when its defaults resolve into the opening fetch', (
     WidgetTester tester,
   ) async {
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       page: _page(count: 2, currentPage: 1, lastPage: 1),
     );
     // Defaults that differ from tela's own, so adopting them genuinely changes
@@ -128,7 +129,7 @@ void main() {
       ),
     );
 
-    await _pumpBrowse(tester, api, settings);
+    await _pumpBrowse(tester, source, settings);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -136,7 +137,7 @@ void main() {
     // a spinner that never goes away.
     expect(find.byType(WallpaperTile), findsNWidgets(2));
     expect(
-      api.receivedQueries.last.categories,
+      source.receivedQueries.last.categories,
       const CategoryFilter({Category.anime}),
     );
   });
@@ -147,11 +148,11 @@ void main() {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       page: _page(count: 2, currentPage: 1, lastPage: 1),
     );
 
-    await _pumpBrowse(tester, api, FakeSettingsRepository());
+    await _pumpBrowse(tester, source, FakeSettingsRepository());
 
     // Android hands Flutter its real display metrics after the first frame is
     // already up, and browse folds the screen's size into every query it makes
@@ -167,7 +168,7 @@ void main() {
 
     expect(find.byType(WallpaperTile), findsNWidgets(2));
     expect(
-      (api.receivedQueries.last.resolution as AtLeastResolution).minimum,
+      (source.receivedQueries.last.resolution as AtLeastResolution).minimum,
       const Resolution(1600, 2560),
       reason: 'and it asks for images that fit the screen it actually has',
     );
@@ -181,13 +182,13 @@ void main() {
 /// straight over the window under test.
 Future<void> _pumpBrowse(
   WidgetTester tester,
-  FakeWallhavenApi api,
+  FakeWallpaperSource source,
   FakeSettingsRepository settings,
 ) {
   return tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(api),
+        wallhavenSourceProvider.overrideWithValue(source),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         settingsRepositoryProvider.overrideWithValue(settings),
         tagBlocklistRepositoryProvider.overrideWithValue(
@@ -229,19 +230,19 @@ PagingController<int, Wallpaper> _paging(WidgetTester tester) {
       .controller;
 }
 
-/// Mounts the grid on [query], reusing [api] and [blocklist] so that pumping a
+/// Mounts the grid on [query], reusing [source] and [blocklist] so pumping a
 /// new query updates the existing grid rather than remounting it — the
 /// difference between the bug and the tab tap that works around it.
 Future<void> _pumpGrid(
   WidgetTester tester,
-  FakeWallhavenApi api,
+  FakeWallpaperSource source,
   FakeTagBlocklistRepository blocklist,
   SearchQuery query,
 ) {
   return tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(api),
+        wallhavenSourceProvider.overrideWithValue(source),
         // Mounting the grid reads the standing blocklist. Left unbound, it
         // opens the real database.
         tagBlocklistRepositoryProvider.overrideWithValue(blocklist),
@@ -273,6 +274,7 @@ WallpaperPage _page({
     wallpapers: <Wallpaper>[
       for (int i = 0; i < count; i++) _wallpaper('p${currentPage}w$i'),
     ],
+    hasMore: currentPage < lastPage,
     currentPage: currentPage,
     lastPage: lastPage,
   );
@@ -280,6 +282,8 @@ WallpaperPage _page({
 
 Wallpaper _wallpaper(String id) => Wallpaper(
   id: id,
+  source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',

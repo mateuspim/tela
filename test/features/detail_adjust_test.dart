@@ -8,6 +8,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_adjust_failure.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
@@ -21,8 +22,8 @@ import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_system_wallpaper_editor.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
 import '../fakes/fake_wallpaper_sharer.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   testWidgets('a safe wallpaper offers the editor', (
@@ -134,8 +135,8 @@ Future<void> _pumpDetail(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(
-          FakeWallhavenApi(
+        wallhavenSourceProvider.overrideWithValue(
+          FakeWallpaperSource(
             details: details,
           ),
         ),
@@ -176,6 +177,8 @@ Future<void> _pumpDetail(
 WallpaperDetails _details({Purity purity = Purity.sfw}) {
   final Wallpaper wallpaper = Wallpaper(
     id: 'e7jvjd',
+    source: SourceId.wallhaven,
+    pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
     fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',

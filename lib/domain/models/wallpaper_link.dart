@@ -1,5 +1,6 @@
 import 'package:meta/meta.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/search_tag.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 
@@ -43,15 +44,28 @@ final class TagLink extends WallpaperLink {
   /// `id:{n}`, Wallhaven's **exact**-tag operator — not `+{name}`, which is a
   /// fuzzy text match that would quietly return a *different* tag reading the
   /// same. Sent alone, as `id:` demands.
+  ///
+  /// A tag with no id narrows by name instead, and loses nothing by it: only a
+  /// source whose tag names *are* the identifier hands over an id-less tag
+  /// (PLAN §18.4), so there is no fuzzier match to fall into.
   @override
-  SearchQuery narrow(SearchQuery query) =>
-      query.copyWith(term: 'id:${tag.id}', sorting: Sorting.dateAdded);
+  SearchQuery narrow(SearchQuery query) {
+    final int? tagId = tag.id;
+    if (tagId == null) {
+      return query.copyWith(
+        term: '',
+        tags: <SearchTag>[SearchTag(tag.name)],
+        sorting: Sorting.dateAdded,
+      );
+    }
+    return query.copyWith(term: 'id:$tagId', sorting: Sorting.dateAdded);
+  }
 
   @override
-  bool operator ==(Object other) => other is TagLink && other.tag.id == tag.id;
+  bool operator ==(Object other) => other is TagLink && other.tag == tag;
 
   @override
-  int get hashCode => Object.hash(TagLink, tag.id);
+  int get hashCode => Object.hash(TagLink, tag);
 }
 
 /// Everything one Wallhaven user has uploaded.

@@ -1,6 +1,7 @@
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 /// What this device has downloaded, so it can be set again without re-fetching.
 ///
@@ -43,7 +44,7 @@ abstract interface class DownloadHistory {
     required Uri location,
   });
 
-  /// Forgets the row for [id]. **Does not touch the downloaded file.**
+  /// Forgets the row for [ref]. **Does not touch the downloaded file.**
   ///
   /// The history is an index, not a folder, and this is the only honest thing
   /// "remove" can mean here: the file lives in the gallery or under the user's
@@ -52,6 +53,7 @@ abstract interface class DownloadHistory {
   /// how someone loses a wallpaper they meant to keep. The UI says so in the
   /// words of the confirmation, not just in this docstring.
   ///
-  /// A no-op for an id that is not recorded — forgetting twice is not an error.
-  Future<void> forget(String id);
+  /// A no-op for a wallpaper that is not recorded — forgetting twice is not
+  /// an error.
+  Future<void> forget(WallpaperRef ref);
 }

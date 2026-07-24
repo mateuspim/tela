@@ -50,7 +50,7 @@ class SelectableWallpaperShelf extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return SelectionShelf(
-      itemIds: <String>[for (final Wallpaper w in wallpapers) w.id],
+      itemIds: <String>[for (final Wallpaper w in wallpapers) w.ref.key],
       actions: <SelectionAction>[
         for (final WallpaperBatchAction action in actions)
           _actionFor(context, ref, l10n, action),
@@ -83,11 +83,11 @@ class SelectableWallpaperShelf extends ConsumerWidget {
   /// Resolved from the shelf's own list rather than held in the selection: the
   /// listing is the authority on what is on screen, so an id whose wallpaper
   /// has since gone is dropped instead of acted on as a stale copy.
-  List<Wallpaper> _selected(List<String> ids) {
-    final Set<String> ticked = ids.toSet();
+  List<Wallpaper> _selected(List<String> keys) {
+    final Set<String> ticked = keys.toSet();
     return <Wallpaper>[
       for (final Wallpaper w in wallpapers)
-        if (ticked.contains(w.id)) w,
+        if (ticked.contains(w.ref.key)) w,
     ];
   }
 

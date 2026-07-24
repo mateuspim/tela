@@ -431,17 +431,26 @@ serves different content per hostname — `konachan.net` is SFW-only,
 
 Each stage ends green on `make ci` and is mergeable alone.
 
-1. **Identity and encoding.** §17.3 items 1–5 plus the renames. **No
-   user-visible change at all** — which is exactly what makes it verifiable:
-   the existing suites must pass essentially unchanged, and any behaviour that
-   moves is a bug in the refactor.
-2. **Registry and switcher.** `WallpaperSourceRegistry`, an active-source
-   setting, per-source query state, a capability-driven filter sheet, per-source
-   credentials in settings. Still ships one real source; a `FakeWallpaperSource`
-   with deliberately *different* capabilities is what proves the seam in tests.
+1. ~~**Identity and encoding.**~~ **Built** (`7b10ec2`, `ae5cc7a`, `1285154`,
+   `76034cf`, 2026-07-24). §17.3 items 1–7 plus the renames. **No user-visible
+   change at all** — verified by the suites passing essentially unchanged
+   (Dart 944 green through the four commits). Note where the plan was refined
+   in the building: `SearchQuery` grew a `key` (not the encoded string) for
+   the shelf identity; the bit masks split into a *storage* codec
+   (`stored_bits.dart`) kept in `domain/` and a *wire* encoder
+   (`data/wallhaven/wallhaven_query.dart`), because a row on disk must keep
+   reading forever whatever a source's API does. Schema v6 also backfills
+   `page_url`, since the model stopped composing the permalink.
+2. ~~**Registry and switcher.**~~ **Built** (`605a86f`, 2026-07-24).
+   `wallpaper_sources.dart` is the registry; the active source is a Drift
+   setting; the filter sheet renders from `SourceCapabilities`;
+   `SearchWallpapers` reads the source's key rule instead of assuming.
+   `FakeWallpaperSource` with `narrowCapabilities` proves the seam. **Owed on a
+   device:** the v6 migration on a real accumulated database, and watching the
+   sheet re-render on a switch — both wait for a second real source.
 3. **Konachan adapter.** The first real second source — designed in §18, whose
    paging, rating and operator behaviour was **verified live on 2026-07-24**
-   before any of it was planned against.
+   before any of it was planned against. **This is the next build.**
 4. **Cross-source polish.** Source badge on tiles and in library grids, per-source
    rate limits, source-aware failure text.
 

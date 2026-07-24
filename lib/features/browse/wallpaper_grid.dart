@@ -335,13 +335,13 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
   ) {
     final gestures = selectableTileGestures(
       context: context,
-      wallpaperId: loaded[index].id,
+      wallpaperKey: loaded[index].ref.key,
       onOpen: () => _openDetail(context, loaded, index),
       onLongPress: () => _openQuickActions(context, loaded, index),
     );
     return WallpaperTile(
       wallpaper: loaded[index],
-      heroTag: shelfHeroTag(identity, loaded[index].id, index),
+      heroTag: shelfHeroTag(identity, loaded[index].ref.key, index),
       onTap: gestures.onTap,
       onLongPress: gestures.onLongPress,
     );
@@ -509,7 +509,7 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
       await context.pushNamed<void>(
         TelaRoutes.detailName,
         pathParameters: <String, String>{
-          'wallpaperId': session.selectedItem.id,
+          'wallpaperKey': session.selectedItem.ref.key,
         },
         // The grid's own query travels with the session so a tag or colour
         // followed from the detail screen inherits the filters this listing is

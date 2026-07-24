@@ -2,17 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/use_cases/sync_account_defaults.dart';
 
 import '../../fakes/fake_settings_repository.dart';
-import '../../fakes/fake_wallhaven_api.dart';
+import '../../fakes/fake_wallpaper_source.dart';
 
 void main() {
   test('keeps what the account answered with', () async {
     final FakeSettingsRepository settings = FakeSettingsRepository();
     final SyncAccountDefaults sync = SyncAccountDefaults(
-      api: FakeWallhavenApi(account: _account),
+      source: FakeWallpaperSource(account: _account),
       settings: settings,
     );
 
@@ -23,21 +23,21 @@ void main() {
   });
 
   test('costs one request — the account is not polled', () async {
-    final FakeWallhavenApi api = FakeWallhavenApi(account: _account);
+    final FakeWallpaperSource source = FakeWallpaperSource(account: _account);
     final SyncAccountDefaults sync = SyncAccountDefaults(
-      api: api,
+      source: source,
       settings: FakeSettingsRepository(),
     );
 
     await sync();
 
-    expect(api.accountSettingsCalls, 1);
+    expect(source.accountSettingsCalls, 1);
   });
 
   test('stores nothing when the key is rejected', () async {
     final FakeSettingsRepository settings = FakeSettingsRepository();
     final SyncAccountDefaults sync = SyncAccountDefaults(
-      api: FakeWallhavenApi(failure: const InvalidApiKeyFailure()),
+      source: FakeWallpaperSource(failure: const InvalidApiKeyFailure()),
       settings: settings,
     );
 
@@ -50,7 +50,7 @@ void main() {
       accountDefaults: _account,
     );
     final SyncAccountDefaults sync = SyncAccountDefaults(
-      api: FakeWallhavenApi(account: _otherAccount),
+      source: FakeWallpaperSource(account: _otherAccount),
       settings: settings,
     );
 

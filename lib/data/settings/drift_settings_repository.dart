@@ -4,6 +4,7 @@ import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tile_density.dart';
@@ -73,6 +74,11 @@ class DriftSettingsRepository implements SettingsRepository {
   /// picker and a `sqlite3` shell read. Absent means follow the device palette.
   static const String _accentKey = 'appearance.accent';
 
+  /// Which source browse is on, as the `SourceId` value (`wallhaven`).
+  /// Absent means Wallhaven, which is where every build before the switcher
+  /// browsed.
+  static const String _activeSourceKey = 'source.active';
+
   /// How large the shelves draw their tiles, stored as the [TileDensity]
   /// constant name — so a renamed constant reads back as unset (medium) rather
   /// than as some other density. Absent means medium.
@@ -92,6 +98,21 @@ class DriftSettingsRepository implements SettingsRepository {
   static const String _pinnedTierKey = 'downloads.pinned';
 
   final TelaDatabase _db;
+
+  @override
+  Future<SourceId> loadActiveSource() async {
+    final String? stored = await _db.settingValue(_activeSourceKey);
+    if (stored == null || stored.isEmpty) return SourceId.wallhaven;
+    // Taken at face value rather than validated against the registry: this
+    // adapter reports what was written, and choosing what to do about a source
+    // this build no longer has is the registry's call.
+    return SourceId(stored);
+  }
+
+  @override
+  Future<void> saveActiveSource(SourceId source) {
+    return _db.putSetting(_activeSourceKey, source.value);
+  }
 
   @override
   Future<StorageSettings> loadStorageSettings() async {
@@ -151,7 +172,10 @@ class DriftSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> saveAccountDefaults(AccountSettings account) async {
-    await _db.putSetting(_accountCategoriesKey, account.categories.toApiBits());
+    await _db.putSetting(
+      _accountCategoriesKey,
+      account.categories.encodeStored(),
+    );
     await _db.putSetting(_accountTopRangeKey, account.topRange.apiValue);
     // A re-sync is also the moment to drop what an older build wrote here.
     await _db.deleteSettings(<String>[_legacyAccountPurityKey]);
@@ -203,7 +227,10 @@ class DriftSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> saveDeviceDefaults(BrowseDefaults defaults) async {
-    await _db.putSetting(_deviceCategoriesKey, defaults.categories.toApiBits());
+    await _db.putSetting(
+      _deviceCategoriesKey,
+      defaults.categories.encodeStored(),
+    );
     await _db.putSetting(_deviceTopRangeKey, defaults.topRange.apiValue);
     await _db.putSetting(_deviceRatiosKey, defaults.encodedRatios());
     await _db.putSetting(_deviceOrderKey, defaults.order.name);

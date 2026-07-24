@@ -6,6 +6,7 @@ import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/domain/models/download_deletion.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 /// Confirms (unless Android already will), hard-deletes the download, and
 /// reports the outcome — the one entry point every "Delete from device" uses.
@@ -22,13 +23,14 @@ import 'package:tela/domain/models/storage_tier.dart';
 /// ```dart
 /// final bool gone = await confirmAndDeleteDownload(
 ///   context: context, ref: ref,
-///   id: record.wallpaper.id, tier: record.tier, location: record.location);
+///   ref: record.wallpaper.ref, tier: record.tier,
+///   location: record.location);
 /// if (gone) Navigator.of(context).maybePop();
 /// ```
 Future<bool> confirmAndDeleteDownload({
   required BuildContext context,
   required WidgetRef ref,
-  required String id,
+  required WallpaperRef? wallpaper,
   required StorageTier tier,
   required Uri location,
 }) async {
@@ -48,7 +50,7 @@ Future<bool> confirmAndDeleteDownload({
     ref,
     messenger,
     l10n,
-    id: id,
+    wallpaper: wallpaper,
     tier: tier,
     location: location,
   );
@@ -82,13 +84,13 @@ Future<bool> _deleteAndReport(
   WidgetRef ref,
   ScaffoldMessengerState messenger,
   AppLocalizations l10n, {
-  required String id,
+  required WallpaperRef? wallpaper,
   required StorageTier tier,
   required Uri location,
 }) async {
   try {
     final DownloadDeletion outcome = await ref.read(deleteDownloadProvider)(
-      id: id,
+      ref: wallpaper,
       tier: tier,
       location: location,
     );

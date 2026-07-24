@@ -1,19 +1,25 @@
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_capabilities.dart';
+import 'package:tela/domain/models/source_failure.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
-import 'package:tela/domain/ports/wallhaven_api.dart';
+import 'package:tela/domain/ports/wallpaper_source.dart';
 
-/// In-memory [WallhavenApi] that records what it was asked for.
+/// In-memory [WallpaperSource] that records what it was asked for.
 ///
 /// Records every [SearchQuery] it receives so tests can assert on the request
 /// the use case *built*, which is where the seed and paging bugs live.
-class FakeWallhavenApi implements WallhavenApi {
+class FakeWallpaperSource implements WallpaperSource {
   /// Creates a fake that answers every search with [page], or throws [failure].
-  FakeWallhavenApi({
+  FakeWallpaperSource({
+    this.id = SourceId.wallhaven,
+    this.displayName = 'Wallhaven',
+    this.capabilities = wallhavenLikeCapabilities,
     this.page,
     this.pageFor,
     this.pagesByNumber = const <int, WallpaperPage>{},
@@ -23,6 +29,23 @@ class FakeWallhavenApi implements WallhavenApi {
     this.failure,
     this.searchDelay,
   });
+
+  /// Which source this stands in for. Defaults to Wallhaven, because that is
+  /// what nearly every existing test is exercising.
+  @override
+  final SourceId id;
+
+  /// The name a switcher would print.
+  @override
+  final String displayName;
+
+  /// What this fake claims to support.
+  ///
+  /// The seam's real test: a fake declaring *fewer* capabilities is what proves
+  /// the filter sheet and the search guard read them rather than assuming
+  /// Wallhaven's.
+  @override
+  final SourceCapabilities capabilities;
 
   /// The page every [search] returns, unless [failure] is set.
   final WallpaperPage? page;
@@ -50,7 +73,7 @@ class FakeWallhavenApi implements WallhavenApi {
   final AccountSettings? account;
 
   /// When set, every call throws this instead of returning a page.
-  final WallhavenFailure? failure;
+  final SourceFailure? failure;
 
   /// How long each [search] takes to answer, decided from the query itself.
   ///
@@ -76,7 +99,7 @@ class FakeWallhavenApi implements WallhavenApi {
     receivedQueries.add(query);
     final Duration? delay = searchDelay?.call(query);
     if (delay != null) await Future<void>.delayed(delay);
-    final WallhavenFailure? toThrow = failure;
+    final SourceFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
     final WallpaperPage Function(SearchQuery query)? answerWith = pageFor;
     if (answerWith != null) return answerWith(query);
@@ -84,6 +107,7 @@ class FakeWallhavenApi implements WallhavenApi {
         page ??
         const WallpaperPage(
           wallpapers: <Wallpaper>[],
+          hasMore: false,
           currentPage: 1,
           lastPage: 1,
         );
@@ -92,7 +116,7 @@ class FakeWallhavenApi implements WallhavenApi {
   @override
   Future<WallpaperDetails> wallpaperDetails(String id) async {
     receivedDetailIds.add(id);
-    final WallhavenFailure? toThrow = failure;
+    final SourceFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
     final WallpaperDetails? result = detailsById[id] ?? details;
     if (result == null) {
@@ -104,7 +128,7 @@ class FakeWallhavenApi implements WallhavenApi {
   @override
   Future<AccountSettings> accountSettings() async {
     accountSettingsCalls++;
-    final WallhavenFailure? toThrow = failure;
+    final SourceFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
     return account ?? _telaDefaults;
   }
@@ -115,3 +139,49 @@ class FakeWallhavenApi implements WallhavenApi {
     topRange: TopRange.oneMonth,
   );
 }
+
+/// Everything Wallhaven supports — the default a fake wears.
+const SourceCapabilities wallhavenLikeCapabilities = SourceCapabilities(
+  filters: <SourceFilter>{
+    SourceFilter.categories,
+    SourceFilter.purity,
+    SourceFilter.colors,
+    SourceFilter.ratios,
+    SourceFilter.resolutions,
+    SourceFilter.tags,
+    SourceFilter.topRange,
+  },
+  sortings: <Sorting>{
+    Sorting.dateAdded,
+    Sorting.relevance,
+    Sorting.random,
+    Sorting.views,
+    Sorting.favorites,
+    Sorting.toplist,
+    Sorting.hot,
+  },
+  purities: <Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw},
+  credentials: SourceCredentials.nsfwRequiresKey,
+  requestsPerMinute: 45,
+  syncsAccountDefaults: true,
+);
+
+/// A deliberately *narrower* source: no categories, no colours, no toplist,
+/// three sortings, and no credentials at all — the shape of a booru.
+///
+/// Named after nothing real on purpose. It exists so a test can prove the app
+/// renders and guards from the capabilities rather than from Wallhaven's
+/// habits, without waiting for the Konachan adapter to exist.
+const SourceCapabilities narrowCapabilities = SourceCapabilities(
+  filters: <SourceFilter>{
+    SourceFilter.purity,
+    SourceFilter.ratios,
+    SourceFilter.resolutions,
+    SourceFilter.tags,
+  },
+  sortings: <Sorting>{Sorting.dateAdded, Sorting.views, Sorting.favorites},
+  purities: <Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw},
+  credentials: SourceCredentials.none,
+  requestsPerMinute: 60,
+  syncsAccountDefaults: false,
+);

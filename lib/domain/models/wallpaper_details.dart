@@ -38,33 +38,47 @@ class WallpaperDetails {
   /// The credited source URL, or an empty string when none was provided.
   final String source;
 
-  /// Number of Wallhaven detail-page views at fetch time.
-  final int views;
+  /// Number of detail-page views at fetch time, or null where the source
+  /// does not count them (Konachan has no view count at all).
+  final int? views;
 
-  /// Number of Wallhaven favorites at fetch time.
-  final int favorites;
+  /// Number of favorites at fetch time, or null where the source has no such
+  /// figure. A booru's `score` stands in for it where there is one.
+  final int? favorites;
 }
 
 /// One Wallhaven tag displayed with a wallpaper.
 @immutable
 class WallpaperTag {
-  /// Creates a tag with its stable Wallhaven id and display name.
-  const WallpaperTag({required this.id, required this.name});
+  /// Creates a tag with its display name, and the source's numeric id where
+  /// the source has one.
+  const WallpaperTag({required this.name, this.id});
 
-  /// Wallhaven's numeric tag id.
-  final int id;
+  /// The source's numeric tag id, or null where tags are identified by name.
+  ///
+  /// Booru tag names *are* the identifier — Konachan's own ids cost a second
+  /// request per tag and buy nothing (PLAN §18.4), so the adapter does not
+  /// fetch them.
+  final int? id;
 
   /// Human-readable tag label.
   final String name;
 
   /// Two tags are the same constraint when their id matches — the id is what
   /// Wallhaven's `id:{n}` operator and the blocklist both key on, and a tag can
-  /// be renamed upstream without becoming a different tag.
+  /// be renamed upstream without becoming a different tag. Where there is no
+  /// id, the name is the identity, because on those sources it genuinely is.
   @override
-  bool operator ==(Object other) => other is WallpaperTag && other.id == id;
+  bool operator ==(Object other) {
+    if (other is! WallpaperTag) return false;
+    final int? mine = id;
+    return mine == null || other.id == null
+        ? other.name == name
+        : other.id == mine;
+  }
 
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode => id?.hashCode ?? name.hashCode;
 }
 
 /// The Wallhaven user credited as a wallpaper's uploader.

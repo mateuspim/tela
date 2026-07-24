@@ -21,23 +21,17 @@ GallerySessionController<Wallpaper> createWallpaperGallerySession({
     prefetchItem: (Wallpaper wallpaper) =>
         _prefetchWallpaper(context, wallpaper),
     requestMore: requestMore,
-    itemKey: (Wallpaper wallpaper) => wallpaper.id,
+    itemKey: (Wallpaper wallpaper) => wallpaper.ref.key,
   );
 }
 
 /// Stable identity for one query-backed shelf, independent of page number.
-String wallpaperListingIdentity(String shelf, SearchQuery query) {
-  final Map<String, String> parameters = query.atPage(1).toQueryParameters();
-  final List<String> keys = parameters.keys.toList()..sort();
-  final String encoded = keys
-      .map(
-        (String key) =>
-            '${Uri.encodeQueryComponent(key)}='
-            '${Uri.encodeQueryComponent(parameters[key]!)}',
-      )
-      .join('&');
-  return '$shelf?$encoded';
-}
+///
+/// Reads [SearchQuery.key] rather than the encoded request: a shelf is not a
+/// URL, and a feature that keyed on one would have depended on whichever
+/// source's params happened to be current.
+String wallpaperListingIdentity(String shelf, SearchQuery query) =>
+    '$shelf?${query.atPage(1).key}';
 
 Future<void> _prefetchWallpaper(
   BuildContext context,

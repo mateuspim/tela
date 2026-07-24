@@ -3,7 +3,8 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
@@ -31,10 +32,15 @@ abstract final class WallhavenMapper {
       );
     }
     final Map<String, dynamic> meta = _readMeta(body);
+    final int currentPage = _readInt(meta, 'current_page', fallback: 1);
+    final int lastPage = _readInt(meta, 'last_page', fallback: 1);
     return WallpaperPage(
       wallpapers: data.map(_toWallpaper).toList(),
-      currentPage: _readInt(meta, 'current_page', fallback: 1),
-      lastPage: _readInt(meta, 'last_page', fallback: 1),
+      currentPage: currentPage,
+      // Wallhaven does publish a page count, so `hasMore` is decided here
+      // rather than by a short page — the fallback a source without one needs.
+      hasMore: currentPage < lastPage,
+      lastPage: lastPage,
       seed: meta['seed'] as String?,
     );
   }
@@ -123,6 +129,8 @@ abstract final class WallhavenMapper {
     }
     return Wallpaper(
       id: _readString(raw, 'id'),
+      source: SourceId.wallhaven,
+      pageUrl: Uri.parse(_readString(raw, 'url')),
       fullImageUrl: _readString(raw, 'path'),
       thumbSmallUrl: _readThumb(raw, 'small'),
       thumbLargeUrl: _readThumb(raw, 'large'),

@@ -9,6 +9,7 @@ import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/storage_settings_controller.dart';
+import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
@@ -28,18 +29,19 @@ import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/share_option.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_adjust_failure.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/models/wallpaper_share_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
-import 'package:tela/domain/ports/wallhaven_api.dart';
+import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/domain/use_cases/share_wallpaper.dart';
 import 'package:tela/features/browse/linked_listing_args.dart';
 import 'package:tela/features/detail/crop_wallpaper_screen.dart';
@@ -50,13 +52,20 @@ import 'package:tela/features/favorites/favorite_button.dart';
 import 'package:tela/features/settings/blocked_tags_providers.dart';
 
 /// Loads complete metadata independently of the grid's fast listing response.
-final FutureProviderFamily<WallpaperDetails, String> wallpaperDetailsProvider =
-    FutureProvider.autoDispose.family<WallpaperDetails, String>((
+///
+/// Keyed by the whole [WallpaperRef], and fetched through *that wallpaper's*
+/// source rather than the active one: a favorite opened from the library
+/// belongs to whichever site issued it, and an id means nothing anywhere else.
+final FutureProviderFamily<WallpaperDetails, WallpaperRef>
+wallpaperDetailsProvider = FutureProvider.autoDispose
+    .family<WallpaperDetails, WallpaperRef>((
       Ref ref,
-      String id,
+      WallpaperRef wallpaper,
     ) {
-      final WallhavenApi api = ref.watch(wallhavenApiProvider);
-      return api.wallpaperDetails(id);
+      final WallpaperSource source = ref.watch(
+        wallpaperSourceForProvider(wallpaper.source),
+      );
+      return source.wallpaperDetails(wallpaper.id);
     });
 
 /// Full-screen preview, metadata, and the shortest path to wallpaper apply.
@@ -330,7 +339,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     final bool deleted = await confirmAndDeleteDownload(
       context: context,
       ref: ref,
-      id: record.wallpaper.id,
+      wallpaper: record.wallpaper.ref,
       tier: record.tier,
       location: record.location,
     );
@@ -440,7 +449,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final AsyncValue<WallpaperDetails> details = ref.watch(
-      wallpaperDetailsProvider(_wallpaper.id),
+      wallpaperDetailsProvider(_wallpaper.ref),
     );
     final bool expanded = MediaQuery.sizeOf(context).width >= _expandedWidth;
     return Scaffold(
@@ -591,7 +600,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       wallpaper: wallpaper,
       fillLetterbox: true,
       heroTag: index == _gallery.selectedIndex
-          ? shelfHeroTag(_gallery.identity, wallpaper.id, index)
+          ? shelfHeroTag(_gallery.identity, wallpaper.ref.key, index)
           : null,
     );
   }
@@ -709,7 +718,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       error: (Object error, StackTrace stackTrace) => Padding(
         padding: const EdgeInsets.all(24),
         child: Text(
-          error is WallhavenFailure
+          error is SourceFailure
               ? localizedFailure(l10n, error)
               : l10n.errorUnexpected,
         ),

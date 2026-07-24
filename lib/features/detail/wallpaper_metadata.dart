@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/wallpaper_swatch.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
+import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
@@ -105,12 +106,19 @@ class WallpaperMetadata extends StatelessWidget {
     return <(String, String)>[
       (l10n.detailResolution, item.wallpaper.resolution.toString()),
       (l10n.detailFileSize, _bytes(l10n, item.wallpaper.fileSizeBytes)),
-      (l10n.detailCategory, categoryLabel(l10n, item.wallpaper.category)),
+      // Omitted rather than filled with a placeholder when the source has no
+      // category axis: an empty row would read as "uncategorised", which is a
+      // different claim from "this site does not classify that way".
+      if (item.wallpaper.category case final Category category)
+        (l10n.detailCategory, categoryLabel(l10n, category)),
       (l10n.detailPurity, purityLabel(l10n, item.wallpaper.purity)),
       (l10n.detailFileType, item.fileType),
       (l10n.detailRatio, item.ratio),
-      (l10n.detailViews, _number(item.views)),
-      (l10n.detailFavorites, _number(item.favorites)),
+      // Both are omitted, not zeroed, where the source publishes no such
+      // figure: "0 views" is a claim, and it would be a false one.
+      if (item.views case final int views) (l10n.detailViews, _number(views)),
+      if (item.favorites case final int favorites)
+        (l10n.detailFavorites, _number(favorites)),
     ];
   }
 

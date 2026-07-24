@@ -5,8 +5,10 @@ import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/use_cases/delete_download.dart';
 
 import '../../fakes/fake_download_history.dart';
@@ -25,7 +27,7 @@ void main() {
       );
 
       final DownloadDeletion outcome = await delete(
-        id: 'e7jvjd',
+        ref: _ref,
         tier: StorageTier.sharedGallery,
         location: _location,
       );
@@ -49,7 +51,7 @@ void main() {
       );
 
       final DownloadDeletion outcome = await delete(
-        id: 'e7jvjd',
+        ref: _ref,
         tier: StorageTier.sharedGallery,
         location: _location,
       );
@@ -74,7 +76,7 @@ void main() {
 
       await expectLater(
         delete(
-          id: 'e7jvjd',
+          ref: _ref,
           tier: StorageTier.filesOutsideGallery,
           location: _location,
         ),
@@ -101,7 +103,7 @@ void main() {
       );
 
       final DownloadDeletion outcome = await delete(
-        id: 'e7jvjd',
+        ref: _ref,
         tier: StorageTier.filesOutsideGallery,
         location: _location,
       );
@@ -121,7 +123,7 @@ void main() {
       );
 
       final DownloadDeletion outcome = await delete(
-        id: 'e7jvjd',
+        ref: _ref,
         tier: StorageTier.appPrivate,
         location: _location,
       );
@@ -141,15 +143,20 @@ DownloadRecord _record() => DownloadRecord(
   downloadedAt: DateTime.utc(2026, 7, 14),
 );
 
-const Wallpaper _wallpaper = Wallpaper(
+Wallpaper _wallpaper = Wallpaper(
   id: 'e7jvjd',
+  source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
   fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
   thumbOriginalUrl: 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg',
-  resolution: Resolution(1440, 3200),
+  resolution: const Resolution(1440, 3200),
   fileSizeBytes: 2048,
   purity: Purity.sfw,
   category: Category.general,
-  colors: <String>[],
+  colors: const <String>[],
 );
+
+/// The one wallpaper every case here deletes.
+const WallpaperRef _ref = WallpaperRef(SourceId.wallhaven, 'e7jvjd');

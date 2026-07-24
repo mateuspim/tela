@@ -13,7 +13,7 @@ void main() {
     test('captures the filters a query expresses', () {
       final BrowseDefaults captured = BrowseDefaults.of(_browsing);
 
-      expect(captured.categories.toApiBits(), '010');
+      expect(captured.categories.encodeStored(), '010');
       expect(captured.topRange, TopRange.oneWeek);
       expect(captured.ratios, <RatioChoice>[const ExactRatio(16, 9)]);
       expect(captured.order, SortOrder.asc);
@@ -33,7 +33,7 @@ void main() {
         explicit,
       ).applyTo(const SearchQuery());
 
-      expect(reopened.purity.toApiBits(), '100');
+      expect(reopened.purity.purities, <Purity>{Purity.sfw});
     });
 
     test('never captures the term — searching is not a filter', () {
@@ -53,7 +53,7 @@ void main() {
         _browsing,
       ).applyTo(const SearchQuery());
 
-      expect(query.categories.toApiBits(), '010');
+      expect(query.categories.encodeStored(), '010');
       expect(query.topRange, TopRange.oneWeek);
       expect(query.ratios, <RatioChoice>[const ExactRatio(16, 9)]);
       expect(query.order, SortOrder.asc);
@@ -75,7 +75,7 @@ void main() {
       expect(query.sorting, Sorting.hot);
       // Adopting a default must not switch the grid back to safe under someone
       // who turned sketchy on for this session.
-      expect(query.purity.toApiBits(), '010');
+      expect(query.purity.purities, <Purity>{Purity.sketchy});
       expect(query.page, 3);
       expect(query.seed, 'abc');
     });
@@ -134,7 +134,7 @@ void main() {
       final BrowseDefaults saved = BrowseDefaults.of(_browsing);
 
       final BrowseDefaults? parsed = BrowseDefaults.tryParse(
-        storedCategories: saved.categories.toApiBits(),
+        storedCategories: saved.categories.encodeStored(),
         storedTopRange: saved.topRange.apiValue,
         storedRatios: saved.encodedRatios(),
         storedOrder: saved.order.name,

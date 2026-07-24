@@ -2,17 +2,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_capabilities.dart';
+import 'package:tela/domain/models/source_failure.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
-import 'package:tela/domain/ports/wallhaven_api.dart';
+import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/domain/use_cases/save_api_key.dart';
 import 'package:tela/domain/use_cases/sync_account_defaults.dart';
 
 import '../../fakes/fake_secret_store.dart';
 import '../../fakes/fake_settings_repository.dart';
-import '../../fakes/fake_wallhaven_api.dart';
+import '../../fakes/fake_wallpaper_source.dart';
 
 void main() {
   test('stores the key and reports it verified when the account answers', () {
@@ -22,19 +24,19 @@ void main() {
   });
 
   test('verifies with one /settings request — not a page of nsfw', () async {
-    final FakeWallhavenApi api = FakeWallhavenApi();
-    final SaveApiKey saveApiKey = _saveApiKey(api: api);
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    final SaveApiKey saveApiKey = _saveApiKey(source: source);
 
     await saveApiKey('abc123');
 
-    expect(api.accountSettingsCalls, 1);
-    expect(api.receivedQueries, isEmpty);
+    expect(source.accountSettingsCalls, 1);
+    expect(source.receivedQueries, isEmpty);
   });
 
   test('keeps the account defaults the verifying request answered', () async {
     final FakeSettingsRepository settings = FakeSettingsRepository();
     final SaveApiKey saveApiKey = _saveApiKey(
-      api: FakeWallhavenApi(account: _animeAccount),
+      source: FakeWallpaperSource(account: _animeAccount),
       settings: settings,
     );
 
@@ -56,7 +58,7 @@ void main() {
     final FakeSecretStore secrets = FakeSecretStore();
     final SaveApiKey saveApiKey = _saveApiKey(
       secrets: secrets,
-      api: KeyCheckingWallhavenApi(secrets: secrets, validKey: 'abc123'),
+      source: KeyCheckingWallpaperSource(secrets: secrets, validKey: 'abc123'),
     );
 
     expect(saveApiKey('abc123'), completion(ApiKeySaveOutcome.verified));
@@ -75,7 +77,7 @@ void main() {
     final FakeSettingsRepository settings = FakeSettingsRepository();
     final SaveApiKey saveApiKey = _saveApiKey(
       secrets: secrets,
-      api: FakeWallhavenApi(failure: const InvalidApiKeyFailure()),
+      source: FakeWallpaperSource(failure: const InvalidApiKeyFailure()),
       settings: settings,
     );
 
@@ -94,7 +96,7 @@ void main() {
     );
     final SaveApiKey saveApiKey = _saveApiKey(
       secrets: secrets,
-      api: FakeWallhavenApi(failure: const InvalidApiKeyFailure()),
+      source: FakeWallpaperSource(failure: const InvalidApiKeyFailure()),
       settings: settings,
     );
 
@@ -112,7 +114,7 @@ void main() {
     final FakeSettingsRepository settings = FakeSettingsRepository();
     final SaveApiKey saveApiKey = _saveApiKey(
       secrets: secrets,
-      api: FakeWallhavenApi(failure: const NetworkFailure()),
+      source: FakeWallpaperSource(failure: const NetworkFailure()),
       settings: settings,
     );
 
@@ -126,7 +128,7 @@ void main() {
     final FakeSecretStore secrets = FakeSecretStore();
     final SaveApiKey saveApiKey = _saveApiKey(
       secrets: secrets,
-      api: FakeWallhavenApi(failure: const RateLimitedFailure()),
+      source: FakeWallpaperSource(failure: const RateLimitedFailure()),
     );
 
     expect(await saveApiKey('abc123'), ApiKeySaveOutcome.savedUnverified);
@@ -143,27 +145,27 @@ const AccountSettings _animeAccount = AccountSettings(
 
 SaveApiKey _saveApiKey({
   FakeSecretStore? secrets,
-  WallhavenApi? api,
+  WallpaperSource? source,
   FakeSettingsRepository? settings,
 }) {
   return SaveApiKey(
     secrets: secrets ?? FakeSecretStore(),
     syncDefaults: SyncAccountDefaults(
-      api: api ?? FakeWallhavenApi(),
+      source: source ?? FakeWallpaperSource(),
       settings: settings ?? FakeSettingsRepository(),
     ),
   );
 }
 
-/// A [WallhavenApi] that behaves like Wallhaven does: it answers only when the
-/// key it would send is the valid one.
+/// A [WallpaperSource] that behaves like Wallhaven does: it answers only when
+/// the key it would send is the valid one.
 ///
 /// It reads the key from the store the way `ApiKeyInterceptor` does at request
 /// time, which is what makes it able to catch a use case that verifies *before*
 /// it stores.
-class KeyCheckingWallhavenApi implements WallhavenApi {
+class KeyCheckingWallpaperSource implements WallpaperSource {
   /// Creates an API that accepts only [validKey], read from [secrets].
-  const KeyCheckingWallhavenApi({
+  const KeyCheckingWallpaperSource({
     required FakeSecretStore secrets,
     required String validKey,
   }) : _secrets = secrets,
@@ -171,6 +173,15 @@ class KeyCheckingWallhavenApi implements WallhavenApi {
 
   final FakeSecretStore _secrets;
   final String _validKey;
+
+  @override
+  SourceId get id => SourceId.wallhaven;
+
+  @override
+  String get displayName => 'Wallhaven';
+
+  @override
+  SourceCapabilities get capabilities => wallhavenLikeCapabilities;
 
   @override
   Future<AccountSettings> accountSettings() async {
@@ -187,11 +198,14 @@ class KeyCheckingWallhavenApi implements WallhavenApi {
 
   @override
   Future<WallpaperDetails> wallpaperDetails(String id) {
-    throw UnimplementedError('KeyCheckingWallhavenApi only answers searches');
+    throw UnimplementedError(
+      'KeyCheckingWallpaperSource only answers searches',
+    );
   }
 
   static const WallpaperPage _empty = WallpaperPage(
     wallpapers: <Wallpaper>[],
+    hasMore: false,
     currentPage: 1,
     lastPage: 1,
   );

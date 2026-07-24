@@ -14,6 +14,7 @@ import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/tile_density.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
@@ -400,6 +401,8 @@ Widget _app(Widget home) {
 
 Wallpaper _wallpaper(String id) => Wallpaper(
   id: id,
+  source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',

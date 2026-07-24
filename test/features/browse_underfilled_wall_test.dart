@@ -11,6 +11,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/tile_density.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
@@ -18,7 +19,7 @@ import 'package:tela/features/browse/wallpaper_grid.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 /// A shelf too short to scroll must still reach its second page.
 ///
@@ -37,21 +38,21 @@ void main() {
     WidgetTester tester,
   ) async {
     // Two tiles cannot fill a tall viewport; page 2 says the listing goes on.
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       pagesByNumber: <int, WallpaperPage>{
         1: _page(count: 2, currentPage: 1, lastPage: 3),
         2: _page(count: 2, currentPage: 2, lastPage: 3),
       },
     );
 
-    await _pumpGrid(tester, api);
+    await _pumpGrid(tester, source);
     await tester.pump(const Duration(milliseconds: 300));
     // A second frame: the top-up is scheduled post-frame, and the page it asks
     // for needs a frame of its own to arrive and lay out.
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
-      api.receivedQueries.map((SearchQuery q) => q.page),
+      source.receivedQueries.map((SearchQuery q) => q.page),
       containsAllInOrder(<int>[1, 2]),
       reason:
           'an under-filled wall must ask for the next page itself, with '
@@ -70,19 +71,19 @@ void main() {
     // The guard that keeps the top-up from turning into an eager prefetch: with
     // a scroll extent to spare, paging stays the scroll trigger's job. Without
     // this the fix would pull pages the user never scrolled to.
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       pagesByNumber: <int, WallpaperPage>{
         1: _page(count: 40, currentPage: 1, lastPage: 3),
         2: _page(count: 40, currentPage: 2, lastPage: 3),
       },
     );
 
-    await _pumpGrid(tester, api);
+    await _pumpGrid(tester, source);
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
-      api.receivedQueries.map((SearchQuery q) => q.page),
+      source.receivedQueries.map((SearchQuery q) => q.page),
       everyElement(1),
       reason: 'a wall taller than its viewport pages on scroll, not on build',
     );
@@ -94,18 +95,18 @@ void main() {
     // `hasNextPage` is the other guard. A short *final* page is the steady
     // state of every narrow search, and a top-up that ignored the end of the
     // listing would spin on it forever.
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       pagesByNumber: <int, WallpaperPage>{
         1: _page(count: 2, currentPage: 1, lastPage: 1),
       },
     );
 
-    await _pumpGrid(tester, api);
+    await _pumpGrid(tester, source);
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
-      api.receivedQueries.length,
+      source.receivedQueries.length,
       1,
       reason: 'the only page there is must be requested exactly once',
     );
@@ -123,7 +124,7 @@ void main() {
     tester.view.devicePixelRatio = 2.125;
     addTearDown(tester.view.reset);
 
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       pagesByNumber: <int, WallpaperPage>{
         1: _page(count: 24, currentPage: 1, lastPage: 5, resolution: _wide),
         2: _page(count: 24, currentPage: 2, lastPage: 5, resolution: _wide),
@@ -132,17 +133,17 @@ void main() {
     );
 
     // The harness mounts at Medium, where this page overflows.
-    await _pumpGrid(tester, api);
+    await _pumpGrid(tester, source);
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
-    final int settled = api.receivedQueries.length;
+    final int settled = source.receivedQueries.length;
 
-    await _pumpGrid(tester, api, density: TileDensity.small);
+    await _pumpGrid(tester, source, density: TileDensity.small);
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(
-      api.receivedQueries.length,
+      source.receivedQueries.length,
       greaterThan(settled),
       reason:
           'the smaller wall no longer fills its viewport, so it must ask '
@@ -154,13 +155,13 @@ void main() {
 /// Mounts the grid on a viewport a two-tile page cannot fill.
 Future<void> _pumpGrid(
   WidgetTester tester,
-  FakeWallhavenApi api, {
+  FakeWallpaperSource source, {
   TileDensity density = TileDensity.medium,
 }) {
   return tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(api),
+        wallhavenSourceProvider.overrideWithValue(source),
         // Mounting the grid reads the standing blocklist. Left unbound, it
         // opens the real database.
         tagBlocklistRepositoryProvider.overrideWithValue(
@@ -199,6 +200,7 @@ WallpaperPage _page({
       for (int i = 0; i < count; i++)
         _wallpaper('p${currentPage}w$i', resolution),
     ],
+    hasMore: currentPage < lastPage,
     currentPage: currentPage,
     lastPage: lastPage,
   );
@@ -209,6 +211,8 @@ Wallpaper _wallpaper(
   Resolution resolution = const Resolution(1080, 2400),
 ]) => Wallpaper(
   id: id,
+  source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
   fullImageUrl: 'https://w.wallhaven.cc/full/$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/$id.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/$id.jpg',

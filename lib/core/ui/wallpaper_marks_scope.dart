@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 /// One "you already have this" claim a tile can make about a wallpaper.
 ///
@@ -27,13 +28,13 @@ enum WallpaperMark {
 ///
 /// ```dart
 /// WallpaperMarksScope(
-///   favorited: <String>{'abc123'},
+///   favorited: <String>{'wallhaven-e7jvjd'},
 ///   downloaded: <String>{},
 ///   child: shelf,
 /// );
 /// ```
 class WallpaperMarksScope extends InheritedWidget {
-  /// Publishes both id sets to everything under [child].
+  /// Publishes both key sets to everything under [child].
   const WallpaperMarksScope({
     required this.favorited,
     required this.downloaded,
@@ -41,19 +42,20 @@ class WallpaperMarksScope extends InheritedWidget {
     super.key,
   });
 
-  /// Ids of every favorited wallpaper.
+  /// [WallpaperRef.key] of every favorited wallpaper — source-qualified, since
+  /// the library holds wallpapers from more than one site.
   final Set<String> favorited;
 
-  /// Ids of every wallpaper downloaded to this device.
+  /// [WallpaperRef.key] of every wallpaper downloaded to this device.
   final Set<String> downloaded;
 
-  /// The marks [wallpaperId] has earned, narrowed to those the shelf shows.
+  /// The marks [wallpaperKey] has earned, narrowed to those the shelf shows.
   ///
   /// [visible] is what lets a shelf drop a mark that would be true on every one
   /// of its tiles and therefore says nothing — a heart on all of Favorites.
   static Set<WallpaperMark> marksFor(
     BuildContext context,
-    String wallpaperId,
+    String wallpaperKey,
     Set<WallpaperMark> visible,
   ) {
     final WallpaperMarksScope? scope = context
@@ -61,10 +63,10 @@ class WallpaperMarksScope extends InheritedWidget {
     if (scope == null) return const <WallpaperMark>{};
     return <WallpaperMark>{
       if (visible.contains(WallpaperMark.favorited) &&
-          scope.favorited.contains(wallpaperId))
+          scope.favorited.contains(wallpaperKey))
         WallpaperMark.favorited,
       if (visible.contains(WallpaperMark.downloaded) &&
-          scope.downloaded.contains(wallpaperId))
+          scope.downloaded.contains(wallpaperKey))
         WallpaperMark.downloaded,
     };
   }

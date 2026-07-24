@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/core/network/wallhaven_client.dart';
-import 'package:tela/data/wallhaven/dio_wallhaven_api.dart';
+import 'package:tela/data/wallhaven/dio_wallhaven_source.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
@@ -17,7 +17,7 @@ import '../fakes/fake_wallhaven_transport.dart';
 ///
 /// Real `baseUrl`, because the URI is the thing under test and a fake host
 /// would not be the URI tela sends.
-({DioWallhavenApi api, FakeWallhavenTransport transport}) _wired({
+({DioWallhavenSource api, FakeWallhavenTransport transport}) _wired({
   String fixture = 'search_page.json',
 }) {
   final FakeWallhavenTransport transport = FakeWallhavenTransport(
@@ -25,19 +25,19 @@ import '../fakes/fake_wallhaven_transport.dart';
   );
   final Dio dio = Dio(BaseOptions(baseUrl: WallhavenClient.baseUrl))
     ..httpClientAdapter = transport;
-  return (api: DioWallhavenApi(dio), transport: transport);
+  return (api: DioWallhavenSource(dio), transport: transport);
 }
 
 /// The URI [query] actually leaves the device as.
 Future<Uri> _sentUriFor(SearchQuery query) async {
-  final ({DioWallhavenApi api, FakeWallhavenTransport transport}) wired =
+  final ({DioWallhavenSource api, FakeWallhavenTransport transport}) wired =
       _wired();
   await wired.api.search(query);
   return wired.transport.lastUri;
 }
 
 void main() {
-  group('DioWallhavenApi.search sends what the query built', () {
+  group('DioWallhavenSource.search sends what the query built', () {
     test('reaches Wallhaven /search on the documented base URL', () async {
       final Uri uri = await _sentUriFor(const SearchQuery());
 
@@ -46,7 +46,7 @@ void main() {
     });
 
     test('sends an exact ratio as the literal Wallhaven parses', () async {
-      // The ratios param has only ever met FakeWallhavenApi, which records a
+      // The ratios param has only ever met FakeWallpaperSource, which records a
       // SearchQuery and so cannot see the encoding. Wallhaven *silently
       // ignores* a ratios value it cannot read and answers with an unfiltered
       // grid (real server, 2026-07-16: `ratios=bogus` returns the same listing
@@ -161,7 +161,7 @@ void main() {
     test('maps the answered body through to the domain page', () async {
       // Proves the wire assertions above ran through the real adapter path,
       // not a URI built in isolation.
-      final ({DioWallhavenApi api, FakeWallhavenTransport transport}) wired =
+      final ({DioWallhavenSource api, FakeWallhavenTransport transport}) wired =
           _wired();
 
       final WallpaperPage page = await wired.api.search(const SearchQuery());
@@ -170,9 +170,9 @@ void main() {
     });
   });
 
-  group('DioWallhavenApi.wallpaperDetails', () {
+  group('DioWallhavenSource.wallpaperDetails', () {
     test('sends the id in the path with no query string', () async {
-      final ({DioWallhavenApi api, FakeWallhavenTransport transport}) wired =
+      final ({DioWallhavenSource api, FakeWallhavenTransport transport}) wired =
           _wired(fixture: 'wallpaper_detail.json');
 
       await wired.api.wallpaperDetails('e7jvjd');

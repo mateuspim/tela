@@ -17,10 +17,12 @@ import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/favorites/favorite_button.dart';
 
@@ -33,9 +35,9 @@ import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_system_wallpaper_editor.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
 import '../fakes/fake_wallpaper_applier.dart';
 import '../fakes/fake_wallpaper_sharer.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   testWidgets(
@@ -103,7 +105,12 @@ void main() {
     await tester.tap(find.byKey(const Key('immersive-viewer-favorite')));
     await tester.pumpAndSettle();
 
-    expect(await favorites.isFavorite('e7jvjd'), isTrue);
+    expect(
+      await favorites.isFavorite(
+        const WallpaperRef(SourceId.wallhaven, 'e7jvjd'),
+      ),
+      isTrue,
+    );
     // And the heart fills without leaving the viewer, which is the half a
     // repository assertion cannot show.
     expect(find.bySemanticsLabel('Remove from favorites'), findsOneWidget);
@@ -178,7 +185,7 @@ void main() {
             items: <Wallpaper>[first.wallpaper, second.wallpaper],
             initialIndex: 0,
           );
-      final FakeWallhavenApi api = FakeWallhavenApi(
+      final FakeWallpaperSource source = FakeWallpaperSource(
         detailsById: <String, WallpaperDetails>{
           first.wallpaper.id: first,
           second.wallpaper.id: second,
@@ -190,7 +197,7 @@ void main() {
       await _pumpDetail(
         tester,
         first,
-        api: api,
+        source: source,
         gallerySession: gallery,
         imageStore: imageStore,
         sharer: sharer,
@@ -593,7 +600,7 @@ void main() {
       tester,
       first,
       gallerySession: gallery,
-      api: _detailsApi(first, second),
+      source: _detailsApi(first, second),
     );
 
     await tester.drag(find.byType(PageView), const Offset(-500, 0));
@@ -621,7 +628,7 @@ void main() {
       tester,
       first,
       gallerySession: gallery,
-      api: _detailsApi(first, second),
+      source: _detailsApi(first, second),
       disableAnimations: true,
     );
 
@@ -647,7 +654,7 @@ void main() {
       tester,
       first,
       gallerySession: gallery,
-      api: _detailsApi(first, second),
+      source: _detailsApi(first, second),
       disableAnimations: true,
     );
 
@@ -679,7 +686,7 @@ void main() {
       tester,
       first,
       gallerySession: gallery,
-      api: _detailsApi(first, second),
+      source: _detailsApi(first, second),
       disableAnimations: true,
     );
 
@@ -707,8 +714,8 @@ void main() {
     final WallpaperDetails details = _details();
     final ProviderContainer container = ProviderContainer(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(
-          FakeWallhavenApi(details: details),
+        wallhavenSourceProvider.overrideWithValue(
+          FakeWallpaperSource(details: details),
         ),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
@@ -863,8 +870,11 @@ GallerySessionController<Wallpaper> _twoItemGallery(
 
 /// A fake API that answers full metadata for both wallpapers in the session, so
 /// paging between them resolves rather than erroring.
-FakeWallhavenApi _detailsApi(WallpaperDetails first, WallpaperDetails second) {
-  return FakeWallhavenApi(
+FakeWallpaperSource _detailsApi(
+  WallpaperDetails first,
+  WallpaperDetails second,
+) {
+  return FakeWallpaperSource(
     detailsById: <String, WallpaperDetails>{
       first.wallpaper.id: first,
       second.wallpaper.id: second,
@@ -889,7 +899,7 @@ Future<void> _pumpDetail(
   FakeWallpaperSharer? sharer,
   FakeTagBlocklistRepository? blocklist,
   FakeImmersiveSystemUi? immersiveSystemUi,
-  FakeWallhavenApi? api,
+  FakeWallpaperSource? source,
   GallerySessionController<Wallpaper>? gallerySession,
   FakeWallpaperApplier? applier,
   FakeExternalLink? externalLink,
@@ -900,8 +910,8 @@ Future<void> _pumpDetail(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(
-          api ?? FakeWallhavenApi(details: details),
+        wallhavenSourceProvider.overrideWithValue(
+          source ?? FakeWallpaperSource(details: details),
         ),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         settingsRepositoryProvider.overrideWithValue(
@@ -966,6 +976,8 @@ Future<void> _pumpDetail(
 WallpaperDetails _details({Purity purity = Purity.sfw}) {
   final Wallpaper wallpaper = Wallpaper(
     id: 'e7jvjd',
+    source: SourceId.wallhaven,
+    pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
     fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
@@ -996,24 +1008,26 @@ WallpaperDetails _details({Purity purity = Purity.sfw}) {
 }
 
 WallpaperDetails _otherDetails() {
-  const Wallpaper wallpaper = Wallpaper(
+  final Wallpaper wallpaper = Wallpaper(
     id: 'bbb222',
+    source: SourceId.wallhaven,
+    pageUrl: Uri.parse('https://wallhaven.cc/w/bbb222'),
     fullImageUrl: 'https://w.wallhaven.cc/full/bb/wallhaven-bbb222.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/bb/bbb222.jpg',
     thumbLargeUrl: 'https://th.wallhaven.cc/lg/bb/bbb222.jpg',
     thumbOriginalUrl: 'https://th.wallhaven.cc/orig/bb/bbb222.jpg',
-    resolution: Resolution(2160, 3840),
+    resolution: const Resolution(2160, 3840),
     fileSizeBytes: 2048,
     purity: Purity.sfw,
     category: Category.general,
-    colors: <String>['#0066cc'],
+    colors: const <String>['#0066cc'],
   );
-  return const WallpaperDetails(
+  return WallpaperDetails(
     wallpaper: wallpaper,
     ratio: '0.56',
     fileType: 'image/jpeg',
-    tags: <WallpaperTag>[WallpaperTag(id: 303, name: 'portrait')],
-    uploader: WallpaperUploader(
+    tags: const <WallpaperTag>[WallpaperTag(id: 303, name: 'portrait')],
+    uploader: const WallpaperUploader(
       username: 'second-uploader',
       group: 'User',
       avatarUrl: 'https://example.com/second-avatar.jpg',

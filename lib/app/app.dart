@@ -47,9 +47,9 @@ class _TelaAppState extends ConsumerState<TelaApp> {
     // frame is simply unmarked and marks appear a beat later — never an error,
     // and never a wall that waits on the library to draw.
     final Set<String> favorited =
-        ref.watch(favoritedIdsProvider).value ?? const <String>{};
+        ref.watch(favoritedKeysProvider).value ?? const <String>{};
     final Set<String> downloaded =
-        ref.watch(downloadedIdsProvider).value ?? const <String>{};
+        ref.watch(downloadedKeysProvider).value ?? const <String>{};
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDevice, ColorScheme? darkDevice) =>
           MaterialApp.router(

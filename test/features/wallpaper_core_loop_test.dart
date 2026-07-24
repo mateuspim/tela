@@ -7,6 +7,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
@@ -15,23 +16,24 @@ import 'package:tela/features/browse/wallpaper_tile.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
-import '../fakes/fake_wallhaven_api.dart';
 import '../fakes/fake_wallpaper_applier.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   testWidgets('grid to preview to both screens is a three-tap core loop', (
     WidgetTester tester,
   ) async {
     final Wallpaper wallpaper = _wallpaper();
-    final FakeWallhavenApi api = FakeWallhavenApi(
+    final FakeWallpaperSource source = FakeWallpaperSource(
       page: WallpaperPage(
         wallpapers: <Wallpaper>[wallpaper],
+        hasMore: false,
         currentPage: 1,
         lastPage: 1,
       ),
     );
     final FakeWallpaperApplier applier = FakeWallpaperApplier();
-    await _pumpApp(tester, api, applier);
+    await _pumpApp(tester, source, applier);
 
     await tester.tap(find.byType(WallpaperTile).first);
     await _finishTransition(tester);
@@ -53,13 +55,13 @@ void main() {
 
 Future<void> _pumpApp(
   WidgetTester tester,
-  FakeWallhavenApi api,
+  FakeWallpaperSource source,
   FakeWallpaperApplier applier,
 ) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        wallhavenApiProvider.overrideWithValue(api),
+        wallhavenSourceProvider.overrideWithValue(source),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
         wallpaperApplierProvider.overrideWithValue(applier),
         settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
@@ -81,15 +83,17 @@ Future<void> _finishTransition(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 500));
 }
 
-Wallpaper _wallpaper() => const Wallpaper(
+Wallpaper _wallpaper() => Wallpaper(
   id: 'e7jvjd',
+  source: SourceId.wallhaven,
+  pageUrl: Uri.parse('https://wallhaven.cc/w/e7jvjd'),
   fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
   thumbOriginalUrl: 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg',
-  resolution: Resolution(1440, 3200),
+  resolution: const Resolution(1440, 3200),
   fileSizeBytes: 2048,
   purity: Purity.sfw,
   category: Category.general,
-  colors: <String>[],
+  colors: const <String>[],
 );

@@ -8,7 +8,8 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
@@ -87,6 +88,13 @@ void main() {
       expect(page.lastPage, 37);
       expect(page.seed, 'abc123');
       expect(page.hasMore, isTrue);
+      // The permalink comes off the wire; the model no longer composes one,
+      // because only the adapter knows its site's URL shape.
+      expect(
+        page.wallpapers.first.pageUrl,
+        Uri.parse('https://wallhaven.cc/w/e7jvjd'),
+      );
+      expect(page.wallpapers.first.source, SourceId.wallhaven);
     });
 
     test('maps each wallpaper to the domain shape, not the wire shape', () {
@@ -156,7 +164,7 @@ void main() {
         _fixture('account_settings.json'),
       );
 
-      expect(account.categories.toApiBits(), '110');
+      expect(account.categories.encodeStored(), '110');
       expect(account.topRange, TopRange.oneWeek);
     });
 
@@ -170,12 +178,8 @@ void main() {
       });
 
       expect(
-        account
-            .toBrowseDefaults()
-            .applyTo(const SearchQuery())
-            .purity
-            .toApiBits(),
-        '100',
+        account.toBrowseDefaults().applyTo(const SearchQuery()).purity.purities,
+        <Purity>{Purity.sfw},
       );
     });
 
@@ -185,7 +189,7 @@ void main() {
         'toplist_range': '1w',
       });
 
-      expect(account.categories.toApiBits(), '010');
+      expect(account.categories.encodeStored(), '010');
       expect(account.topRange, TopRange.oneWeek);
     });
 
@@ -196,7 +200,7 @@ void main() {
         'categories': <String>[],
       });
 
-      expect(account.categories.toApiBits(), '111');
+      expect(account.categories.encodeStored(), '111');
     });
 
     test('an unreadable toplist range costs the range', () {

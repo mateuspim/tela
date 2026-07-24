@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 
 void main() {
@@ -9,7 +10,7 @@ void main() {
     test('carries the two fields the account is allowed to set', () {
       final BrowseDefaults defaults = _account.toBrowseDefaults();
 
-      expect(defaults.categories.toApiBits(), '010');
+      expect(defaults.categories.encodeStored(), '010');
       expect(defaults.topRange, TopRange.oneWeek);
     });
 
@@ -32,14 +33,14 @@ void main() {
         const SearchQuery(),
       );
 
-      expect(query.purity.toApiBits(), '100');
+      expect(query.purity.purities, <Purity>{Purity.sfw});
     });
   });
 
   group('tryParse', () {
     test('reads back what the repository writes', () {
       final AccountSettings? parsed = AccountSettings.tryParse(
-        storedCategories: _account.categories.toApiBits(),
+        storedCategories: _account.categories.encodeStored(),
         storedTopRange: _account.topRange.apiValue,
       );
 

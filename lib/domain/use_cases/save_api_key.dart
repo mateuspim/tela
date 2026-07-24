@@ -1,4 +1,4 @@
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/use_cases/sync_account_defaults.dart';
 
@@ -64,7 +64,7 @@ class SaveApiKey {
     } on InvalidApiKeyFailure {
       await _restore(previous);
       rethrow;
-    } on WallhavenFailure {
+    } on SourceFailure {
       // Offline or rate-limited says nothing about the key. Keeping it beats
       // making the user re-paste it when their connection comes back. The
       // defaults stay unsynced; nothing was written, so nothing is half-right.

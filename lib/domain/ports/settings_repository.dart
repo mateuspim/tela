@@ -3,6 +3,7 @@ import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tile_density.dart';
@@ -12,6 +13,18 @@ import 'package:tela/domain/models/tile_density.dart';
 /// A pure-domain port: no package sits behind it, and the fact that its adapter
 /// speaks SQL is not something a feature or a use case may observe.
 abstract interface class SettingsRepository {
+  /// Which source browse is currently on.
+  ///
+  /// Answers [SourceId.wallhaven] when never set — the source every build
+  /// before the switcher browsed, so an upgrade opens where it always did.
+  /// Never throws: an unreadable row answers the same. A stored id no build
+  /// knows any more is the registry's problem to fall back from, not this
+  /// one's: it reports what was written.
+  Future<SourceId> loadActiveSource();
+
+  /// Persists which source browse is on.
+  Future<void> saveActiveSource(SourceId source);
+
   /// The current storage routing, or [StorageSettings.defaults] when unset.
   ///
   /// Never throws: unreadable or corrupt storage falls back to the defaults,

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/use_cases/load_account_defaults.dart';
@@ -10,7 +11,7 @@ import 'package:tela/domain/use_cases/sync_account_defaults.dart';
 
 import '../../fakes/fake_secret_store.dart';
 import '../../fakes/fake_settings_repository.dart';
-import '../../fakes/fake_wallhaven_api.dart';
+import '../../fakes/fake_wallpaper_source.dart';
 
 void main() {
   test('takes the account when that is the source', () async {
@@ -65,7 +66,9 @@ void main() {
         const SearchQuery(),
       );
 
-      expect(query.purity.toApiBits(), '100', reason: 'source: ${source.name}');
+      expect(query.purity.purities, <Purity>{
+        Purity.sfw,
+      }, reason: 'source: ${source.name}');
     }
   });
 }
@@ -98,7 +101,7 @@ ResolveBrowseDefaults _resolve({
       settings: settings,
       secrets: FakeSecretStore(),
       syncDefaults: SyncAccountDefaults(
-        api: FakeWallhavenApi(),
+        source: FakeWallpaperSource(),
         settings: settings,
       ),
     ),
