@@ -201,6 +201,78 @@ void main() {
       expect(repository.streakSaved(Purity.nsfw)?.tier, StorageTier.appPrivate);
     });
   });
+
+  group('the "Keep sending here" pin', () {
+    test('a plain download goes to the pin, not the configured tier', () async {
+      final FakeImageStore imageStore = FakeImageStore();
+      final DownloadWallpaper download = _download(
+        imageStore,
+        repository: FakeSettingsRepository(
+          settings: StorageSettings.defaults, // sfw → gallery
+          pinnedDownloadTier: StorageTier.filesOutsideGallery,
+        ),
+      );
+
+      await download(_wallpaper(Purity.sfw));
+
+      expect(imageStore.receivedTier, StorageTier.filesOutsideGallery);
+    });
+
+    test('lets a per-download tier win over the pin', () async {
+      final FakeImageStore imageStore = FakeImageStore();
+      final DownloadWallpaper download = _download(
+        imageStore,
+        repository: FakeSettingsRepository(
+          pinnedDownloadTier: StorageTier.appPrivate,
+        ),
+      );
+
+      await download(_wallpaper(Purity.sfw), tier: StorageTier.sharedGallery);
+
+      expect(imageStore.receivedTier, StorageTier.sharedGallery);
+    });
+
+    // The invariant, surfaced one layer up: a gallery pin is legal to hold, but
+    // it can never carry an explicit download into the MediaStore-indexed tier.
+    test('an explicit download under a gallery pin falls to private', () async {
+      final FakeImageStore imageStore = FakeImageStore();
+      final DownloadWallpaper download = _download(
+        imageStore,
+        repository: FakeSettingsRepository(
+          settings: StorageSettings.defaults, // nsfw → appPrivate
+          pinnedDownloadTier: StorageTier.sharedGallery,
+        ),
+      );
+
+      await download(_wallpaper(Purity.nsfw));
+
+      expect(imageStore.receivedTier, StorageTier.appPrivate);
+    });
+
+    test('still sends sketchy and safe downloads to a gallery pin', () async {
+      for (final Purity purity in <Purity>[Purity.sfw, Purity.sketchy]) {
+        final FakeImageStore imageStore = FakeImageStore();
+        final DownloadWallpaper download = _download(
+          imageStore,
+          repository: FakeSettingsRepository(
+            settings: StorageSettings(
+              sfwTier: StorageTier.appPrivate,
+              nsfwTier: StorageTier.appPrivate,
+            ),
+            pinnedDownloadTier: StorageTier.sharedGallery,
+          ),
+        );
+
+        await download(_wallpaper(purity));
+
+        expect(
+          imageStore.receivedTier,
+          StorageTier.sharedGallery,
+          reason: '$purity is legal for the gallery, so the pin governs it',
+        );
+      }
+    });
+  });
 }
 
 DownloadWallpaper _download(

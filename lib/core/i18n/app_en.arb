@@ -506,6 +506,32 @@
     }
   },
 
+  "downloadKeepSendingHere": "Keep sending here",
+  "@downloadKeepSendingHere": {
+    "description": "Toggle in the download-destination chooser that pins the tapped destination so every later download goes straight there."
+  },
+
+  "downloadKeepSendingSubtitle": "Every download goes straight here until you change it.",
+  "@downloadKeepSendingSubtitle": {
+    "description": "Explains what the 'Keep sending here' toggle does."
+  },
+
+  "downloadPinActive": "Sending every download to {destination}.",
+  "@downloadPinActive": {
+    "description": "Caption shown in the chooser when a 'Keep sending here' pin is already active. {destination} is a localized storage tier name like Private library.",
+    "placeholders": {
+      "destination": {
+        "type": "String",
+        "example": "Private library"
+      }
+    }
+  },
+
+  "downloadPinStop": "Stop",
+  "@downloadPinStop": {
+    "description": "Action in the chooser that clears the active 'Keep sending here' pin without downloading anything."
+  },
+
   "storageSharedGallery": "Gallery",
   "@storageSharedGallery": {
     "description": "Storage tier: the system-visible Pictures/tela gallery folder."

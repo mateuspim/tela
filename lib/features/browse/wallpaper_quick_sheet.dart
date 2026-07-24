@@ -172,10 +172,14 @@ Future<({bool proceed, StorageTier? tier})> _resolveDestination(
   WidgetRef ref,
   Wallpaper wallpaper,
 ) async {
-  if (wallpaper.purity == Purity.sfw) {
+  final SettingsRepository settings = ref.read(settingsRepositoryProvider);
+  // A pin is the whole point: with one set, downloading no longer asks. The
+  // download use case applies the pin (invariant permitting), so a null tier
+  // routes to it silently — even for a not-safe wallpaper the user pinned.
+  final StorageTier? pin = await settings.loadPinnedDownloadTier();
+  if (pin != null || wallpaper.purity == Purity.sfw) {
     return (proceed: true, tier: null);
   }
-  final SettingsRepository settings = ref.read(settingsRepositoryProvider);
   final StorageSettings storage = await ref.read(
     storageSettingsProvider.future,
   );
@@ -188,12 +192,13 @@ Future<({bool proceed, StorageTier? tier})> _resolveDestination(
     configuredTier: storage.tierFor(wallpaper.purity),
     streak: streak,
   );
-  if (choice == null) return (proceed: false, tier: null);
+  if (choice == null || choice.stopsPin) return (proceed: false, tier: null);
   if (choice.remember) {
     await ref
         .read(storageSettingsProvider.notifier)
-        .route(wallpaper.purity, choice.tier);
+        .route(wallpaper.purity, choice.tier!);
   }
+  if (choice.pin) await settings.setPinnedDownloadTier(choice.tier);
   return (proceed: true, tier: choice.tier);
 }
 

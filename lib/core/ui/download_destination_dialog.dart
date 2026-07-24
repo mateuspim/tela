@@ -8,36 +8,59 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 
-/// One download's answer: where it lands, and whether that becomes the default.
+/// One download's answer: where it lands, and whether that answer sticks.
 ///
-/// [remember] is only ever true for the streak destination — it is the "Always
+/// [remember] is only ever true for the streak destination — the "Always
 /// save … here" affordance, which both sends this download there *and* asks the
-/// caller to persist it as the bucket's default. A plain destination tap leaves
-/// it false: this one download moves, the setting does not.
+/// caller to persist it as the bucket's per-purity default (I3). [pin] is the
+/// "Keep sending here" toggle: it asks the caller to make [tier] the
+/// purity-flat pin every later download follows (K2). A plain destination tap
+/// leaves both false: this one download moves, nothing else does.
+///
+/// A choice that only [stopsPin] carries a null [tier] and downloads nothing —
+/// it is the chooser's Stop affordance, clearing an active pin and no more.
 @immutable
 class DownloadDestinationChoice {
-  /// Creates a choice of [tier], optionally asking to [remember] it as default.
-  const DownloadDestinationChoice({required this.tier, this.remember = false});
+  /// Creates a choice of [tier], optionally asking to [remember] or [pin] it.
+  const DownloadDestinationChoice({
+    required this.tier,
+    this.remember = false,
+    this.pin = false,
+  });
 
-  /// Where this download should land.
-  final StorageTier tier;
+  /// A choice that only clears the "Keep sending here" pin — nothing downloads.
+  const DownloadDestinationChoice.stopPin()
+    : tier = null,
+      remember = false,
+      pin = false;
 
-  /// Whether to also make [tier] the default for this wallpaper's bucket.
+  /// Where this download should land, or null when the choice only [stopsPin].
+  final StorageTier? tier;
+
+  /// Whether to also make [tier] the per-purity configured default (I3's
+  /// "Always"). Independent of [pin].
   final bool remember;
+
+  /// Whether to make [tier] the purity-flat "Keep sending here" pin (K2).
+  final bool pin;
+
+  /// Whether this choice only clears the pin and downloads nothing — true
+  /// exactly when [tier] is null.
+  bool get stopsPin => tier == null;
 }
 
 /// Asks where this one download should land; null when dismissed.
 ///
-/// Centred, not a bottom sheet — which is what it replaces. The three
-/// destinations differ in *consequence*, not in name (one is indexed into
-/// Photos, one is reachable over USB, one is visible to nothing but tela), so
-/// this is a decision to be read rather than a menu to be flicked at.
+/// Centred, not a bottom sheet. The three destinations differ in *consequence*,
+/// not in name (one is indexed into Photos, one is reachable over USB, one is
+/// visible to nothing but tela), so this is a decision to be read rather than a
+/// menu to be flicked at.
 ///
 /// When a [streak] of recent downloads has drifted from [configuredTier] —
-/// where a plain tap already routes — the chooser says so: it marks that spot
-/// and offers to make it the default, which is what stops the long-pressing. A
-/// streak that merely agrees with [configuredTier] is nothing to suggest and is
-/// left silent.
+/// where a plain tap already routes — it marks that spot and offers to make
+/// it the default, which is what stops the long-pressing. A "Keep sending here"
+/// switch pins the tapped tier for *every* later download; [pinnedTier] is the
+/// pin already in force, which the chooser shows and offers to clear.
 ///
 /// The option list comes from [StorageSettings.choicesFor] rather than being
 /// spelled out here: that is where the NSFW invariant lives, and it is why an
@@ -49,6 +72,7 @@ class DownloadDestinationChoice {
 ///   purity: wallpaper.purity,
 ///   configuredTier: settings.tierFor(wallpaper.purity),
 ///   streak: streak,
+///   pinnedTier: pin,
 /// );
 /// ```
 Future<DownloadDestinationChoice?> chooseDownloadDestination(
@@ -56,6 +80,57 @@ Future<DownloadDestinationChoice?> chooseDownloadDestination(
   required Purity purity,
   required StorageTier configuredTier,
   DownloadDestinationStreak? streak,
+  StorageTier? pinnedTier,
+}) {
+  return _show(
+    context,
+    options: StorageSettings.choicesFor(purity),
+    strongestPurity: purity,
+    configuredTier: configuredTier,
+    streak: streak,
+    pinnedTier: pinnedTier,
+  );
+}
+
+/// Asks where a whole selection should land; null when dismissed.
+///
+/// The batch twin of [chooseDownloadDestination]: it offers only the tiers
+/// legal for **every** purity in [purities] (the intersection), so a mixed set
+/// containing an explicit wallpaper is never offered the gallery and one
+/// destination genuinely governs all of them. It has no streak or "Always" — a
+/// bulk action is not a per-item habit — but it does carry the "Keep sending
+/// here" switch, since pinning is exactly a "put everything here" decision.
+Future<DownloadDestinationChoice?> chooseBatchDownloadDestination(
+  BuildContext context, {
+  required Set<Purity> purities,
+  StorageTier? pinnedTier,
+}) {
+  return _show(
+    context,
+    options: StorageSettings.choicesForAll(purities),
+    strongestPurity: _strongest(purities),
+    configuredTier: null,
+    streak: null,
+    pinnedTier: pinnedTier,
+  );
+}
+
+/// The most explicit purity in [purities] — the one whose warning the chooser
+/// shows over a mixed batch — or [Purity.sfw] for an empty set.
+Purity _strongest(Set<Purity> purities) {
+  return purities.fold(
+    Purity.sfw,
+    (Purity worst, Purity p) => p.index > worst.index ? p : worst,
+  );
+}
+
+Future<DownloadDestinationChoice?> _show(
+  BuildContext context, {
+  required List<StorageTier> options,
+  required Purity strongestPurity,
+  required StorageTier? configuredTier,
+  required DownloadDestinationStreak? streak,
+  required StorageTier? pinnedTier,
 }) {
   if (!context.mounted) {
     return Future<DownloadDestinationChoice?>.value();
@@ -63,32 +138,54 @@ Future<DownloadDestinationChoice?> chooseDownloadDestination(
   return showDialog<DownloadDestinationChoice>(
     context: context,
     builder: (BuildContext context) => _DestinationDialog(
-      purity: purity,
+      options: options,
+      strongestPurity: strongestPurity,
       configuredTier: configuredTier,
       streak: streak,
+      pinnedTier: pinnedTier,
     ),
   );
 }
 
-/// The dialog body: a purity line when one is owed, then one card per tier, and
-/// an "Always save … here" action when a run has drifted from the default.
-class _DestinationDialog extends StatelessWidget {
+/// The dialog body: a purity line when one is owed, the active pin when there
+/// is one, a card per destination, the "Always" action when a run has drifted,
+/// and the "Keep sending here" switch.
+class _DestinationDialog extends StatefulWidget {
   const _DestinationDialog({
-    required this.purity,
+    required this.options,
+    required this.strongestPurity,
     required this.configuredTier,
     required this.streak,
+    required this.pinnedTier,
   });
 
-  /// The purity of the wallpaper being downloaded, which decides the options,
-  /// the warning line, and how the "Always" action names itself.
-  final Purity purity;
+  /// The tiers to offer, already narrowed to what every purity present allows.
+  final List<StorageTier> options;
 
-  /// Where a plain tap already routes this purity; the streak is only worth
-  /// mentioning when it differs from this.
-  final StorageTier configuredTier;
+  /// The purity that decides the warning line and the "Always" label — the most
+  /// explicit one in a batch.
+  final Purity strongestPurity;
 
-  /// The run of recent same-destination downloads, or null when there is none.
+  /// Where a plain tap already routes, or null for a batch (which has no single
+  /// configured tier); the streak is only worth mentioning when it differs.
+  final StorageTier? configuredTier;
+
+  /// The run of recent same-destination downloads, or null (always null for a
+  /// batch).
   final DownloadDestinationStreak? streak;
+
+  /// The "Keep sending here" pin already in force, or null when none is set.
+  final StorageTier? pinnedTier;
+
+  @override
+  State<_DestinationDialog> createState() => _DestinationDialogState();
+}
+
+class _DestinationDialogState extends State<_DestinationDialog> {
+  /// Whether the tapped destination should become the pin. Opt-in, so it
+  /// starts off — except when a pin is already in force, where it mirrors that
+  /// state so the switch reads the truth.
+  late bool _keepSending = widget.pinnedTier != null;
 
   /// A destination has to be reached this many times in a row before the
   /// chooser offers to make it the default. The owner's number.
@@ -99,23 +196,20 @@ class _DestinationDialog extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return AlertDialog(
       title: Text(l10n.detailDownloadChooseTier),
-      content: _options(context, l10n),
+      content: _content(context, l10n),
       actions: <Widget>[
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text(l10n.actionCancel),
         ),
+        ?_stopAction(context, l10n),
       ],
     );
   }
 
-  /// Caps the measure at [_maxWidth] and scrolls rather than clipping.
-  ///
-  /// `AlertDialog` does not cap its own width, so on a tablet the cards would
-  /// stretch to nearly the whole screen; the cap is intersected with the
-  /// dialog's own constraints, so a narrow phone gets less than 360 and nothing
-  /// overflows. The scroll is for three cards on a phone in landscape.
-  Widget _options(BuildContext context, AppLocalizations l10n) {
+  /// Caps the measure at [_maxWidth] and scrolls rather than clipping, since an
+  /// `AlertDialog` does not cap its own width and would stretch on a tablet.
+  Widget _content(BuildContext context, AppLocalizations l10n) {
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: _maxWidth),
       child: SingleChildScrollView(
@@ -124,9 +218,11 @@ class _DestinationDialog extends StatelessWidget {
           spacing: 8,
           children: <Widget>[
             ?_purityLine(context, l10n),
-            for (final StorageTier tier in StorageSettings.choicesFor(purity))
+            ?_pinLine(context, l10n),
+            for (final StorageTier tier in widget.options)
               _destination(context, l10n, tier),
             ?_alwaysAction(context, l10n),
+            _keepSendingSwitch(context, l10n),
           ],
         ),
       ),
@@ -141,19 +237,21 @@ class _DestinationDialog extends StatelessWidget {
   /// carries a warning that lives in Settings. The chooser still saves there
   /// for one download; it just does not offer to make it permanent from here.
   StorageTier? get _suggestedTier {
-    final DownloadDestinationStreak? run = streak;
-    if (run == null || run.length < _suggestAfter) return null;
-    if (run.tier == configuredTier) return null;
+    final DownloadDestinationStreak? run = widget.streak;
+    final StorageTier? configured = widget.configuredTier;
+    if (run == null || configured == null) return null;
+    if (run.length < _suggestAfter || run.tier == configured) return null;
     final bool gatedInSettings =
-        StorageSettings.bucketFor(purity) == Purity.nsfw &&
+        StorageSettings.bucketFor(widget.strongestPurity) == Purity.nsfw &&
         run.tier == StorageTier.filesOutsideGallery;
     return gatedInSettings ? null : run.tier;
   }
 
-  /// Names the purity in the same tint the download button wears, or null for
-  /// a safe wallpaper — which has nothing to warn about and gets no line.
+  /// Names the purity in the same tint the download button wears, or null for a
+  /// safe wallpaper — which has nothing to warn about and gets no line.
   Widget? _purityLine(BuildContext context, AppLocalizations l10n) {
     final ThemeData theme = Theme.of(context);
+    final Purity purity = widget.strongestPurity;
     final Color? tint = purityAlertTint(theme.colorScheme, purity);
     if (tint == null) return null;
     return Row(
@@ -170,8 +268,31 @@ class _DestinationDialog extends StatelessWidget {
     );
   }
 
+  /// The pin already in force, named so the user knows every download is being
+  /// steered — or null when there is no pin. The Stop affordance lives in the
+  /// dialog actions, not here.
+  Widget? _pinLine(BuildContext context, AppLocalizations l10n) {
+    final StorageTier? pin = widget.pinnedTier;
+    if (pin == null) return null;
+    final ThemeData theme = Theme.of(context);
+    return Row(
+      spacing: 8,
+      children: <Widget>[
+        Icon(Icons.push_pin, size: 18, color: theme.colorScheme.primary),
+        Expanded(
+          child: Text(
+            l10n.downloadPinActive(storageTierLabel(l10n, pin)),
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   /// One destination as a tappable card, marked when the run has been landing
-  /// there.
+  /// there. Tapping answers the tier and whether it becomes the pin.
   Widget _destination(
     BuildContext context,
     AppLocalizations l10n,
@@ -182,7 +303,7 @@ class _DestinationDialog extends StatelessWidget {
       child: InkWell(
         onTap: () => Navigator.pop(
           context,
-          DownloadDestinationChoice(tier: tier),
+          DownloadDestinationChoice(tier: tier, pin: _keepSending),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -240,7 +361,7 @@ class _DestinationDialog extends StatelessWidget {
   ) {
     if (tier != _suggestedTier) return null;
     return Text(
-      l10n.detailDownloadStreak(streak!.length),
+      l10n.detailDownloadStreak(widget.streak!.length),
       style: theme.textTheme.labelSmall?.copyWith(
         color: theme.colorScheme.primary,
       ),
@@ -251,8 +372,7 @@ class _DestinationDialog extends StatelessWidget {
   ///
   /// Because the chooser is only ever reached by a deliberate long press, this
   /// is never an unsolicited nag: it waits in the sheet the user chose to open,
-  /// and disappears the moment they take it (the default then equals the run)
-  /// or route elsewhere (the run resets). So it needs no dismiss-cooldown.
+  /// and disappears the moment they take it or route elsewhere.
   Widget? _alwaysAction(BuildContext context, AppLocalizations l10n) {
     final StorageTier? tier = _suggestedTier;
     if (tier == null) return null;
@@ -264,12 +384,40 @@ class _DestinationDialog extends StatelessWidget {
           DownloadDestinationChoice(tier: tier, remember: true),
         ),
         icon: const Icon(Icons.push_pin_outlined, size: 18),
-        label: Text(l10n.detailDownloadAlways(purityLabel(l10n, purity))),
+        label: Text(
+          l10n.detailDownloadAlways(purityLabel(l10n, widget.strongestPurity)),
+        ),
       ),
     );
   }
 
-  /// Wide enough for the longest destination detail on two lines, narrow
-  /// enough that the cards still read as a stack of choices on a tablet.
+  /// The "Keep sending here" toggle. When on, tapping a destination pins it for
+  /// every later download; when off, the tap is a one-off and leaves any pin as
+  /// it is (Stop clears an existing one).
+  Widget _keepSendingSwitch(BuildContext context, AppLocalizations l10n) {
+    return SwitchListTile.adaptive(
+      value: _keepSending,
+      onChanged: (bool on) => setState(() => _keepSending = on),
+      contentPadding: EdgeInsets.zero,
+      title: Text(l10n.downloadKeepSendingHere),
+      subtitle: Text(l10n.downloadKeepSendingSubtitle),
+    );
+  }
+
+  /// The Stop button, present only while a pin is in force. It clears the pin
+  /// and downloads nothing — the way out that does not make you save something.
+  Widget? _stopAction(BuildContext context, AppLocalizations l10n) {
+    if (widget.pinnedTier == null) return null;
+    return TextButton(
+      onPressed: () => Navigator.pop(
+        context,
+        const DownloadDestinationChoice.stopPin(),
+      ),
+      child: Text(l10n.downloadPinStop),
+    );
+  }
+
+  /// Wide enough for the longest destination detail on two lines, narrow enough
+  /// that the cards still read as a stack of choices on a tablet.
   static const double _maxWidth = 360;
 }
