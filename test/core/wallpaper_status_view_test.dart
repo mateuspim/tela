@@ -3,7 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
 
 /// Boots [child] with the real localizations, which the view reads its wording
 /// from.
@@ -121,7 +121,7 @@ void main() {
     testWidgets('never leaks a raw error to the user', (
       WidgetTester tester,
     ) async {
-      // Not a WallhavenFailure at all: a bug, not a diagnosis. The user gets
+      // Not a SourceFailure at all: a bug, not a diagnosis. The user gets
       // the generic wording rather than a stack trace.
       await _pump(tester, _failure(StateError('paging controller exploded')));
 

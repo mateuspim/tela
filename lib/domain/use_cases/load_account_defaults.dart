@@ -1,5 +1,5 @@
 import 'package:tela/domain/models/account_settings.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/use_cases/sync_account_defaults.dart';
@@ -59,7 +59,7 @@ class LoadAccountDefaults {
   Future<AccountSettings?> _backfill() async {
     try {
       return await _syncDefaults();
-    } on WallhavenFailure {
+    } on SourceFailure {
       return null;
     }
   }

@@ -28,9 +28,9 @@ import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/share_option.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_adjust_failure.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
@@ -709,7 +709,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       error: (Object error, StackTrace stackTrace) => Padding(
         padding: const EdgeInsets.all(24),
         child: Text(
-          error is WallhavenFailure
+          error is SourceFailure
               ? localizedFailure(l10n, error)
               : l10n.errorUnexpected,
         ),

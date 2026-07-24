@@ -80,7 +80,7 @@ class BrowseDefaultsController extends AsyncNotifier<ActiveBrowseDefaults> {
   ///
   /// On demand only. There is still no periodic refresh: an account's defaults
   /// change about as often as its password, and a poll would spend the
-  /// 45 req/min budget on a question nobody asked. Throws a `WallhavenFailure`
+  /// 45 req/min budget on a question nobody asked. Throws a `SourceFailure`
   /// on a key that is rejected or an account tela cannot reach — the caller
   /// shows it.
   Future<void> refreshFromAccount() async {

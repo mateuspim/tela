@@ -1,6 +1,6 @@
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 
@@ -8,7 +8,7 @@ import 'package:tela/domain/models/wallpaper_page.dart';
 ///
 /// Owned by the domain, implemented in `data/` over Dio. Features depend on
 /// this and never on the HTTP client, so replacing Dio touches one adapter.
-/// Implementations throw [WallhavenFailure], never a transport exception.
+/// Implementations throw [SourceFailure], never a transport exception.
 ///
 /// ```dart
 /// final WallpaperPage page = await api.search(const SearchQuery());

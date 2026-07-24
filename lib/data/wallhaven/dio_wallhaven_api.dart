@@ -2,14 +2,14 @@ import 'package:dio/dio.dart';
 import 'package:tela/data/wallhaven/wallhaven_mapper.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/ports/wallhaven_api.dart';
 
 /// The Dio-backed [WallhavenApi].
 ///
-/// Dio stops here: every `DioException` becomes a [WallhavenFailure], so no
+/// Dio stops here: every `DioException` becomes a [SourceFailure], so no
 /// feature ever imports the HTTP client to find out what went wrong, and
 /// swapping Dio out touches only this file (CLAUDE.md, dependency rule).
 class DioWallhavenApi implements WallhavenApi {
@@ -72,11 +72,14 @@ class DioWallhavenApi implements WallhavenApi {
   }
 
   /// Translates transport-level noise into the four things the UI can act on.
-  WallhavenFailure _toFailure(DioException error) {
+  SourceFailure _toFailure(DioException error) {
     final int? status = error.response?.statusCode;
     if (status == 401) return const InvalidApiKeyFailure();
     if (status == 429) {
-      return RateLimitedFailure(retryAfter: _retryAfterOf(error.response));
+      return RateLimitedFailure(
+        retryAfter: _retryAfterOf(error.response),
+        message: 'Wallhaven rate limit reached (45 req/min)',
+      );
     }
     return switch (error.type) {
       DioExceptionType.connectionTimeout ||

@@ -1,7 +1,7 @@
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
@@ -50,7 +50,7 @@ class FakeWallhavenApi implements WallhavenApi {
   final AccountSettings? account;
 
   /// When set, every call throws this instead of returning a page.
-  final WallhavenFailure? failure;
+  final SourceFailure? failure;
 
   /// How long each [search] takes to answer, decided from the query itself.
   ///
@@ -76,7 +76,7 @@ class FakeWallhavenApi implements WallhavenApi {
     receivedQueries.add(query);
     final Duration? delay = searchDelay?.call(query);
     if (delay != null) await Future<void>.delayed(delay);
-    final WallhavenFailure? toThrow = failure;
+    final SourceFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
     final WallpaperPage Function(SearchQuery query)? answerWith = pageFor;
     if (answerWith != null) return answerWith(query);
@@ -93,7 +93,7 @@ class FakeWallhavenApi implements WallhavenApi {
   @override
   Future<WallpaperDetails> wallpaperDetails(String id) async {
     receivedDetailIds.add(id);
-    final WallhavenFailure? toThrow = failure;
+    final SourceFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
     final WallpaperDetails? result = detailsById[id] ?? details;
     if (result == null) {
@@ -105,7 +105,7 @@ class FakeWallhavenApi implements WallhavenApi {
   @override
   Future<AccountSettings> accountSettings() async {
     accountSettingsCalls++;
-    final WallhavenFailure? toThrow = failure;
+    final SourceFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
     return account ?? _telaDefaults;
   }

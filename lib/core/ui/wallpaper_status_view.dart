@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
 
 /// What a grid shows when it has no wallpapers to show: an icon, a sentence,
 /// and — when there is something to try — one button.
@@ -31,14 +31,14 @@ class WallpaperStatusView extends StatelessWidget {
   /// network, the key icon for a rejected key, and so on.
   ///
   /// Takes `Object?` because that is what a paging controller hands back — a
-  /// non-[WallhavenFailure] is a bug rather than a diagnosis, and gets the
+  /// non-[SourceFailure] is a bug rather than a diagnosis, and gets the
   /// generic wording instead of leaking a stack trace to the user.
   factory WallpaperStatusView.failure({
     required AppLocalizations l10n,
     required Object? error,
     required VoidCallback onRetry,
   }) {
-    final WallhavenFailure? failure = error is WallhavenFailure ? error : null;
+    final SourceFailure? failure = error is SourceFailure ? error : null;
     return WallpaperStatusView(
       icon: failure == null ? Icons.error_outline : _failureIcon(failure),
       message: failure == null
@@ -133,7 +133,7 @@ class WallpaperStatusView extends StatelessWidget {
 
   /// Exhaustive over the sealed failure, so a new one is a compile error here
   /// rather than a grid that silently falls back to a generic icon.
-  static IconData _failureIcon(WallhavenFailure failure) {
+  static IconData _failureIcon(SourceFailure failure) {
     return switch (failure) {
       InvalidApiKeyFailure() => Icons.key_off_outlined,
       RateLimitedFailure() => Icons.hourglass_empty,

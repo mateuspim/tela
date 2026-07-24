@@ -13,10 +13,10 @@ import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tile_density.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
 import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/features/settings/settings_screen.dart';
 

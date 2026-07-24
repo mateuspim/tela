@@ -1,5 +1,5 @@
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/wallhaven_failure.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/tag_blocklist_repository.dart';
