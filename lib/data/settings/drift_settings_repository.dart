@@ -87,6 +87,10 @@ class DriftSettingsRepository implements SettingsRepository {
   static const String _safeStreakKey = 'downloads.streak.sfw';
   static const String _explicitStreakKey = 'downloads.streak.nsfw';
 
+  /// The "Keep sending here" pin. A [StorageTier] name, or absent when no pin
+  /// is set. Purity-flat — one row for all purities.
+  static const String _pinnedTierKey = 'downloads.pinned';
+
   final TelaDatabase _db;
 
   @override
@@ -272,6 +276,24 @@ class DriftSettingsRepository implements SettingsRepository {
       _streakKey(purity),
       DownloadDestinationStreak.extending(current, tier).encode(),
     );
+  }
+
+  @override
+  Future<StorageTier?> loadPinnedDownloadTier() async {
+    final String? stored = await _db.settingValue(_pinnedTierKey);
+    if (stored == null) return null;
+    // Distrust the row: an unrecognised name reads as no pin, never a crash.
+    // The NSFW invariant is not applied here — a `sharedGallery` pin is legal
+    // to store and simply skips explicit downloads at routing time.
+    return StorageTier.values
+        .where((StorageTier tier) => tier.name == stored)
+        .firstOrNull;
+  }
+
+  @override
+  Future<void> setPinnedDownloadTier(StorageTier? tier) {
+    if (tier == null) return _db.deleteSettings(<String>[_pinnedTierKey]);
+    return _db.putSetting(_pinnedTierKey, tier.name);
   }
 
   /// The row a [purity]'s streak lives in, bucketed exactly as its tier is.

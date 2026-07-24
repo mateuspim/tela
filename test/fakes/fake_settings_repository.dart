@@ -21,7 +21,9 @@ class FakeSettingsRepository implements SettingsRepository {
     AccentColor? accent,
     TileDensity density = TileDensity.medium,
     Map<Purity, DownloadDestinationStreak>? streaks,
+    StorageTier? pinnedDownloadTier,
   }) : _streaks = <Purity, DownloadDestinationStreak>{...?streaks},
+       _pinnedDownloadTier = pinnedDownloadTier,
        _settings = settings ?? StorageSettings.defaults,
        _privateLibraryLocked = privateLibraryLocked,
        _nsfwOnRemovableAcknowledged = nsfwOnRemovableAcknowledged,
@@ -39,6 +41,7 @@ class FakeSettingsRepository implements SettingsRepository {
   BrowseDefaults? _deviceDefaults;
   AccentColor? _accent;
   TileDensity _density;
+  StorageTier? _pinnedDownloadTier;
 
   /// Streaks by storage bucket, seeded through the constructor and keyed the
   /// same way the Drift adapter keys its two rows.
@@ -68,6 +71,9 @@ class FakeSettingsRepository implements SettingsRepository {
 
   /// The accent currently stored, or null when following the device palette.
   AccentColor? get accentSaved => _accent;
+
+  /// The "Keep sending here" pin currently stored, or null when none is set.
+  StorageTier? get pinnedTierSaved => _pinnedDownloadTier;
 
   @override
   Future<StorageSettings> loadStorageSettings() async => _settings;
@@ -160,5 +166,13 @@ class FakeSettingsRepository implements SettingsRepository {
       _streaks[bucket],
       tier,
     );
+  }
+
+  @override
+  Future<StorageTier?> loadPinnedDownloadTier() async => _pinnedDownloadTier;
+
+  @override
+  Future<void> setPinnedDownloadTier(StorageTier? tier) async {
+    _pinnedDownloadTier = tier;
   }
 }

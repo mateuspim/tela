@@ -9,6 +9,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
@@ -215,6 +216,60 @@ void main() {
     expect(find.textContaining('Downloaded 0 of 2'), findsNothing);
   });
 
+  // K1 — a not-safe wallpaper in the batch is exactly what the single-download
+  // chooser now guards for, so the batch owes the same question before landing.
+  testWidgets('a not-safe batch asks where it lands', (
+    WidgetTester tester,
+  ) async {
+    await _pumpWall(
+      tester,
+      wallpapers: <Wallpaper>[
+        _wallpaper('e7jvjd', purity: Purity.sketchy),
+        _wallpaper('7j1mzo'),
+      ],
+    );
+    await _startSelecting(tester);
+    await tester.tap(find.byType(WallpaperTile).at(1));
+    await _settle(tester);
+
+    await tester.tap(find.byIcon(Icons.download_outlined));
+    await _settle(tester);
+
+    // The intersection: one sketchy wallpaper keeps the gallery on offer, but
+    // the chooser is up rather than the download running silently.
+    expect(find.text('Download to'), findsOneWidget);
+    expect(find.text('Private library'), findsOneWidget);
+  });
+
+  // K2 — with a pin set, downloading no longer asks: the whole point is to skip
+  // the chooser, so even a not-safe batch routes straight to the pin.
+  testWidgets('a pin sends the batch straight through, no chooser', (
+    WidgetTester tester,
+  ) async {
+    final FakeImageStore images = FakeImageStore();
+    await _pumpWall(
+      tester,
+      images: images,
+      settings: FakeSettingsRepository(
+        pinnedDownloadTier: StorageTier.appPrivate,
+      ),
+      wallpapers: <Wallpaper>[
+        _wallpaper('e7jvjd', purity: Purity.sketchy),
+        _wallpaper('7j1mzo'),
+      ],
+    );
+    await _startSelecting(tester);
+    await tester.tap(find.byType(WallpaperTile).at(1));
+    await _settle(tester);
+
+    await tester.tap(find.byIcon(Icons.download_outlined));
+    await _settle(tester);
+
+    expect(find.text('Download to'), findsNothing);
+    expect(find.text('Downloaded 2 wallpapers'), findsOneWidget);
+    expect(images.receivedTier, StorageTier.appPrivate);
+  });
+
   testWidgets('closing the bar drops the selection without acting', (
     WidgetTester tester,
   ) async {
@@ -251,6 +306,8 @@ Future<void> _pumpWall(
   WidgetTester tester, {
   FakeFavoritesRepository? favorites,
   FakeImageStore? images,
+  FakeSettingsRepository? settings,
+  List<Wallpaper>? wallpapers,
 }) async {
   // A real phone's geometry, not the 800x600 default — see the quick-sheet
   // suite, where the short default let a tap aimed at the sheet's last row
@@ -260,11 +317,13 @@ Future<void> _pumpWall(
   addTearDown(tester.view.reset);
   final FakeWallhavenApi api = FakeWallhavenApi(
     page: WallpaperPage(
-      wallpapers: <Wallpaper>[
-        _wallpaper('e7jvjd'),
-        _wallpaper('7j1mzo'),
-        _wallpaper('k8lvqm'),
-      ],
+      wallpapers:
+          wallpapers ??
+          <Wallpaper>[
+            _wallpaper('e7jvjd'),
+            _wallpaper('7j1mzo'),
+            _wallpaper('k8lvqm'),
+          ],
       currentPage: 1,
       lastPage: 1,
     ),
@@ -274,7 +333,9 @@ Future<void> _pumpWall(
       overrides: <Override>[
         wallhavenApiProvider.overrideWithValue(api),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
-        settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+        settingsRepositoryProvider.overrideWithValue(
+          settings ?? FakeSettingsRepository(),
+        ),
         tagBlocklistRepositoryProvider.overrideWithValue(
           FakeTagBlocklistRepository(),
         ),
@@ -297,7 +358,7 @@ Future<void> _settle(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 500));
 }
 
-Wallpaper _wallpaper(String id) => Wallpaper(
+Wallpaper _wallpaper(String id, {Purity purity = Purity.sfw}) => Wallpaper(
   id: id,
   fullImageUrl: 'https://w.wallhaven.cc/full/xx/wallhaven-$id.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/xx/$id.jpg',
@@ -305,7 +366,7 @@ Wallpaper _wallpaper(String id) => Wallpaper(
   thumbOriginalUrl: 'https://th.wallhaven.cc/orig/xx/$id.jpg',
   resolution: const Resolution(1440, 3200),
   fileSizeBytes: 2048,
-  purity: Purity.sfw,
+  purity: purity,
   category: Category.general,
   colors: const <String>[],
 );

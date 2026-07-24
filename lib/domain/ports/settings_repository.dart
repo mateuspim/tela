@@ -125,4 +125,21 @@ abstract interface class SettingsRepository {
   /// merely agrees with the configured tier is what tells the caller it has
   /// nothing to suggest.
   Future<void> recordDestination(Purity purity, StorageTier tier);
+
+  /// The "Keep sending here" pin — one tier every download goes to until the
+  /// user changes it — or null when no pin is set (route by the per-purity
+  /// configured tier as usual).
+  ///
+  /// Purity-flat on purpose: the pin is one destination for all purities. The
+  /// NSFW invariant is applied at routing ([StorageSettings.tierWithPin]), not
+  /// here, so a `sharedGallery` pin is stored plainly and simply does not
+  /// govern explicit downloads.
+  ///
+  /// Never throws: an unreadable row answers null, the safe reading — no pin
+  /// falls back to the configured routing rather than force a destination.
+  Future<StorageTier?> loadPinnedDownloadTier();
+
+  /// Pins [tier] as the destination every download goes to until changed, or
+  /// clears the pin when [tier] is null.
+  Future<void> setPinnedDownloadTier(StorageTier? tier);
 }

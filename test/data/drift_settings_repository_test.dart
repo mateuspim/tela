@@ -455,6 +455,30 @@ void main() {
       expect(await settings.loadDestinationStreak(Purity.nsfw), isNull);
     });
   });
+
+  group('the "Keep sending here" pin', () {
+    test('is absent until one is set', () async {
+      expect(await settings.loadPinnedDownloadTier(), isNull);
+    });
+
+    test('round-trips every tier, including the gallery', () async {
+      for (final StorageTier tier in StorageTier.values) {
+        await settings.setPinnedDownloadTier(tier);
+        expect(await settings.loadPinnedDownloadTier(), tier);
+      }
+    });
+
+    test('clears back to no pin', () async {
+      await settings.setPinnedDownloadTier(StorageTier.appPrivate);
+      await settings.setPinnedDownloadTier(null);
+      expect(await settings.loadPinnedDownloadTier(), isNull);
+    });
+
+    test('reads an unrecognised row as no pin', () async {
+      await db.putSetting('downloads.pinned', 'dropbox');
+      expect(await settings.loadPinnedDownloadTier(), isNull);
+    });
+  });
 }
 
 /// Records [times] downloads of [purity] all landing in [tier].

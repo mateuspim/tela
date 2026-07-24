@@ -35,14 +35,16 @@ class DownloadWallpaper {
   /// has the last word on where a file actually went.
   ///
   /// [tier] is the per-download override; without it the wallpaper goes to the
-  /// tier the user configured for its purity.
+  /// pinned "Keep sending here" destination, or the tier the user configured
+  /// for its purity when no pin is set. The precedence is: the per-download
+  /// [tier] > the pin > the configured tier.
   ///
   /// ```dart
-  /// await download(wallpaper); // the configured destination
+  /// await download(wallpaper); // the pin, or the configured destination
   /// await download(wallpaper, tier: StorageTier.appPrivate); // just this once
   /// ```
   Future<StoredImage> call(Wallpaper wallpaper, {StorageTier? tier}) async {
-    final StorageTier destination = tier ?? await _configuredTier(wallpaper);
+    final StorageTier destination = tier ?? await _defaultTier(wallpaper);
     final StoredImage stored = await _imageStore.store(
       id: wallpaper.id,
       imageUrl: wallpaper.fullImageUrl,
@@ -75,8 +77,16 @@ class DownloadWallpaper {
     );
   }
 
-  Future<StorageTier> _configuredTier(Wallpaper wallpaper) async {
+  /// The destination a plain download lands in: the pin when one is set and
+  /// legal for this purity, else the configured tier.
+  ///
+  /// The invariant fallback — an explicit wallpaper under a `sharedGallery` pin
+  /// dropping to its configured private tier — lives in
+  /// [StorageSettings.tierWithPin], so it is enforced in the domain and not
+  /// re-derived per caller.
+  Future<StorageTier> _defaultTier(Wallpaper wallpaper) async {
+    final StorageTier? pin = await _settings.loadPinnedDownloadTier();
     final StorageSettings settings = await _settings.loadStorageSettings();
-    return settings.tierFor(wallpaper.purity);
+    return settings.tierWithPin(wallpaper.purity, pin);
   }
 }

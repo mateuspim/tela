@@ -233,19 +233,28 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
     final DownloadDestinationStreak? streak = await settings
         .loadDestinationStreak(_wallpaper.purity);
+    final StorageTier? pin = await settings.loadPinnedDownloadTier();
     if (!mounted) return;
     final DownloadDestinationChoice? choice = await chooseDownloadDestination(
       context,
       purity: _wallpaper.purity,
       configuredTier: storage.tierFor(_wallpaper.purity),
       streak: streak,
+      pinnedTier: pin,
     );
-    if (choice == null || !mounted) return;
+    if (choice == null) return;
+    // Stop clears the pin and downloads nothing — the deliberate way out.
+    if (choice.stopsPin) {
+      await settings.setPinnedDownloadTier(null);
+      return;
+    }
     if (choice.remember) {
       await ref
           .read(storageSettingsProvider.notifier)
-          .route(_wallpaper.purity, choice.tier);
+          .route(_wallpaper.purity, choice.tier!);
     }
+    if (choice.pin) await settings.setPinnedDownloadTier(choice.tier);
+    if (!mounted) return;
     await _download(choice.tier);
   }
 

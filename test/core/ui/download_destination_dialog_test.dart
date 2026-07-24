@@ -169,6 +169,108 @@ void main() {
       expect(find.textContaining('Always'), findsNothing);
     });
   });
+
+  group('the "Keep sending here" pin', () {
+    testWidgets('pins the tapped tier when the switch is on', (
+      WidgetTester tester,
+    ) async {
+      final Future<DownloadDestinationChoice?> picked = await _open(
+        tester,
+        purity: Purity.sfw,
+      );
+
+      await tester.tap(find.text('Keep sending here'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Private library'));
+      await tester.pumpAndSettle();
+
+      final DownloadDestinationChoice? choice = await picked;
+      expect(choice?.tier, StorageTier.appPrivate);
+      expect(choice?.pin, isTrue);
+    });
+
+    testWidgets('leaves a plain tap unpinned when the switch is off', (
+      WidgetTester tester,
+    ) async {
+      final Future<DownloadDestinationChoice?> picked = await _open(
+        tester,
+        purity: Purity.sfw,
+      );
+
+      await tester.tap(find.text('Gallery'));
+      await tester.pumpAndSettle();
+
+      final DownloadDestinationChoice? choice = await picked;
+      expect(choice?.pin, isFalse);
+      expect(choice?.stopsPin, isFalse);
+    });
+
+    testWidgets('shows an active pin and offers to stop it', (
+      WidgetTester tester,
+    ) async {
+      final Future<DownloadDestinationChoice?> picked = await _open(
+        tester,
+        purity: Purity.sfw,
+        pinnedTier: StorageTier.appPrivate,
+      );
+
+      expect(
+        find.text('Sending every download to Private library.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Stop'));
+      await tester.pumpAndSettle();
+
+      final DownloadDestinationChoice? choice = await picked;
+      expect(choice?.stopsPin, isTrue);
+      expect(choice?.tier, isNull);
+    });
+
+    // With no pin in force there is nothing to stop, so the way out is Cancel.
+    testWidgets('offers no Stop when no pin is set', (
+      WidgetTester tester,
+    ) async {
+      await _open(tester, purity: Purity.sfw);
+      expect(find.text('Stop'), findsNothing);
+    });
+  });
+
+  group('chooseBatchDownloadDestination', () {
+    testWidgets('offers every tier when the batch is all safe', (
+      WidgetTester tester,
+    ) async {
+      await _openBatch(tester, purities: <Purity>{Purity.sfw, Purity.sketchy});
+
+      expect(find.text('Gallery'), findsOneWidget);
+      expect(find.text('Files, not gallery'), findsOneWidget);
+      expect(find.text('Private library'), findsOneWidget);
+    });
+
+    // The intersection: one explicit wallpaper in the set takes the gallery off
+    // the table for the whole batch, so one destination can hold all of them.
+    testWidgets('drops the gallery when any wallpaper is explicit', (
+      WidgetTester tester,
+    ) async {
+      await _openBatch(tester, purities: <Purity>{Purity.sfw, Purity.nsfw});
+
+      expect(find.text('Gallery'), findsNothing);
+      expect(find.text('Files, not gallery'), findsOneWidget);
+      expect(find.text('Private library'), findsOneWidget);
+    });
+
+    // A bulk action is not a per-item habit, so the streak's "Always" never
+    // appears — but the pin toggle does, since pinning is a "put everything
+    // here" decision.
+    testWidgets('has the pin toggle but never an "Always"', (
+      WidgetTester tester,
+    ) async {
+      await _openBatch(tester, purities: <Purity>{Purity.sfw});
+
+      expect(find.text('Keep sending here'), findsOneWidget);
+      expect(find.textContaining('Always'), findsNothing);
+    });
+  });
 }
 
 /// Pumps a host app and opens the dialog from a real context, returning the
@@ -180,7 +282,39 @@ Future<Future<DownloadDestinationChoice?>> _open(
   required Purity purity,
   StorageTier configuredTier = StorageTier.sharedGallery,
   DownloadDestinationStreak? streak,
+  StorageTier? pinnedTier,
 }) async {
+  final BuildContext context = await _host(tester);
+  final Future<DownloadDestinationChoice?> picked = chooseDownloadDestination(
+    context,
+    purity: purity,
+    configuredTier: configuredTier,
+    streak: streak,
+    pinnedTier: pinnedTier,
+  );
+  await tester.pumpAndSettle();
+  return picked;
+}
+
+/// The batch twin of [_open].
+Future<Future<DownloadDestinationChoice?>> _openBatch(
+  WidgetTester tester, {
+  required Set<Purity> purities,
+  StorageTier? pinnedTier,
+}) async {
+  final BuildContext context = await _host(tester);
+  final Future<DownloadDestinationChoice?> picked =
+      chooseBatchDownloadDestination(
+        context,
+        purities: purities,
+        pinnedTier: pinnedTier,
+      );
+  await tester.pumpAndSettle();
+  return picked;
+}
+
+/// Pumps the localized host app and hands back a real context to open from.
+Future<BuildContext> _host(WidgetTester tester) async {
   await tester.pumpWidget(
     const MaterialApp(
       localizationsDelegates: <LocalizationsDelegate<Object>>[
@@ -193,13 +327,5 @@ Future<Future<DownloadDestinationChoice?>> _open(
       home: Scaffold(body: SizedBox.expand()),
     ),
   );
-  final BuildContext context = tester.element(find.byType(Scaffold));
-  final Future<DownloadDestinationChoice?> picked = chooseDownloadDestination(
-    context,
-    purity: purity,
-    configuredTier: configuredTier,
-    streak: streak,
-  );
-  await tester.pumpAndSettle();
-  return picked;
+  return tester.element(find.byType(Scaffold));
 }

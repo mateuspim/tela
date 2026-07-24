@@ -2,22 +2,49 @@
 
 Updated: 2026-07-23
 
-> **START HERE — I IS MERGED. The next feature to build is K (a pinned "Keep
-> sending here" destination + a batch chooser).** The download-destination
-> decision (I1–I4) went into `master` as `e693346` (2026-07-23), a real merge
-> commit off `ee09b3b`; the gate ran both suites (**877 Dart, 34 Kotlin**).
-> **Nothing is pushed** — `origin` has seen none of I, J's plan, or K's.
+> **START HERE — K IS BUILT on branch `feat/k-pinned-destination` (off
+> `master`, `d7184ef`, 2026-07-23), NOT YET MERGED and NOT YET DEVICE-VERIFIED.**
+> The pinned "Keep sending here" destination + the batch chooser. `flutter
+> analyze` is clean and the Dart suite is **894** (was 877, +17 for K); the
+> Kotlin suite is untouched at **34**. The merge gate has **not** run yet — it
+> fires on the merge into `master`, which is still owed. **Nothing is pushed** —
+> `origin` has seen none of I, J's plan, or K.
 >
-> **What to do next:** open a branch off `master` and build **K** (its section is
-> below *J*). Its four questions are already **answered by the owner
-> (2026-07-23)** — a "Keep sending here" toggle in the chooser that pins one
-> destination, persists until changed, and governs every download (single tap and
-> batch) so downloading needs no press-and-hold or Settings trip; opt-in via the
-> toggle; purity-flat but the NSFW invariant still wins (explicit under a Gallery
-> pin falls back to private). **J** (the hard delete) stays **parked** on its
-> three questions and owes native/Kotlin work — do not start it until answered.
+> **What to do next, in order:** (1) put K on the tablet (`make deploy`) and walk
+> it — see the device-flags below. (2) Merge `feat/k-pinned-destination` into
+> `master` (the gate runs both suites then). Then **J** (the hard delete) is the
+> next build: it stays **parked** on its three questions and owes native/Kotlin
+> work — do not start it until the owner answers them.
 >
-> The record of the just-merged I follows, newest first.
+> **What K does** (its section is below *J*, marked BUILT):
+> - **The pin** — purity-flat, persisted until changed, opt-in via a "Keep
+>   sending here" switch in the chooser. It governs *every* download, single tap
+>   and batch, so downloading needs no long-press or Settings trip. Precedence
+>   lives in the domain (`StorageSettings.tierWithPin`, resolved in
+>   `DownloadWallpaper`): per-download pick **>** pin **>** configured tier. The
+>   NSFW invariant still wins — an explicit download under a Gallery pin falls
+>   back to its configured private tier. The chooser also shows an active pin and
+>   a **Stop** that clears it without downloading.
+> - **The batch chooser** — a batch resolves one destination up front. A
+>   wholly-safe batch stays silent (mirrors the single safe tap); a batch with
+>   any not-safe wallpaper opens `chooseBatchDownloadDestination`, offering only
+>   the *intersection* of tiers legal for every selected purity, so one explicit
+>   item takes Gallery off the table for all. A pin makes the batch skip the
+>   chooser entirely.
+>
+> **Flag on the device (owner calls these):**
+> - A **wholly-safe batch routes silently** rather than asking (the build's one
+>   judgement call, chosen for symmetry with the single safe tap — safe already
+>   never asks). If an all-safe batch *should* also offer a chooser, that is a
+>   one-line change in `_resolveBatchDestination`.
+> - The batch heading is still the plain **"Download to"** with the strongest
+>   purity's warning line; the handoff floated a neutral "N wallpapers" heading —
+>   decide on the tablet.
+> - Whether the per-download **"Always"** (I3, per-bucket default) now feels
+>   redundant beside the **pin** (purity-flat, above it). They coexist under the
+>   precedence above; the owner may want them folded.
+>
+> The record of the merged I follows, newest first.
 >
 > - `1b837a5` **I4 — the grid's download gets a destination.** The browse
 >   long-press sheet's Download row had no destination choice at all; it now
@@ -2298,7 +2325,44 @@ Do not guess them into a build.
 3. **Scope of the first cut** — history + private library tiles only, or the
    detail screen as well?
 
-## K — a pinned download destination + a batch chooser, scoped 2026-07-23; questions ANSWERED, NOT STARTED
+## K — a pinned download destination + a batch chooser, scoped 2026-07-23; BUILT (`d7184ef`), device pass + merge owed
+
+> **BUILT on `feat/k-pinned-destination` (`d7184ef`), not yet merged, not yet
+> device-verified.** What shipped, against the slices below:
+>
+> - **K2 (the pin).** `SettingsRepository.load/setPinnedDownloadTier` (nullable;
+>   unreadable → null = no pin), Drift row `downloads.pinned` — a `sharedGallery`
+>   pin is stored plainly, the invariant is applied at routing, not on write.
+>   Precedence is one domain method, `StorageSettings.tierWithPin(purity, pin)`,
+>   resolved in `DownloadWallpaper._defaultTier`: per-download `tier:` **>** pin
+>   **>** configured. An explicit wallpaper under a `sharedGallery` pin drops to
+>   its configured private tier there, so the caller never re-derives the rule.
+>   The chooser (I1) gained a **"Keep sending here"** switch (opt-in; starts on
+>   only when a pin is already in force), an active-pin caption
+>   (`downloadPinActive`), and a **Stop** action (`DownloadDestinationChoice`
+>   grew `pin` + a `stopPin` constructor / `stopsPin` getter). Single tap and the
+>   grid quick sheet now read the pin and route silently through it; the detail
+>   long-press manages it.
+> - **K1 (the batch chooser).** `chooseBatchDownloadDestination` beside the single
+>   one, sharing the now-stateful `_DestinationDialog`; options are
+>   `StorageSettings.choicesForAll(purities)` (the intersection). `_downloadAll`
+>   resolves one destination up front via `_resolveBatchDestination`: a pin →
+>   silent (`tier: null`, each item resolves the pin); an all-safe batch →
+>   silent; otherwise the chooser, and a dismissed chooser abandons the batch
+>   (`_perform` now returns whether it ran, so the ticks survive). No "Always" in
+>   the batch chooser; the pin toggle is there.
+> - **The one judgement call**, flagged in the top START-HERE: a **wholly-safe
+>   batch routes silently** rather than asking — symmetric with the single safe
+>   tap, and it kept the existing all-safe batch tests valid. The chooser appears
+>   only when the selection carries a not-safe wallpaper.
+> - **Tests (+17):** dialog (toggle pins / plain tap does not / active pin +
+>   Stop / no Stop without a pin / batch intersection / batch has no Always);
+>   `DownloadWallpaper` precedence incl. the explicit-under-gallery-pin fallback;
+>   Drift pin round-trip (all tiers incl. gallery, clear, unrecognised → null);
+>   `browse_multi_select` (a not-safe batch asks; a pin sends it straight
+>   through). The fake grew `pinnedDownloadTier` + `pinnedTierSaved`.
+> - **Not touched:** no native/Kotlin work (K is pure Dart/UI); `origin` still
+>   sees nothing.
 
 Two linked complaints from the owner, 2026-07-23:
 

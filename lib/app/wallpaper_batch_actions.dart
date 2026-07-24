@@ -4,10 +4,14 @@ import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/tela_toast.dart';
+import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
+import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 
 /// What a shelf can do to every ticked wallpaper at once.
@@ -70,11 +74,13 @@ Future<bool> runWallpaperBatchAction({
   // a batch of downloads is long enough that the shelf may be gone by then.
   final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
   final AppLocalizations l10n = AppLocalizations.of(context);
-  await _perform(context, ref, action, wallpapers, messenger, l10n);
-  return true;
+  return _perform(context, ref, action, wallpapers, messenger, l10n);
 }
 
-Future<void> _perform(
+/// Runs the action and reports whether it ran — false only when the download
+/// chooser was dismissed before anything was written, so the caller keeps a
+/// selection the user did not abandon.
+Future<bool> _perform(
   BuildContext context,
   WidgetRef ref,
   WallpaperBatchAction action,
@@ -86,14 +92,17 @@ Future<void> _perform(
     case WallpaperBatchAction.favorite:
       await _favoriteAll(ref, wallpapers);
       _say(messenger, l10n.batchFavoriteDone(wallpapers.length));
+      return true;
     case WallpaperBatchAction.unfavorite:
       await _unfavoriteAll(ref, wallpapers);
       _say(messenger, l10n.batchUnfavoriteDone(wallpapers.length));
+      return true;
     case WallpaperBatchAction.download:
-      await _downloadAll(context, ref, wallpapers, messenger, l10n);
+      return _downloadAll(context, ref, wallpapers, messenger, l10n);
     case WallpaperBatchAction.forget:
       await _forgetAll(ref, wallpapers);
       _say(messenger, l10n.batchForgetDone(wallpapers.length));
+      return true;
   }
 }
 
@@ -140,19 +149,24 @@ void _refreshFavorites(WidgetRef ref, List<Wallpaper> wallpapers) {
 /// so, because "downloaded 9 of 12" and "downloaded 12" are different outcomes
 /// and a snackbar that rounds the first up to the second is a lie about what is
 /// on the device.
-Future<void> _downloadAll(
+Future<bool> _downloadAll(
   BuildContext context,
   WidgetRef ref,
   List<Wallpaper> wallpapers,
   ScaffoldMessengerState messenger,
   AppLocalizations l10n,
 ) async {
+  final ({bool proceed, StorageTier? tier}) destination =
+      await _resolveBatchDestination(context, ref, wallpapers);
+  if (!destination.proceed) return false;
+
   int saved = 0;
   for (final Wallpaper wallpaper in wallpapers) {
     final DownloadOutcome outcome = await ref.read(configuredDownloadProvider)(
       wallpaper,
       chooseVolume: ({required bool offerSdCard}) =>
           chooseDownloadVolume(context, offerSdCard: offerSdCard),
+      tier: destination.tier,
     );
     // Backing out of first-time folder setup abandons the batch: every
     // remaining download would ask the same unanswered question.
@@ -166,12 +180,46 @@ Future<void> _downloadAll(
         l10n.detailDownloadFolderUnavailable,
         kind: ToastKind.failure,
       );
-      return;
+      return true;
     }
     if (outcome == DownloadOutcome.saved) saved++;
   }
   refreshDownloads(ref);
   _sayDownloadOutcome(messenger, l10n, saved, wallpapers.length);
+  return true;
+}
+
+/// Where a whole batch lands: the pin when one is set (each item resolves it,
+/// invariant permitting, via a null tier), or the one destination the user
+/// picks from the intersection chooser. A dismissed chooser answers
+/// `proceed: false` so the batch abandons and the selection stays.
+Future<({bool proceed, StorageTier? tier})> _resolveBatchDestination(
+  BuildContext context,
+  WidgetRef ref,
+  List<Wallpaper> wallpapers,
+) async {
+  final SettingsRepository settings = ref.read(settingsRepositoryProvider);
+  // A pin governs the batch too: hand each download a null tier and let the
+  // download use case send it to the pin, dropping explicit items to their
+  // private tier where a gallery pin cannot hold them.
+  if (await settings.loadPinnedDownloadTier() != null) {
+    return (proceed: true, tier: null);
+  }
+  final Set<Purity> purities = wallpapers
+      .map((Wallpaper wallpaper) => wallpaper.purity)
+      .toSet();
+  // A wholly-safe batch routes silently, the same rule a single safe tap
+  // follows: the chooser is for the destination a not-safe download must not
+  // enter unasked. Nothing here is not-safe, so there is nothing to decide.
+  if (!purities.any((Purity purity) => purity != Purity.sfw)) {
+    return (proceed: true, tier: null);
+  }
+  if (!context.mounted) return (proceed: false, tier: null);
+  final DownloadDestinationChoice? choice =
+      await chooseBatchDownloadDestination(context, purities: purities);
+  if (choice == null || choice.stopsPin) return (proceed: false, tier: null);
+  if (choice.pin) await settings.setPinnedDownloadTier(choice.tier);
+  return (proceed: true, tier: choice.tier);
 }
 
 void _sayDownloadOutcome(
