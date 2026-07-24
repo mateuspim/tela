@@ -2,9 +2,63 @@
 
 Updated: 2026-07-24
 
-> **START HERE — J IS MERGED (`e967175`). Two more things sit BUILT on branch
-> `fix/clear-image-cache-orphans`; device pass + merge owed.** Nothing pushed
-> (`origin` has none of I, J, or K).
+> **START HERE — MULTI-SOURCE STAGES 1 & 2 ARE BUILT on branch
+> `feat/multi-source-identity`; device pass + merge owed.** The cache fix, J,
+> and K are all on `master` (the older trail is below). Nothing is pushed —
+> `origin` has none of it.
+>
+> **What was built (PLAN §17, the refactor that turns Wallhaven from *the*
+> backend into *a* backend). Five commits, `make ci` green throughout — Dart
+> 956, Kotlin green, `flutter analyze` clean:**
+>
+> - **Stage 1, identity (`7b10ec2`).** `SourceId` (a value type, not an enum)
+>   and `WallpaperRef(source, id)`, whose `key` is `wallhaven-e7jvjd`. Both
+>   Drift tables gain a `source` column and a composite PK — **schema v6**, a
+>   `TableMigration` backfilling `'wallhaven'`, verified against the raw SQLite
+>   column, not through the mapper. Every cross-source key in the UI (tile
+>   marks, selection ticks, hero tags, the missing badge, the detail route)
+>   moved to `ref.key`. `wallpaperFileName` is composed from the ref now, not
+>   lifted from the URL — a booru names files after the *tags* on the image.
+> - **Stage 1, loosened models (`ae5cc7a`).** `pageUrl` is a mapper-supplied
+>   field (v6 also stores `page_url`); `hasMore` is the stored primitive with
+>   `lastPage` optional (Moebooru sends no page count); `category`, `views`,
+>   `favorites` and `WallpaperTag.id` are optional and the metadata screen
+>   omits what is absent rather than showing a zero.
+> - **Stage 1, `SourceFailure` (`1285154`)** — pure rename of `WallhavenFailure`
+>   across 22 files; the 45/min text moved into Wallhaven's adapter.
+> - **Stage 1, encoding leaves the domain (`76034cf`).** `data/wallhaven/
+>   wallhaven_query.dart` holds the whole URL shape; `SearchQuery.key` is the
+>   new source-agnostic shelf identity (was the encoded query string, which
+>   made a *feature* depend on Wallhaven's params). The bit masks stayed as a
+>   *storage* codec (`stored_bits.dart`) since rows on disk are written in it.
+> - **Stage 2, registry + switcher (`605a86f`).** `WallhavenApi` →
+>   `WallpaperSource` (+ `id`, `displayName`, `SourceCapabilities`);
+>   `wallpaper_sources.dart` is the registry; `activeWallpaperSourceProvider`
+>   is what features read. The filter sheet renders from capabilities (a group
+>   the source can't honour is not shown; an empty card disappears);
+>   `SearchWallpapers` asks the source whether NSFW needs a key rather than
+>   hardcoding it; a `BrowseSourceButton` appears the moment a second adapter
+>   is registered; switching resets the listing. A `FakeWallpaperSource` with
+>   `narrowCapabilities` (booru-shaped) proves the seam.
+>
+> **NOT device-verified.** This is a no-user-visible-change refactor for stage
+> 1 and a switcher that only shows itself with two sources for stage 2, so most
+> of it is provable by the suites — but the v6 migration on a *real accumulated
+> database* has never run on hardware (the tablet is v3-native, see the Wave 2
+> notes), and nobody has watched the filter sheet re-render on a switch,
+> because there is still only one source. Both wait for the Konachan adapter
+> (PLAN §17 stage 3 / §18), which is the next build.
+>
+> **The next build is stage 3: the Konachan adapter** (PLAN §18, API probed
+> live 2026-07-24). Its whole point is to be the second real source that makes
+> the switcher and the capability-driven sheet do something a human can see.
+>
+> ---
+>
+> **Older START-HERE (J / the cache fix) follows.**
+>
+> **J IS MERGED (`e967175`). The cache fix is MERGED (`e0434c3`).** Nothing
+> pushed (`origin` has none of I, J, or K).
 >
 > **J is on `master`.** The merge gate ran both suites on the merge and reported
 > **both green**. Its device walk was done 2026-07-24 (below); the one thing
