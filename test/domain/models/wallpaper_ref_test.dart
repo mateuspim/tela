@@ -5,7 +5,7 @@ import 'package:tela/domain/models/wallpaper_ref.dart';
 void main() {
   group('SourceId', () {
     test('parses a well-shaped id', () {
-      expect(SourceId.parse('konachan'), const SourceId('konachan'));
+      expect(SourceId.parse('konachan'), SourceId.konachan);
       expect(SourceId.parse('wallhaven').value, 'wallhaven');
     });
 
@@ -33,7 +33,7 @@ void main() {
       // Same reason: the rebuilt id must hash like the constant too.
       // ignore: use_named_constants
       expect(const SourceId('wallhaven').hashCode, SourceId.wallhaven.hashCode);
-      expect(const SourceId('konachan'), isNot(SourceId.wallhaven));
+      expect(SourceId.konachan, isNot(SourceId.wallhaven));
     });
   });
 
@@ -41,7 +41,7 @@ void main() {
     test('keys on both halves, which is the whole point', () {
       // The collision the source column exists to prevent: two boorus can
       // issue the same numeric id, and they are not the same wallpaper.
-      const WallpaperRef konachan = WallpaperRef(SourceId('konachan'), '12345');
+      const WallpaperRef konachan = WallpaperRef(SourceId.konachan, '12345');
       const WallpaperRef yandere = WallpaperRef(SourceId('yandere'), '12345');
 
       expect(konachan, isNot(yandere));
@@ -54,7 +54,7 @@ void main() {
         'wallhaven-e7jvjd',
       );
       expect(
-        const WallpaperRef(SourceId('konachan'), '406484').key,
+        const WallpaperRef(SourceId.konachan, '406484').key,
         'konachan-406484',
       );
     });

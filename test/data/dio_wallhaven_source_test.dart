@@ -11,16 +11,16 @@ import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/search_tag.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 
-import '../fakes/fake_wallhaven_transport.dart';
+import '../fakes/recording_dio_transport.dart';
 
 /// The adapter under test, wired to a transport that records what Dio built.
 ///
 /// Real `baseUrl`, because the URI is the thing under test and a fake host
 /// would not be the URI tela sends.
-({DioWallhavenSource api, FakeWallhavenTransport transport}) _wired({
+({DioWallhavenSource api, RecordingDioTransport transport}) _wired({
   String fixture = 'search_page.json',
 }) {
-  final FakeWallhavenTransport transport = FakeWallhavenTransport(
+  final RecordingDioTransport transport = RecordingDioTransport(
     body: File('test/fixtures/$fixture').readAsStringSync(),
   );
   final Dio dio = Dio(BaseOptions(baseUrl: WallhavenClient.baseUrl))
@@ -30,7 +30,7 @@ import '../fakes/fake_wallhaven_transport.dart';
 
 /// The URI [query] actually leaves the device as.
 Future<Uri> _sentUriFor(SearchQuery query) async {
-  final ({DioWallhavenSource api, FakeWallhavenTransport transport}) wired =
+  final ({DioWallhavenSource api, RecordingDioTransport transport}) wired =
       _wired();
   await wired.api.search(query);
   return wired.transport.lastUri;
@@ -161,7 +161,7 @@ void main() {
     test('maps the answered body through to the domain page', () async {
       // Proves the wire assertions above ran through the real adapter path,
       // not a URI built in isolation.
-      final ({DioWallhavenSource api, FakeWallhavenTransport transport}) wired =
+      final ({DioWallhavenSource api, RecordingDioTransport transport}) wired =
           _wired();
 
       final WallpaperPage page = await wired.api.search(const SearchQuery());
@@ -172,7 +172,7 @@ void main() {
 
   group('DioWallhavenSource.wallpaperDetails', () {
     test('sends the id in the path with no query string', () async {
-      final ({DioWallhavenSource api, FakeWallhavenTransport transport}) wired =
+      final ({DioWallhavenSource api, RecordingDioTransport transport}) wired =
           _wired(fixture: 'wallpaper_detail.json');
 
       await wired.api.wallpaperDetails('e7jvjd');
