@@ -98,12 +98,14 @@ class _WallpaperImmersiveSessionState
       zoomController: _zoomController,
       systemUi: widget.systemUi,
       onClose: widget.onClose,
+      onOpenDetails: widget.onClose,
       barActions: _barActions(l10n, wallpaper),
     );
   }
 
-  /// Favorite, download and set — the three the quick sheet offers, minus
-  /// *Open details*, which from here is what closing already does.
+  /// Favorite, download and set — the three wallpaper mutations the quick
+  /// sheet offers. Open details is a top-row viewer action because it changes
+  /// screens rather than changing the wallpaper.
   ///
   /// Each one runs through [runWallpaperQuickAction] rather than growing its
   /// own copy: the target chooser, the snackbars and the `refreshFavorites` /
@@ -164,10 +166,10 @@ class _WallpaperImmersiveSessionState
       ref: ref,
       wallpaper: wallpaper,
       action: action,
-      // Unreachable: *Open details* is not offered here, because closing the
-      // viewer is that action. Kept honest rather than silently doing nothing.
+      // Unreachable: the viewer owns its dedicated Open details control rather
+      // than routing it through a wallpaper mutation.
       openDetail: () => throw StateError(
-        'the immersive viewer offers no Open details action',
+        'Open details is handled by the immersive viewer',
       ),
     );
   }

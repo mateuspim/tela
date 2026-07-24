@@ -371,6 +371,26 @@ void main() {
     expect(systemUi.restoreCalls, 1);
   });
 
+  testWidgets('opens details only after restoring system chrome', (
+    WidgetTester tester,
+  ) async {
+    final FakeImmersiveSystemUi systemUi = FakeImmersiveSystemUi();
+    await _pumpViewer(
+      tester,
+      systemUi: systemUi,
+      onOpenDetails: () async => systemUi.events.add('details'),
+    );
+
+    expect(
+      find.byKey(const Key('immersive-viewer-open-details')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('immersive-viewer-open-details')));
+    await tester.pump();
+
+    expect(systemUi.events, <String>['enter', 'restore', 'details']);
+  });
+
   testWidgets('disposal also restores normal system chrome', (
     WidgetTester tester,
   ) async {
@@ -416,6 +436,7 @@ Future<void> _pumpViewer(
   FakeImmersiveSystemUi? systemUi,
   FakeGalleryImageSource? source,
   Future<void> Function()? onClose,
+  Future<void> Function()? onOpenDetails,
   bool disableAnimations = false,
   double aspectRatio = 16 / 9,
   Size viewportSize = const Size(800, 600),
@@ -448,6 +469,7 @@ Future<void> _pumpViewer(
               zoomController: zoomController,
               systemUi: systemUi ?? FakeImmersiveSystemUi(),
               onClose: onClose ?? () async {},
+              onOpenDetails: onOpenDetails,
               position: position,
               itemCount: itemCount,
               onPrevious: onPrevious,

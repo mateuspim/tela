@@ -13,7 +13,10 @@ import 'package:tela/domain/ports/wallpaper_source.dart';
 /// capabilities, never a particular adapter.
 final Provider<List<WallpaperSource>> wallpaperSourcesProvider =
     Provider<List<WallpaperSource>>(
-      (Ref ref) => <WallpaperSource>[ref.watch(wallhavenSourceProvider)],
+      (Ref ref) => <WallpaperSource>[
+        ref.watch(wallhavenSourceProvider),
+        ref.watch(konachanSourceProvider),
+      ],
     );
 
 /// Which source browse is on, persisted across launches.

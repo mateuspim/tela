@@ -28,6 +28,7 @@ Widget _failure(Object? error, {VoidCallback? onRetry}) {
     builder: (BuildContext context) => WallpaperStatusView.failure(
       l10n: AppLocalizations.of(context),
       error: error,
+      sourceName: 'Wallhaven',
       onRetry: onRetry ?? () {},
     ),
   );
@@ -138,6 +139,28 @@ void main() {
       );
 
       expect(find.textContaining('thumbs'), findsNothing);
+    });
+
+    testWidgets('names the source that actually failed', (
+      WidgetTester tester,
+    ) async {
+      await _pump(
+        tester,
+        Builder(
+          builder: (BuildContext context) => WallpaperStatusView.failure(
+            l10n: AppLocalizations.of(context),
+            error: const NetworkFailure(),
+            sourceName: 'Konachan',
+            onRetry: () {},
+          ),
+        ),
+      );
+
+      expect(
+        find.text("Can't reach Konachan. Check your connection."),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Wallhaven'), findsNothing);
     });
   });
 }

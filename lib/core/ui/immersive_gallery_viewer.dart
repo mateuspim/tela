@@ -16,6 +16,7 @@ class ImmersiveGalleryViewer extends StatefulWidget {
     required this.semanticsLabel,
     required this.source,
     required this.onClose,
+    this.onOpenDetails,
     this.position = 1,
     this.itemCount = 1,
     this.onPrevious,
@@ -42,6 +43,11 @@ class ImmersiveGalleryViewer extends StatefulWidget {
 
   /// Closes the surrounding fullscreen route after system chrome is restored.
   final Future<void> Function() onClose;
+
+  /// Opens the selected image's Detail screen after system chrome is restored.
+  ///
+  /// Null for local-only images that cannot be reconstructed as a wallpaper.
+  final Future<void> Function()? onOpenDetails;
 
   /// One-based selected position exposed to sighted and assistive users.
   final int position;
@@ -162,12 +168,22 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
   }
 
   Future<void> _exitFullscreen() async {
+    await _leaveFullscreen(widget.onClose);
+  }
+
+  Future<void> _openDetails() async {
+    final Future<void> Function()? onOpenDetails = widget.onOpenDetails;
+    if (onOpenDetails == null) return;
+    await _leaveFullscreen(onOpenDetails);
+  }
+
+  Future<void> _leaveFullscreen(Future<void> Function() navigate) async {
     if (_isExiting) return;
     _isExiting = true;
     await _restoreSystemUi();
     if (!mounted) return;
     setState(() => _allowPop = true);
-    await widget.onClose();
+    await navigate();
   }
 
   void _toggleChrome() {
@@ -350,7 +366,24 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
       onPrevious: widget.onPrevious,
       onNext: widget.onNext,
       barActions: widget.barActions,
-      actions: widget.actions,
+      actions: <Widget>[
+        if (widget.onOpenDetails != null) _openDetailsButton(),
+        ...widget.actions,
+      ],
+    );
+  }
+
+  Widget _openDetailsButton() {
+    final String label = AppLocalizations.of(context).quickActionOpenDetail;
+    return IconButton.filledTonal(
+      key: const Key('immersive-viewer-open-details'),
+      onPressed: () => unawaited(_openDetails()),
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.black45,
+        foregroundColor: Colors.white,
+      ),
+      constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+      icon: Icon(Icons.info_outline, semanticLabel: label),
     );
   }
 

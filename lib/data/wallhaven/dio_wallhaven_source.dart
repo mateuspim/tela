@@ -42,6 +42,7 @@ class DioWallhavenSource implements WallpaperSource {
       SourceFilter.ratios,
       SourceFilter.resolutions,
       SourceFilter.tags,
+      SourceFilter.order,
       SourceFilter.topRange,
     },
     sortings: <Sorting>{

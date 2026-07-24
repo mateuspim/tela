@@ -352,9 +352,13 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   /// explicit wallpaper is never given the chance to send its image file — the
   /// menu and the use case enforce the same rule (see [shareOptionsFor]).
   Future<void> _chooseShare() async {
+    final String sourceName = ref
+        .read(wallpaperSourceForProvider(_wallpaper.source))
+        .displayName;
     final ShareOption? option = await chooseShareOption(
       context,
       shareOptionsFor(_wallpaper.purity),
+      sourceName: sourceName,
     );
     if (option == null || !mounted) return;
     await _share(option);
@@ -392,7 +396,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
   }
 
-  /// Hands a URL — a wallpaper's source or its Wallhaven page — to the device
+  /// Hands a URL — a wallpaper's credit or its source page — to the device
   /// browser, saying so only when nothing can open it.
   Future<void> _openLink(Uri url) async {
     try {
@@ -451,6 +455,9 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     final AsyncValue<WallpaperDetails> details = ref.watch(
       wallpaperDetailsProvider(_wallpaper.ref),
     );
+    final String sourceName = ref
+        .watch(wallpaperSourceForProvider(_wallpaper.source))
+        .displayName;
     final bool expanded = MediaQuery.sizeOf(context).width >= _expandedWidth;
     return Scaffold(
       // No title: the resolution that used to sit here is a spec, not a name,
@@ -461,8 +468,8 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
         actions: expanded ? null : _compactActions(l10n),
       ),
       body: expanded
-          ? _expandedBody(details, l10n)
-          : _compactBody(details, l10n),
+          ? _expandedBody(details, l10n, sourceName)
+          : _compactBody(details, l10n, sourceName),
     );
   }
 
@@ -482,6 +489,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   Widget _compactBody(
     AsyncValue<WallpaperDetails> details,
     AppLocalizations l10n,
+    String sourceName,
   ) {
     final double previewHeight = (MediaQuery.sizeOf(context).height * .58)
         .clamp(320, 560);
@@ -491,7 +499,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
           child: ListView(
             children: <Widget>[
               SizedBox(height: previewHeight, child: _preview()),
-              _metadata(details, l10n),
+              _metadata(details, l10n, sourceName),
             ],
           ),
         ),
@@ -503,6 +511,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   Widget _expandedBody(
     AsyncValue<WallpaperDetails> details,
     AppLocalizations l10n,
+    String sourceName,
   ) {
     final ColorScheme colors = Theme.of(context).colorScheme;
     return Row(
@@ -531,7 +540,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
                 const Divider(),
                 Expanded(
                   child: SingleChildScrollView(
-                    child: _metadata(details, l10n),
+                    child: _metadata(details, l10n, sourceName),
                   ),
                 ),
                 _applyButton(l10n),
@@ -703,10 +712,12 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   Widget _metadata(
     AsyncValue<WallpaperDetails> details,
     AppLocalizations l10n,
+    String sourceName,
   ) {
     return details.when(
       data: (WallpaperDetails value) => WallpaperMetadata(
         details: value,
+        sourceName: sourceName,
         onFollow: _follow,
         onBlockTag: _confirmBlockTag,
         onOpenLink: _openLink,
@@ -719,7 +730,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
         padding: const EdgeInsets.all(24),
         child: Text(
           error is SourceFailure
-              ? localizedFailure(l10n, error)
+              ? localizedFailure(l10n, error, sourceName: sourceName)
               : l10n.errorUnexpected,
         ),
       ),

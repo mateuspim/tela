@@ -36,6 +36,7 @@ class WallpaperStatusView extends StatelessWidget {
   factory WallpaperStatusView.failure({
     required AppLocalizations l10n,
     required Object? error,
+    required String sourceName,
     required VoidCallback onRetry,
   }) {
     final SourceFailure? failure = error is SourceFailure ? error : null;
@@ -43,7 +44,7 @@ class WallpaperStatusView extends StatelessWidget {
       icon: failure == null ? Icons.error_outline : _failureIcon(failure),
       message: failure == null
           ? l10n.errorUnexpected
-          : localizedFailure(l10n, failure),
+          : localizedFailure(l10n, failure, sourceName: sourceName),
       actionLabel: l10n.actionRetry,
       onAction: onRetry,
     );

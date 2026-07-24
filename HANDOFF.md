@@ -2,10 +2,78 @@
 
 Updated: 2026-07-24
 
-> **START HERE — MULTI-SOURCE STAGES 1 & 2 ARE BUILT on branch
-> `feat/multi-source-identity`; device pass + merge owed.** The cache fix, J,
-> and K are all on `master` (the older trail is below). Nothing is pushed —
-> `origin` has none of it.
+> **DEVICE-WALK GAPS FIXED AND RE-VERIFIED (2026-07-24, uncommitted on
+> `feat/konachan-source`).** The source switch now replaces the grid even when
+> both sources have an equal default query, and the visible switcher names and
+> checks the active source. Browse tabs, filter order, and available purities
+> now follow the active source's capabilities (including explicit Konachan
+> browsing without a Wallhaven key). Uploader narrowing is structural:
+> Wallhaven encodes `@name`, while Konachan encodes `user:name`. Detail,
+> sharing, and request-failure copy name the wallpaper's actual source instead
+> of saying Wallhaven. The fullscreen wallpaper and Download History viewers
+> now expose an **Open details** info action for the image currently selected,
+> restoring system chrome before navigating. A transient Konachan listing
+> timeout/connection failure now gets one bounded retry; HTTP responses are
+> never retried. The filter sheet explains that at least one purity must stay
+> selected, and its active summary names the changed groups (for example,
+> **1 active filter: Shape**) instead of presenting an unexplained count.
+> Regression coverage exercises all of these paths. `make ci` is green:
+> `flutter analyze` clean, Dart **1023**, Kotlin green.
+>
+> **Hardware pass:** deployed over the accumulated tablet data on SM-X730 at
+> `192.168.50.151:5555`. Konachan↔Wallhaven switched and reloaded immediately;
+> the tab/filter vocabulary followed each source; Konachan uploader narrowing,
+> source-aware Detail, fullscreen **Open details**, and Download History
+> **Open details** all worked. The follow-up build kept Konachan on Safe-only,
+> exposed **Filters, 1 active: Shape**, explained the purity invariant, and
+> recovered the listing on Retry after the endpoint transiently failed. No
+> Flutter exception, overflow, or crash appeared in the app-process log.
+>
+> **Still owed on a device:** repeat the §18.6 human checks for the NSFW
+> invariant/private storage/`FLAG_SECURE`/app lock, observe the `.net` host,
+> run the full wallpaper lifecycle, check the source-prefixed filename, verify
+> the v6 migration against a real accumulated database, and finish the
+> destructive/storage-sensitive parts of the lifecycle.
+>
+> **START HERE — KONACHAN (§17 stage 3 / §18) IS BUILT on branch
+> `feat/konachan-source`; device pass owed before merge.** Stages 1 & 2 are
+> now MERGED to `master` (`ba41af2`), correcting this file's older claim that
+> they were only on a branch. The cache fix, J, and K are all on `master` too
+> (the older trail is below). Nothing is pushed — `origin` has none of it.
+>
+> **Konachan, the second real source (`ffb2e95`), `make ci` green — Dart 1007,
+> Kotlin green, `flutter analyze` clean:**
+>
+> - **`data/konachan/`** — `konachan_query.dart` (the whole `tags`-string URL
+>   shape), `konachan_mapper.dart` (bare-array → page, `hasMore` from a full
+>   page, rating→purity failing closed), `dio_konachan_source.dart` (the
+>   adapter). `core/network/konachan_client.dart` is the Dio (no base URL —
+>   host is per-request — real User-Agent, own 60/min ceiling, no key).
+> - **The host follows purity (§18.2).** SFW-only browses `konachan.net`, the
+>   server-enforced-safe view; anything wider goes to `.com`. Detail always
+>   asks `.com` so a q/e post never returns the empty array `.net` gives, which
+>   would read as a mystery-empty screen (§18.4).
+> - **Rating is ONE term (§18.3).** `rating:s`, `-rating:e`, no token for all
+>   three — one `rating:` per purity is silently last-wins on Moebooru. Tags go
+>   out underscore-joined and unquoted, the opposite of Wallhaven's quoting.
+> - **Registered** in `wallpaper_sources.dart`; `SourceId.konachan` added; the
+>   three pre-existing tests that already spelled `SourceId('konachan')` now use
+>   the constant. `FakeWallhavenTransport` → `RecordingDioTransport` (it was
+>   never Wallhaven-specific; both adapters' wire URIs go through it).
+>
+> **NOT device-verified — this is the §18.6 walk, and it needs a human:** an
+> `e`-rated Konachan wallpaper never MediaStore-indexed in any tier, landing in
+> the private library under `FLAG_SECURE` + app-lock; safe mode observed to be
+> served by `.net` (watch the request host, not just that results look safe);
+> the full browse→preview→favorite→download→apply→delete loop on a Konachan
+> wallpaper; filename `konachan-406484.jpg`; switching sources resetting query
+> and grid without stranding paging. This *also* discharges what stages 1 & 2
+> owed (the v6 migration on a real accumulated DB; the filter sheet re-rendering
+> on a switch) — a second source is exactly what makes both walkable at last.
+>
+> ---
+>
+> **Older START-HERE (multi-source stages 1 & 2) follows.**
 >
 > **What was built (PLAN §17, the refactor that turns Wallhaven from *the*
 > backend into *a* backend). Five commits, `make ci` green throughout — Dart
@@ -46,12 +114,11 @@ Updated: 2026-07-24
 > of it is provable by the suites — but the v6 migration on a *real accumulated
 > database* has never run on hardware (the tablet is v3-native, see the Wave 2
 > notes), and nobody has watched the filter sheet re-render on a switch,
-> because there is still only one source. Both wait for the Konachan adapter
-> (PLAN §17 stage 3 / §18), which is the next build.
+> because there was, at the time, still only one source. Both now travel with
+> the Konachan device walk above — the second source is what makes them
+> observable at last.
 >
-> **The next build is stage 3: the Konachan adapter** (PLAN §18, API probed
-> live 2026-07-24). Its whole point is to be the second real source that makes
-> the switcher and the capability-driven sheet do something a human can see.
+> **Stage 3 (the Konachan adapter) is now built** — see the top of this file.
 >
 > ---
 >
@@ -1377,8 +1444,10 @@ wallpaper** in its bottom bar, each running through D1's
 `runWallpaperQuickAction` rather than growing a second copy — the target
 chooser, the snackbars and the `refreshFavorites`/`refreshDownloads`
 invalidations are all decided there, and two implementations of "download this
-wallpaper" would drift. *Open details* is deliberately absent: from here,
-closing **is** that action.
+wallpaper" would drift. *Open details* was deliberately absent at this point:
+from here, closing **was** that action. The 2026-07-24 follow-up at the top of
+this file adds an explicit info action, and also makes it useful from Download
+History where Detail is not already underneath the viewer.
 
 **The chrome was six labelled pills in four corners** — *Zoom in*, hide,
 *Close*, *Previous*, *Next* and a counter — all at the same visual weight, on

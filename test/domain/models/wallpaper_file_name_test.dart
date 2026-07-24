@@ -40,7 +40,7 @@ void main() {
       wallpaperFileName(
         _wallpaper(
           id: '406484',
-          source: const SourceId('konachan'),
+          source: SourceId.konachan,
           // A booru names its file after the tags on the image. Lifting that
           // name whole would hand another app a list of what is in the
           // picture — including the explicit ones.

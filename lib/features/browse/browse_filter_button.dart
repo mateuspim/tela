@@ -36,7 +36,8 @@ class BrowseFilterButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final int active = activeBrowseFilterCount(filters);
+    final List<String> labels = activeBrowseFilterLabels(l10n, filters);
+    final int active = labels.length;
     return IconButton.filledTonal(
       icon: ExcludeSemantics(
         child: Badge(
@@ -47,7 +48,7 @@ class BrowseFilterButton extends StatelessWidget {
       ),
       tooltip: active == 0
           ? l10n.browseFilters
-          : l10n.browseFiltersActive(active),
+          : l10n.browseFiltersActiveDetails(active, labels.join(', ')),
       onPressed: () => showFilterSheet(context, scope: scope),
     );
   }

@@ -13,6 +13,7 @@ class WallpaperMetadata extends StatelessWidget {
   /// Creates metadata for one complete Wallhaven detail response.
   const WallpaperMetadata({
     required this.details,
+    required this.sourceName,
     required this.onFollow,
     required this.onBlockTag,
     required this.onOpenLink,
@@ -22,8 +23,11 @@ class WallpaperMetadata extends StatelessWidget {
   /// Detail data to render.
   final WallpaperDetails details;
 
+  /// The proper name of the site that issued [details].
+  final String sourceName;
+
   /// Called with a URL to open outside tela — the credited source, or the
-  /// wallpaper's Wallhaven page. The screen owns the browser hand-off; a
+  /// wallpaper's public source page. The screen owns the browser hand-off; a
   /// callback keeps this panel testable without one.
   final ValueChanged<Uri> onOpenLink;
 
@@ -142,7 +146,7 @@ class WallpaperMetadata extends StatelessWidget {
       _sourceCredit(l10n, item),
       _LinkAction(
         icon: Icons.open_in_new,
-        text: l10n.detailViewOnWallhaven,
+        text: l10n.detailViewOnSource(sourceName),
         onTap: () => onOpenLink(item.wallpaper.pageUrl),
       ),
     ];

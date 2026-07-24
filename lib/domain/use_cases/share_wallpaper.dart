@@ -10,7 +10,7 @@ class ShareWallpaper {
 
   final WallpaperSharer _sharer;
 
-  /// Shares the wallpaper's public Wallhaven page. Allowed for any purity — the
+  /// Shares the wallpaper's public source page. Allowed for any purity — the
   /// page is public, so the link reveals nothing tela is holding back.
   Future<void> link(Wallpaper wallpaper) {
     return _sharer.shareLink(wallpaper.pageUrl);

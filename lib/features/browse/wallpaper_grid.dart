@@ -9,6 +9,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/selectable_wallpaper_shelf.dart';
 import 'package:tela/app/wallpaper_batch_actions.dart';
+import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
@@ -440,6 +441,7 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     return WallpaperStatusView.failure(
       l10n: l10n,
       error: error,
+      sourceName: ref.read(activeWallpaperSourceProvider).displayName,
       onRetry: _retry,
     );
   }

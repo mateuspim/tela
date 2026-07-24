@@ -307,12 +307,12 @@ void main() {
       final TelaDatabase db = TelaDatabase(NativeDatabase(file));
       final DriftFavoritesRepository favorites = DriftFavoritesRepository(db);
 
-      await favorites.save(_wallpaperFrom(const SourceId('konachan'), '12345'));
+      await favorites.save(_wallpaperFrom(SourceId.konachan, '12345'));
       await favorites.save(_wallpaperFrom(const SourceId('yandere'), '12345'));
 
       expect(await favorites.favorites(), hasLength(3));
       await favorites.forget(
-        const WallpaperRef(SourceId('konachan'), '12345'),
+        const WallpaperRef(SourceId.konachan, '12345'),
       );
       expect(
         (await favorites.favorites()).map((Wallpaper w) => w.ref),

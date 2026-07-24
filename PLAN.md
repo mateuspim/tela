@@ -448,11 +448,19 @@ Each stage ends green on `make ci` and is mergeable alone.
    `FakeWallpaperSource` with `narrowCapabilities` proves the seam. **Owed on a
    device:** the v6 migration on a real accumulated database, and watching the
    sheet re-render on a switch — both wait for a second real source.
-3. **Konachan adapter.** The first real second source — designed in §18, whose
-   paging, rating and operator behaviour was **verified live on 2026-07-24**
-   before any of it was planned against. **This is the next build.**
-4. **Cross-source polish.** Source badge on tiles and in library grids, per-source
-   rate limits, source-aware failure text.
+3. ~~**Konachan adapter.**~~ **Built** (`ffb2e95`, 2026-07-24). The first real
+   second source — designed in §18, whose paging, rating and operator behaviour
+   was **verified live on 2026-07-24** before any of it was planned against.
+   `data/konachan/` holds the query encoder, the mapper and the adapter;
+   `SourceId.konachan` and one registry entry wire it in. `make ci` green (Dart
+   1007). **Owed on a device:** the §18.6 walk — the NSFW invariant on the new
+   source, and observing `.net` actually serve safe mode — plus the v6 migration
+   and the filter sheet re-rendering on a switch that stages 1–2 also owe.
+4. **Cross-source polish — partly built (uncommitted, 2026-07-24).** The active
+   source is visibly named in its selector; browse tabs and filter controls
+   render from capabilities; and detail, share, and failure copy are
+   source-aware. Per-source rate limits were already in the adapters. Source
+   badges on tiles and in library grids remain.
 
 *Exit:* two sources browsable, one at a time; a wallpaper from either can be
 favorited, downloaded, applied and deleted; no NSFW rule weakened by the second
@@ -462,10 +470,16 @@ source's arrival.
 
 ## 18. Konachan — the second source
 
-**Status:** designed, not built. Implements §17 stage 3. API behaviour below was
-**probed live on 2026-07-24**, not read from documentation — Moebooru forks
-differ from each other and from their docs, and this project's standing rule is
-that query operators get confirmed against the live service.
+**Status:** **built** (`ffb2e95`, 2026-07-24), with the first device-walk
+software gaps fixed in the working tree; full device verification is still
+owed.
+Implements §17 stage 3. API behaviour below was **probed live on 2026-07-24**,
+not read from documentation — Moebooru forks differ from each other and from
+their docs, and this project's standing rule is that query operators get
+confirmed against the live service. The build followed this design closely; two
+refinements worth noting are recorded where they land (the `.net`-returns-`[]`
+detail trap is handled by always querying `.com`; `ExactResolutions` is dropped
+rather than mis-encoded, since Konachan has no exact-size list).
 
 Konachan is Moebooru: `GET /post.json`, no versioned API root, no OpenAPI, and
 a query language that lives entirely inside the `tags` parameter.
@@ -647,6 +661,11 @@ Beyond both suites green:
    not just by observing that results look safe.
 5. Switching sources resets the query and the grid, and does not strand paging
    state from the previous source.
+
+The software regression for item 5 is now covered by a widget test that
+switches from Wallhaven to Konachan while both have their default query.
+Uploader filtering is likewise covered through each source's wire encoder.
+Both paths still need their post-fix device re-walk.
 
 *Risks:* Moebooru's `tags` grammar is positional and forgiving — wrong input
 returns plausible wrong results instead of an error (the `rating:s rating:q`

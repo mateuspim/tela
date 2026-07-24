@@ -161,7 +161,7 @@ class _RefreshButtonState extends ConsumerState<_RefreshButton> {
     try {
       await ref.read(browseDefaultsProvider.notifier).refreshFromAccount();
     } on SourceFailure catch (failure) {
-      message = localizedFailure(l10n, failure);
+      message = localizedFailure(l10n, failure, sourceName: 'Wallhaven');
       kind = ToastKind.failure;
     }
     if (!mounted) return;

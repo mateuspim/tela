@@ -54,6 +54,7 @@ String? _freeQuery(SearchQuery query) {
   if (_isExclusiveOperator(query.term)) return query.term;
   final List<String> parts = <String>[
     if (query.term.isNotEmpty) query.term,
+    if (query.uploader.isNotEmpty) '@${query.uploader}',
     for (final SearchTag tag in query.tags) _tagToken(tag),
     // Same encoding as the chosen tags, not a hand-rolled `-$name`: Wallhaven
     // needs the quotes a multi-word tag name requires, and this is the one

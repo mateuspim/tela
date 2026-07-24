@@ -39,10 +39,11 @@ void main() {
   });
 
   group('UploaderLink', () {
-    test('replaces the term with the uploader operator', () {
+    test('carries the uploader without a source-specific operator', () {
       final SearchQuery query = const UploaderLink('pym').narrow(browsing);
 
-      expect(query.term, '@pym');
+      expect(query.term, isEmpty);
+      expect(query.uploader, 'pym');
       expect(query.sorting, Sorting.dateAdded);
     });
 

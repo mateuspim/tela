@@ -1,0 +1,170 @@
+import 'package:dio/dio.dart';
+import 'package:tela/data/konachan/konachan_mapper.dart';
+import 'package:tela/data/konachan/konachan_query.dart';
+import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/source_capabilities.dart';
+import 'package:tela/domain/models/source_failure.dart';
+import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/wallpaper_details.dart';
+import 'package:tela/domain/models/wallpaper_page.dart';
+import 'package:tela/domain/ports/wallpaper_source.dart';
+
+/// Konachan, as a [WallpaperSource], over Dio (PLAN §18).
+///
+/// Dio stops here: every `DioException` becomes a [SourceFailure], so no
+/// feature imports the HTTP client, and swapping Dio touches only this file
+/// (CLAUDE.md).
+/// The host is chosen per request from the query's purity — SFW-only reads the
+/// server-enforced-safe `.net`, so a bug in rating mapping cannot leak an
+/// explicit image into a safe browse (PLAN §18.2).
+class DioKonachanSource implements WallpaperSource {
+  /// Creates the adapter over a configured [Dio] (see `KonachanClient`).
+  DioKonachanSource(
+    this._dio, {
+    Future<void> Function(Duration) delay = Future<void>.delayed,
+  }) : _delay = delay;
+
+  final Dio _dio;
+  final Future<void> Function(Duration) _delay;
+
+  /// One short retry turns the transient timeout seen on hardware into a
+  /// slightly slower successful fetch without hiding a persistent outage.
+  static const Duration _networkRetryDelay = Duration(milliseconds: 500);
+
+  @override
+  SourceId get id => SourceId.konachan;
+
+  @override
+  String get displayName => 'Konachan';
+
+  /// The booru-shaped subset of what tela can ask — deliberately narrower than
+  /// Wallhaven's, and the thing that makes the capability-driven filter sheet
+  /// do something a human can see.
+  ///
+  /// No categories or colours (Konachan has neither axis), no toplist range,
+  /// and three sortings only: `random` takes no seed and would repeat images
+  /// across pages, so it is left out rather than shipped broken (PLAN §18.3).
+  @override
+  SourceCapabilities get capabilities => const SourceCapabilities(
+    filters: <SourceFilter>{
+      SourceFilter.purity,
+      SourceFilter.ratios,
+      SourceFilter.resolutions,
+      SourceFilter.tags,
+    },
+    sortings: <Sorting>{Sorting.dateAdded, Sorting.views, Sorting.favorites},
+    purities: <Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw},
+    // Explicit content is served anonymously — refusing it for want of a key
+    // would refuse a request Konachan would happily answer (PLAN §18.5).
+    credentials: SourceCredentials.none,
+    requestsPerMinute: 60,
+    syncsAccountDefaults: false,
+  );
+
+  @override
+  Future<WallpaperPage> search(SearchQuery query) async {
+    final String host = KonachanHost.forPurity(query.purity);
+    try {
+      final Response<List<dynamic>> response = await _getPosts(
+        'https://$host/post.json',
+        queryParameters: konachanQueryParameters(query),
+      );
+      return KonachanMapper.toPage(response.data, currentPage: query.page);
+    } on DioException catch (error) {
+      throw _toFailure(error);
+    }
+  }
+
+  /// Retries one idempotent listing read after a transport-level failure.
+  ///
+  /// Konachan sits behind Cloudflare and the tablet produced one receive
+  /// timeout that succeeded immediately when retried. Status responses are not
+  /// retried here: 429 has its own limiter path, and repeating a 4xx/5xx would
+  /// spend source budget without changing the answer.
+  Future<Response<List<dynamic>>> _getPosts(
+    String url, {
+    required Map<String, String> queryParameters,
+  }) async {
+    try {
+      return await _dio.get<List<dynamic>>(
+        url,
+        queryParameters: queryParameters,
+      );
+    } on DioException catch (error) {
+      if (!_isTransientNetworkFailure(error)) rethrow;
+      await _delay(_networkRetryDelay);
+      return _dio.get<List<dynamic>>(
+        url,
+        queryParameters: queryParameters,
+      );
+    }
+  }
+
+  bool _isTransientNetworkFailure(DioException error) {
+    return switch (error.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.receiveTimeout ||
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.connectionError => true,
+      _ => false,
+    };
+  }
+
+  @override
+  Future<WallpaperDetails> wallpaperDetails(String id) async {
+    try {
+      // Always the unrestricted host: `.net` returns [] for a questionable or
+      // explicit post, which would surface as a mystery empty detail screen
+      // rather than the wallpaper the user opened (PLAN §18.4).
+      final Response<List<dynamic>> response = await _dio.get<List<dynamic>>(
+        'https://${KonachanHost.unrestricted}/post.json',
+        queryParameters: <String, String>{'tags': 'id:$id', 'limit': '1'},
+      );
+      return KonachanMapper.toDetails(response.data);
+    } on DioException catch (error) {
+      throw _toFailure(error);
+    }
+  }
+
+  @override
+  Future<AccountSettings> accountSettings() {
+    // Konachan has no accounts, and the capability says so. Reaching here
+    // without asking `syncsAccountDefaults` first is a programming error.
+    throw UnsupportedError(
+      'Konachan has no account defaults to sync; '
+      'guard on SourceCapabilities.syncsAccountDefaults',
+    );
+  }
+
+  /// Translates transport-level noise into the failures the UI can act on.
+  ///
+  /// No 401 branch: Konachan needs no key, so a rejected request is never an
+  /// invalid-key one. A Cloudflare challenge arrives as an ordinary non-2xx
+  /// with an HTML body and lands in [UnexpectedResponseFailure].
+  SourceFailure _toFailure(DioException error) {
+    final int? status = error.response?.statusCode;
+    if (status == 429) {
+      return RateLimitedFailure(
+        retryAfter: _retryAfterOf(error.response),
+        message: 'Konachan rate limit reached (60 req/min)',
+      );
+    }
+    return switch (error.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.receiveTimeout ||
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.connectionError => const NetworkFailure(),
+      _ => UnexpectedResponseFailure(
+        'Konachan answered with status ${status ?? 'none'}',
+      ),
+    };
+  }
+
+  Duration? _retryAfterOf(Response<dynamic>? response) {
+    final String? header = response?.headers.value('retry-after');
+    final int? seconds = header == null ? null : int.tryParse(header);
+    return seconds == null ? null : Duration(seconds: seconds);
+  }
+}

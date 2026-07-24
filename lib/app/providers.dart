@@ -2,11 +2,13 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/wallpaper_sources.dart';
+import 'package:tela/core/network/konachan_client.dart';
 import 'package:tela/core/network/wallhaven_client.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/downloads/drift_download_history.dart';
 import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/images/cache_manager_fetched_image_cache.dart';
+import 'package:tela/data/konachan/dio_konachan_source.dart';
 import 'package:tela/data/secrets/secure_secret_store.dart';
 import 'package:tela/data/security/local_auth_app_lock.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
@@ -76,6 +78,21 @@ final Provider<Dio> wallhavenDioProvider = Provider<Dio>(
 final Provider<WallpaperSource> wallhavenSourceProvider =
     Provider<WallpaperSource>(
       (Ref ref) => DioWallhavenSource(ref.watch(wallhavenDioProvider)),
+    );
+
+/// Konachan's HTTP client (User-Agent + rate limiting wired; no key, no base
+/// URL — the adapter picks the host per request).
+final Provider<Dio> konachanDioProvider = Provider<Dio>(
+  (Ref ref) => KonachanClient.create(),
+);
+
+/// Konachan as a source, bound to its Dio adapter.
+///
+/// Registered in `wallpaper_sources.dart`; features read the *active* source
+/// from there rather than naming this one.
+final Provider<WallpaperSource> konachanSourceProvider =
+    Provider<WallpaperSource>(
+      (Ref ref) => DioKonachanSource(ref.watch(konachanDioProvider)),
     );
 
 /// The Android wallpaper port, bound to the native method-channel adapter.

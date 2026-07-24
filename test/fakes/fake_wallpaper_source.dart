@@ -149,6 +149,7 @@ const SourceCapabilities wallhavenLikeCapabilities = SourceCapabilities(
     SourceFilter.ratios,
     SourceFilter.resolutions,
     SourceFilter.tags,
+    SourceFilter.order,
     SourceFilter.topRange,
   },
   sortings: <Sorting>{

@@ -5,6 +5,7 @@ import 'package:tela/app/delete_download_action.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
 import 'package:tela/core/ui/immersive_gallery_viewer.dart';
@@ -15,6 +16,7 @@ import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
+import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/downloads/download_gallery_source.dart';
 
 /// The immersive, local-first viewer for one download-history session.
@@ -113,6 +115,38 @@ class _DownloadImmersiveSessionState
         // _exitFullscreen, so consulting it from inside onClose is a cycle
         // that leaves the route standing.
         onClose: () async => Navigator.of(context).pop(),
+        onOpenDetails: _openDetails,
+      ),
+    );
+  }
+
+  /// Replaces the local viewer with the selected wallpaper's metadata screen.
+  ///
+  /// Replacement keeps Back pointed at Download History rather than stacking
+  /// the viewer underneath Detail. The shared viewer restores system chrome
+  /// before invoking this callback.
+  Future<void> _openDetails() {
+    final WallpaperDetailScreen detail = WallpaperDetailScreen(
+      wallpaper: _record.wallpaper,
+    );
+    final Duration duration = galleryTransitionDuration(context);
+    return Navigator.of(context).pushReplacement<void, void>(
+      PageRouteBuilder<void>(
+        transitionDuration: duration,
+        reverseTransitionDuration: duration,
+        pageBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+            ) => detail,
+        transitionsBuilder:
+            (
+              BuildContext context,
+              Animation<double> animation,
+              Animation<double> secondaryAnimation,
+              Widget child,
+            ) => FadeTransition(opacity: animation, child: child),
       ),
     );
   }

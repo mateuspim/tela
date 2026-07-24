@@ -13,6 +13,7 @@ import 'package:tela/features/browse/browse_query_controller.dart';
 
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
+import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
   group('BrowseQueryController', () {
@@ -257,25 +258,59 @@ void main() {
 
   group('offerablePurities', () {
     test('withholds nsfw until a key is stored', () {
-      expect(offerablePurities(hasApiKey: false), <Purity>[
-        Purity.sfw,
-        Purity.sketchy,
-      ]);
-      expect(offerablePurities(hasApiKey: true), Purity.values);
+      expect(
+        offerablePurities(
+          capabilities: wallhavenLikeCapabilities,
+          hasApiKey: false,
+        ),
+        <Purity>[Purity.sfw, Purity.sketchy],
+      );
+      expect(
+        offerablePurities(
+          capabilities: wallhavenLikeCapabilities,
+          hasApiKey: true,
+        ),
+        Purity.values,
+      );
+    });
+
+    test('offers Konachan explicit without a Wallhaven key', () {
+      expect(
+        offerablePurities(
+          capabilities: narrowCapabilities,
+          hasApiKey: false,
+        ),
+        Purity.values,
+      );
     });
   });
 
   group('offerableSortings', () {
     test('withholds relevance until there is a term to rank against', () {
       expect(
-        offerableSortings(hasTerm: false),
+        offerableSortings(
+          hasTerm: false,
+          supported: Sorting.values.toSet(),
+        ),
         isNot(contains(Sorting.relevance)),
       );
-      expect(offerableSortings(hasTerm: true), contains(Sorting.relevance));
+      expect(
+        offerableSortings(
+          hasTerm: true,
+          supported: Sorting.values.toSet(),
+        ),
+        contains(Sorting.relevance),
+      );
     });
 
     test('leads with relevance, so a search lands on it', () {
-      expect(offerableSortings(hasTerm: true).first, Sorting.relevance);
+      expect(
+        offerableSortings(
+          hasTerm: true,
+          supported: Sorting.values.toSet(),
+        ).first,
+        Sorting.relevance,
+      );
     });
 
     test('offers every sorting Wallhaven has, and no more', () {
@@ -283,21 +318,44 @@ void main() {
       // Wave 1 and could not be reached at all, because the tab *was* the
       // sorting and there were four tabs.
       expect(
-        offerableSortings(hasTerm: true).toSet(),
+        offerableSortings(
+          hasTerm: true,
+          supported: Sorting.values.toSet(),
+        ).toSet(),
         Sorting.values.toSet(),
         reason: 'a sorting nothing offers is a listing nobody can reach',
       );
     });
 
     test('a termless listing keeps the six that stand on their own', () {
-      expect(offerableSortings(hasTerm: false), <Sorting>[
-        Sorting.dateAdded,
-        Sorting.toplist,
-        Sorting.hot,
-        Sorting.random,
-        Sorting.views,
-        Sorting.favorites,
-      ]);
+      expect(
+        offerableSortings(
+          hasTerm: false,
+          supported: Sorting.values.toSet(),
+        ),
+        <Sorting>[
+          Sorting.dateAdded,
+          Sorting.toplist,
+          Sorting.hot,
+          Sorting.random,
+          Sorting.views,
+          Sorting.favorites,
+        ],
+      );
+    });
+
+    test('withholds every sorting the source cannot serve', () {
+      expect(
+        offerableSortings(
+          hasTerm: true,
+          supported: const <Sorting>{
+            Sorting.dateAdded,
+            Sorting.views,
+            Sorting.favorites,
+          },
+        ),
+        <Sorting>[Sorting.dateAdded, Sorting.views, Sorting.favorites],
+      );
     });
   });
 }

@@ -134,7 +134,9 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
 
   Widget _sheetHeading(AppLocalizations l10n) {
     final ThemeData theme = Theme.of(context);
-    final int count = activeBrowseFilterCount(_draft);
+    final List<String> labels = activeBrowseFilterLabels(l10n, _draft);
+    final int count = labels.length;
+    final String countText = l10n.filterActiveCount(count);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
       child: Row(
@@ -145,7 +147,12 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
               children: <Widget>[
                 Text(l10n.browseFilters, style: theme.textTheme.headlineSmall),
                 Text(
-                  l10n.filterActiveCount(count),
+                  labels.isEmpty
+                      ? countText
+                      : l10n.filterActiveDetails(
+                          countText,
+                          labels.join(', '),
+                        ),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -205,9 +212,7 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
       icon: Icons.sort,
       title: l10n.filterResultsGroup,
       groups: <_FilterGroup?>[
-        // Order is not a capability: every source tela can browse has some
-        // direction, and one that did not would answer the same either way.
-        _FilterGroup(title: l10n.filterOrder, child: _order(l10n)),
+        _group(SourceFilter.order, l10n.filterOrder, _order(l10n)),
         _group(SourceFilter.topRange, l10n.filterTopRange, _topRange(l10n)),
       ],
     );
@@ -228,19 +233,34 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
     );
   }
 
-  /// NSFW appears only with a stored key — see [offerablePurities].
+  /// Offers only purities the source serves and the current credentials unlock.
   Widget _purities(AppLocalizations l10n) {
     final bool hasKey = ref.watch(apiKeyProvider).value ?? false;
     final Set<Purity> selected = _draft.purity.purities;
-    return Wrap(
-      spacing: 8,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        for (final Purity purity in offerablePurities(hasApiKey: hasKey))
-          FilterChip(
-            label: Text(purityLabel(l10n, purity)),
-            selected: selected.contains(purity),
-            onSelected: (bool _) => _togglePurity(purity),
+        Wrap(
+          spacing: 8,
+          children: <Widget>[
+            for (final Purity purity in offerablePurities(
+              capabilities: _capabilities,
+              hasApiKey: hasKey,
+            ))
+              FilterChip(
+                label: Text(purityLabel(l10n, purity)),
+                selected: selected.contains(purity),
+                onSelected: (bool _) => _togglePurity(purity),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          l10n.filterPurityRequired,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
+        ),
       ],
     );
   }

@@ -1,12 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/browse_filter_text.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
 import 'package:tela/core/ui/selection_shelf.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/features/browse/browse_filter_button.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/browse/browse_search_field.dart';
@@ -63,9 +66,11 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
     );
 
     final SearchQuery query = ref.watch(browseQueryProvider);
+    final WallpaperSource source = ref.watch(activeWallpaperSourceProvider);
     final SearchQuery base = query.forScreen(screenResolution(context));
     final List<Sorting> sortings = offerableSortings(
       hasTerm: base.term.isNotEmpty,
+      supported: source.capabilities.sortings,
     );
     final TabController tabs = _controllerFor(sortings);
 
@@ -98,7 +103,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
               // shifts every grid one place right, and an unkeyed one would
               // inherit the paging state of the listing that used to sit there.
               WallpaperGrid(
-                key: ValueKey<Sorting>(sorting),
+                key: ValueKey<(SourceId, Sorting)>((source.id, sorting)),
                 query: base.copyWith(sorting: sorting),
               ),
           ],
@@ -156,7 +161,11 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
   /// from the list, and [_controllerFor] falls back to Latest on its way past —
   /// so the emptied case needs no branch of its own.
   void _onTerm(String? previous, String next) {
-    if (next.isEmpty) return;
+    final bool supportsRelevance = ref
+        .read(activeWallpaperSourceProvider)
+        .capabilities
+        .sortsBy(Sorting.relevance);
+    if (next.isEmpty || !supportsRelevance) return;
     _selected = Sorting.relevance;
 
     // Refining a search that is already running: the list does not change

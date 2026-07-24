@@ -38,6 +38,11 @@ class SourceId {
   /// before schema v6 belongs to.
   static const SourceId wallhaven = SourceId('wallhaven');
 
+  /// Konachan — the Moebooru second source (PLAN §18). One id for both hosts:
+  /// `.net` and `.com` share one post database and one id space, so a favorite
+  /// made in safe mode is the same row as one made unrestricted.
+  static const SourceId konachan = SourceId('konachan');
+
   static final RegExp _shape = RegExp(r'^[a-z0-9_]+$');
 
   /// The stable identifier, e.g. `'wallhaven'`.
