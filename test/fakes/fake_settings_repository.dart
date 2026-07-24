@@ -1,7 +1,10 @@
 import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
+import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tile_density.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 
@@ -17,7 +20,9 @@ class FakeSettingsRepository implements SettingsRepository {
     BrowseDefaults? deviceDefaults,
     AccentColor? accent,
     TileDensity density = TileDensity.medium,
-  }) : _settings = settings ?? StorageSettings.defaults,
+    Map<Purity, DownloadDestinationStreak>? streaks,
+  }) : _streaks = <Purity, DownloadDestinationStreak>{...?streaks},
+       _settings = settings ?? StorageSettings.defaults,
        _privateLibraryLocked = privateLibraryLocked,
        _nsfwOnRemovableAcknowledged = nsfwOnRemovableAcknowledged,
        _accountDefaults = accountDefaults,
@@ -34,6 +39,14 @@ class FakeSettingsRepository implements SettingsRepository {
   BrowseDefaults? _deviceDefaults;
   AccentColor? _accent;
   TileDensity _density;
+
+  /// Streaks by storage bucket, seeded through the constructor and keyed the
+  /// same way the Drift adapter keys its two rows.
+  final Map<Purity, DownloadDestinationStreak> _streaks;
+
+  /// The streak currently recorded for [purity]'s bucket, if any.
+  DownloadDestinationStreak? streakSaved(Purity purity) =>
+      _streaks[StorageSettings.bucketFor(purity)];
 
   /// The settings a save last wrote, readable by assertions.
   StorageSettings get saved => _settings;
@@ -131,5 +144,21 @@ class FakeSettingsRepository implements SettingsRepository {
   @override
   Future<void> saveTileDensity(TileDensity density) async {
     _density = density;
+  }
+
+  @override
+  Future<DownloadDestinationStreak?> loadDestinationStreak(
+    Purity purity,
+  ) async => _streaks[StorageSettings.bucketFor(purity)];
+
+  @override
+  Future<void> recordDestination(Purity purity, StorageTier tier) async {
+    final Purity bucket = StorageSettings.bucketFor(purity);
+    // Through the domain's own arithmetic, not a reimplementation of it: a fake
+    // that counted differently from Drift would let a test prove nothing.
+    _streaks[bucket] = DownloadDestinationStreak.extending(
+      _streaks[bucket],
+      tier,
+    );
   }
 }

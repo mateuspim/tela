@@ -6,6 +6,8 @@ import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
@@ -396,6 +398,75 @@ void main() {
       expect(await settings.loadTileDensity(), TileDensity.medium);
     });
   });
+
+  group('the destination streak', () {
+    test('is absent until a download lands', () async {
+      expect(await settings.loadDestinationStreak(Purity.sfw), isNull);
+    });
+
+    test('counts a run to the same tier', () async {
+      await _record(settings, Purity.sfw, StorageTier.appPrivate, times: 3);
+
+      final DownloadDestinationStreak? streak = await settings
+          .loadDestinationStreak(Purity.sfw);
+      expect(streak?.tier, StorageTier.appPrivate);
+      expect(streak?.length, 3);
+    });
+
+    test('restarts when a download lands somewhere else', () async {
+      await _record(settings, Purity.sfw, StorageTier.appPrivate, times: 3);
+      await settings.recordDestination(Purity.sfw, StorageTier.sharedGallery);
+
+      final DownloadDestinationStreak? streak = await settings
+          .loadDestinationStreak(Purity.sfw);
+      expect(streak?.tier, StorageTier.sharedGallery);
+      expect(streak?.length, 1);
+    });
+
+    // Two knobs, not three: sketchy shares sfw's row exactly as it shares its
+    // configured tier, so a sketchy download must lengthen the safe streak
+    // rather than opening a third one.
+    test('files sketchy in the safe bucket, not one of its own', () async {
+      await settings.recordDestination(Purity.sfw, StorageTier.appPrivate);
+      await settings.recordDestination(Purity.sketchy, StorageTier.appPrivate);
+
+      expect((await settings.loadDestinationStreak(Purity.sketchy))?.length, 2);
+      expect((await settings.loadDestinationStreak(Purity.sfw))?.length, 2);
+    });
+
+    test('keeps the explicit bucket separate from the safe one', () async {
+      await _record(settings, Purity.sfw, StorageTier.sharedGallery, times: 2);
+      await settings.recordDestination(Purity.nsfw, StorageTier.appPrivate);
+
+      expect((await settings.loadDestinationStreak(Purity.sfw))?.length, 2);
+      expect((await settings.loadDestinationStreak(Purity.nsfw))?.length, 1);
+    });
+
+    test('a corrupt row costs the suggestion, not the app', () async {
+      await db.putSetting('downloads.streak.sfw', 'appPrivate:lots');
+      expect(await settings.loadDestinationStreak(Purity.sfw), isNull);
+    });
+
+    // The same distrust `_tier` applies: a hand-edited row claiming an explicit
+    // run landed in the gallery must not become a suggestion to route explicit
+    // downloads there, which StorageSettings would then refuse to construct.
+    test('refuses a stored streak the purity could never have', () async {
+      await db.putSetting('downloads.streak.nsfw', 'sharedGallery:5');
+      expect(await settings.loadDestinationStreak(Purity.nsfw), isNull);
+    });
+  });
+}
+
+/// Records [times] downloads of [purity] all landing in [tier].
+Future<void> _record(
+  DriftSettingsRepository settings,
+  Purity purity,
+  StorageTier tier, {
+  required int times,
+}) async {
+  for (int i = 0; i < times; i++) {
+    await settings.recordDestination(purity, tier);
+  }
 }
 
 /// A snapshot whose every field differs from tela's own defaults, so a round

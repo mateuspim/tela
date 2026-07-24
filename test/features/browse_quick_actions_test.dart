@@ -8,6 +8,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
@@ -129,6 +130,43 @@ void main() {
     expect(find.byIcon(Icons.download_done), findsOneWidget);
   });
 
+  testWidgets('a safe download skips the chooser and routes silently', (
+    WidgetTester tester,
+  ) async {
+    final FakeImageStore images = FakeImageStore();
+    await _pumpWall(tester, images: images);
+
+    await _longPressTile(tester);
+    await tester.tap(find.text('Download'));
+    await _settle(tester);
+
+    // No dialog stood between the tap and the file: a plain tap stays silent.
+    expect(find.text('Download to'), findsNothing);
+    expect(images.receivedId, 'e7jvjd');
+  });
+
+  // The grid's only download path is this row — there is no long press to reach
+  // a destination as the detail screen has — so a not-safe wallpaper opens the
+  // chooser here, which is the remedy the tint on the row promises.
+  testWidgets('a not-safe download opens the chooser first', (
+    WidgetTester tester,
+  ) async {
+    final FakeImageStore images = FakeImageStore();
+    await _pumpWall(tester, images: images, purity: Purity.sketchy);
+
+    await _longPressTile(tester);
+    await tester.tap(find.text('Download'));
+    await _settle(tester);
+
+    expect(find.text('Download to'), findsOneWidget);
+
+    await tester.tap(find.text('Private library'));
+    await _settle(tester);
+
+    expect(images.receivedId, 'e7jvjd');
+    expect(images.receivedTier, StorageTier.appPrivate);
+  });
+
   testWidgets('setting a wallpaper asks which surface before applying', (
     WidgetTester tester,
   ) async {
@@ -175,6 +213,8 @@ Future<void> _pumpWall(
   FakeDownloadHistory? history,
   FakeImageStore? images,
   FakeWallpaperApplier? applier,
+  FakeSettingsRepository? settings,
+  Purity purity = Purity.sfw,
   Size size = const Size(1080, 2400),
 }) async {
   // A real phone's geometry, not the 800x600 default. It is load-bearing: a
@@ -186,7 +226,7 @@ Future<void> _pumpWall(
   addTearDown(tester.view.reset);
   final FakeWallhavenApi api = FakeWallhavenApi(
     page: WallpaperPage(
-      wallpapers: <Wallpaper>[_wallpaper()],
+      wallpapers: <Wallpaper>[_wallpaper(purity: purity)],
       currentPage: 1,
       lastPage: 1,
     ),
@@ -196,7 +236,9 @@ Future<void> _pumpWall(
       overrides: <Override>[
         wallhavenApiProvider.overrideWithValue(api),
         secretStoreProvider.overrideWithValue(FakeSecretStore()),
-        settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
+        settingsRepositoryProvider.overrideWithValue(
+          settings ?? FakeSettingsRepository(),
+        ),
         tagBlocklistRepositoryProvider.overrideWithValue(
           FakeTagBlocklistRepository(),
         ),
@@ -224,15 +266,15 @@ Future<void> _settle(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 500));
 }
 
-Wallpaper _wallpaper() => const Wallpaper(
+Wallpaper _wallpaper({Purity purity = Purity.sfw}) => Wallpaper(
   id: 'e7jvjd',
   fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg',
   thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/e7jvjd.jpg',
   thumbLargeUrl: 'https://th.wallhaven.cc/lg/e7/e7jvjd.jpg',
   thumbOriginalUrl: 'https://th.wallhaven.cc/orig/e7/e7jvjd.jpg',
-  resolution: Resolution(1440, 3200),
+  resolution: const Resolution(1440, 3200),
   fileSizeBytes: 2048,
-  purity: Purity.sfw,
+  purity: purity,
   category: Category.general,
-  colors: <String>[],
+  colors: const <String>[],
 );

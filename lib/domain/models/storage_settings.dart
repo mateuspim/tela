@@ -48,9 +48,24 @@ class StorageSettings {
         .toList();
   }
 
+  /// The purity whose setting governs [purity]: [Purity.nsfw] for explicit
+  /// content, [Purity.sfw] for everything else.
+  ///
+  /// The two-knobs-not-three rule, spelled once. Anything that keys storage
+  /// *state* by purity — the configured tier, the destination streak — must key
+  /// it through here, or `sketchy` quietly grows a bucket of its own that
+  /// [tierFor] does not honour.
+  ///
+  /// ```dart
+  /// StorageSettings.bucketFor(Purity.sketchy); // Purity.sfw
+  /// ```
+  static Purity bucketFor(Purity purity) {
+    return purity == Purity.nsfw ? Purity.nsfw : Purity.sfw;
+  }
+
   /// The configured destination for a wallpaper of [purity].
   StorageTier tierFor(Purity purity) {
-    return purity == Purity.nsfw ? nsfwTier : sfwTier;
+    return bucketFor(purity) == Purity.nsfw ? nsfwTier : sfwTier;
   }
 
   /// Returns a copy with one tier replaced.

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/byte_size_text.dart';
 import 'package:tela/core/ui/storage_volume_kind_text.dart';
@@ -14,7 +15,6 @@ import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/features/settings/download_location_controller.dart';
 import 'package:tela/features/settings/nsfw_removable_guard.dart';
 import 'package:tela/features/settings/settings_section_label.dart';
-import 'package:tela/features/settings/storage_settings_controller.dart';
 
 /// Picks which volume the files-outside-gallery tier writes to: device or card.
 ///
