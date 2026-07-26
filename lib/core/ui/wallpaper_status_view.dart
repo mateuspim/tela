@@ -139,6 +139,7 @@ class WallpaperStatusView extends StatelessWidget {
       InvalidApiKeyFailure() => Icons.key_off_outlined,
       RateLimitedFailure() => Icons.hourglass_empty,
       NetworkFailure() => Icons.cloud_off_outlined,
+      NotFoundFailure() => Icons.search_off_outlined,
       UnexpectedResponseFailure() => Icons.error_outline,
     };
   }

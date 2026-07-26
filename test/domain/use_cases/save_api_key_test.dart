@@ -203,6 +203,9 @@ class KeyCheckingWallpaperSource implements WallpaperSource {
     );
   }
 
+  @override
+  String? wallpaperIdIn(String text) => null;
+
   static const WallpaperPage _empty = WallpaperPage(
     wallpapers: <Wallpaper>[],
     hasMore: false,

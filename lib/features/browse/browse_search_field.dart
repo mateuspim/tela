@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
+import 'package:tela/features/browse/browse_search_draft.dart';
+import 'package:tela/features/browse/wallpaper_id_chip.dart';
 
 /// The search term, as the browse app bar's title.
 ///
@@ -34,9 +36,16 @@ class _BrowseSearchFieldState extends ConsumerState<BrowseSearchField> {
       decoration: InputDecoration(
         prefixIcon: const Icon(Icons.search),
         hintText: l10n.browseSearchHint,
+        // Inside the field rather than under it: the field is mostly empty
+        // space on a tablet, and anything below it either shoves the tabs down
+        // or covers the first thumbnail. See WallpaperIdChip for both attempts.
+        suffix: const WallpaperIdChip(),
         suffixIcon: _entry.text.isEmpty ? null : _clearButton(l10n),
       ),
-      onChanged: (String _) => setState(() {}),
+      onChanged: _draft,
+      // Untouched on purpose: Enter runs an ordinary text search even when the
+      // text is id-shaped. The chip is an offer beside this, never in place of
+      // it — a six-character search term must not be intercepted.
       onSubmitted: _search,
     );
   }
@@ -49,6 +58,13 @@ class _BrowseSearchFieldState extends ConsumerState<BrowseSearchField> {
     );
   }
 
+  /// The rebuild is for the clear button; the draft is for the id-jump chip,
+  /// which sits in the app bar's bottom and cannot see this controller.
+  void _draft(String text) {
+    setState(() {});
+    ref.read(browseSearchDraftProvider.notifier).typed = text;
+  }
+
   void _search(String term) {
     ref.read(browseQueryProvider.notifier).search(term);
   }
@@ -58,6 +74,7 @@ class _BrowseSearchFieldState extends ConsumerState<BrowseSearchField> {
   void _clear() {
     _entry.clear();
     setState(() {});
+    ref.read(browseSearchDraftProvider.notifier).typed = '';
     ref.read(browseQueryProvider.notifier).search('');
   }
 }

@@ -9,6 +9,7 @@ import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/search_tag.dart';
+import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 
 import '../fakes/recording_dio_transport.dart';
@@ -179,6 +180,97 @@ void main() {
 
       expect(wired.transport.lastUri.path, '/api/v1/w/e7jvjd');
       expect(wired.transport.lastUri.query, isEmpty);
+    });
+
+    test('a 404 is a not-found id, not a malformed response', () async {
+      final RecordingDioTransport transport = RecordingDioTransport(
+        body: '{"error":"Nothing here"}',
+        statusCode: 404,
+      );
+      final Dio dio = Dio(BaseOptions(baseUrl: WallhavenClient.baseUrl))
+        ..httpClientAdapter = transport;
+
+      expect(
+        () => DioWallhavenSource(dio).wallpaperDetails('je9ldq'),
+        throwsA(
+          isA<NotFoundFailure>().having(
+            (NotFoundFailure f) => f.id,
+            'id',
+            'je9ldq',
+          ),
+        ),
+      );
+    });
+
+    test('a 404 from /search stays an unexpected response', () async {
+      // Only a single-wallpaper lookup can mean "no such id"; a 404 from the
+      // listing endpoint is Wallhaven answering strangely.
+      final RecordingDioTransport transport = RecordingDioTransport(
+        body: '{"error":"Nothing here"}',
+        statusCode: 404,
+      );
+      final Dio dio = Dio(BaseOptions(baseUrl: WallhavenClient.baseUrl))
+        ..httpClientAdapter = transport;
+
+      expect(
+        () => DioWallhavenSource(dio).search(const SearchQuery()),
+        throwsA(isA<UnexpectedResponseFailure>()),
+      );
+    });
+  });
+
+  group('DioWallhavenSource.wallpaperIdIn', () {
+    late DioWallhavenSource api;
+
+    setUp(() => api = _wired().api);
+
+    test('recognizes a real six-character id', () {
+      expect(api.wallpaperIdIn('je9ldp'), 'je9ldp');
+    });
+
+    test('lowercases what a soft keyboard auto-capitalized', () {
+      // Verified on the live API 2026-07-26: GET /w/Je9ldp is a 404 and
+      // /w/je9ldp is the wallpaper. Normalizing here is what makes the id a
+      // phone actually produces resolve at all.
+      expect(api.wallpaperIdIn('Je9ldp'), 'je9ldp');
+      expect(api.wallpaperIdIn('JE9LDP'), 'je9ldp');
+    });
+
+    test('trims surrounding whitespace from a paste', () {
+      expect(api.wallpaperIdIn('  je9ldp  '), 'je9ldp');
+    });
+
+    test('rejects ordinary search words of the same length', () {
+      // The point of the narrow alphabet: a,b,c,f,h,i,s,t,u are not in it, so
+      // most six-letter words cannot be mistaken for an id.
+      for (final String word in <String>[
+        'sunset',
+        'nature',
+        'forest',
+        'castle',
+        'purple',
+        'katana',
+      ]) {
+        expect(api.wallpaperIdIn(word), isNull, reason: word);
+      }
+    });
+
+    test('rejects the wrong length', () {
+      expect(api.wallpaperIdIn('je9ld'), isNull);
+      expect(api.wallpaperIdIn('je9ldpq'), isNull);
+      expect(api.wallpaperIdIn(''), isNull);
+    });
+
+    test('rejects punctuation a URL paste would carry', () {
+      expect(api.wallpaperIdIn('w/je9ldp'), isNull);
+      expect(api.wallpaperIdIn('je-9ldp'), isNull);
+    });
+
+    test('accepts an all-digit id — Konachan-shaped is Wallhaven-shaped', () {
+      // Not a bug and worth pinning: digits are in Wallhaven's alphabet, so a
+      // six-digit Konachan id is a legitimate Wallhaven id shape. Recognition
+      // is per-source and only ever *offers*; the API settles it.
+      expect(api.wallpaperIdIn('406484'), '406484');
     });
   });
 }

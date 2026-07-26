@@ -56,6 +56,16 @@
     "description": "Accessibility label for the button emptying the search field."
   },
 
+  "browseGoToWallpaper": "Go to wallpaper {id}",
+  "@browseGoToWallpaper": {
+    "description": "Chip under the browse search field, offered when the typed text has the shape of a wallpaper id on the active source. Tapping it opens that wallpaper; it is an offer, not an interception, because pressing Enter still runs an ordinary text search.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+
   "browseSource": "Source: {name}",
   "@browseSource": {
     "description": "Accessibility label and tooltip for the browse source switcher, naming the site currently being browsed.",
@@ -444,6 +454,19 @@
   "@errorOffline": {
     "description": "Shown when the device has no route to the active wallpaper source.",
     "placeholders": {
+      "sourceName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "errorNotFound": "No wallpaper {id} on {sourceName}.",
+  "@errorNotFound": {
+    "description": "Shown when a looked-up wallpaper id does not exist on the source. Kept separate from errorUnexpected because this is the expected answer to a mistyped or wrong-source id, not a malfunction, and naming the id lets someone spot their own typo.",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      },
       "sourceName": {
         "type": "String"
       }

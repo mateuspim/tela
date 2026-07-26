@@ -27,7 +27,9 @@ class FakeWallpaperSource implements WallpaperSource {
     this.detailsById = const <String, WallpaperDetails>{},
     this.account,
     this.failure,
+    this.detailFailure,
     this.searchDelay,
+    this.idIn = _recognizesNothing,
   });
 
   /// Which source this stands in for. Defaults to Wallhaven, because that is
@@ -75,12 +77,23 @@ class FakeWallpaperSource implements WallpaperSource {
   /// When set, every call throws this instead of returning a page.
   final SourceFailure? failure;
 
+  /// When set, only [wallpaperDetails] throws this — a source whose listings
+  /// answer fine but which has no wallpaper under the id it was handed. What
+  /// the id-jump chip's miss actually looks like.
+  final SourceFailure? detailFailure;
+
   /// How long each [search] takes to answer, decided from the query itself.
   ///
   /// What a test reaches for when two searches must be in flight at once and
   /// the *order they land in* is the thing under test — a request the grid has
   /// already abandoned can still answer, and answer last.
   final Duration Function(SearchQuery query)? searchDelay;
+
+  /// How this fake recognizes its own ids, for the browse id-jump chip.
+  ///
+  /// Defaults to recognizing nothing, so no existing test grows a chip it never
+  /// asked for; a test that wants one supplies its own shape.
+  final String? Function(String text) idIn;
 
   /// Every query passed to [search], oldest first.
   final List<SearchQuery> receivedQueries = <SearchQuery>[];
@@ -116,7 +129,7 @@ class FakeWallpaperSource implements WallpaperSource {
   @override
   Future<WallpaperDetails> wallpaperDetails(String id) async {
     receivedDetailIds.add(id);
-    final SourceFailure? toThrow = failure;
+    final SourceFailure? toThrow = detailFailure ?? failure;
     if (toThrow != null) throw toThrow;
     final WallpaperDetails? result = detailsById[id] ?? details;
     if (result == null) {
@@ -126,12 +139,18 @@ class FakeWallpaperSource implements WallpaperSource {
   }
 
   @override
+  String? wallpaperIdIn(String text) => idIn(text);
+
+  @override
   Future<AccountSettings> accountSettings() async {
     accountSettingsCalls++;
     final SourceFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
     return account ?? _telaDefaults;
   }
+
+  /// The default [idIn]: a source that never offers an id jump.
+  static String? _recognizesNothing(String text) => null;
 
   /// What an account that never changed a setting would answer with.
   static const AccountSettings _telaDefaults = AccountSettings(

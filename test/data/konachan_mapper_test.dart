@@ -173,7 +173,10 @@ void main() {
     late WallpaperDetails details;
 
     setUp(() {
-      details = KonachanMapper.toDetails(_fixture('konachan_single_post.json'));
+      details = KonachanMapper.toDetails(
+        _fixture('konachan_single_post.json'),
+        id: '406484',
+      );
     });
 
     test('score stands in for favorites; there is no view count', () {
@@ -215,6 +218,7 @@ void main() {
             'file_url': 'https://konachan.com/image/9.png',
           }..remove('file_ext'),
         ],
+        id: '9',
       );
 
       expect(png.fileType, 'image/png');
@@ -223,9 +227,17 @@ void main() {
     test('an empty array is a failure, not an empty screen', () {
       // The .net-returns-[] trap (PLAN §18.4): the adapter avoids it by asking
       // .com, but if it ever surfaces it must read as an error, not a blank.
+      // Now a NotFoundFailure rather than an UnexpectedResponseFailure: ids can
+      // be typed by hand, so "no such post" is the ordinary answer here.
       expect(
-        () => KonachanMapper.toDetails(const <dynamic>[]),
-        throwsA(isA<UnexpectedResponseFailure>()),
+        () => KonachanMapper.toDetails(const <dynamic>[], id: '406484'),
+        throwsA(
+          isA<NotFoundFailure>().having(
+            (NotFoundFailure f) => f.id,
+            'id',
+            '406484',
+          ),
+        ),
       );
     });
   });

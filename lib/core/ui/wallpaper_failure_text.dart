@@ -28,6 +28,7 @@ String localizedFailure(
     InvalidApiKeyFailure() => l10n.errorInvalidApiKey(sourceName),
     RateLimitedFailure() => l10n.errorRateLimited(sourceName),
     NetworkFailure() => l10n.errorOffline(sourceName),
+    NotFoundFailure(:final String id) => l10n.errorNotFound(id, sourceName),
     UnexpectedResponseFailure() => l10n.errorUnexpected,
   };
 }
