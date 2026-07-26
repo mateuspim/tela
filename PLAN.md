@@ -456,11 +456,16 @@ Each stage ends green on `make ci` and is mergeable alone.
    1007). **Owed on a device:** the §18.6 walk — the NSFW invariant on the new
    source, and observing `.net` actually serve safe mode — plus the v6 migration
    and the filter sheet re-rendering on a switch that stages 1–2 also owe.
-4. **Cross-source polish — partly built (uncommitted, 2026-07-24).** The active
-   source is visibly named in its selector; browse tabs and filter controls
-   render from capabilities; and detail, share, and failure copy are
-   source-aware. Per-source rate limits were already in the adapters. Source
-   badges on tiles and in library grids remain.
+4. **Cross-source polish — built.** The active source is visibly named in its
+   selector; browse tabs and filter controls render from capabilities; and
+   detail, share, and failure copy are source-aware. Per-source rate limits were
+   already in the adapters. **Source badges** now name each tile's source on the
+   library grids that can hold more than one (Favorites, Download History, the
+   recent-downloads strip) — a bottom-left pill read from a root-level
+   `WallpaperSourceLabelsScope`, off on the single-source browse wall. The
+   **private library** is the one remaining grid: its tile draws from
+   `PrivateImage`, which carries no `SourceId`, so badging it is a follow-up that
+   first threads source onto that model.
 
 *Exit:* two sources browsable, one at a time; a wallpaper from either can be
 favorited, downloaded, applied and deleted; no NSFW rule weakened by the second

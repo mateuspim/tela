@@ -5,6 +5,8 @@ import 'package:tela/core/network/wallpaper_image_caches.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_marks_scope.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
+import 'package:tela/core/ui/wallpaper_source_badge.dart';
+import 'package:tela/core/ui/wallpaper_source_labels_scope.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 
 /// One wallpaper in the browse grid.
@@ -24,6 +26,7 @@ class WallpaperTile extends StatelessWidget {
       WallpaperMark.favorited,
       WallpaperMark.downloaded,
     },
+    this.showSourceBadge = false,
     super.key,
   });
 
@@ -50,6 +53,14 @@ class WallpaperTile extends StatelessWidget {
   /// so tells the user nothing. Whether a tile *earns* a mark comes from
   /// [WallpaperMarksScope]; this only says which ones the shelf shows.
   final Set<WallpaperMark> visibleMarks;
+
+  /// Whether this shelf draws the source-name badge.
+  ///
+  /// False on the browse wall, where every tile is the active source and a
+  /// badge on all of them says nothing. The library shelves — which can hold
+  /// wallpapers from more than one site at once — turn it on. Same per-shelf
+  /// opt-in as [visibleMarks], and for the same "tells you nothing" reason.
+  final bool showSourceBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -107,18 +118,21 @@ class WallpaperTile extends StatelessWidget {
       wallpaper.ref.key,
       visibleMarks,
     );
+    final Widget? badge = _sourceBadge(context);
     final Widget? selection = _selectionOverlay(context);
-    if (marks.isEmpty && selection == null) return thumb;
+    if (marks.isEmpty && badge == null && selection == null) return thumb;
     // Outside the Hero on purpose: a mark inside it would fly into the detail
     // screen along with the thumbnail and land on top of the full preview. The
-    // selection tick is outside for the same reason, and additionally because a
-    // tick flying into a screen that has no selection mode is nonsense.
+    // source badge and selection tick are outside for the same reason, and the
+    // tick additionally because a tick flying into a screen that has no
+    // selection mode is nonsense.
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
         thumb,
         if (marks.isNotEmpty)
           Positioned(bottom: 6, right: 6, child: _marks(context, marks)),
+        ?badge,
         ?selection,
       ],
     );
@@ -131,12 +145,33 @@ class WallpaperTile extends StatelessWidget {
   /// changed mode, and without it the first tap on an unticked tile looks like
   /// it should open the wallpaper.
   ///
-  /// Top-left is the last free corner — the download history owns top-right for
-  /// its missing badge and C4's marks own bottom-right — so the three never
-  /// collide on a history tile that is missing, marked and ticked at once.
+  /// Top-left is this overlay's corner — the download history owns top-right
+  /// for its missing badge, C4's marks own bottom-right, and the source badge
+  /// owns bottom-left — so the four never collide on a history tile that is
+  /// missing, marked, badged and ticked at once.
   Widget? _selectionOverlay(BuildContext context) {
     if (!WallpaperSelectionScope.isActive(context)) return null;
     return WallpaperSelectionOverlay(wallpaperKey: wallpaper.ref.key);
+  }
+
+  /// The source-name pill in the free bottom-left corner, or null when this
+  /// shelf does not show it or the source's name is not in scope.
+  ///
+  /// The name is resolved through [WallpaperSourceLabelsScope] — one root-level
+  /// watch of the registry — rather than a per-tile provider lookup, the same
+  /// way the marks avoid a family watch on a wall of hundreds.
+  Widget? _sourceBadge(BuildContext context) {
+    if (!showSourceBadge) return null;
+    final String? name = WallpaperSourceLabelsScope.labelFor(
+      context,
+      wallpaper.ref.source.value,
+    );
+    if (name == null) return null;
+    return Positioned(
+      bottom: 6,
+      left: 6,
+      child: WallpaperSourceBadge(sourceName: name),
+    );
   }
 
   /// The marks as one pill, in the corner the missing badge leaves free.

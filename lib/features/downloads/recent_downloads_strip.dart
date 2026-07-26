@@ -111,6 +111,8 @@ class RecentDownloadsStrip extends ConsumerWidget {
         // Everything here is downloaded by definition, so only the heart
         // carries information — the same narrowing the history shelf makes.
         visibleMarks: const <WallpaperMark>{WallpaperMark.favorited},
+        // Recent downloads can be from either source; name each one.
+        showSourceBadge: true,
       ),
     );
   }
