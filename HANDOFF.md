@@ -2,9 +2,18 @@
 
 Updated: 2026-07-26
 
-> **START HERE — SOURCE BADGES ARE BUILT on branch `feat/source-badges`
-> (2026-07-26); not yet merged, device eye owed.** This closes the last *code*
-> item of the multi-source polish (PLAN §17.5 stage 4). Konachan (§17 stage 3)
+> **START HERE — NEXT UP is the ID-JUMP follow-up (scoped, not built; its own
+> block just below).** The owner asked for it 2026-07-26: typing a wallpaper id
+> like `Je9ldp` into the browse search box should offer to jump straight to that
+> wallpaper. Design is settled — a **suggestion chip**, not a search hijack. Read
+> its section for the shape.
+>
+> **SOURCE BADGES ARE MERGED** (`feat/source-badges` → `master`, 2026-07-26; the
+> merge gate ran both suites and reported both green). This closed the last
+> *code* item of the multi-source polish (PLAN §17.5 stage 4). The **device eye**
+> is still owed: look at the bottom-left pill over real thumbnails on the tablet
+> — placement, legibility, and that it doesn't crowd the marks pill at the
+> highest tile density. Konachan (§17 stage 3)
 > is already MERGED to `master` (`72b4d5e Merge branch 'feat/konachan-source'`) —
 > the older note below that calls it "uncommitted on a branch" is stale; the
 > branch was merged. What still stands from that note is the **device-owed**
@@ -13,9 +22,10 @@ Updated: 2026-07-26
 >
 > **What source badges did.** In a mixed library grid a Wallhaven and a Konachan
 > wallpaper sat side by side with nothing to distinguish them; now each library
-> tile wears a small pill naming its source. `make ci` not yet run end to end,
-> but `flutter analyze` clean, `dart format` clean, **Dart 1031** green (1023 +
-> 8 new); no `android/` change, so Kotlin is untouched.
+> tile wears a small pill naming its source. `flutter analyze` clean, `dart
+> format` clean, **Dart 1031** green (1023 + 8 new); no `android/` change, so
+> Kotlin is untouched. The merge gate re-ran both suites on the way into
+> `master` and reported both green.
 >
 > - **Corner discipline.** The pill sits **bottom-left** — the one corner the
 >   selection tick (top-left), the download-history missing badge (top-right)
@@ -49,7 +59,59 @@ Updated: 2026-07-26
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
->
+
+## PLANNED — jump to a wallpaper by its id (owner request 2026-07-26; NOT built)
+
+**The ask.** Paste a wallpaper's id into the browse search box — `Je9ldp` on
+Wallhaven, `406484` on Konachan — and go straight to that wallpaper's detail
+screen instead of running a text search that would not find it.
+
+**Design settled with the owner (do not re-litigate the trigger):** a
+**suggestion chip**, not a search hijack. When the typed text matches the
+*active source's* id shape, a "Go to wallpaper {id}" action appears under the
+field. Tapping it fetches and jumps; pressing **Enter still runs a normal text
+search**. This never intercepts a real 6-char search, and it is discoverable.
+The two rejected shapes, for the record: *jump-on-submit with fallback* (a
+6-char search term that happens to be id-shaped would get intercepted, and a
+wasted lookup request fires on every id-ish search) and a *separate "Go to ID"
+field* (another affordance, less in-the-flow).
+
+**The plumbing already exists — this is small.** No new port method, no schema
+change:
+- `WallpaperSource.wallpaperDetails(String id)` already fetches one wallpaper by
+  its source-native id and returns `WallpaperDetails`, which wraps a full
+  `Wallpaper`.
+- The detail route already accepts a bare `Wallpaper` as `extra`
+  (`router.dart`, `state.extra is Wallpaper`), and the detail screen re-fetches
+  its own metadata (cached by ref). So the jump is: recognise an id → call
+  `wallpaperDetails(id)` → `pushNamed(detail, extra: details.wallpaper)`.
+
+**The one new domain piece — id-shape recognition, owned by the source.** Id
+shape is source-specific (Wallhaven ≈ 6-char base36; Konachan numeric), so it
+belongs on `WallpaperSource`/`SourceCapabilities`, never in a feature. Add a
+`recognizesId(String)` (or an `idPattern`); a source that cannot recognise its
+own ids simply never offers the chip. The regex only decides whether to
+*offer* — the lookup itself is confirmed against the live API on tap, per the
+project's standing "verify operators live" rule ([[wallhaven_exclude_by_id_broken]]
+is the cautionary tale: never trust a q-operator by unit test alone). Confirm
+the real Wallhaven id alphabet on the wire before pinning the pattern — the
+owner's example `Je9ldp` has an uppercase letter, so the shape is **not**
+lowercase-only.
+
+**Slices:**
+1. `recognizesId` on the source + capability; Wallhaven and Konachan patterns,
+   unit-tested (and Wallhaven's confirmed live).
+2. A `goToWallpaperId` path: fetch via the active source's `wallpaperDetails`,
+   push the detail route with the returned `Wallpaper`; a not-found / failure
+   surfaces the existing `SourceFailure` toast vocabulary, nothing navigates.
+3. The chip UI under `BrowseSearchField`, shown only when
+   `activeWallpaperSource.recognizesId(term)` and gated so Enter still searches.
+   New l10n key for "Go to wallpaper {id}".
+
+**Owed on a device (owner-only):** paste a real id on the tablet, confirm the
+chip appears and the jump lands on the right wallpaper; confirm a normal 6-char
+search is untouched by pressing Enter.
+
 > ---
 >
 > **DEVICE-WALK GAPS FIXED AND RE-VERIFIED (2026-07-24, uncommitted on
