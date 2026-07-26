@@ -466,6 +466,15 @@ Each stage ends green on `make ci` and is mergeable alone.
    **private library** is the one remaining grid: its tile draws from
    `PrivateImage`, which carries no `SourceId`, so badging it is a follow-up that
    first threads source onto that model.
+5. **Jump to a wallpaper by its id — built** (`feat/id-jump`, 2026-07-26).
+   Typing an id into the browse search box offers a chip that opens it; Enter
+   still runs an ordinary text search, so a real six-character search term is
+   never intercepted. `WallpaperSource.wallpaperIdIn` makes id shape the
+   source's own business — it returns the **normalized** id rather than a bool,
+   because Wallhaven's API is case-sensitive and a phone auto-capitalizes what
+   you type. `NotFoundFailure` joins the sealed `SourceFailure` so a mistyped id
+   names itself instead of reading as a malfunction. **Owed on a device:** see
+   HANDOFF, which also records the measured Wallhaven id alphabet.
 
 *Exit:* two sources browsable, one at a time; a wallpaper from either can be
 favorited, downloaded, applied and deleted; no NSFW rule weakened by the second
