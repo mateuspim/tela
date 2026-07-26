@@ -158,6 +158,10 @@ class DownloadHistoryScreen extends ConsumerWidget {
               // definition, so only the heart carries information. It also
               // keeps this shelf to one new mark beside the missing badge.
               visibleMarks: const <WallpaperMark>{WallpaperMark.favorited},
+              // The history spans every source downloaded from, so each tile
+              // names its own — the badge sits bottom-left, clear of the
+              // missing badge this screen adds top-right.
+              showSourceBadge: true,
             ),
           ),
           if (isMissing)

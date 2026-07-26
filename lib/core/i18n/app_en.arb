@@ -1147,6 +1147,16 @@
     "description": "Corner mark on a grid tile for a wallpaper tela has already downloaded to this device."
   },
 
+  "wallpaperSourceBadge": "From {sourceName}",
+  "@wallpaperSourceBadge": {
+    "description": "Accessibility label for the corner badge on a library grid tile naming which site the wallpaper came from, e.g. 'From Konachan'. The badge shows the bare source name; the screen reader hears this fuller phrase.",
+    "placeholders": {
+      "sourceName": {
+        "type": "String"
+      }
+    }
+  },
+
   "downloadHistoryRedownload": "Download {wallpaperId} again and set it",
   "@downloadHistoryRedownload": {
     "description": "Accessibility label for a history tile whose file is gone. Deliberately different from downloadHistorySetAgain: the badge is visual, and a screen reader must hear the same distinction.",

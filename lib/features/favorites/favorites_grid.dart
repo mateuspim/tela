@@ -92,6 +92,9 @@ class FavoritesGrid extends ConsumerWidget {
       // Whether you also *downloaded* one is the open question on this
       // shelf, and it is the only mark that answers anything.
       visibleMarks: const <WallpaperMark>{WallpaperMark.downloaded},
+      // Favorites mixes sources — a Wallhaven and a Konachan wallpaper sit side
+      // by side — so each tile names where it came from.
+      showSourceBadge: true,
     );
   }
 

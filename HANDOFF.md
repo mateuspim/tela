@@ -1,7 +1,57 @@
 # tela handoff
 
-Updated: 2026-07-24
+Updated: 2026-07-26
 
+> **START HERE — SOURCE BADGES ARE BUILT on branch `feat/source-badges`
+> (2026-07-26); not yet merged, device eye owed.** This closes the last *code*
+> item of the multi-source polish (PLAN §17.5 stage 4). Konachan (§17 stage 3)
+> is already MERGED to `master` (`72b4d5e Merge branch 'feat/konachan-source'`) —
+> the older note below that calls it "uncommitted on a branch" is stale; the
+> branch was merged. What still stands from that note is the **device-owed**
+> §18.6 walk (NSFW invariant, `.net` host, full lifecycle, v6 migration on a
+> real DB), which needs the owner's tablet.
+>
+> **What source badges did.** In a mixed library grid a Wallhaven and a Konachan
+> wallpaper sat side by side with nothing to distinguish them; now each library
+> tile wears a small pill naming its source. `make ci` not yet run end to end,
+> but `flutter analyze` clean, `dart format` clean, **Dart 1031** green (1023 +
+> 8 new); no `android/` change, so Kotlin is untouched.
+>
+> - **Corner discipline.** The pill sits **bottom-left** — the one corner the
+>   selection tick (top-left), the download-history missing badge (top-right)
+>   and the C4 marks (bottom-right) all leave free, so all four coexist on a
+>   history tile that is missing, marked, badged and ticked at once. Styled like
+>   the marks pill (0.82-alpha surface, rounded, `labelSmall`).
+> - **One root-level watch, not per-tile.** New `WallpaperSourceLabelsScope`
+>   (`core/ui`) publishes an id→name map wired once in `app.dart` from
+>   `wallpaperSourcesProvider`, exactly like `WallpaperMarksScope` — a tile in
+>   `core/ui` may not reach into the registry, and a family watch per tile on a
+>   wall of hundreds is the cost C4 warned about. `labelFor` answers null with no
+>   scope above it, so no existing shelf test needed touching.
+> - **Per-shelf opt-in.** A `showSourceBadge` flag on `WallpaperTile` (default
+>   **false**), same shape and reason as `visibleMarks`: **off on the browse
+>   wall** (structurally single-source, so a badge everywhere says nothing),
+>   **on** for Favorites, Download History and the recent-downloads strip.
+> - **a11y.** The pill shows the bare name; a screen reader hears "From
+>   Konachan" via l10n key `wallpaperSourceBadge` (`ExcludeSemantics` on the
+>   Text stops a doubled read).
+>
+> **The one grid left out, on purpose:** the **private library**. Its tile draws
+> from `PrivateImage`, which carries no `SourceId` (the id is recovered from the
+> filename), so badging it is a larger, lower-value follow-up that first has to
+> thread source onto that model. Noted in PLAN §17.5 item 4.
+>
+> **Device eye owed** (owner-only, not unit-testable): look at the pill over
+> real thumbnails on the tablet — placement, legibility, and that it does not
+> crowd the marks pill at the highest tile density.
+>
+> **Files:** new `core/ui/wallpaper_source_badge.dart`,
+> `core/ui/wallpaper_source_labels_scope.dart`,
+> `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
+> `app/app.dart`, the ARB, and the three shelves.
+>
+> ---
+>
 > **DEVICE-WALK GAPS FIXED AND RE-VERIFIED (2026-07-24, uncommitted on
 > `feat/konachan-source`).** The source switch now replaces the grid even when
 > both sources have an equal default query, and the visible switcher names and
