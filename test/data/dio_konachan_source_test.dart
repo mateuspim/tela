@@ -146,6 +146,58 @@ void main() {
       expect(uri.queryParameters['tags'], 'id:406484');
       expect(details.favorites, 42);
     });
+
+    test('an id no post carries is a not-found failure', () async {
+      // Konachan answers a missing id with 200 and an empty array, not a 404.
+      final RecordingDioTransport transport = RecordingDioTransport(body: '[]');
+      final Dio dio = Dio()..httpClientAdapter = transport;
+
+      expect(
+        () => DioKonachanSource(dio).wallpaperDetails('999999999'),
+        throwsA(
+          isA<NotFoundFailure>().having(
+            (NotFoundFailure f) => f.id,
+            'id',
+            '999999999',
+          ),
+        ),
+      );
+    });
+  });
+
+  group('DioKonachanSource.wallpaperIdIn', () {
+    late DioKonachanSource api;
+
+    setUp(() => api = _wired().api);
+
+    test('recognizes a decimal post number', () {
+      expect(api.wallpaperIdIn('406484'), '406484');
+      expect(api.wallpaperIdIn('9'), '9');
+    });
+
+    test('trims surrounding whitespace from a paste', () {
+      expect(api.wallpaperIdIn('  406484  '), '406484');
+    });
+
+    test("rejects Wallhaven's alphanumeric shape", () {
+      // The asymmetry is deliberate: Konachan can rule out je9ldp, but
+      // Wallhaven cannot rule out 406484 — digits are in its alphabet too.
+      expect(api.wallpaperIdIn('je9ldp'), isNull);
+    });
+
+    test('rejects a leading zero, which is not how Konachan writes an id', () {
+      expect(api.wallpaperIdIn('0406484'), isNull);
+      expect(api.wallpaperIdIn('0'), isNull);
+    });
+
+    test('rejects a number too long to be a post id', () {
+      expect(api.wallpaperIdIn('1234567890'), isNull);
+    });
+
+    test('rejects a tag that merely contains digits', () {
+      expect(api.wallpaperIdIn('touhou_2'), isNull);
+      expect(api.wallpaperIdIn(''), isNull);
+    });
   });
 
   group('DioKonachanSource.capabilities — booru-shaped', () {

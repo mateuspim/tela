@@ -2,11 +2,17 @@
 
 Updated: 2026-07-26
 
-> **START HERE — NEXT UP is the ID-JUMP follow-up (scoped, not built; its own
-> block just below).** The owner asked for it 2026-07-26: typing a wallpaper id
-> like `Je9ldp` into the browse search box should offer to jump straight to that
-> wallpaper. Design is settled — a **suggestion chip**, not a search hijack. Read
-> its section for the shape.
+> **START HERE — the ID-JUMP feature is BUILT on `feat/id-jump`, unmerged, and
+> owes a device pass** (its own block just below). Typing a wallpaper id like
+> `je9ldp` into the browse search box now offers a **suggestion chip** that
+> jumps to it; Enter still runs an ordinary text search. Dart **1061** green,
+> `flutter analyze` clean.
+>
+> **Read the CORRECTED note in that section before touching the pattern:** this
+> file used to claim Wallhaven ids are not lowercase-only, on the strength of the
+> owner's `Je9ldp`. Measured on the wire, that is backwards — `/w/Je9ldp` is a
+> 404 and `/w/je9ldp` is the wallpaper. The id alphabet is now recorded there
+> from a 623-id sample; do not re-derive it.
 >
 > **SOURCE BADGES ARE MERGED** (`feat/source-badges` → `master`, 2026-07-26; the
 > merge gate ran both suites and reported both green). This closed the last
@@ -60,7 +66,7 @@ Updated: 2026-07-26
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
-## PLANNED — jump to a wallpaper by its id (owner request 2026-07-26; NOT built)
+## BUILT, DEVICE PASS OWED — jump to a wallpaper by its id (`feat/id-jump`)
 
 **The ask.** Paste a wallpaper's id into the browse search box — `Je9ldp` on
 Wallhaven, `406484` on Konachan — and go straight to that wallpaper's detail
@@ -88,29 +94,112 @@ change:
 
 **The one new domain piece — id-shape recognition, owned by the source.** Id
 shape is source-specific (Wallhaven ≈ 6-char base36; Konachan numeric), so it
-belongs on `WallpaperSource`/`SourceCapabilities`, never in a feature. Add a
-`recognizesId(String)` (or an `idPattern`); a source that cannot recognise its
-own ids simply never offers the chip. The regex only decides whether to
-*offer* — the lookup itself is confirmed against the live API on tap, per the
-project's standing "verify operators live" rule ([[wallhaven_exclude_by_id_broken]]
-is the cautionary tale: never trust a q-operator by unit test alone). Confirm
-the real Wallhaven id alphabet on the wire before pinning the pattern — the
-owner's example `Je9ldp` has an uppercase letter, so the shape is **not**
-lowercase-only.
+belongs on `WallpaperSource`/`SourceCapabilities`, never in a feature. A source
+that cannot recognise its own ids simply never offers the chip. The regex only
+decides whether to *offer* — the lookup itself is confirmed against the live API
+on tap, per the project's standing "verify operators live" rule
+([[wallhaven_exclude_by_id_broken]] is the cautionary tale: never trust a
+q-operator by unit test alone).
 
-**Slices:**
-1. `recognizesId` on the source + capability; Wallhaven and Konachan patterns,
-   unit-tested (and Wallhaven's confirmed live).
-2. A `goToWallpaperId` path: fetch via the active source's `wallpaperDetails`,
-   push the detail route with the returned `Wallpaper`; a not-found / failure
-   surfaces the existing `SourceFailure` toast vocabulary, nothing navigates.
-3. The chip UI under `BrowseSearchField`, shown only when
-   `activeWallpaperSource.recognizesId(term)` and gated so Enter still searches.
-   New l10n key for "Go to wallpaper {id}".
+> **CORRECTED 2026-07-26, measured on the wire.** This section previously said
+> the owner's example `Je9ldp` proves the shape is "**not** lowercase-only".
+> That is backwards, and acting on it would have shipped a feature that 404s on
+> the first id anyone types on a phone:
+>
+> | Request | Result |
+> |---|---|
+> | `GET /api/v1/w/Je9ldp` | **404** `{"error":"Nothing here"}` |
+> | `GET /api/v1/w/je9ldp` | **200**, a real wallpaper |
+> | a known-good id, uppercased | **404** |
+>
+> Wallhaven ids are **lowercase and the API is case-sensitive**. `Je9ldp` was a
+> soft keyboard auto-capitalising the first letter — which is exactly what a
+> phone does constantly, so **normalising to lowercase before both the match and
+> the lookup is load-bearing.**
+>
+> **The alphabet, from 623 live ids (3738 characters):** all length 6, drawn
+> from **27 characters** — `0-9` plus `degjklmnopqrvwxyz`. The letters
+> `a b c f h i s t u` never appear once (a profanity-safe alphabet). That
+> narrowness is what keeps the chip quiet: against 79 realistic six-letter
+> search terms it wrongly offers a chip for 6, where a broad `[a-z0-9]{6}` would
+> offer one for all 79. Konachan ids are plain decimal, confirmed against
+> `post.json`. **Do not re-derive this; it is measured, not assumed.**
 
-**Owed on a device (owner-only):** paste a real id on the tablet, confirm the
-chip appears and the jump lands on the right wallpaper; confirm a normal 6-char
-search is untouched by pressing Enter.
+**Slices — ALL THREE BUILT on branch `feat/id-jump`; device pass owed.**
+`flutter analyze` clean, `dart format` clean, Dart **1061** green (1031 + 30).
+No `android/` change, so Kotlin is untouched.
+
+1. **`wallpaperIdIn` on the port** (`wallpaper_source.dart`), Wallhaven and
+   Konachan patterns, unit-tested. **Named `wallpaperIdIn`, not the
+   `recognizesId` this file originally proposed, and the rename is the point:** a
+   bool is not enough. `recognizesId('Je9ldp')` would answer true, and the
+   lookup that followed would pass `Je9ldp` straight through and 404.
+   Recognition and normalisation have to be one step, so it returns the
+   normalized id or null. Four implementers, the port's complete set:
+   both adapters plus `FakeWallpaperSource` and `KeyCheckingWallpaperSource`.
+   It is a port method rather than a `SourceCapabilities` field because `RegExp`
+   has no const constructor and every capability field is `required` by written
+   policy.
+2. **`NotFoundFailure`**, a fifth variant on the sealed `SourceFailure`. A 404
+   used to become `UnexpectedResponseFailure` → "Something went wrong", which
+   for a mistyped id reads as an app malfunction; it now reads "No wallpaper
+   je9ldq on Wallhaven." Wallhaven maps 404 **only** for a single-wallpaper
+   lookup (a 404 from `/search` is still unexpected); Konachan maps its
+   empty-array answer. Both exhaustive switches over the sealed type were caught
+   by the compiler.
+3. **The chip** (`features/browse/wallpaper_id_chip.dart`), **inside the search
+   field** as its `InputDecoration.suffix`, just before the clear `✕`.
+   `onSubmitted` is untouched — that is what keeps Enter a plain search, and
+   `wallpaper_id_chip_test.dart` guards it. The typed text is lifted into
+   `browseSearchDraftProvider` because the field is a `ConsumerStatefulWidget`
+   with a private controller; nothing but the chip watches the draft, so a
+   keystroke rebuilds neither the screen nor a single tile.
+
+   **Placement took three tries, two of them corrected on the owner's tablet.
+   Do not move it again without a device pass — read this first:**
+   1. *App bar `bottom`, above the `TabBar`* — shoved the whole tab row down
+      mid-typing, ate scarce vertical space, was easy to miss, and read as
+      belonging to the tabs rather than the search box. All four named by the
+      owner on hardware.
+   2. *Floating over the grid* (`Positioned` in a `Stack`) — fixed the shoving,
+      but landed squarely on the first thumbnail, so it read as a tooltip stuck
+      onto someone's wallpaper.
+   3. **Inside the field** — covers nothing, sits beside the text it refers to,
+      and uses space that was empty anyway: on the tablet the field is ~1400px
+      wide and a six-character id fills about 7% of it.
+
+   Two invariants worth keeping: the chip stays **mounted and shrunk** rather
+   than unmounting, so the field's height — and the tab row below it — never
+   moves (a test asserts `TabBar` and `TabBarView` do not shift by a pixel);
+   and it is deliberately **not** an `OverlayEntry`, which would keep floating
+   over the detail screen after a jump unless torn down by hand. Because it is
+   mounted-but-shrunk, its tests match the visible `ActionChip`, not
+   `WallpaperIdChip`.
+
+   Below **600px** the label is dropped for an icon button carrying the same
+   string as its tooltip — a phone's field has no room for the sentence a
+   tablet's swallows. The label keeps the **normalized** id on purpose even
+   though the field shows the raw text a centimetre away: typing `Qrlwql` and
+   being offered `qrlwql` is how someone sees which id will actually be fetched.
+
+**Device pass — VERIFIED on SM-X730 at `192.168.50.151:5555`, 2026-07-26**
+(release build, `./tool/tela deploy`):
+
+- **The auto-capital case is proven dead.** Typed `Qrlwql` with the keyboard's
+  auto-capital; the chip offered `qrlwql` and the jump resolved. This is the
+  exact failure the pre-correction claim above would have shipped.
+- **The jump lands on the right wallpaper, not merely a wallpaper.** Detail
+  read 3840x2160 / 18,134,129 bytes / image/png / General / Safe / 8,502 views
+  / 163 favorites, matched field-for-field against a live
+  `GET /api/v1/w/qrlwql`.
+- The final in-field placement covers no thumbnail and does not move the tabs.
+
+**Still owed on a device:** confirm a wrong id toasts "No wallpaper … on …"
+rather than a generic error; press Enter on an id-shaped term and confirm a
+normal search still runs (unit-tested, not yet seen on glass); switch to
+Konachan and confirm the chip follows that source's numeric shape; and look at
+the phone-width icon-only fallback on an actual phone, which has only been
+exercised at 400px in a test.
 
 > ---
 >

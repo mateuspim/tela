@@ -122,10 +122,23 @@ class DioKonachanSource implements WallpaperSource {
         'https://${KonachanHost.unrestricted}/post.json',
         queryParameters: <String, String>{'tags': 'id:$id', 'limit': '1'},
       );
-      return KonachanMapper.toDetails(response.data);
+      return KonachanMapper.toDetails(response.data, id: id);
     } on DioException catch (error) {
       throw _toFailure(error);
     }
+  }
+
+  /// A decimal post number, the only id shape a Moebooru issues.
+  ///
+  /// No leading zero (`id:0406584` is not how Konachan writes one) and bounded
+  /// at nine digits, which keeps it inside an int and well past the ~400k posts
+  /// the site actually has.
+  static final RegExp _idShape = RegExp(r'^[1-9][0-9]{0,8}$');
+
+  @override
+  String? wallpaperIdIn(String text) {
+    final String candidate = text.trim();
+    return _idShape.hasMatch(candidate) ? candidate : null;
   }
 
   @override

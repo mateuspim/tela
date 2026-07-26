@@ -60,6 +60,23 @@ class NetworkFailure extends SourceFailure {
   String get kind => 'network';
 }
 
+/// The source answered clearly that it has no wallpaper with that id.
+///
+/// Distinct from [UnexpectedResponseFailure] because it is not a malfunction:
+/// it is the expected answer to a mistyped id, or to an id belonging to a
+/// different site. Carrying the [id] lets the message name it instead of
+/// telling someone who typed six characters that something went wrong.
+class NotFoundFailure extends SourceFailure {
+  /// Creates a not-found failure for the looked-up [id].
+  NotFoundFailure(this.id) : super('no wallpaper "$id" at the source');
+
+  /// The id that found nothing, as it went out on the wire.
+  final String id;
+
+  @override
+  String get kind => 'not_found';
+}
+
 /// The source answered, but not with anything we can parse.
 ///
 /// Wallhaven's ToS reserves the right to change the API without notice and a

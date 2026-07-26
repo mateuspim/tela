@@ -43,14 +43,14 @@ abstract final class KonachanMapper {
   ///
   /// There is no per-post endpoint on Konachan (PLAN §18.1), so detail is a
   /// one-result search. An empty array is a real failure here, not an empty
-  /// grid: it means the id was looked up on `.net` for a post that host will
-  /// not serve (PLAN §18.4), which the adapter avoids by asking `.com`.
-  static WallpaperDetails toDetails(Object? body) {
+  /// grid: either no post carries [id], or it was looked up on `.net` for a
+  /// post that host will not serve (PLAN §18.4), which the adapter avoids by
+  /// asking `.com`. Since ids can now be typed by hand, the first case is the
+  /// ordinary one, so it raises [NotFoundFailure] and names the id.
+  static WallpaperDetails toDetails(Object? body, {required String id}) {
     final List<dynamic> posts = _asPostList(body);
     if (posts.isEmpty) {
-      throw const UnexpectedResponseFailure(
-        'Konachan returned no post for an id lookup',
-      );
+      throw NotFoundFailure(id);
     }
     final Map<String, dynamic> post = _asPost(posts.first);
     return WallpaperDetails(

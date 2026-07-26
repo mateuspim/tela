@@ -83,8 +83,26 @@ class DioWallhavenSource implements WallpaperSource {
           .get<Map<String, dynamic>>('/w/$id');
       return _mapped(response.data, WallhavenMapper.toDetails);
     } on DioException catch (error) {
-      throw _toFailure(error);
+      throw _toFailure(error, notFoundId: id);
     }
+  }
+
+  /// Six characters of Wallhaven's own alphabet, case-folded.
+  ///
+  /// The alphabet is `0-9` plus `degjklmnopqrvwxyz` — measured off 623 live ids
+  /// (3738 characters), in which `a b c f h i s t u` never once appear, so this
+  /// is Wallhaven's issuing alphabet and not a sample artefact. Dropping those
+  /// nine letters is what keeps the chip quiet on ordinary six-letter searches:
+  /// `sunset`, `nature`, `forest`, `castle` and `purple` all contain one.
+  static final RegExp _idShape = RegExp(r'^[0-9degjklmnopqrvwxyz]{6}$');
+
+  /// Lowercases before matching: `GET /w/Je9ldp` is a 404 and `/w/je9ldp` is
+  /// the wallpaper, so a soft keyboard's auto-capital would otherwise make
+  /// every typed id miss.
+  @override
+  String? wallpaperIdIn(String text) {
+    final String candidate = text.trim().toLowerCase();
+    return _idShape.hasMatch(candidate) ? candidate : null;
   }
 
   @override
@@ -115,10 +133,18 @@ class DioWallhavenSource implements WallpaperSource {
     return map(body);
   }
 
-  /// Translates transport-level noise into the four things the UI can act on.
-  SourceFailure _toFailure(DioException error) {
+  /// Translates transport-level noise into the things the UI can act on.
+  ///
+  /// [notFoundId] is passed only by a single-wallpaper lookup, and only then
+  /// does a 404 mean "no such wallpaper": a 404 from `/search` or `/settings`
+  /// is Wallhaven answering strangely, not a missing id, and stays an
+  /// [UnexpectedResponseFailure].
+  SourceFailure _toFailure(DioException error, {String? notFoundId}) {
     final int? status = error.response?.statusCode;
     if (status == 401) return const InvalidApiKeyFailure();
+    if (status == 404 && notFoundId != null) {
+      return NotFoundFailure(notFoundId);
+    }
     if (status == 429) {
       return RateLimitedFailure(
         retryAfter: _retryAfterOf(error.response),

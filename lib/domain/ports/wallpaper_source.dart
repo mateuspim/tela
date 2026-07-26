@@ -42,8 +42,28 @@ abstract interface class WallpaperSource {
 
   /// Fetches complete metadata for a single wallpaper [id] of *this* source.
   ///
-  /// Throws the same safe failures as [search].
+  /// Throws the same safe failures as [search], plus [NotFoundFailure] when the
+  /// source answers clearly that it has no such wallpaper.
   Future<WallpaperDetails> wallpaperDetails(String id);
+
+  /// The source-native wallpaper id inside [text], or null if it isn't one.
+  ///
+  /// Id shape is site-specific — Wallhaven's is six characters of its own
+  /// alphabet, Konachan's is a decimal post number — so only the source can
+  /// judge it, and a source that cannot recognise its own ids just answers
+  /// null. Normalizing is *part* of recognizing: Wallhaven's API is
+  /// case-sensitive and its ids are lowercase, so a phone keyboard's
+  /// auto-capitalized `Je9ldp` has to come back as `je9ldp` or the lookup that
+  /// follows 404s. Returning the normalized id rather than a bool is what makes
+  /// that impossible to forget at the call site.
+  ///
+  /// Only ever decides whether to *offer* a jump — the id itself is confirmed
+  /// against the live API by [wallpaperDetails], never by this pattern.
+  ///
+  /// ```dart
+  /// final String? id = source.wallpaperIdIn(' Je9ldp '); // 'je9ldp'
+  /// ```
+  String? wallpaperIdIn(String text);
 
   /// Fetches the browse defaults of the account the stored key belongs to.
   ///
