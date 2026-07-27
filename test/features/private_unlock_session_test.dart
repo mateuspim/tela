@@ -10,6 +10,8 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/features/private_library/private_immersive_session.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
 
@@ -127,7 +129,7 @@ Future<void> _openViewerAlone(
         identity: 'private-library',
         items: <PrivateImage>[_image('e7jvjd')],
         initialIndex: 0,
-        itemKey: (PrivateImage image) => image.id,
+        itemKey: (PrivateImage image) => image.ref.key,
       );
   addTearDown(session.dispose);
   return _pumpRouter(
@@ -196,7 +198,7 @@ Future<void> _pumpRouter(
 }
 
 PrivateImage _image(String id) => PrivateImage(
-  id: id,
+  ref: WallpaperRef(SourceId.wallhaven, id),
   location: Uri.parse('file:///data/tela/$id.jpg'),
   savedAt: DateTime.utc(2026, 7, 14),
   sizeBytes: 2048,

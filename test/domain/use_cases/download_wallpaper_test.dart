@@ -25,9 +25,25 @@ void main() {
       await download(wallpaper, tier: StorageTier.filesOutsideGallery);
 
       expect(imageStore.receivedId, wallpaper.id);
+      expect(imageStore.receivedSource, wallpaper.source);
       expect(imageStore.receivedImageUrl, wallpaper.fullImageUrl);
       expect(imageStore.receivedPurity, Purity.nsfw);
       expect(imageStore.receivedTier, StorageTier.filesOutsideGallery);
+    });
+
+    test("sends the wallpaper's own source, not a hardcoded one", () async {
+      // The regression: the file name is built from this pair, and the source
+      // half was a `wallhaven-` literal in the storage adapter — so every
+      // Konachan download was written to disk under Wallhaven's name. For the
+      // app-private tier that name is the *only* record of where the image came
+      // from, since an explicit download deliberately writes no history row.
+      final FakeImageStore imageStore = FakeImageStore();
+      final DownloadWallpaper download = _download(imageStore);
+
+      await download(_konachanWallpaper());
+
+      expect(imageStore.receivedSource, SourceId.konachan);
+      expect(imageStore.receivedId, '406484');
     });
 
     test(
@@ -288,6 +304,23 @@ DownloadWallpaper _download(
     history: history ?? FakeDownloadHistory(),
   );
 }
+
+/// A wallpaper from the second source, whose downloads the file name used to
+/// misattribute to Wallhaven.
+Wallpaper _konachanWallpaper() => Wallpaper(
+  id: '406484',
+  source: SourceId.konachan,
+  pageUrl: Uri.parse('https://konachan.com/post/show/406484'),
+  fullImageUrl: 'https://konachan.com/image/abc/Konachan.com%20-%20406484.jpg',
+  thumbSmallUrl: 'https://konachan.com/data/preview/ab/406484.jpg',
+  thumbLargeUrl: 'https://konachan.com/jpeg/abc/406484.jpg',
+  thumbOriginalUrl: 'https://konachan.com/jpeg/abc/406484.jpg',
+  resolution: const Resolution(1440, 3200),
+  fileSizeBytes: 2048,
+  purity: Purity.sfw,
+  category: Category.general,
+  colors: const <String>[],
+);
 
 Wallpaper _wallpaper(Purity purity) => Wallpaper(
   id: 'e7jvjd',

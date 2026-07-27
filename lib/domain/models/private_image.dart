@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 /// One image sitting in the app-private tier, as the private library sees it.
 ///
@@ -13,7 +14,7 @@ class PrivateImage {
   /// decode, and are null when the file could not be decoded — a corrupt or
   /// truncated download the gallery must still render as a safe broken state.
   const PrivateImage({
-    required this.id,
+    required this.ref,
     required this.location,
     required this.savedAt,
     required this.sizeBytes,
@@ -21,8 +22,13 @@ class PrivateImage {
     this.height,
   });
 
-  /// Wallhaven's id, recovered from the file name.
-  final String id;
+  /// Which source issued it and under what id, recovered from the file name.
+  ///
+  /// A whole [WallpaperRef] rather than a bare id, because the file name is the
+  /// only record this tier has: an explicit download writes no history row, so
+  /// there is no table to join a source out of. It is also what lets the grid
+  /// badge a private tile with the site it came from.
+  final WallpaperRef ref;
 
   /// Local file URI. Never log this.
   final Uri location;
@@ -52,12 +58,12 @@ class PrivateImage {
   }
 
   @override
-  bool operator ==(Object other) => other is PrivateImage && other.id == id;
+  bool operator ==(Object other) => other is PrivateImage && other.ref == ref;
 
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode => ref.hashCode;
 
   /// Names the image without naming where it lives.
   @override
-  String toString() => 'PrivateImage($id, $sizeBytes bytes)';
+  String toString() => 'PrivateImage($ref, $sizeBytes bytes)';
 }

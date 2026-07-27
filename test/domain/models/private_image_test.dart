@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 void main() {
   test('aspectRatio divides known pixel dimensions', () {
@@ -32,7 +34,7 @@ void main() {
 
 PrivateImage _image({required int? width, required int? height}) =>
     PrivateImage(
-      id: 'e7jvjd',
+      ref: const WallpaperRef(SourceId.wallhaven, 'e7jvjd'),
       location: Uri.file(
         '/data/user/0/cc.pym.tela/files/wallpapers/w-e7jvjd.jpg',
       ),

@@ -7,8 +7,10 @@ import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 
 void main() {
   test('sends image identity, purity, and tier to the native store', () async {
@@ -18,6 +20,7 @@ void main() {
     );
 
     await store.store(
+      source: SourceId.konachan,
       id: 'e7jvjd',
       imageUrl: _imageUrl,
       purity: Purity.nsfw,
@@ -25,7 +28,11 @@ void main() {
     );
 
     expect(fake.receivedMethod, 'storeImage');
+    // The source travels beside the id because native composes the file name
+    // from the pair; without it every Konachan download was filed under
+    // Wallhaven's name on disk.
     expect(fake.receivedArguments, <String, String>{
+      'source': 'konachan',
       'id': 'e7jvjd',
       'imageUrl': _imageUrl,
       'purity': 'nsfw',
@@ -57,6 +64,7 @@ void main() {
 
       await expectLater(
         store.store(
+          source: SourceId.wallhaven,
           id: 'e7jvjd',
           imageUrl: _imageUrl,
           purity: Purity.nsfw,
@@ -76,6 +84,7 @@ void main() {
 
     await expectLater(
       store.store(
+        source: SourceId.wallhaven,
         id: 'e7jvjd',
         imageUrl: _imageUrl,
         purity: Purity.sfw,
@@ -92,8 +101,9 @@ void main() {
           'success': true,
           'images': <Object?>[
             <Object?, Object?>{
-              'id': 'e7jvjd',
-              'location': 'file:///data/user/0/cc.pym.tela/files/w-e7jvjd.jpg',
+              'ref': 'wallhaven-e7jvjd',
+              'location':
+                  'file:///data/user/0/cc.pym.tela/files/wallhaven-e7jvjd.jpg',
               'savedAt': 1750000000000,
               'sizeBytes': 2048,
               'width': 1080,
@@ -109,7 +119,10 @@ void main() {
       final List<PrivateImage> images = await store.privateImages();
 
       expect(fake.receivedMethod, 'listPrivateImages');
-      expect(images.single.id, 'e7jvjd');
+      expect(
+        images.single.ref,
+        const WallpaperRef(SourceId.wallhaven, 'e7jvjd'),
+      );
       expect(images.single.sizeBytes, 2048);
       expect(images.single.width, 1080);
       expect(images.single.height, 2400);
@@ -131,8 +144,8 @@ void main() {
             'success': true,
             'images': <Object?>[
               <Object?, Object?>{
-                'id': 'corrupt',
-                'location': 'file:///files/w-corrupt.jpg',
+                'ref': 'wallhaven-corrupt',
+                'location': 'file:///files/wallhaven-corrupt.jpg',
                 'savedAt': 1750000000000,
                 'sizeBytes': 8,
                 'width': -1,
@@ -145,7 +158,7 @@ void main() {
 
       final PrivateImage image = (await store.privateImages()).single;
 
-      expect(image.id, 'corrupt');
+      expect(image.ref.id, 'corrupt');
       expect(image.width, isNull);
       expect(image.height, isNull);
       expect(image.aspectRatio, isNull);
@@ -168,10 +181,10 @@ void main() {
           response: <Object?, Object?>{
             'success': true,
             'images': <Object?>[
-              <Object?, Object?>{'id': 'broken'},
+              <Object?, Object?>{'ref': 'broken'},
               <Object?, Object?>{
-                'id': 'intact',
-                'location': 'file:///files/w-intact.jpg',
+                'ref': 'wallhaven-intact',
+                'location': 'file:///files/wallhaven-intact.jpg',
                 'savedAt': 1750000000000,
                 'sizeBytes': 1,
               },
@@ -182,7 +195,10 @@ void main() {
 
       final List<PrivateImage> images = await store.privateImages();
 
-      expect(images.map((PrivateImage image) => image.id), <String>['intact']);
+      expect(
+        images.map((PrivateImage image) => image.ref.id),
+        <String>['intact'],
+      );
     });
 
     test('maps a native listing failure to a safe failure', () async {

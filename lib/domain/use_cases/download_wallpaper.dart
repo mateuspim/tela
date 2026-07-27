@@ -46,7 +46,8 @@ class DownloadWallpaper {
   Future<StoredImage> call(Wallpaper wallpaper, {StorageTier? tier}) async {
     final StorageTier destination = tier ?? await _defaultTier(wallpaper);
     final StoredImage stored = await _imageStore.store(
-      id: wallpaper.id,
+      source: wallpaper.ref.source,
+      id: wallpaper.ref.id,
       imageUrl: wallpaper.fullImageUrl,
       purity: wallpaper.purity,
       tier: destination,

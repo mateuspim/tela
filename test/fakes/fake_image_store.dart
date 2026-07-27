@@ -4,9 +4,11 @@ import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/image_store.dart';
 
 /// In-memory [ImageStore] that records the requested storage route.
@@ -54,8 +56,8 @@ class FakeImageStore implements ImageStore {
   /// What the app-private tier currently holds, newest first.
   final List<PrivateImage> _privateLibrary;
 
-  /// Ids of private images passed to [deleteDownload], oldest first.
-  final List<String> deletedIds = <String>[];
+  /// Refs of private images passed to [deleteDownload], oldest first.
+  final List<WallpaperRef> deletedRefs = <WallpaperRef>[];
 
   /// Every location [deleteDownload] actually removed, oldest first.
   final List<Uri> deletedLocations = <Uri>[];
@@ -73,8 +75,11 @@ class FakeImageStore implements ImageStore {
   /// Latest source image URL.
   String? receivedImageUrl;
 
-  /// Latest Wallhaven image id.
+  /// Latest image id, as its own source issued it.
   String? receivedId;
+
+  /// Latest source the id belongs to — the other half of the on-disk file name.
+  SourceId? receivedSource;
 
   /// Latest privacy classification.
   Purity? receivedPurity;
@@ -84,11 +89,13 @@ class FakeImageStore implements ImageStore {
 
   @override
   Future<StoredImage> store({
+    required SourceId source,
     required String id,
     required String imageUrl,
     required Purity purity,
     required StorageTier tier,
   }) async {
+    receivedSource = source;
     receivedId = id;
     receivedImageUrl = imageUrl;
     receivedPurity = purity;
@@ -144,7 +151,7 @@ class FakeImageStore implements ImageStore {
       (PrivateImage image) => image.location == location,
     );
     if (index >= 0) {
-      deletedIds.add(_privateLibrary[index].id);
+      deletedRefs.add(_privateLibrary[index].ref);
       _privateLibrary.removeAt(index);
     }
     return true;
