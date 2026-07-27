@@ -13,6 +13,7 @@ import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
+import '../fakes/fake_download_queue.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
@@ -68,6 +69,7 @@ Future<void> _pumpApp(
         tagBlocklistRepositoryProvider.overrideWithValue(
           FakeTagBlocklistRepository(),
         ),
+        downloadQueueProvider.overrideWithValue(FakeDownloadQueue()),
       ],
       child: const TelaApp(),
     ),

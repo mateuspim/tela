@@ -6,6 +6,15 @@ import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/image_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 
+/// Stores one wallpaper, honouring purity routing and any per-download [tier].
+///
+/// The narrow view of [DownloadWallpaper.call] that its wrappers need — the
+/// first-time-folder-setup coordinator and the queue worker both drive a
+/// download without caring what it returns. Declared beside the use case it
+/// abstracts, not beside either caller, so the two cannot drift apart.
+typedef PerformDownload =
+    Future<void> Function(Wallpaper wallpaper, {StorageTier? tier});
+
 /// Downloads a wallpaper to the destination its purity is configured for.
 class DownloadWallpaper {
   /// Creates the use case over the storage, settings, and history seams.

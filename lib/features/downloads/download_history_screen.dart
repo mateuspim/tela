@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/download_queue_controller.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/selectable_wallpaper_shelf.dart';
 import 'package:tela/app/wallpaper_batch_actions.dart';
@@ -13,8 +14,10 @@ import 'package:tela/core/ui/wallpaper_marks_scope.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/download_record.dart';
+import 'package:tela/domain/models/queued_download.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
+import 'package:tela/features/downloads/download_queue_tab.dart';
 import 'package:tela/features/downloads/download_viewer_launch.dart';
 
 /// The wallpapers already on this device, each one tap away from being set.
@@ -28,6 +31,11 @@ import 'package:tela/features/downloads/download_viewer_launch.dart';
 /// it is the batch action at a count of one, since "remove from history" and
 /// "delete the file" are two different things and this tile looks exactly like
 /// a file.
+///
+/// Two tabs now: **History**, the wallpapers that landed, and **Queue**, the
+/// ones still owed. They belong on one screen because they are one idea seen
+/// from either end — a queue entry becomes a history row — and because a
+/// download that failed is one tap from the shelf it was headed for.
 class DownloadHistoryScreen extends ConsumerWidget {
   /// Creates the download-history screen.
   const DownloadHistoryScreen({super.key});
@@ -35,28 +43,67 @@ class DownloadHistoryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    return DefaultTabController(
+      length: 2,
+      child: SelectionShelfScope(
+        child: Scaffold(
+          appBar: GradientAppBar(
+            toolbarHeight: 72,
+            title: Text(
+              l10n.downloadHistoryTitle,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            actions: const <Widget>[SelectModeButton(), SizedBox(width: 8)],
+            bottom: TabBar(
+              tabs: <Widget>[
+                Tab(text: l10n.downloadHistoryTab),
+                Tab(child: _queueTabLabel(context, ref, l10n)),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            children: <Widget>[
+              _historyTab(context, ref, l10n),
+              const DownloadQueueTab(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The Queue tab's label, badged while anything is owed.
+  ///
+  /// The badge is the whole reason the queue is reachable at all without
+  /// looking for it: a batch draining behind the History tab is otherwise
+  /// invisible, which is the state this feature exists to end.
+  Widget _queueTabLabel(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) {
+    final List<QueuedDownload> entries =
+        ref.watch(downloadQueueControllerProvider).value ??
+        const <QueuedDownload>[];
+    final Text label = Text(l10n.downloadQueueTab);
+    if (entries.isEmpty) return label;
+    return Badge.count(count: entries.length, child: label);
+  }
+
+  Widget _historyTab(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) {
     final AsyncValue<List<DownloadRecord>> downloads = ref.watch(
       recentDownloadsProvider,
     );
-    return SelectionShelfScope(
-      child: Scaffold(
-        appBar: GradientAppBar(
-          toolbarHeight: 72,
-          title: Text(
-            l10n.downloadHistoryTitle,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          actions: const <Widget>[SelectModeButton(), SizedBox(width: 8)],
-        ),
-        body: downloads.when(
-          data: (List<DownloadRecord> recent) =>
-              _grid(context, ref, l10n, recent),
-          loading: () => const WallpaperGridSkeleton(),
-          error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
-            icon: Icons.error_outline,
-            message: l10n.errorUnexpected,
-          ),
-        ),
+    return downloads.when(
+      data: (List<DownloadRecord> recent) => _grid(context, ref, l10n, recent),
+      loading: () => const WallpaperGridSkeleton(),
+      error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
+        icon: Icons.error_outline,
+        message: l10n.errorUnexpected,
       ),
     );
   }
@@ -84,6 +131,10 @@ class DownloadHistoryScreen extends ConsumerWidget {
       // confirms, in its own words, through `runWallpaperBatchAction`.
       actions: const <WallpaperBatchAction>[
         WallpaperBatchAction.favorite,
+        // Moving sits between the two destructive ones on purpose: it is the
+        // middle answer to "I do not want this here" — the file stays, it just
+        // stops being in Photos and in this list.
+        WallpaperBatchAction.moveToPrivate,
         WallpaperBatchAction.forget,
         WallpaperBatchAction.delete,
       ],

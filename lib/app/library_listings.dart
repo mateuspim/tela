@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/private_image.dart';
@@ -91,11 +92,26 @@ final FutureProvider<Set<String>> downloadedKeysProvider =
 ///
 /// [downloadedKeysProvider] needs no mention: it derives from
 /// [recentDownloadsProvider], so the tile marks re-draw for free.
-void refreshDownloads(WidgetRef ref) {
-  ref
-    ..invalidate(recentDownloadsProvider)
-    ..invalidate(privateImagesProvider);
-}
+void refreshDownloads(WidgetRef ref) =>
+    _downloadListings.forEach(ref.invalidate);
+
+/// The same refresh, for a caller holding a provider [Ref] rather than a
+/// widget's.
+///
+/// The download queue drains with no widget behind it, so its controller has
+/// only a [Ref] — and `WidgetRef` and `Ref` are separate types with no common
+/// supertype to write this once against. What must not drift is the *list* of
+/// listings a landed download invalidates, and that is shared; forgetting one
+/// here is the 2026-07-14 bug [refreshDownloads] documents, arriving by a
+/// different door.
+void refreshDownloadsFrom(Ref ref) => _downloadListings.forEach(ref.invalidate);
+
+/// Every listing a finished download can make stale. The single list both
+/// refreshes above read.
+final List<ProviderOrFamily> _downloadListings = <ProviderOrFamily>[
+  recentDownloadsProvider,
+  privateImagesProvider,
+];
 
 /// The keys in [recentDownloadsProvider] whose downloaded file is gone.
 ///

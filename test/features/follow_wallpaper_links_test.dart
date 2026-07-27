@@ -15,6 +15,7 @@ import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
+import '../fakes/fake_download_queue.dart';
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
@@ -120,6 +121,7 @@ Future<ProviderContainer> _pumpDetail(
       tagBlocklistRepositoryProvider.overrideWithValue(
         blocklist ?? FakeTagBlocklistRepository(),
       ),
+      downloadQueueProvider.overrideWithValue(FakeDownloadQueue()),
     ],
   );
   addTearDown(container.dispose);

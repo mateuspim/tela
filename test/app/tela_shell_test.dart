@@ -8,6 +8,7 @@ import 'package:tela/app/tela_shell.dart';
 import 'package:tela/core/ui/tela_mark.dart';
 import 'package:tela/core/ui/tela_wordmark.dart';
 
+import '../fakes/fake_download_queue.dart';
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
@@ -91,6 +92,7 @@ Future<void> _pumpShell(WidgetTester tester) async {
         tagBlocklistRepositoryProvider.overrideWithValue(
           FakeTagBlocklistRepository(),
         ),
+        downloadQueueProvider.overrideWithValue(FakeDownloadQueue()),
       ],
       child: const TelaApp(),
     ),

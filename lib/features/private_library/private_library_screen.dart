@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/library_listings.dart';
+import 'package:tela/app/move_to_private_action.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
@@ -121,6 +122,11 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
       // in — a favorite would be a second, unlocked index of what is in here.
       actions: <SelectionAction>[
         SelectionAction(
+          icon: Icons.lock_open_outlined,
+          label: l10n.moveOutOfPrivateAction,
+          run: _moveSelectedOut,
+        ),
+        SelectionAction(
           icon: Icons.delete_outline,
           label: l10n.privateLibraryDelete,
           run: _deleteSelected,
@@ -193,6 +199,41 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     ref.invalidate(privateImagesProvider);
     if (mounted) _show(_deleteOutcome(l10n, deleted, keys.length));
     return true;
+  }
+
+  /// Moves the ticked images out to the files folder.
+  ///
+  /// The one batch besides deleting that means anything here, and the only way
+  /// back out of this tier: a private image can never be re-downloaded from the
+  /// grid, because the grid holds no wallpaper to re-download — just a ref and
+  /// a file. `confirmAndMoveOutOfPrivate` owns the confirmation, which has to
+  /// say two surprising things (never to Photos, and tela stops tracking it),
+  /// and the folder grant that tier needs.
+  ///
+  /// Answers false on a declined confirmation so the ticks survive it, the same
+  /// rule [_deleteSelected] follows.
+  Future<bool> _moveSelectedOut(List<String> keys) async {
+    if (keys.isEmpty) return false;
+    final List<PrivateImage> selected = _imagesFor(keys);
+    if (selected.isEmpty || !mounted) return false;
+    final bool moved = await confirmAndMoveOutOfPrivate(
+      context: context,
+      ref: ref,
+      images: selected,
+    );
+    if (moved) ref.invalidate(privateImagesProvider);
+    return moved;
+  }
+
+  /// The loaded images behind [keys], in the listing's order.
+  List<PrivateImage> _imagesFor(List<String> keys) {
+    final List<PrivateImage> stored =
+        ref.read(privateImagesProvider).value ?? const <PrivateImage>[];
+    final Set<String> wanted = keys.toSet();
+    return <PrivateImage>[
+      for (final PrivateImage image in stored)
+        if (wanted.contains(image.ref.key)) image,
+    ];
   }
 
   /// One at a time, counting the ones that failed rather than hiding them:

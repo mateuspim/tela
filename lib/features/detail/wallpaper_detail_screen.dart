@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/delete_download_action.dart';
 import 'package:tela/app/library_listings.dart';
+import 'package:tela/app/move_to_private_action.dart';
+import 'package:tela/app/pinned_download_tier.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/storage_settings_controller.dart';
@@ -112,6 +114,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   bool _isSharing = false;
   bool _isAdjusting = false;
   bool _isDeleting = false;
+  bool _isMoving = false;
 
   Wallpaper get _wallpaper => _gallery.selectedItem;
 
@@ -245,7 +248,9 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
     final DownloadDestinationStreak? streak = await settings
         .loadDestinationStreak(_wallpaper.purity);
-    final StorageTier? pin = await settings.loadPinnedDownloadTier();
+    final StorageTier? pin = await ref.read(
+      pinnedDownloadTierProvider.future,
+    );
     if (!mounted) return;
     final DownloadDestinationChoice? choice = await chooseDownloadDestination(
       context,
@@ -257,7 +262,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     if (choice == null) return;
     // Stop clears the pin and downloads nothing — the deliberate way out.
     if (choice.stopsPin) {
-      await settings.setPinnedDownloadTier(null);
+      await ref.read(pinnedDownloadTierProvider.notifier).clear();
       return;
     }
     if (choice.remember) {
@@ -265,7 +270,9 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
           .read(storageSettingsProvider.notifier)
           .route(_wallpaper.purity, choice.tier!);
     }
-    if (choice.pin) await settings.setPinnedDownloadTier(choice.tier);
+    if (choice.pin) {
+      await ref.read(pinnedDownloadTierProvider.notifier).pin(choice.tier!);
+    }
     if (!mounted) return;
     await _download(choice.tier);
   }
@@ -329,6 +336,23 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       if (record.wallpaper.id == _wallpaper.id) return record;
     }
     return null;
+  }
+
+  /// Moves the downloaded file into the private library.
+  ///
+  /// Both buttons retire themselves afterwards, and correctly: the history row
+  /// is forgotten by the move, so `_downloadedRecord()` answers null and this
+  /// screen goes back to offering a plain download. The wallpaper stays
+  /// browsable — only tela's record of having it here does not.
+  Future<void> _moveToPrivateLibrary(DownloadRecord record) async {
+    setState(() => _isMoving = true);
+    await confirmAndMoveToPrivate(
+      context: context,
+      ref: ref,
+      records: <DownloadRecord>[record],
+    );
+    if (!mounted) return;
+    setState(() => _isMoving = false);
   }
 
   /// Hard-deletes the downloaded file, then refreshes so the button that opened
@@ -482,6 +506,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       _adjustButton(l10n),
       _shareButton(l10n),
       _downloadButton(l10n),
+      if (downloaded != null) _moveToPrivateButton(l10n, downloaded),
       if (downloaded != null) _deleteButton(l10n, downloaded),
     ];
   }
@@ -703,6 +728,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
           _adjustButton(l10n),
           _shareButton(l10n),
           _downloadButton(l10n),
+          if (downloaded != null) _moveToPrivateButton(l10n, downloaded),
           if (downloaded != null) _deleteButton(l10n, downloaded),
         ],
       ),
@@ -827,6 +853,28 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   /// Shown only for a wallpaper already in the download history: the file and
   /// its row, deleted together. Its own confirmation lives in
   /// [confirmAndDeleteDownload], suppressed where Android's own takes over.
+  /// Moves the downloaded file into the private library.
+  ///
+  /// Behind the **same gate as [_deleteButton]** — `_downloadedRecord()` — and
+  /// that is deliberate rather than convenient. That lookup reads the download
+  /// history, which never holds an explicit or app-private download, so an
+  /// action offered from it can never disclose that one exists on this ungated
+  /// screen. A second gate written for this button is a second chance to get
+  /// that wrong.
+  Widget _moveToPrivateButton(AppLocalizations l10n, DownloadRecord record) {
+    return IconButton(
+      key: const Key('detail-move-to-private'),
+      onPressed: _isMoving ? null : () => _moveToPrivateLibrary(record),
+      tooltip: l10n.moveToPrivateAction,
+      icon: _isMoving
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.lock_outline),
+    );
+  }
+
   Widget _deleteButton(AppLocalizations l10n, DownloadRecord record) {
     return IconButton(
       key: const Key('detail-delete'),

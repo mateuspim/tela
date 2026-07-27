@@ -9,6 +9,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -20,6 +21,7 @@ import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/downloads/download_history_screen.dart';
 
 import '../fakes/fake_download_history.dart';
+import '../fakes/fake_download_queue.dart';
 import '../fakes/fake_image_store.dart';
 
 void main() {
@@ -178,6 +180,76 @@ void main() {
       expect(find.byType(WallpaperTile), findsOneWidget);
     });
 
+    testWidgets('a batch move to private confirms in its own words', (
+      WidgetTester tester,
+    ) async {
+      // Three actions with different consequences now sit on one shelf, and the
+      // sentence is still the only thing telling them apart before the tap
+      // lands. This one has to say both halves: where the file goes, and that
+      // tela cannot bring it back to Photos.
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[_download('e7jvjd')],
+      );
+      await _pump(tester, history);
+
+      await _selectAndTap(tester, Icons.lock_outline);
+
+      expect(
+        find.textContaining('Move this to the private library?'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('leaves Photos'), findsOneWidget);
+      expect(find.textContaining('cannot move it back'), findsOneWidget);
+      // Nothing moved on the strength of the dialog alone.
+      expect(history.recorded, hasLength(1));
+    });
+
+    testWidgets('a confirmed batch move copies, deletes and forgets', (
+      WidgetTester tester,
+    ) async {
+      final FakeImageStore imageStore = FakeImageStore();
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[_download('e7jvjd'), _download('7j1mzo')],
+      );
+      await _pump(tester, history, imageStore: imageStore);
+
+      await _selectAndTap(tester, Icons.lock_outline, count: 2);
+      await tester.tap(find.text('Move to private').last);
+      await tester.pumpAndSettle();
+
+      // Copied into the private tier, originals deleted in **one** call, and
+      // both history rows gone — a private download is never recorded.
+      expect(imageStore.copies, hasLength(2));
+      expect(imageStore.batchSizes, <int>[2]);
+      expect(await history.downloads(), isEmpty);
+      expect(find.text('Moved 2 to the private library'), findsOneWidget);
+    });
+
+    testWidgets('a declined move leaves the row and the file alone', (
+      WidgetTester tester,
+    ) async {
+      // The rollback, from the screen's side: the wallpaper must end up in
+      // exactly one place, and the grid must still show it.
+      final FakeImageStore imageStore = FakeImageStore(
+        declined: <Uri>{_locationOf('e7jvjd')},
+      );
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[_download('e7jvjd')],
+      );
+      await _pump(tester, history, imageStore: imageStore);
+
+      await _selectAndTap(tester, Icons.lock_outline);
+      await tester.tap(find.text('Move to private').last);
+      await tester.pumpAndSettle();
+
+      expect(await history.downloads(), hasLength(1));
+      expect(find.byType(WallpaperTile), findsOneWidget);
+      expect(
+        find.text('Moved 0 of 1 — the rest are where they were'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('a batch delete says it deletes files, not rows', (
       WidgetTester tester,
     ) async {
@@ -259,10 +331,15 @@ void main() {
             opened = session,
       );
 
-      final ScrollableState scrollable = tester.state<ScrollableState>(
-        find.byType(Scrollable),
+      // Scoped to the grid: the screen is two tabs now, and the
+      // TabBarView contributes a Scrollable of its own that a bare byType
+      // would also match.
+      final Finder grid = find.descendant(
+        of: find.byType(JustifiedWallpaperGrid),
+        matching: find.byType(Scrollable),
       );
-      await tester.drag(find.byType(Scrollable), const Offset(0, -700));
+      final ScrollableState scrollable = tester.state<ScrollableState>(grid);
+      await tester.drag(grid, const Offset(0, -700));
       await tester.pumpAndSettle();
       final double before = scrollable.position.pixels;
 
@@ -356,6 +433,7 @@ Future<void> _pump(
         downloadHistoryProvider.overrideWithValue(history),
         // The grid probes each row's file to badge the ones that are gone.
         imageStoreProvider.overrideWithValue(imageStore ?? FakeImageStore()),
+        downloadQueueProvider.overrideWithValue(FakeDownloadQueue()),
       ],
       child: MaterialApp.router(
         routerConfig: router,
@@ -434,13 +512,21 @@ Future<void> _forgetSelected(WidgetTester tester) async {
 ///
 /// The hard delete's sibling of [_forgetSelected]: same walk, other action, and
 /// it takes a count because the batch's whole point is more than one row.
-Future<void> _deleteSelected(WidgetTester tester, {int count = 1}) async {
+Future<void> _deleteSelected(WidgetTester tester, {int count = 1}) =>
+    _selectAndTap(tester, Icons.delete_outline, count: count);
+
+/// Ticks [count] tiles and taps the batch action wearing [icon].
+Future<void> _selectAndTap(
+  WidgetTester tester,
+  IconData icon, {
+  int count = 1,
+}) async {
   await tester.longPress(find.byType(WallpaperTile).first);
   await tester.pumpAndSettle();
   for (int index = 1; index < count; index++) {
     await tester.tap(find.byType(WallpaperTile).at(index));
     await tester.pumpAndSettle();
   }
-  await tester.tap(find.byIcon(Icons.delete_outline));
+  await tester.tap(find.byIcon(icon));
   await tester.pumpAndSettle();
 }

@@ -97,6 +97,7 @@ class SelectableWallpaperShelf extends ConsumerWidget {
     WallpaperBatchAction.download => Icons.download_outlined,
     WallpaperBatchAction.forget => Icons.playlist_remove,
     WallpaperBatchAction.delete => Icons.delete_outline,
+    WallpaperBatchAction.moveToPrivate => Icons.lock_outline,
   };
 
   String _labelOf(AppLocalizations l10n, WallpaperBatchAction action) =>
@@ -106,5 +107,6 @@ class SelectableWallpaperShelf extends ConsumerWidget {
         WallpaperBatchAction.download => l10n.detailDownload,
         WallpaperBatchAction.forget => l10n.downloadHistoryForgetMenu,
         WallpaperBatchAction.delete => l10n.downloadDeleteMenu,
+        WallpaperBatchAction.moveToPrivate => l10n.moveToPrivateAction,
       };
 }

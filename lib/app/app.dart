@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tela/app/download_queue_controller.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/router.dart';
 import 'package:tela/app/theme.dart';
@@ -60,6 +61,12 @@ class _TelaAppState extends ConsumerState<TelaApp> {
       for (final WallpaperSource source in ref.watch(wallpaperSourcesProvider))
         source.id.value: source.displayName,
     };
+    // Nothing here reads the result: this exists so the queue *builds*. Its
+    // controller demotes any download a killed process left mid-flight and
+    // starts draining what is still owed, and a queue that only woke up when
+    // its own tab was opened would leave a batch the user closed the app on
+    // waiting for them to come looking for it.
+    ref.watch(downloadQueueControllerProvider);
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDevice, ColorScheme? darkDevice) =>
           MaterialApp.router(

@@ -5,6 +5,7 @@ import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/image_store.dart';
+import 'package:tela/domain/use_cases/download_wallpaper.dart';
 
 /// How a download that may need first-time folder setup turned out.
 enum DownloadOutcome {
@@ -30,10 +31,6 @@ enum DownloadOutcome {
 /// Settings chooser uses.
 typedef ChooseDownloadVolume =
     Future<StorageVolumeKind?> Function({required bool offerSdCard});
-
-/// Stores one wallpaper, honouring purity routing and any per-download [tier].
-typedef PerformDownload =
-    Future<void> Function(Wallpaper wallpaper, {StorageTier? tier});
 
 /// A download that sets up the files-outside-gallery folder on first use.
 ///
@@ -95,6 +92,24 @@ class ConfiguredDownload {
     }
   }
 
+  /// Grants the files-outside-gallery folder **before** any download runs,
+  /// unless one is already granted.
+  ///
+  /// The batch path's entry point, and the reason it is public. A queued batch
+  /// drains with no screen mounted, so it cannot answer a chooser the way
+  /// [call] does — it has to settle first-time setup while there is still a
+  /// screen, or every entry fails on the same unanswered question. True when a
+  /// folder is granted (already, or just now); false when the user backed out.
+  ///
+  /// ```dart
+  /// if (!await configuredDownload.ensureFolder(chooseVolume)) return;
+  /// ```
+  Future<bool> ensureFolder(ChooseDownloadVolume chooseVolume) async {
+    final DownloadLocation location = await _imageStore.downloadLocation();
+    if (location.folder != null) return true;
+    return _grantFrom(location, chooseVolume);
+  }
+
   /// Grants a folder through the chooser, then retries the download once.
   Future<DownloadOutcome> _setUpAndRetry(
     Wallpaper wallpaper,
@@ -109,6 +124,15 @@ class ConfiguredDownload {
   /// pick. False when the user dismissed the sheet or the system picker.
   Future<bool> _grantFolder(ChooseDownloadVolume chooseVolume) async {
     final DownloadLocation location = await _imageStore.downloadLocation();
+    return _grantFrom(location, chooseVolume);
+  }
+
+  /// The chooser half, over a [location] already read — so [ensureFolder] does
+  /// not ask the store the same question twice.
+  Future<bool> _grantFrom(
+    DownloadLocation location,
+    ChooseDownloadVolume chooseVolume,
+  ) async {
     final StorageVolumeKind? kind = await chooseVolume(
       offerSdCard: location.offersSdCard,
     );

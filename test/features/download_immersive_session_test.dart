@@ -205,6 +205,40 @@ void main() {
     },
   );
 
+  testWidgets('Move to private moves the shown record and then leaves', (
+    WidgetTester tester,
+  ) async {
+    // Leaving is not optional: this viewer renders from the download history,
+    // and a wallpaper that has just gone private has no row there. Staying
+    // would show it on a screen with neither FLAG_SECURE nor the app-lock.
+    final FakeDownloadHistory history = FakeDownloadHistory(
+      initial: <DownloadRecord>[_download('e7jvjd')],
+    );
+    final FakeImageStore imageStore = FakeImageStore();
+    await _pump(
+      tester,
+      _session(<DownloadRecord>[_download('e7jvjd')]),
+      history: history,
+      imageStore: imageStore,
+    );
+
+    await tester.tap(find.byKey(const Key('download-viewer-overflow')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Move to private'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('private library?'), findsOneWidget);
+    // Nothing has moved on the strength of the dialog alone.
+    expect(imageStore.copies, isEmpty);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Move to private'));
+    await tester.pumpAndSettle();
+
+    expect(imageStore.copies.single.tier, StorageTier.appPrivate);
+    expect(await history.downloads(), isEmpty);
+    expect(find.byType(DownloadImmersiveSession), findsNothing);
+    expect(find.text('grid'), findsOneWidget);
+  });
+
   testWidgets(
     'a files-tier delete confirms first, in words that name the file',
     (WidgetTester tester) async {

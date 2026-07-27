@@ -425,4 +425,106 @@ class ImageStorageTest {
     @Suppress("UNCHECKED_CAST")
     private fun imagesFrom(result: Map<String, Any>): List<Map<String, Any>> =
         result["images"] as List<Map<String, Any>>
+
+    // --- copy, the local-source twin of store -------------------------------
+
+    /**
+     * Reachable here where [store] is not: both ends are local, so there is no
+     * network to stand in for. It is also the path a "move to the private
+     * library" takes, and the one that has to name the file correctly or the
+     * image silently vanishes from [listPrivate].
+     */
+    @Test
+    fun `copy lands under source-id and is listed back`() {
+        val origin = File(context.cacheDir, "origin.png").apply {
+            writeText("pixels")
+        }
+
+        val result = storage.copy(copyRequest(Uri.fromFile(origin)), null)
+
+        assertEquals(true, result["success"])
+        val landed = File(privateDirectory(), "wallhaven-abc123.png")
+        assertTrue("the copy is not where its name says", landed.exists())
+        assertEquals("pixels", landed.readText())
+        assertEquals(
+            listOf("wallhaven-abc123"),
+            imagesFrom(storage.listPrivate()).map { it["ref"] },
+        )
+    }
+
+    /** A copy leaves its source alone — deleting it is the caller's step. */
+    @Test
+    fun `copy does not remove the file it read`() {
+        val origin = File(context.cacheDir, "origin.jpg").apply {
+            writeText("pixels")
+        }
+
+        storage.copy(copyRequest(Uri.fromFile(origin)), null)
+
+        assertTrue("the source was consumed", origin.exists())
+    }
+
+    /**
+     * The invariant the whole move-out direction rests on.
+     *
+     * An image leaving the private tier declares `nsfw` because nothing records
+     * what that tier holds beyond a file name — so tela cannot prove it is safe
+     * for Photos. What makes that safe rather than merely polite is this
+     * refusal, in the adapter, where every other NSFW rule lives.
+     */
+    @Test
+    fun `copy refuses an nsfw image aimed at the gallery`() {
+        val origin = File(context.cacheDir, "origin.jpg").apply {
+            writeText("pixels")
+        }
+
+        val result = storage.copy(
+            copyRequest(Uri.fromFile(origin), purity = "nsfw", tier = "sharedGallery"),
+            null,
+        )
+
+        assertEquals(false, result["success"])
+        assertEquals("restricted", errorCodeOf(result))
+    }
+
+    /** An unreadable source is a failure, not a zero-byte file left behind. */
+    @Test
+    fun `copy fails safely when the source cannot be read`() {
+        val missing = Uri.fromFile(File(context.cacheDir, "not-there.jpg"))
+
+        val result = storage.copy(copyRequest(missing), null)
+
+        assertEquals(false, result["success"])
+        assertEquals("downloadFailed", errorCodeOf(result))
+    }
+
+    /** The same path guard the store applies; a copy must not weaken it. */
+    @Test
+    fun `copy refuses a traversing id`() {
+        val origin = File(context.cacheDir, "origin.jpg").apply {
+            writeText("pixels")
+        }
+        val escaped = File(context.filesDir, "tela.jpg")
+
+        val result = storage.copy(
+            copyRequest(Uri.fromFile(origin), id = "../tela"),
+            null,
+        )
+
+        assertEquals(false, result["success"])
+        assertFalse("a file was written outside the tier", escaped.exists())
+    }
+
+    private fun copyRequest(
+        from: Uri,
+        id: String = "abc123",
+        purity: String = "sfw",
+        tier: String = "appPrivate",
+    ) = ImageCopyRequest(
+        source = "wallhaven",
+        id = id,
+        from = from.toString(),
+        purity = purity,
+        tier = tier,
+    )
 }

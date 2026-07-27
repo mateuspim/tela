@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/delete_download_action.dart';
 import 'package:tela/app/library_listings.dart';
+import 'package:tela/app/move_to_private_action.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_route_transitions.dart';
@@ -185,12 +186,34 @@ class _DownloadImmersiveSessionState
           child: Text(l10n.downloadHistoryForgetMenu),
         ),
         PopupMenuItem<void>(
+          key: const Key('download-viewer-move-to-private'),
+          onTap: _moveToPrivateLibrary,
+          child: Text(l10n.moveToPrivateAction),
+        ),
+        PopupMenuItem<void>(
           key: const Key('download-viewer-delete'),
           onTap: _deleteFromDevice,
           child: Text(l10n.downloadDeleteMenu),
         ),
       ],
     );
+  }
+
+  /// Moves the shown record into the private library, then leaves the viewer.
+  ///
+  /// Leaving is not optional: this screen renders from the download history,
+  /// and a wallpaper that has just moved into the private tier has no row there
+  /// any more. Staying would show a record of something this list no longer
+  /// holds — and it would show it on a screen with neither `FLAG_SECURE` nor
+  /// the app-lock, which is the whole reason the private tier exists.
+  Future<void> _moveToPrivateLibrary() async {
+    final bool moved = await confirmAndMoveToPrivate(
+      context: context,
+      ref: ref,
+      records: <DownloadRecord>[_record],
+    );
+    if (!moved || !mounted) return;
+    await Navigator.of(context).maybePop();
   }
 
   /// Hard-deletes the shown record — the file and its history row — then leaves

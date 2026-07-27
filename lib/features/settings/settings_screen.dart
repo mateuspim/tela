@@ -21,6 +21,7 @@ import 'package:tela/features/settings/clear_cache_tile.dart';
 import 'package:tela/features/settings/download_location_controller.dart';
 import 'package:tela/features/settings/download_location_section.dart';
 import 'package:tela/features/settings/nsfw_removable_guard.dart';
+import 'package:tela/features/settings/pinned_destination_notice.dart';
 import 'package:tela/features/settings/settings_section_label.dart';
 import 'package:tela/features/settings/tile_density_section.dart';
 
@@ -156,6 +157,9 @@ class _SettingsList extends StatelessWidget {
           routeName: TelaRoutes.downloadHistoryName,
         ),
         const Divider(),
+        // Above the pickers, because while a pin is on those pickers do not
+        // decide anything: the pin overrides them for every download.
+        const PinnedDestinationNotice(),
         // No dividers between the two pickers and the volume panel: the
         // captions carry the breaks, the way the Appearance card separates its
         // accent and size controls. A slab per sub-decision was what made the

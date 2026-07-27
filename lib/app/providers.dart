@@ -6,6 +6,7 @@ import 'package:tela/core/network/konachan_client.dart';
 import 'package:tela/core/network/wallhaven_client.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/downloads/drift_download_history.dart';
+import 'package:tela/data/downloads/drift_download_queue.dart';
 import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/images/cache_manager_fetched_image_cache.dart';
 import 'package:tela/data/konachan/dio_konachan_source.dart';
@@ -25,6 +26,7 @@ import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/download_history.dart';
+import 'package:tela/domain/ports/download_queue.dart';
 import 'package:tela/domain/ports/external_link.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/fetched_image_cache.dart';
@@ -47,8 +49,10 @@ import 'package:tela/domain/use_cases/confirm_nsfw_on_removable.dart';
 import 'package:tela/domain/use_cases/delete_download.dart';
 import 'package:tela/domain/use_cases/delete_downloads.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
+import 'package:tela/domain/use_cases/drain_download_queue.dart';
 import 'package:tela/domain/use_cases/forget_api_key.dart';
 import 'package:tela/domain/use_cases/load_account_defaults.dart';
+import 'package:tela/domain/use_cases/move_stored_images.dart';
 import 'package:tela/domain/use_cases/resolve_browse_defaults.dart';
 import 'package:tela/domain/use_cases/save_api_key.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
@@ -214,6 +218,11 @@ final Provider<DownloadHistory> downloadHistoryProvider =
       (Ref ref) => DriftDownloadHistory(ref.watch(telaDatabaseProvider)),
     );
 
+/// The download-queue port, bound to its Drift adapter.
+final Provider<DownloadQueue> downloadQueueProvider = Provider<DownloadQueue>(
+  (Ref ref) => DriftDownloadQueue(ref.watch(telaDatabaseProvider)),
+);
+
 /// The tag-blocklist port, bound to its Drift adapter.
 final Provider<TagBlocklistRepository> tagBlocklistRepositoryProvider =
     Provider<TagBlocklistRepository>(
@@ -246,6 +255,31 @@ final Provider<ConfiguredDownload> configuredDownloadProvider =
         perform: (Wallpaper wallpaper, {StorageTier? tier}) =>
             ref.read(downloadWallpaperProvider)(wallpaper, tier: tier),
         imageStore: ref.watch(imageStoreProvider),
+      ),
+    );
+
+/// Moves already-downloaded images between storage tiers, without the network.
+final Provider<MoveStoredImages> moveStoredImagesProvider =
+    Provider<MoveStoredImages>(
+      (Ref ref) => MoveStoredImages(
+        imageStore: ref.watch(imageStoreProvider),
+        history: ref.watch(downloadHistoryProvider),
+      ),
+    );
+
+/// The worker that empties the download queue, several at a time.
+///
+/// Goes through [downloadWallpaperProvider] and **not**
+/// [configuredDownloadProvider]: the latter answers a missing folder by opening
+/// the volume chooser, which a worker draining with no screen mounted cannot
+/// do. A batch resolves its destination before it enqueues, so the worker marks
+/// that case failed instead. See `DrainDownloadQueue`.
+final Provider<DrainDownloadQueue> drainDownloadQueueProvider =
+    Provider<DrainDownloadQueue>(
+      (Ref ref) => DrainDownloadQueue(
+        queue: ref.watch(downloadQueueProvider),
+        perform: (Wallpaper wallpaper, {StorageTier? tier}) =>
+            ref.read(downloadWallpaperProvider)(wallpaper, tier: tier),
       ),
     );
 
