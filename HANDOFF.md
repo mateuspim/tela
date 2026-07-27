@@ -1,9 +1,36 @@
 # tela handoff
 
-Updated: 2026-07-26
+Updated: 2026-07-27
 
-> **START HERE — every downloaded file was named `wallhaven-*`, whatever source
-> it came from** (`feat/private-source-badge`, its own block just below). What
+> **ALSO ON THIS BRANCH — a download can change tier now, and every batch is
+> asked where it lands.** Two owner requests after the queue: *"transfer media
+> to private library"* and *"when downloading a batch I can choose where I
+> download"* — plus a **lingering queued toast**, which turned out to be a
+> Flutter carve-out and not a duration. All three built, in the blocks below the
+> queue's. A fourth report — *"batch download isn't asking where I want it"* —
+> turned out to be a **pin** silencing it. A batch no longer honours the pin
+> silently: it always asks, with the pin named and stoppable in the chooser, and
+> Settings shows and stops one too. `make ci` green: analyze clean, Dart
+> **1151**, Kotlin **51**. The move turned up the constraint
+> that shapes it — `PrivateImage` carries **no purity** — and the way out of the
+> private tier is limited by it. Read that block before touching the direction.
+>
+> **START HERE — downloads are a durable queue now, not a `for` loop**
+> (`feat/download-queue`, its own block just below). A batch used to await one
+> multi-megabyte original after another inside a widget callback: a hundred
+> wallpapers took a hundred sequential downloads, and closing the app lost every
+> one that had not landed, because the only record of what was still owed was a
+> stack frame. There is now a Drift-backed queue, a three-slot worker, and a
+> **Queue tab** beside History with per-entry state, retry, cancel and pause.
+> **Uncommitted on the branch**; `make ci` is green — analyze clean, Dart
+> **1122**, Kotlin **46**. Slice 2 (a foreground service, so it drains with the
+> app closed) is scoped and not built.
+>
+> **It also found a real native race.** See that block: `mkdirs()` was not
+> thread-safe, and it only mattered once downloads moved onto a pool.
+>
+> **The older START HERE — every downloaded file was named `wallhaven-*`,
+> whatever source it came from** (`feat/private-source-badge`, merged). What
 > began as "badge the last un-badged grid" turned out to be a storage bug: the
 > native `fileName` hardcoded the prefix, so every Konachan download since
 > `ffb2e95` was filed under Wallhaven's name in **all three tiers** — and for the
@@ -81,6 +108,299 @@ Updated: 2026-07-26
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## BUILT — the download queue, slice 1 (`feat/download-queue`, uncommitted)
+
+**Asked for by the owner, 2026-07-27:** downloading ~100 wallpapers "takes too
+long", and "if I close the app I lose progress". Both were true, and the first
+was not true for the reason the code claimed.
+
+### The three things that were wrong
+
+1. **`_downloadAll`'s docstring blamed the wrong layer.** It said sequential was
+   deliberate — "firing twenty at once would hold twenty in flight". The real
+   ceiling was native: `MainActivity.imageStoreExecutor` was
+   `newSingleThreadExecutor()` and `storeImage` ran on it, and
+   `ImageStorage.store` streams the image over HTTP *before* it writes. Every
+   download in a batch waited on the one in front of it. **Dart-side
+   concurrency alone would have bought nothing** — worth knowing before anyone
+   tries to tune this from the Dart end.
+2. **The queue was a stack frame.** Kill the process at 40 of 100 and the other
+   60 were gone with no record they were ever wanted.
+3. **Nothing to look at, nothing to touch.** The batch was invisible until a
+   "downloaded 91 of 100" toast, and the 9 that failed were unnamed.
+
+### What is there now
+
+- **`DownloadQueue`** (`domain/ports/`) over a new `download_queue_entries`
+  table — schema **v6 → v7**, one additive `createTable`. `WallpaperColumns`
+  again, so an entry carries the whole wallpaper and the queue renders and
+  drains with no listing behind it.
+- **`DrainDownloadQueue`** (`domain/use_cases/`), plain Dart, three independent
+  worker loops rather than batches — a batch moves at the speed of its slowest
+  member, and a hundred originals of wildly different sizes would spend most of
+  it waiting on one 20MB file with two slots idle.
+- **`MainActivity.downloadExecutor`**, a fixed pool of 3 that **only**
+  `storeImage` uses. `imageStoreExecutor` stays serial for listing, deleting and
+  preview caching, whose ordering is free correctness. Sized from
+  `MAX_CONCURRENT_DOWNLOADS` in `Downloads.kt`, which a test holds to Dart's cap.
+- **`DownloadQueueController`** (`app/`), an `AsyncNotifier` that owns and emits
+  its own state — the invalidated-`FutureProvider` staleness `refreshDownloads`
+  documents is exactly what a queue mutating under an open screen would hit.
+  `app.dart` watches it once so a queue left over from a killed session starts
+  draining on launch rather than when its tab is opened.
+- **A Queue tab** on the Downloads screen, badged with its count.
+
+### Four decisions worth not re-litigating
+
+- **`ImageStoreProblem.notConfigured` is a failure in the worker, not a
+  prompt.** `ConfiguredDownload` answers it by opening the volume chooser and
+  retrying; a worker draining with no screen mounted cannot. So the batch now
+  grants the folder **up front** via the new `ConfiguredDownload.ensureFolder`,
+  and only when the batch really lands in `filesOutsideGallery` — resolved
+  through `StorageSettings.tierWithPin`, the same rule the download itself will
+  apply, not a second guess at it.
+- **The queue holds explicit and app-private entries; `DownloadHistory` does
+  not.** The two ports look alike and this is the whole difference: history is a
+  permanent, backed-up index, a queue row is a work item deleted the moment the
+  file lands. Refusing to hold one would not protect anything — it would
+  silently decline a download the user asked for. What *does* apply is the
+  screen rule: the Queue tab sits behind no app-lock and no `FLAG_SECURE`, so an
+  explicit entry renders as a neutral "Private download" row — no thumbnail, no
+  id — until the private library's unlock has been paid this session. It still
+  counts and still drains. `queueRevealsPrivateProvider` (`app/`) is where the
+  two features meet, since they may not import each other.
+- **Pause is in memory, never persisted.** A killed app is not a paused app;
+  persisting it means one crash leaves a queue that silently never drains again.
+- **`running` is demoted to `pending` once at startup**, through
+  `resumeInterrupted` — *not* as a side effect of every read, which would demote
+  the entries this process genuinely has in flight and let `claimNext` hand the
+  same wallpaper to a second worker.
+
+### The native race this turned up
+
+`ConcurrentDownloadTest` drives six real concurrent stores against a loopback
+HTTP server, and it failed on the first full `make ci` run: **`if
+(!directory.exists() && !directory.mkdirs())` is not thread-safe.** Two stores
+both see the directory missing, both call `mkdirs`, and the loser gets `false`
+for a directory that now exists — so a perfectly good download reported
+`unavailable` and wrote nothing. Latent forever; it only became reachable when
+downloads moved onto a pool. Now `ImageStorage.ensureDirectory`, which asks what
+the state *is* rather than who created it, used by `storePrivately` and
+`materialise` both. Five forced `--rerun-tasks` runs green after.
+
+### What the tests cover
+
+Dart **1122** (from 1080), Kotlin **46** (from 43), `analyze` and `format`
+clean. New: `drain_download_queue_test` (concurrency cap, per-entry failure
+reasons, no self-retry, `notConfigured` marked rather than looped),
+`drift_download_queue_test` (ordering, idempotent enqueue, claim-once, the
+`running` demotion, corrupt-cell fallbacks), a **v6 → v7** migration case built
+by running the real v5 → v6 migration rather than hand-writing its output,
+`download_queue_tab_test` (including the neutral explicit row, locked and
+unlocked), and the rewritten batch tests.
+
+**Note for every future widget test that mounts `TelaApp`:** it now needs
+`downloadQueueProvider.overrideWithValue(FakeDownloadQueue())`, for the reason
+`telaDatabaseProvider`'s docstring gives — unbound, it throws lazily and
+surfaces as an unrelated `AsyncError`, not as a named failure.
+
+### Owed
+
+- **A device pass.** Nothing here has been on the tablet. Time a ~30-wallpaper
+  batch against master's sequential loop — if the pool does not make it visibly
+  faster, the bottleneck is somewhere else and worth finding before slice 2.
+  Kill the app mid-batch and confirm it resumes with nothing lost and nothing
+  downloaded twice. Airplane-mode mid-batch, then *Retry all*.
+- **Slice 2**, scoped and not built: a Kotlin foreground service draining the
+  same table with a progress notification, `POST_NOTIFICATIONS` +
+  `FOREGROUND_SERVICE_DATA_SYNC`, and a rule that the service and the Dart
+  worker never both drain (both claim through `claimNext`).
+- **Byte-level per-file progress is deliberately out of scope.** `storeImage` is
+  one method-channel call that returns when the file is written; a percentage
+  per entry needs an `EventChannel` out of `copyRemote`. The tab gives per-entry
+  *state* and an overall count.
+
+## BUILT — moving a download into (and out of) the private library
+
+**Asked for by the owner, 2026-07-27**, alongside the batch-destination change
+below it. Until now a wallpaper's tier was decided once, at download time. If a
+safe wallpaper you had sent to Photos turned out to be one you would rather not
+have there, the only route was: delete it, then download it again with an
+override — the whole file over the network, for bytes already on the phone.
+
+### The constraint that shapes the feature — read this first
+
+**`PrivateImage` carries no purity.** It is
+`{ref, location, savedAt, sizeBytes, width?, height?}`; its `WallpaperRef` is
+recovered from the *file name*, because the app-private tier writes no history
+row and has no table behind it. So for an image **leaving** the private library,
+tela cannot prove it is safe for Photos. Two consequences, and neither is a
+preference anyone gets to change without solving that first:
+
+- **Out of private always lands in `filesOutsideGallery`.** Enforced with no new
+  rule: the move declares `Purity.nsfw`, and the storage adapter's existing gate
+  (`nsfw` + `sharedGallery` → `restricted`) makes the gallery impossible by
+  construction. That is a *refusal to claim* the image is safe, not a claim that
+  it is explicit — the docstring on `StoredImageMove.purity` says so, because
+  the field reads wrong otherwise.
+- **A moved-out image leaves tela's indexes entirely.** There is no `Wallpaper`
+  to build a history row from — no URLs, no purity, no category, just a ref and
+  a file — so it cannot be recorded even in principle. It lands in the
+  `.nomedia` folder, reachable by any file manager and over USB, and tela stops
+  showing it anywhere. **The confirmation says both surprises out loud**
+  (`moveOutOfPrivateBody`), because "move out of the private library" reads like
+  it goes somewhere else in the app, and it does not.
+
+### What is there
+
+- **`MoveStoredImages`** (`domain/use_cases/`) over a list of
+  **`StoredImageMove`**, answering the `Set<WallpaperRef>` that really moved —
+  the shape `DeleteDownloads` already uses so the caller reports an honest tally
+  rather than the count it asked for. Three steps, and the third is the point:
+  1. copy each source into its destination;
+  2. delete the originals in **one** `deleteDownloads` call — on API 30+ each
+     gallery delete raises its own system prompt, and thirty prompts for one
+     "move these to the private library" is a punishment, not a feature;
+  3. **roll back any copy whose original survived.** The user can dismiss that
+     prompt, and a copy beside a surviving original leaves the wallpaper in
+     *two* tiers — the worse half being the copy sitting in the private library
+     while the original is still in Photos. This is the case worth a device pass.
+- **`ImageStore.copyStoredImage`**, the local-source twin of `store`. Native
+  `ImageStorage.copy` reads through the ContentResolver, which is what makes one
+  function cover MediaStore, SAF and `file:` alike.
+- **`ImageWrite`, the seam that made this cheap.** The three tier writers each
+  ended in `copyRemote(request.imageUrl, output)`. They now take a
+  `writeBytes: (OutputStream) -> Unit`, so `store` and `copy` share every one of
+  them. That matters because those writers are where the hard-won behaviour
+  lives — MediaStore de-duplicating rather than overwriting, the `.nomedia`
+  marker, `"wt"` to truncate, which failure path may delete what it just made —
+  and a second copy of all that to serve local sources is where it would rot.
+- **`extensionOf(uri)`**, MIME first and the `file:` suffix second. A
+  `content://` URI has no suffix to read, and this is load-bearing rather than
+  cosmetic: `listPrivate` drops any file whose name fails `PRIVATE_FILE`, so a
+  wrong extension makes a moved image *silently vanish* from the library.
+- **Entry points, all through `lib/app/move_to_private_action.dart`**: a batch
+  action on the Download History grid and its mirror on the private grid, an
+  item in the download viewer's overflow, a second icon in the private viewer,
+  and a button on the detail screen. That file has both a confirming and a
+  non-confirming entry — the batch bar already confirms in
+  `runWallpaperBatchAction`, and asking twice is how a user learns to dismiss
+  the dialog that matters.
+
+### Two decisions worth not re-litigating
+
+- **The detail screen's move button reuses `_downloadedRecord()`**, the delete
+  button's own gate, rather than getting one of its own. That lookup reads the
+  download history, which never holds an explicit or app-private download, so an
+  action offered from it cannot disclose on that ungated screen that such a
+  download exists. A second gate is a second chance to get it wrong; a test pins
+  that the button is absent for an undownloaded wallpaper.
+- **`FakeImageStore.copyStoredImage` enforces the NSFW gate**, unlike its
+  `store`, which only records. Deliberate: the safety of the whole move-out
+  direction *is* the adapter refusing the gallery, and a fake that accepted it
+  would let the suite pass over exactly the arrangement that leaks.
+
+## ALSO BUILT — every unpinned batch asks where it lands
+
+One early return removed from `_resolveBatchDestination`. A wholly-safe batch
+used to route silently, on the grounds that the chooser existed for the
+destination a not-safe download must not enter unasked — which left "put these
+thirty in my files folder" with no way to say it at all.
+
+**The pin is now the only thing that stops the asking**, which is what "Keep
+sending here" already meant. Two rules collapse into one. Widget tests pin both
+halves: a safe batch opens the chooser, a pinned one does not.
+
+## ALSO FIXED — "when I batch download it's not asking where I want it"
+
+Reported twice. The batch chooser itself was never broken — a **"Keep sending
+here" pin** was in force, and the rule as first written was that a pin silences
+the chooser everywhere.
+
+**That rule was wrong for a batch, and it is gone.** A pin earns its keep by
+removing a question from a one-tap action performed constantly. A batch is
+neither: it is deliberate, it is rare, and it commits many multi-megabyte files
+at once. Silencing it turned a pin set weeks ago on a single wallpaper into an
+invisible standing order over every later selection. **A batch now always
+asks** — the pin arrives as `pinnedTier`, so the chooser names it, starts its
+switch on, and offers **Stop**. One tap on the pinned destination is the same
+download it would have made silently; the difference is the user can see it and
+change it. The pin still silences the quick sheet's single tap, which is where
+it belongs. A second bug fell out: the batch chooser's *Stop* answered
+"dismissed" without clearing anything, so the button did nothing at all.
+
+The other half of the bug: **the pin was invisible and all but unclearable.**
+It silences the destination chooser on *every* path that downloads — the quick
+sheet, the batch bar and the detail screen all route silently — so it is the one
+setting the user stops being shown at the moment it starts working. It presented
+as "downloading doesn't ask me where any more", with nothing on any screen to
+explain it. The only way out was long-pressing Download on a wallpaper's detail
+screen and finding **Stop** inside the chooser. Settings never mentioned it: its
+download section shows the *folder* the files tier writes to, which is a
+different thing.
+
+- **`PinnedDownloadTier`** (`lib/app/pinned_download_tier.dart`), an
+  `AsyncNotifier` that is now the single owner of the value. The three writers
+  (quick sheet, detail, batch) and the new reader all go through it. Direct
+  `SettingsRepository.setPinnedDownloadTier` calls would have left the screen
+  offering to clear a pin reading a copy written somewhere else.
+- **`PinnedDestinationNotice`** at the top of Settings → Downloads, above the
+  per-purity pickers — because while a pin is on, those pickers decide nothing.
+  It names the destination and carries a **Stop**. It renders nothing when no
+  pin is set: a permanent row explaining a feature that is off is worse than no
+  row.
+
+**Two ways out on a device now**: the batch chooser's own *Stop*, and the
+Settings notice. Neither existed when this was reported.
+
+## ALSO FIXED — the queued toast never went away
+
+Reported by the owner while the above was being built. `showTelaToast` already
+asked for 3 seconds, so the duration was not the bug.
+
+**`ScaffoldMessenger` deliberately never starts its dismissal timer for a
+SnackBar that has an action while accessible navigation is on** — the reasoning
+being that a screen-reader user needs time to reach the button. The queued
+download toast is the **first one in the app to carry an action**, so it was the
+first to sit there until something else replaced it.
+
+`showTelaToast` now schedules its own dismissal — but **only** for an
+action-carrying toast **and only under accessible navigation**, which is exactly
+the case the framework declines to time out. Scoping it that tightly is not
+fastidiousness: an unconditional timer armed one on every toast in the app, and
+widget tests fail on a pending timer at teardown — four of them did, which is
+how the first attempt was caught. The `closed` future cancels it, so it can
+never reach past its own toast and dismiss whichever one replaced it.
+`showTelaToast` also takes an optional `duration` now.
+
+Pinned by `tela_toast_test`, and the test was checked by mutation — it fails
+with the dismissal removed.
+
+### What the tests cover
+
+Dart **1151** (from 1122), Kotlin **51** (from 46), `analyze` and `format`
+clean. New: `move_stored_images_test` (11 cases, including the declined-delete
+rollback and the gallery refusal), Kotlin `copy` cases in `ImageStorageTest`
+(lands under `source-id.ext` and is listed back, leaves its source alone,
+refuses `nsfw`→gallery, fails safely on an unreadable source, refuses a
+traversing id), widget tests for all five entry points, the toast regression
+above, and two settings tests for the pin notice.
+
+### Owed
+
+- **The device pass, and one case above all**: move a gallery download to
+  private and **decline** the system delete prompt. The wallpaper must end up in
+  exactly one place — still in Photos, still in the history, **not** in the
+  private library. That is the rollback, and no widget test reaches the real OS
+  prompt.
+- Also: a five-item batch raises **one** prompt, not five; a move out with no
+  folder granted runs the volume chooser first; and a moved-out file opens in a
+  file manager and never appears in Photos.
+- **Not built, and named on purpose:** importing the user's own media. There is
+  no picker anywhere in the app, and the private tier's identity *is* its
+  `source-id.ext` file name — an imported photo has neither, so that scheme has
+  to be reworked before the tier can hold one.
 
 ## FIXED — every download was named for Wallhaven (`feat/private-source-badge`)
 
