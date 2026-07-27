@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/library_listings.dart';
+import 'package:tela/app/pinned_download_tier.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
@@ -176,7 +177,7 @@ Future<({bool proceed, StorageTier? tier})> _resolveDestination(
   // A pin is the whole point: with one set, downloading no longer asks. The
   // download use case applies the pin (invariant permitting), so a null tier
   // routes to it silently — even for a not-safe wallpaper the user pinned.
-  final StorageTier? pin = await settings.loadPinnedDownloadTier();
+  final StorageTier? pin = await ref.read(pinnedDownloadTierProvider.future);
   if (pin != null || wallpaper.purity == Purity.sfw) {
     return (proceed: true, tier: null);
   }
@@ -198,7 +199,9 @@ Future<({bool proceed, StorageTier? tier})> _resolveDestination(
         .read(storageSettingsProvider.notifier)
         .route(wallpaper.purity, choice.tier!);
   }
-  if (choice.pin) await settings.setPinnedDownloadTier(choice.tier);
+  if (choice.pin) {
+    await ref.read(pinnedDownloadTierProvider.notifier).pin(choice.tier!);
+  }
   return (proceed: true, tier: choice.tier);
 }
 

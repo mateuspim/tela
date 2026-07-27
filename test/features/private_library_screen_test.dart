@@ -9,9 +9,11 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_source_badge.dart';
 import 'package:tela/core/ui/wallpaper_source_labels_scope.dart';
+import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
 
@@ -195,6 +197,73 @@ void main() {
       expect(find.textContaining('Nothing here'), findsOneWidget);
     });
 
+    testWidgets('moving out warns it never reaches Photos, and is untracked', (
+      WidgetTester tester,
+    ) async {
+      // Two surprises this move holds, and the copy has to say both before it
+      // happens: it cannot go to Photos (tela cannot prove a private image is
+      // safe to show there), and the image leaves every tela screen — there is
+      // no wallpaper left to write a history row from.
+      final FakeImageStore store = FakeImageStore(
+        privateLibrary: <PrivateImage>[_image('e7jvjd')],
+        folder: _grantedFolder,
+      );
+      await _pump(tester, store);
+
+      await _moveOutSelected(tester);
+
+      expect(
+        find.textContaining('Move this out of the private library?'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('never to Photos'), findsOneWidget);
+      expect(find.textContaining('stops tracking it'), findsOneWidget);
+      expect(store.copies, isEmpty, reason: 'the dialog alone moves nothing');
+    });
+
+    testWidgets('a confirmed move out lands in the files tier, never Photos', (
+      WidgetTester tester,
+    ) async {
+      // The invariant this whole direction rests on: the move declares `nsfw`
+      // because it cannot prove otherwise, and the store refuses the gallery.
+      final FakeImageStore store = FakeImageStore(
+        privateLibrary: <PrivateImage>[_image('e7jvjd')],
+        folder: _grantedFolder,
+      );
+      await _pump(tester, store);
+
+      await _moveOutSelected(tester);
+      await tester.tap(find.text('Move out').last);
+      await tester.pumpAndSettle();
+
+      expect(store.copies.single.tier, StorageTier.filesOutsideGallery);
+      expect(
+        store.deletedTiers,
+        <StorageTier>[StorageTier.appPrivate],
+      );
+      expect(find.text('Moved to your downloads folder'), findsOneWidget);
+      expect(find.textContaining('Nothing here'), findsOneWidget);
+    });
+
+    testWidgets('moving out with no folder yet runs the volume chooser', (
+      WidgetTester tester,
+    ) async {
+      // That tier needs a granted folder, and finding that out after copying
+      // nothing is a wall with no explanation. Backing out moves nothing.
+      final FakeImageStore store = FakeImageStore(
+        privateLibrary: <PrivateImage>[_image('e7jvjd')],
+      );
+      await _pump(tester, store);
+
+      await _moveOutSelected(tester);
+      await tester.tap(find.text('Move out').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Where files are saved'), findsOneWidget);
+      expect(find.text('Internal storage'), findsOneWidget);
+      expect(store.copies, isEmpty);
+    });
+
     testWidgets('a ticked private tile shows the selection it is in', (
       WidgetTester tester,
     ) async {
@@ -372,3 +441,19 @@ Future<void> _deleteSelected(WidgetTester tester) async {
   await tester.tap(find.byIcon(Icons.delete_outline));
   await tester.pumpAndSettle();
 }
+
+/// The same, for the move-out action beside it.
+Future<void> _moveOutSelected(WidgetTester tester) async {
+  await tester.longPress(find.bySemanticsLabel('Private wallpaper e7jvjd'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byIcon(Icons.lock_open_outlined));
+  await tester.pumpAndSettle();
+}
+
+/// A folder already granted, so a move out needs no chooser.
+const DownloadFolder _grantedFolder = DownloadFolder(
+  volumeLabel: 'Internal storage',
+  relativePath: 'Wallpapers/tela',
+  isRemovable: false,
+  isAvailable: true,
+);

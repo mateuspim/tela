@@ -109,6 +109,39 @@ class FakeImageStore implements ImageStore {
         StoredImage(location: Uri.parse('memory://$id'), tier: tier);
   }
 
+  /// Every local copy made, in call order — the moves that got as far as
+  /// writing a destination file.
+  final List<({Uri from, StorageTier tier, WallpaperRef ref})> copies =
+      <({Uri from, StorageTier tier, WallpaperRef ref})>[];
+
+  /// Applies the real NSFW gate, unlike [store].
+  ///
+  /// Deliberate, and the one place this fake enforces a rule rather than
+  /// recording one: a move out of the private library hands over `nsfw` because
+  /// it cannot prove otherwise, and the whole safety of that design is the
+  /// adapter refusing the gallery. A fake that accepted it would let the test
+  /// suite pass over exactly the arrangement that would leak an explicit image
+  /// into Photos.
+  @override
+  Future<StoredImage> copyStoredImage({
+    required SourceId source,
+    required String id,
+    required Uri from,
+    required Purity purity,
+    required StorageTier tier,
+  }) async {
+    if (purity == Purity.nsfw && tier == StorageTier.sharedGallery) {
+      throw const ImageStoreFailure(ImageStoreProblem.restricted);
+    }
+    final ImageStoreFailure? toThrow = failure;
+    if (toThrow != null) throw toThrow;
+    if (_failingIds.contains(id)) {
+      throw const ImageStoreFailure(ImageStoreProblem.source);
+    }
+    copies.add((from: from, tier: tier, ref: WallpaperRef(source, id)));
+    return StoredImage(location: Uri.parse('memory://$id-copy'), tier: tier);
+  }
+
   @override
   Future<List<PrivateImage>> privateImages() async {
     final ImageStoreFailure? toThrow = failure;

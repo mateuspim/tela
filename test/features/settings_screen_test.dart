@@ -556,6 +556,43 @@ void main() {
     });
   });
 
+  group('the download pin', () {
+    testWidgets('says a pin is in force, and offers to stop it', (
+      WidgetTester tester,
+    ) async {
+      // The gap this closes: a pin silences the destination chooser on every
+      // screen that downloads, so it is the one setting the user stops being
+      // shown at the moment it starts working. It read as "downloading does
+      // not ask me where any more", with nowhere to find out why.
+      final FakeSettingsRepository settings = FakeSettingsRepository(
+        pinnedDownloadTier: StorageTier.appPrivate,
+      );
+      await _pumpSettings(tester, settings);
+
+      expect(
+        find.text('Sending every download to Private library.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('settings-stop-download-pin')));
+      await tester.pumpAndSettle();
+
+      expect(settings.pinnedTierSaved, isNull);
+      expect(find.byKey(const Key('settings-stop-download-pin')), findsNothing);
+    });
+
+    testWidgets('stays out of the way when no pin is set', (
+      WidgetTester tester,
+    ) async {
+      // Most users never turn this on, and a permanent row explaining a
+      // feature that is off is worse than no row at all.
+      await _pumpSettings(tester, FakeSettingsRepository());
+
+      expect(find.byKey(const Key('settings-stop-download-pin')), findsNothing);
+      expect(find.textContaining('Sending every download'), findsNothing);
+    });
+  });
+
   group('app-lock switch', () {
     testWidgets('turning the lock off asks for proof first', (
       WidgetTester tester,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 
@@ -38,6 +40,13 @@ enum ToastKind {
 /// - **A failure lingers longer than a success.** The success is usually
 ///   confirming something the screen already shows; the failure is the only
 ///   place the news exists.
+/// - **A toast with an action still goes away on its own.** Flutter's
+///   `ScaffoldMessenger` deliberately never starts its dismissal timer for a
+///   SnackBar that has an action *while accessible navigation is on* — the
+///   reasoning being that a screen-reader user needs time to reach the button.
+///   The result on a device with TalkBack enabled is a toast that sits there
+///   until something else replaces it, which is what the queued-download toast
+///   was doing. So this schedules its own dismissal.
 ///
 /// ```dart
 /// showTelaToast(messenger, l10n.detailDownloadSuccess);
@@ -49,29 +58,55 @@ void showTelaToast(
   String message, {
   ToastKind kind = ToastKind.success,
   SnackBarAction? action,
+  Duration? duration,
 }) {
   final BuildContext context = messenger.context;
   final ColorScheme colors = Theme.of(context).colorScheme;
   final bool isFailure = kind == ToastKind.failure;
-  messenger
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: _ToastContent(message: message, isFailure: isFailure),
-        backgroundColor: isFailure
-            ? colors.errorContainer
-            : colors.inverseSurface,
-        behavior: SnackBarBehavior.floating,
-        width: _toastWidth(context),
-        duration: isFailure
-            ? const Duration(seconds: 6)
-            : const Duration(seconds: 3),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+  final Duration life = duration ?? (isFailure ? _failureLife : _successLife);
+  messenger.hideCurrentSnackBar();
+  final ScaffoldFeatureController<SnackBar, SnackBarClosedReason> shown =
+      messenger.showSnackBar(
+        SnackBar(
+          content: _ToastContent(message: message, isFailure: isFailure),
+          backgroundColor: isFailure
+              ? colors.errorContainer
+              : colors.inverseSurface,
+          behavior: SnackBarBehavior.floating,
+          width: _toastWidth(context),
+          duration: life,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          action: action,
         ),
-        action: action,
-      ),
-    );
+      );
+  // Only where the framework really does leave it up: scheduling a timer the
+  // rest of the time would arm one on every toast in the app — including in
+  // widget tests, which fail on a pending timer at teardown.
+  if (action != null && MediaQuery.accessibleNavigationOf(context)) {
+    _dismissAfter(shown, life);
+  }
+}
+
+/// How long a toast that reports success stays up.
+const Duration _successLife = Duration(seconds: 3);
+
+/// Longer, because a failure is usually the only place the news exists.
+const Duration _failureLife = Duration(seconds: 6);
+
+/// Closes [shown] after [life], unless it has already gone.
+///
+/// Only for a toast carrying an action *and* only under accessible navigation,
+/// which is the exact case `ScaffoldMessenger` declines to time out. The
+/// `closed` future cancels the timer, so this can never reach past its own
+/// toast and dismiss whichever one replaced it.
+void _dismissAfter(
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason> shown,
+  Duration life,
+) {
+  final Timer timer = Timer(life, shown.close);
+  unawaited(shown.closed.then((SnackBarClosedReason _) => timer.cancel()));
 }
 
 /// Wide enough to read, never wider than a comfortable line.

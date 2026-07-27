@@ -9,6 +9,7 @@ import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/use_cases/download_wallpaper.dart';
 
 import '../fakes/fake_image_store.dart';
 

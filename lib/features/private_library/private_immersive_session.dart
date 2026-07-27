@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/library_listings.dart';
+import 'package:tela/app/move_to_private_action.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
@@ -121,7 +122,7 @@ class _PrivateImmersiveSessionState
           session.selectedIndex,
         ),
         barActions: <Widget>[_setButton(l10n)],
-        actions: <Widget>[_deleteButton(l10n)],
+        actions: <Widget>[_moveOutButton(l10n), _deleteButton(l10n)],
         // pop(), never maybePop(): the viewer's own PopScope defers to
         // _exitFullscreen, so consulting it from inside onClose is a cycle
         // that leaves the route standing. See the delete-to-empty exit below.
@@ -161,6 +162,20 @@ class _PrivateImmersiveSessionState
     );
   }
 
+  /// The way back out of this tier, and the only one there is.
+  ///
+  /// A second icon rather than an overflow menu: two actions do not earn a
+  /// menu, and the delete beside it is the one this viewer has always shown.
+  Widget _moveOutButton(AppLocalizations l10n) {
+    return IconButton.filledTonal(
+      key: const Key('private-viewer-move-out'),
+      onPressed: _moveOut,
+      tooltip: l10n.moveOutOfPrivateAction,
+      constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+      icon: const Icon(Icons.lock_open_outlined),
+    );
+  }
+
   Widget _deleteButton(AppLocalizations l10n) {
     return IconButton.filledTonal(
       key: const Key('private-viewer-delete'),
@@ -194,6 +209,23 @@ class _PrivateImmersiveSessionState
 
   /// Deletes the shown file after the same confirmation the grid uses, then
   /// advances to the nearest remaining image or closes to the empty state.
+  /// Moves the shown image out to the files folder, then leaves it behind.
+  ///
+  /// Advances or pops exactly as a delete does — from this viewer's point of
+  /// view a moved image is gone, and it must not stay on a `FLAG_SECURE`
+  /// canvas showing a file that is no longer private.
+  Future<void> _moveOut() async {
+    final PrivateImage image = _image;
+    final bool moved = await confirmAndMoveOutOfPrivate(
+      context: context,
+      ref: ref,
+      images: <PrivateImage>[image],
+    );
+    if (!moved || !mounted) return;
+    ref.invalidate(privateImagesProvider);
+    _leaveShownImage();
+  }
+
   Future<void> _confirmDelete() async {
     final PrivateImage image = _image;
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -237,6 +269,15 @@ class _PrivateImmersiveSessionState
     // whether we advance or pop back to it.
     ref.invalidate(privateImagesProvider);
     if (!mounted) return;
+    _leaveShownImage();
+  }
+
+  /// Drops the shown image from the session and moves on, or leaves when it was
+  /// the last one.
+  ///
+  /// Shared by the delete and the move-out: both make the shown image cease to
+  /// be something this viewer may show, and only the reason differs.
+  void _leaveShownImage() {
     final bool remains = widget.session.removeSelected();
     if (!remains) {
       // Unconditional pop: the immersive surface owns a PopScope that gates the

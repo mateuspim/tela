@@ -59,6 +59,31 @@ class MethodChannelImageStore implements ImageStore {
   }
 
   @override
+  Future<StoredImage> copyStoredImage({
+    required SourceId source,
+    required String id,
+    required Uri from,
+    required Purity purity,
+    required StorageTier tier,
+  }) async {
+    try {
+      final Object? raw = await _invokeMethod(
+        'copyStoredImage',
+        <String, String>{
+          'source': source.value,
+          'id': id,
+          'from': from.toString(),
+          'purity': purity.name,
+          'tier': tier.name,
+        },
+      );
+      return _storedImageFrom(raw, tier);
+    } on PlatformException catch (error) {
+      throw ImageStoreFailure(_problemFor(error.code));
+    }
+  }
+
+  @override
   Future<List<PrivateImage>> privateImages() async {
     try {
       final Object? raw = await _invokeMethod(

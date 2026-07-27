@@ -7,8 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/features/private_library/private_immersive_session.dart';
@@ -144,8 +146,52 @@ void main() {
     expect(find.byIcon(Icons.share), findsNothing);
     expect(find.byIcon(Icons.ios_share), findsNothing);
     expect(find.byType(PopupMenuButton<void>), findsNothing);
-    // The one feature action is delete.
+    // Two feature actions, and neither sends pixels anywhere: delete, and the
+    // move that is the only way back out of this tier.
     expect(find.byKey(const Key('private-viewer-delete')), findsOneWidget);
+    expect(find.byKey(const Key('private-viewer-move-out')), findsOneWidget);
+  });
+
+  testWidgets('moving out leaves the viewer the way a delete does', (
+    WidgetTester tester,
+  ) async {
+    // A moved image is gone from this viewer's point of view, and it must not
+    // linger on a FLAG_SECURE canvas showing a file that is no longer private.
+    final FakeImageStore store = FakeImageStore(
+      privateLibrary: <PrivateImage>[_image('a'), _image('b')],
+      folder: _grantedFolder,
+    );
+    await _open(
+      tester,
+      _session(<PrivateImage>[_image('a'), _image('b')]),
+      store: store,
+    );
+
+    await tester.tap(find.byKey(const Key('private-viewer-move-out')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Move out'));
+    await tester.pumpAndSettle();
+
+    expect(store.copies.single.tier, StorageTier.filesOutsideGallery);
+    expect(find.bySemanticsLabel('Private wallpaper b'), findsWidgets);
+  });
+
+  testWidgets('moving out the last image closes back to the grid', (
+    WidgetTester tester,
+  ) async {
+    final FakeImageStore store = FakeImageStore(
+      privateLibrary: <PrivateImage>[_image('a')],
+      folder: _grantedFolder,
+    );
+    await _open(tester, _session(<PrivateImage>[_image('a')]), store: store);
+
+    await tester.tap(find.byKey(const Key('private-viewer-move-out')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Move out'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('grid'), findsOneWidget);
+    expect(find.byType(PrivateImmersiveSession), findsNothing);
   });
 
   testWidgets('Set applies the shown private file through the applier', (
@@ -258,6 +304,14 @@ void main() {
     expect(find.text('grid'), findsOneWidget);
   });
 }
+
+/// A folder already granted, so a move out needs no volume chooser.
+const DownloadFolder _grantedFolder = DownloadFolder(
+  volumeLabel: 'Internal storage',
+  relativePath: 'Wallpapers/tela',
+  isRemovable: false,
+  isAvailable: true,
+);
 
 Future<void> _confirmDelete(WidgetTester tester) async {
   await tester.tap(find.byKey(const Key('private-viewer-delete')));

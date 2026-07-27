@@ -815,6 +815,54 @@ void main() {
       expect(find.byKey(const Key('detail-delete')), findsNothing);
     });
 
+    testWidgets('Move to private is gated the same way the delete is', (
+      WidgetTester tester,
+    ) async {
+      // Both read `_downloadedRecord()`, which never sees an explicit or
+      // app-private download — so neither action can disclose on this ungated
+      // screen that such a download exists. A second gate written for the move
+      // would be a second chance to get that wrong.
+      await _pumpDetail(tester, _details());
+      await tester.pump();
+
+      expect(find.byKey(const Key('detail-move-to-private')), findsNothing);
+    });
+
+    testWidgets('Move to private confirms, then retires both buttons', (
+      WidgetTester tester,
+    ) async {
+      final WallpaperDetails details = _details();
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[_recordFor(details.wallpaper)],
+      );
+      final FakeImageStore imageStore = FakeImageStore();
+      await _pumpDetail(
+        tester,
+        details,
+        history: history,
+        imageStore: imageStore,
+      );
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('detail-move-to-private')));
+      await tester.pump();
+      await tester.pump();
+
+      // Unlike the gallery delete, tela always asks here: the trip is one-way,
+      // and the OS prompt that follows says nothing about where the file goes.
+      expect(find.textContaining('private library?'), findsOneWidget);
+      await tester.tap(find.text('Move to private').last);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(imageStore.copies.single.tier, StorageTier.appPrivate);
+      // The history row went with it — a private download is never recorded —
+      // so both buttons retire and the screen offers a plain download again.
+      expect(await history.downloads(), isEmpty);
+      expect(find.byKey(const Key('detail-move-to-private')), findsNothing);
+      expect(find.byKey(const Key('detail-delete')), findsNothing);
+    });
+
     testWidgets('deletes a downloaded gallery file and retires its button', (
       WidgetTester tester,
     ) async {

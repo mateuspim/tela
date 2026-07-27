@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:tela/app/configured_download.dart';
+import 'package:go_router/go_router.dart';
+import 'package:tela/app/download_queue_controller.dart';
 import 'package:tela/app/library_listings.dart';
+import 'package:tela/app/move_to_private_action.dart';
+import 'package:tela/app/pinned_download_tier.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
@@ -40,17 +45,25 @@ enum WallpaperBatchAction {
   /// Hard-delete every ticked download — the files and their rows. Destructive;
   /// confirms first, and batches the gallery tier into one system prompt.
   delete,
+
+  /// Move every ticked download into the private library. Confirms first: the
+  /// file leaves Photos, and tela cannot put it back there afterwards.
+  moveToPrivate,
 }
 
 /// Whether [action] asks before it acts.
 ///
 /// The two destructive ones do — [WallpaperBatchAction.forget] and
-/// [WallpaperBatchAction.delete]. The others are one tap from being undone by
-/// the opposite action, and a confirmation on each would train the user to
-/// dismiss the one that matters.
+/// [WallpaperBatchAction.delete] — and so does
+/// [WallpaperBatchAction.moveToPrivate], which deletes nothing but is not
+/// undoable either: the file leaves Photos, and the private tier keeps no
+/// record of what it holds, so tela can never prove the image safe enough to
+/// put back. The rest are one tap from being undone by the opposite action, and
+/// a confirmation on each would train the user to dismiss the one that matters.
 bool wallpaperBatchActionConfirms(WallpaperBatchAction action) =>
     action == WallpaperBatchAction.forget ||
-    action == WallpaperBatchAction.delete;
+    action == WallpaperBatchAction.delete ||
+    action == WallpaperBatchAction.moveToPrivate;
 
 /// Performs [action] on every wallpaper in [wallpapers], reporting the outcome.
 ///
@@ -116,7 +129,28 @@ Future<bool> _perform(
       return true;
     case WallpaperBatchAction.delete:
       return _deleteAll(ref, wallpapers, messenger, l10n);
+    case WallpaperBatchAction.moveToPrivate:
+      return _moveAllToPrivate(context, ref, wallpapers);
   }
+}
+
+/// Moves every ticked download into the private library.
+///
+/// Reads the records from the history listing for the same reason
+/// [_deleteAll] does: a move needs each file's tier and location, not just its
+/// id. The confirmation and the tally live in `confirmAndMoveToPrivate`, which
+/// the viewers and the detail screen share — a batch here is that action at a
+/// count of many, and its confirmation has **already been shown** by
+/// [runWallpaperBatchAction], so this branch must not ask twice.
+Future<bool> _moveAllToPrivate(
+  BuildContext context,
+  WidgetRef ref,
+  List<Wallpaper> wallpapers,
+) async {
+  final List<DownloadRecord> records = await _recordsFor(ref, wallpapers);
+  if (!context.mounted) return true;
+  await moveToPrivate(context: context, ref: ref, records: records);
+  return true;
 }
 
 /// Hard-deletes every ticked download — files and rows — through the one bulk
@@ -211,15 +245,21 @@ void _refreshFavorites(WidgetRef ref, List<Wallpaper> wallpapers) {
   }
 }
 
-/// Downloads **one at a time**, and reports the failures rather than hiding
-/// them.
+/// Puts the whole selection in the download queue and says so.
 ///
-/// Sequential on purpose: these are multi-megabyte originals, and firing twenty
-/// at once would hold twenty of them in flight for a wall the user selected in
-/// two seconds. It also keeps the failure count honest — a partial batch says
-/// so, because "downloaded 9 of 12" and "downloaded 12" are different outcomes
-/// and a snackbar that rounds the first up to the second is a lie about what is
-/// on the device.
+/// **Queued, not downloaded here.** The loop this replaced awaited one
+/// multi-megabyte original after another inside a widget callback, so a hundred
+/// wallpapers took as long as a hundred sequential downloads and closing the
+/// app lost every one that had not landed — its only record of what was still
+/// owed was a stack frame. The queue is durable, drains three at a time, and
+/// can be paused, retried and cancelled per item.
+///
+/// The destination is resolved and any first-time folder granted *before*
+/// anything is enqueued: the worker drains with no screen mounted and cannot
+/// answer a chooser.
+///
+/// The tally that used to be reported here — "downloaded 9 of 12" — moves to
+/// the queue tab, which can be honest per wallpaper instead of in aggregate.
 Future<bool> _downloadAll(
   BuildContext context,
   WidgetRef ref,
@@ -227,93 +267,161 @@ Future<bool> _downloadAll(
   ScaffoldMessengerState messenger,
   AppLocalizations l10n,
 ) async {
+  // Captured before the first await, like the messenger above: the shelf can
+  // be gone by the time the *View* action is tapped, and a GoRouter outlives
+  // the widget that was asked for it.
+  final GoRouter router = GoRouter.of(context);
   final ({bool proceed, StorageTier? tier}) destination =
       await _resolveBatchDestination(context, ref, wallpapers);
-  if (!destination.proceed) return false;
+  if (!destination.proceed || !context.mounted) return false;
+  final bool ready = await _ensureDownloadFolder(
+    context,
+    ref,
+    wallpapers,
+    destination.tier,
+  );
+  if (!ready) return false;
 
-  int saved = 0;
-  for (final Wallpaper wallpaper in wallpapers) {
-    final DownloadOutcome outcome = await ref.read(configuredDownloadProvider)(
-      wallpaper,
-      chooseVolume: ({required bool offerSdCard}) =>
-          chooseDownloadVolume(context, offerSdCard: offerSdCard),
-      tier: destination.tier,
-    );
-    // Backing out of first-time folder setup abandons the batch: every
-    // remaining download would ask the same unanswered question.
-    if (outcome == DownloadOutcome.cancelled) break;
-    // An unavailable folder is the same wall for every wallpaper left, so stop
-    // and name it — a "0 of N" tally would hide why nothing saved.
-    if (outcome == DownloadOutcome.folderUnavailable) {
-      refreshDownloads(ref);
-      _say(
-        messenger,
-        l10n.detailDownloadFolderUnavailable,
-        kind: ToastKind.failure,
-      );
-      return true;
-    }
-    if (outcome == DownloadOutcome.saved) saved++;
-  }
-  refreshDownloads(ref);
-  _sayDownloadOutcome(messenger, l10n, saved, wallpapers.length);
+  final int queued = await ref
+      .read(downloadQueueControllerProvider.notifier)
+      .enqueue(wallpapers, tier: destination.tier);
+  _sayQueued(router, messenger, l10n, queued, wallpapers.length);
   return true;
 }
 
-/// Where a whole batch lands: the pin when one is set (each item resolves it,
-/// invariant permitting, via a null tier), or the one destination the user
-/// picks from the intersection chooser. A dismissed chooser answers
-/// `proceed: false` so the batch abandons and the selection stays.
+/// Grants the files-outside-gallery folder now, while there is still a screen
+/// to ask on.
+///
+/// The queue worker deliberately cannot run the chooser — see
+/// `DrainDownloadQueue` — so a batch that would land in that tier has to settle
+/// first-time setup up front, or every entry fails on the same unanswered
+/// question. False when the user backed out of the chooser: nothing is queued
+/// and the selection stays, exactly as backing out of the old inline setup did.
+///
+/// A folder that is granted but *unreachable* — an ejected card — is not
+/// checked here and is not meant to be: that failure needs an attempt to
+/// discover, and the queue now has somewhere honest to report it, per entry,
+/// with a retry beside it.
+Future<bool> _ensureDownloadFolder(
+  BuildContext context,
+  WidgetRef ref,
+  List<Wallpaper> wallpapers,
+  StorageTier? tier,
+) async {
+  if (!await _landsOutsideGallery(ref, wallpapers, tier)) return true;
+  if (!context.mounted) return false;
+  return ref
+      .read(configuredDownloadProvider)
+      .ensureFolder(
+        ({required bool offerSdCard}) =>
+            chooseDownloadVolume(context, offerSdCard: offerSdCard),
+      );
+}
+
+/// Whether any wallpaper in this batch is headed for the tier that owns a
+/// folder.
+///
+/// A resolved [tier] answers it outright. A null one means "resolve per
+/// wallpaper when it runs", so the same rule the download itself will apply is
+/// applied here — [StorageSettings.tierWithPin], over the pin and each purity's
+/// configured destination — rather than a second guess at it.
+Future<bool> _landsOutsideGallery(
+  WidgetRef ref,
+  List<Wallpaper> wallpapers,
+  StorageTier? tier,
+) async {
+  if (tier != null) return tier == StorageTier.filesOutsideGallery;
+  final SettingsRepository settings = ref.read(settingsRepositoryProvider);
+  final StorageTier? pin = await ref.read(pinnedDownloadTierProvider.future);
+  final StorageSettings storage = await settings.loadStorageSettings();
+  return wallpapers.any(
+    (Wallpaper wallpaper) =>
+        storage.tierWithPin(wallpaper.purity, pin) ==
+        StorageTier.filesOutsideGallery,
+  );
+}
+
+/// Says how many went into the queue, with a way to go and watch them.
+///
+/// Reports the *newly* queued count when it differs, because re-ticking a shelf
+/// whose wallpapers are already waiting queues nothing new, and "queued 12"
+/// over a queue that did not grow is the same kind of lie the old aggregate
+/// tally was.
+void _sayQueued(
+  GoRouter router,
+  ScaffoldMessengerState messenger,
+  AppLocalizations l10n,
+  int queued,
+  int total,
+) {
+  final String message = queued == total
+      ? l10n.batchDownloadQueued(total)
+      : l10n.batchDownloadQueuedPartial(queued, total);
+  _say(
+    messenger,
+    message,
+    action: SnackBarAction(
+      label: l10n.batchDownloadQueuedView,
+      onPressed: () => router.pushNamed(TelaRoutes.downloadHistoryName),
+    ),
+  );
+}
+
+/// Where a whole batch lands: the one destination the user picks from the
+/// intersection chooser. A dismissed chooser answers `proceed: false` so the
+/// batch abandons and the selection stays.
+///
+/// **A batch always asks. Nothing silences it — not even the pin.**
+///
+/// This has moved twice, and the reasoning is worth keeping. It first asked
+/// only when the selection held a not-safe wallpaper, on the grounds that the
+/// chooser existed for the destination a not-safe download must not enter
+/// unasked; that left "put these thirty in my files folder" with no way to say
+/// it at all. Then it asked unless a pin was set, since silencing the question
+/// is exactly what "Keep sending here" means.
+///
+/// That second rule was wrong **here**, for a reason single downloads do not
+/// share. A pin earns its keep by removing a question from a one-tap action you
+/// perform constantly. A batch is neither: it is deliberate, it is rare, and it
+/// commits many multi-megabyte files at once. Silencing it turned a pin the
+/// user may have set weeks ago on a single wallpaper into an invisible standing
+/// order over every future selection — which is precisely how it presented on
+/// the device (owner, 2026-07-27: "when I batch download it's not asking where
+/// I want it").
+///
+/// The pin is not ignored: it is handed to the chooser, which shows it,
+/// starts its switch on, and offers **Stop**. One tap on the pinned destination
+/// is the same download it would have made silently — the difference is that
+/// the user can see what it is about to do, and change it.
 Future<({bool proceed, StorageTier? tier})> _resolveBatchDestination(
   BuildContext context,
   WidgetRef ref,
   List<Wallpaper> wallpapers,
 ) async {
-  final SettingsRepository settings = ref.read(settingsRepositoryProvider);
-  // A pin governs the batch too: hand each download a null tier and let the
-  // download use case send it to the pin, dropping explicit items to their
-  // private tier where a gallery pin cannot hold them.
-  if (await settings.loadPinnedDownloadTier() != null) {
-    return (proceed: true, tier: null);
-  }
+  final StorageTier? pin = await ref.read(pinnedDownloadTierProvider.future);
   final Set<Purity> purities = wallpapers
       .map((Wallpaper wallpaper) => wallpaper.purity)
       .toSet();
-  // A wholly-safe batch routes silently, the same rule a single safe tap
-  // follows: the chooser is for the destination a not-safe download must not
-  // enter unasked. Nothing here is not-safe, so there is nothing to decide.
-  if (!purities.any((Purity purity) => purity != Purity.sfw)) {
-    return (proceed: true, tier: null);
-  }
   if (!context.mounted) return (proceed: false, tier: null);
   final DownloadDestinationChoice? choice =
       await chooseBatchDownloadDestination(
         context,
         purities: purities,
         count: wallpapers.length,
+        pinnedTier: pin,
       );
-  if (choice == null || choice.stopsPin) return (proceed: false, tier: null);
-  if (choice.pin) await settings.setPinnedDownloadTier(choice.tier);
-  return (proceed: true, tier: choice.tier);
-}
-
-void _sayDownloadOutcome(
-  ScaffoldMessengerState messenger,
-  AppLocalizations l10n,
-  int saved,
-  int total,
-) {
-  if (saved == total) {
-    _say(messenger, l10n.batchDownloadDone(total));
-    return;
+  if (choice == null) return (proceed: false, tier: null);
+  // Stop clears the pin and downloads nothing — the deliberate way out, and the
+  // same contract the single chooser honours. Answering `proceed: false`
+  // without clearing would leave the button doing nothing at all.
+  if (choice.stopsPin) {
+    await ref.read(pinnedDownloadTierProvider.notifier).clear();
+    return (proceed: false, tier: null);
   }
-  _say(
-    messenger,
-    l10n.batchDownloadPartial(saved, total, total - saved),
-    // Some of them are not on the device. That is the one batch outcome the
-    // user has to act on, so it does not get a success tick.
-    kind: ToastKind.failure,
-  );
+  if (choice.pin) {
+    await ref.read(pinnedDownloadTierProvider.notifier).pin(choice.tier!);
+  }
+  return (proceed: true, tier: choice.tier);
 }
 
 Future<void> _forgetAll(WidgetRef ref, List<Wallpaper> wallpapers) async {
@@ -336,16 +444,16 @@ Future<bool> _confirmDestructive(
   int count,
 ) async {
   final AppLocalizations l10n = AppLocalizations.of(context);
-  final bool deleting = action == WallpaperBatchAction.delete;
+  final ({String title, String body, String confirm}) words = _confirmWords(
+    l10n,
+    action,
+    count,
+  );
   final bool? confirmed = await showDialog<bool>(
     context: context,
     builder: (BuildContext context) => AlertDialog(
-      title: Text(
-        deleting ? l10n.batchDeleteTitle(count) : l10n.batchForgetTitle(count),
-      ),
-      content: Text(
-        deleting ? l10n.batchDeleteBody(count) : l10n.batchForgetBody(count),
-      ),
+      title: Text(words.title),
+      content: Text(words.body),
       actions: <Widget>[
         TextButton(
           onPressed: () => Navigator.pop(context, false),
@@ -353,9 +461,7 @@ Future<bool> _confirmDestructive(
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
-          child: Text(
-            deleting ? l10n.downloadDelete : l10n.downloadHistoryForget,
-          ),
+          child: Text(words.confirm),
         ),
       ],
     ),
@@ -363,10 +469,40 @@ Future<bool> _confirmDestructive(
   return confirmed ?? false;
 }
 
+/// The three sentences one confirming action needs, per action.
+///
+/// A switch and not a chain of ternaries: there are three of these now, and the
+/// wording *is* the feature — a reader has to be able to see at a glance which
+/// promise each one makes.
+({String title, String body, String confirm}) _confirmWords(
+  AppLocalizations l10n,
+  WallpaperBatchAction action,
+  int count,
+) {
+  return switch (action) {
+    WallpaperBatchAction.delete => (
+      title: l10n.batchDeleteTitle(count),
+      body: l10n.batchDeleteBody(count),
+      confirm: l10n.downloadDelete,
+    ),
+    WallpaperBatchAction.moveToPrivate => (
+      title: l10n.moveToPrivateTitle(count),
+      body: l10n.moveToPrivateBody(count),
+      confirm: l10n.moveToPrivateAction,
+    ),
+    _ => (
+      title: l10n.batchForgetTitle(count),
+      body: l10n.batchForgetBody(count),
+      confirm: l10n.downloadHistoryForget,
+    ),
+  };
+}
+
 void _say(
   ScaffoldMessengerState messenger,
   String message, {
   ToastKind kind = ToastKind.success,
+  SnackBarAction? action,
 }) {
-  showTelaToast(messenger, message, kind: kind);
+  showTelaToast(messenger, message, kind: kind, action: action);
 }

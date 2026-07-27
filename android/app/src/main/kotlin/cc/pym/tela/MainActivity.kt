@@ -27,6 +27,23 @@ class MainActivity : FlutterFragmentActivity() {
     private val wallpaperExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val imageStoreExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val shareExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+
+    /**
+     * Downloads, and **only** downloads. Separate from [imageStoreExecutor],
+     * and the reason the download queue is faster rather than merely tidier.
+     *
+     * `ImageStorage.store` streams the image over HTTP before it writes, so on
+     * a single-thread executor every download in a batch waits for the one in
+     * front of it — Dart-side concurrency bought nothing, because all of it
+     * queued here. Sized to match `DrainDownloadQueue`'s own cap: more threads
+     * than Dart will ever fill is just idle threads.
+     *
+     * [imageStoreExecutor] stays serial for listing, deleting and preview
+     * caching. Those have no reason to overlap, and their ordering is free
+     * correctness that a pool would give away for nothing.
+     */
+    private val downloadExecutor: ExecutorService =
+        Executors.newFixedThreadPool(MAX_CONCURRENT_DOWNLOADS)
     private var pendingOutsideGalleryGrant: PendingOutsideGalleryGrant? = null
     private var pendingGalleryDeletion: PendingGalleryDeletion? = null
 
@@ -74,6 +91,7 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onDestroy() {
         wallpaperExecutor.shutdown()
         imageStoreExecutor.shutdown()
+        downloadExecutor.shutdown()
         shareExecutor.shutdown()
         super.onDestroy()
     }
@@ -220,6 +238,7 @@ class MainActivity : FlutterFragmentActivity() {
     private fun handleImageStoreCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "storeImage" -> handleStoreImage(call, result)
+            "copyStoredImage" -> handleCopyStoredImage(call, result)
             "listPrivateImages" -> onStorageThread(result) { ImageStorage(this).listPrivate() }
             "deleteDownload" -> handleDeleteDownload(call, result)
             "deleteDownloads" -> handleDeleteDownloads(call, result)
@@ -437,6 +456,42 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    /**
+     * Copies a file already on this device into another tier.
+     *
+     * The same files-outside-gallery pre-check [handleStoreImage] applies: a
+     * move into that tier needs a granted folder, and answering notConfigured
+     * lets Dart run its own chooser rather than opening a blank tree browser.
+     */
+    private fun handleCopyStoredImage(call: MethodCall, result: MethodChannel.Result) {
+        val request = imageCopyRequest(call) ?: run {
+            result.success(imageStoreFailure("unavailable"))
+            return
+        }
+        if (request.tier == "filesOutsideGallery") {
+            outsideGalleryProblem()?.let { problem ->
+                result.success(imageStoreFailure(problem))
+                return
+            }
+        }
+        // On [downloadExecutor] for the same reason a download is: this is bulk
+        // file I/O, and a selection of thirty would otherwise queue behind the
+        // serial storage thread that listing and deleting share.
+        downloadExecutor.execute {
+            val response = ImageStorage(this).copy(request, outsideGalleryTree())
+            runOnUiThread { result.success(response) }
+        }
+    }
+
+    private fun imageCopyRequest(call: MethodCall): ImageCopyRequest? {
+        val source = call.argument<String>("source") ?: return null
+        val id = call.argument<String>("id") ?: return null
+        val from = call.argument<String>("from") ?: return null
+        val purity = call.argument<String>("purity") ?: return null
+        val tier = call.argument<String>("tier") ?: return null
+        return ImageCopyRequest(source, id, from, purity, tier)
+    }
+
     private fun imageStoreRequest(call: MethodCall): ImageStoreRequest? {
         val source = call.argument<String>("source") ?: return null
         val id = call.argument<String>("id") ?: return null
@@ -529,8 +584,15 @@ class MainActivity : FlutterFragmentActivity() {
             .getString(OUTSIDE_GALLERY_TREE, null)
     }
 
+    /**
+     * Downloads on [downloadExecutor], never on [imageStoreExecutor].
+     *
+     * This one routing line is what makes a batch faster: the store streams the
+     * image before it writes, so on the serial executor every download in a
+     * queue waited for the one in front of it however many Dart ran at once.
+     */
     private fun storeImage(request: ImageStoreRequest, result: MethodChannel.Result) {
-        imageStoreExecutor.execute {
+        downloadExecutor.execute {
             val response = ImageStorage(this).store(request, outsideGalleryTree())
             runOnUiThread { result.success(response) }
         }

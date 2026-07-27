@@ -5,12 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/downloads/drift_download_history.dart';
+import 'package:tela/data/downloads/drift_download_queue.dart';
 import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/data/tag_blocklist/drift_tag_blocklist_repository.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/queued_download.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -124,6 +126,38 @@ void _createV5(File file) {
     ..execute("DELETE FROM downloaded_wallpapers WHERE tier = 'appPrivate';")
     ..execute('PRAGMA user_version = 5;')
     ..dispose();
+}
+
+/// The v6 schema, exactly as it shipped: every table qualified by source, and
+/// no download queue.
+///
+/// This is the state a device that installed the last release is really in, so
+/// it is the upgrade v7 has to survive. Built by running the real v5 → v6
+/// migration rather than by hand: v6 *recreates* both wallpaper tables through
+/// drift's `TableMigration`, and a hand-written copy of the result would be a
+/// second definition of the schema free to disagree with the first.
+Future<void> _createV6(File file) async {
+  _createV5(file);
+  final TelaDatabase db = TelaDatabase(NativeDatabase(file));
+  // Any read forces the migration to run; the row count is incidental.
+  await db.favoriteRows();
+  await db.close();
+  sqlite3.open(file.path)
+    ..execute('DROP TABLE IF EXISTS download_queue_entries;')
+    ..execute('PRAGMA user_version = 6;')
+    ..dispose();
+}
+
+/// Whether [table] exists in the file at all.
+bool _hasTable(File file, String table) {
+  final Database db = sqlite3.open(file.path);
+  final ResultSet rows = db.select(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?;",
+    <Object>[table],
+  );
+  final bool found = rows.isNotEmpty;
+  db.dispose();
+  return found;
 }
 
 /// Reads one column of one table straight out of SQLite.
@@ -325,11 +359,61 @@ void main() {
       await db.close();
     });
 
+    test('v6 → v7 adds the download queue and keeps every row', () async {
+      // v7 is an ordinary additive step: one new table, nothing existing
+      // touched. What it must not do is cost the device the library it has —
+      // the same claim every version before it had to make.
+      await _createV6(file);
+      expect(_hasTable(file, 'download_queue_entries'), isFalse);
+
+      final TelaDatabase db = TelaDatabase(NativeDatabase(file));
+
+      expect(await DriftDownloadQueue(db).entries(), isEmpty);
+      expect(
+        (await DriftFavoritesRepository(db).favorites()).single.ref,
+        _wallhaven('e7jvjd'),
+      );
+      expect(
+        (await DriftDownloadHistory(db).downloads()).single.wallpaper.ref,
+        _wallhaven('e7jvjd'),
+      );
+
+      await db.close();
+
+      expect(_hasTable(file, 'download_queue_entries'), isTrue);
+    });
+
+    test('a queue written at v7 survives being reopened', () async {
+      // The whole point of a durable queue: the process that filled it is gone
+      // and the line is still there. This is that, at the file level.
+      await _createV6(file);
+      final TelaDatabase first = TelaDatabase(NativeDatabase(file));
+      await DriftDownloadQueue(first).enqueue(<QueuedDownload>[
+        QueuedDownload(
+          wallpaper: _wallpaperFrom(SourceId.konachan, '12345'),
+          queuedAt: DateTime.utc(2026, 7, 26),
+        ),
+      ]);
+      await first.close();
+
+      final TelaDatabase second = TelaDatabase(NativeDatabase(file));
+      final List<QueuedDownload> entries = await DriftDownloadQueue(
+        second,
+      ).entries();
+
+      expect(
+        entries.single.ref,
+        const WallpaperRef(SourceId.konachan, '12345'),
+      );
+      await second.close();
+    });
+
     test('a fresh install creates every table', () async {
       final TelaDatabase db = TelaDatabase(NativeDatabase(file));
 
       expect(await DriftFavoritesRepository(db).favorites(), isEmpty);
       expect(await DriftDownloadHistory(db).downloads(), isEmpty);
+      expect(await DriftDownloadQueue(db).entries(), isEmpty);
       expect(await DriftTagBlocklistRepository(db).all(), isEmpty);
       expect(
         await DriftSettingsRepository(db).loadStorageSettings(),

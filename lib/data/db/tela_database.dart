@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 
 part 'tela_database.g.dart';
@@ -116,6 +117,43 @@ class DownloadedWallpapers extends Table with WallpaperColumns {
   DateTimeColumn get downloadedAt => dateTime()();
 }
 
+/// One wallpaper this device still owes a download for.
+///
+/// Keyed by source and id like the two tables above, which is what makes
+/// enqueuing idempotent: ticking the same shelf twice updates nothing rather
+/// than lining the same wallpaper up to be downloaded twice.
+///
+/// **Unlike [DownloadedWallpapers], this table does hold explicit and
+/// app-private entries**, and the difference is deliberate — see
+/// `DownloadQueue`'s docstring. A download row is a permanent index; a queue
+/// row is a work item that is deleted the moment the file lands. Refusing to
+/// hold one would not protect anything, it would silently decline to download
+/// a wallpaper the user asked for. What still applies is the screen rule: the
+/// queue UI does not render an explicit entry identifiably.
+@DataClassName('QueueRow')
+class DownloadQueueEntries extends Table with WallpaperColumns {
+  /// `StorageTier` name of the per-download override, or null to resolve the
+  /// destination when the entry actually runs.
+  ///
+  /// Nullable because null is the ordinary case, not a missing value: a
+  /// pin-governed batch enqueues null on purpose so each download follows the
+  /// pin and the purity's configured tier at the moment it runs.
+  TextColumn get tier => text().nullable()();
+
+  /// `DownloadQueueState` name: pending, running or failed.
+  TextColumn get state => text()();
+
+  /// How many times this entry has been tried.
+  IntColumn get attempts => integer().withDefault(const Constant<int>(0))();
+
+  /// `ImageStoreProblem` name of the last failure, or null if it has not
+  /// failed. Never a URL or a path — the same rule `ImageStoreFailure` follows.
+  TextColumn get failure => text().nullable()();
+
+  /// When it was queued. Orders the queue, oldest first — a queue is a line.
+  DateTimeColumn get queuedAt => dateTime()();
+}
+
 /// One tag the user never wants to see again, kept by id so a rename upstream
 /// cannot slip a blocked tag back into a listing.
 @DataClassName('BlockedTagRow')
@@ -148,6 +186,7 @@ class BlockedTags extends Table {
     SettingEntries,
     FavoriteWallpapers,
     DownloadedWallpapers,
+    DownloadQueueEntries,
     BlockedTags,
   ],
 )
@@ -161,7 +200,7 @@ class TelaDatabase extends _$TelaDatabase {
   }
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   /// Adds tables to an existing database instead of recreating it.
   ///
@@ -171,7 +210,8 @@ class TelaDatabase extends _$TelaDatabase {
   /// lacked. v5 is the exception that proves the shape: it adds nothing and
   /// *removes* rows, because those rows should never have been written. v6 is
   /// the other exception: it rewrites two tables, and every row they hold is
-  /// kept.
+  /// kept. v7 is back to the ordinary shape — one new table, the download
+  /// queue, and nothing existing touched.
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
@@ -182,6 +222,7 @@ class TelaDatabase extends _$TelaDatabase {
         if (from < 4) await m.createTable(blockedTags);
         if (from < 5) await purgePrivateDownloads();
         if (from < 6) await _qualifyWallpapersBySource(m);
+        if (from < 7) await m.createTable(downloadQueueEntries);
       },
     );
   }
@@ -276,6 +317,123 @@ class TelaDatabase extends _$TelaDatabase {
           ..where(($DownloadedWallpapersTable row) => _matches(row, ref));
     return statement.go();
   }
+
+  /// Every queue entry, oldest first — a queue is a line.
+  Future<List<QueueRow>> queueRows() {
+    final SimpleSelectStatement<$DownloadQueueEntriesTable, QueueRow> query =
+        select(downloadQueueEntries)
+          ..orderBy(<OrderClauseGenerator<$DownloadQueueEntriesTable>>[
+            ($DownloadQueueEntriesTable row) => OrderingTerm.asc(row.queuedAt),
+          ]);
+    return query.get();
+  }
+
+  /// Adds one entry, **leaving any existing entry for the same wallpaper
+  /// exactly as it was**.
+  ///
+  /// `insertOrIgnore`, not the `insertOnConflictUpdate` the other tables use:
+  /// an entry that is already running or has already failed twice must not be
+  /// reset to a fresh pending row just because the user ticked the same shelf
+  /// again. That is what makes enqueuing idempotent.
+  Future<void> addQueueEntry(DownloadQueueEntriesCompanion row) {
+    return into(
+      downloadQueueEntries,
+    ).insert(row, mode: InsertMode.insertOrIgnore);
+  }
+
+  /// Takes the oldest pending entry and marks it running, or null when there
+  /// is none.
+  ///
+  /// In one transaction because several workers drain at once: a select
+  /// followed by a separate update lets two of them read the same row before
+  /// either writes, and the user gets the same wallpaper downloaded twice.
+  Future<QueueRow?> claimNextQueueRow(String pending, String running) {
+    return transaction(() async {
+      final QueueRow? next = await _oldestQueueRow(pending);
+      if (next == null) return null;
+      await _writeQueueState(
+        WallpaperRef(SourceId(next.source), next.id),
+        DownloadQueueEntriesCompanion(
+          state: Value<String>(running),
+          attempts: Value<int>(next.attempts + 1),
+        ),
+      );
+      return next.copyWith(state: running, attempts: next.attempts + 1);
+    });
+  }
+
+  Future<QueueRow?> _oldestQueueRow(String state) {
+    final SimpleSelectStatement<$DownloadQueueEntriesTable, QueueRow> query =
+        select(downloadQueueEntries)
+          ..where(
+            ($DownloadQueueEntriesTable row) => row.state.equals(state),
+          )
+          ..orderBy(<OrderClauseGenerator<$DownloadQueueEntriesTable>>[
+            ($DownloadQueueEntriesTable row) => OrderingTerm.asc(row.queuedAt),
+          ])
+          ..limit(1);
+    return query.getSingleOrNull();
+  }
+
+  /// Marks [ref] failed for [failure], keeping it in the queue.
+  Future<void> failQueueEntry(WallpaperRef ref, String state, String failure) {
+    return _writeQueueState(
+      ref,
+      DownloadQueueEntriesCompanion(
+        state: Value<String>(state),
+        failure: Value<String>(failure),
+      ),
+    );
+  }
+
+  /// Puts [ref] back to pending and clears its failure, keeping its attempt
+  /// count — a wallpaper that has failed three times should still look like it.
+  Future<void> requeueQueueEntry(WallpaperRef ref, String pending) {
+    return _writeQueueState(
+      ref,
+      DownloadQueueEntriesCompanion(
+        state: Value<String>(pending),
+        failure: const Value<String?>(null),
+      ),
+    );
+  }
+
+  /// Moves every entry in [from] to [to], answering how many moved.
+  ///
+  /// Serves both the retry-all-failed button and the startup demotion of
+  /// entries a killed process left marked running.
+  Future<int> moveQueueEntries(String from, String to) {
+    final UpdateStatement<$DownloadQueueEntriesTable, QueueRow> statement =
+        update(downloadQueueEntries)
+          ..where(($DownloadQueueEntriesTable row) => row.state.equals(from));
+    return statement.write(
+      DownloadQueueEntriesCompanion(
+        state: Value<String>(to),
+        failure: const Value<String?>(null),
+      ),
+    );
+  }
+
+  Future<void> _writeQueueState(
+    WallpaperRef ref,
+    DownloadQueueEntriesCompanion fields,
+  ) async {
+    final UpdateStatement<$DownloadQueueEntriesTable, QueueRow> statement =
+        update(downloadQueueEntries)
+          ..where(($DownloadQueueEntriesTable row) => _matches(row, ref));
+    await statement.write(fields);
+  }
+
+  /// Drops one queue entry. Nothing already written to disk is touched.
+  Future<void> deleteQueueEntry(WallpaperRef ref) {
+    final DeleteStatement<$DownloadQueueEntriesTable, QueueRow> statement =
+        delete(downloadQueueEntries)
+          ..where(($DownloadQueueEntriesTable row) => _matches(row, ref));
+    return statement.go();
+  }
+
+  /// Empties the queue.
+  Future<void> clearQueue() => delete(downloadQueueEntries).go();
 
   /// Every favorite, most recently saved first.
   Future<List<FavoriteRow>> favoriteRows() {

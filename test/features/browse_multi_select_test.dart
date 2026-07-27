@@ -8,6 +8,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/queued_download.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -18,6 +19,7 @@ import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 
 import '../fakes/fake_download_history.dart';
+import '../fakes/fake_download_queue.dart';
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_image_store.dart';
 import '../fakes/fake_secret_store.dart';
@@ -191,51 +193,96 @@ void main() {
     );
   });
 
-  testWidgets('a batch download reports the ones that failed', (
+  testWidgets('a batch queues rather than downloading inline', (
     WidgetTester tester,
   ) async {
-    // "Downloaded 1 of 2" and "Downloaded 2" are different outcomes, and a
-    // snackbar that rounds the first up to the second is a lie about what is
-    // actually on the device.
-    final FakeImageStore images = FakeImageStore(
-      failingIds: const <String>{'7j1mzo'},
-    );
-    await _pumpWall(tester, images: images);
+    // The batch used to await one multi-megabyte original after another inside
+    // this callback, so a hundred wallpapers took a hundred sequential
+    // downloads and closing the app lost every one that had not landed. It now
+    // says "queued", which is the honest word: nothing is on the device yet.
+    final FakeDownloadQueue queue = FakeDownloadQueue();
+    await _pumpWall(tester, queue: queue);
     await _startSelecting(tester);
     await tester.tap(find.byType(WallpaperTile).at(1));
     await _settle(tester);
 
     await tester.tap(find.byIcon(Icons.download_outlined));
     await _settle(tester);
+    // Every unpinned batch asks where it lands now, safe or not.
+    expect(find.text('Download 2 wallpapers to'), findsOneWidget);
+    await _chooseGallery(tester);
 
-    expect(find.text('Downloaded 1 of 2 — 1 failed'), findsOneWidget);
+    expect(find.text('Queued 2 wallpapers'), findsOneWidget);
+    // And the selection is over, the same as every other finished batch.
+    expect(find.text('2 selected'), findsNothing);
   });
 
-  testWidgets('a batch stops on an ejected folder and names it', (
+  testWidgets('re-queuing a wallpaper already waiting counts it once', (
     WidgetTester tester,
   ) async {
-    // Every remaining download would hit the same unwritable folder, so the
-    // batch stops rather than grinding out one failure per wallpaper — and it
-    // says why, instead of a "0 of 2" tally that hides the cause.
+    // "Queued 2" over a queue that grew by one is the same aggregate lie the
+    // old "Downloaded N" tally told. The entry already waiting is a *failed*
+    // one, which is both the realistic case and the only one that survives the
+    // drain the app starts the moment it launches.
+    final FakeDownloadQueue queue = FakeDownloadQueue(
+      initial: <QueuedDownload>[
+        QueuedDownload(
+          wallpaper: _wallpaper('e7jvjd'),
+          queuedAt: DateTime.utc(2026, 7, 26),
+          state: DownloadQueueState.failed,
+          attempts: 1,
+          failure: ImageStoreProblem.source,
+        ),
+      ],
+    );
+    await _pumpWall(tester, queue: queue);
+    await _startSelecting(tester);
+    await tester.tap(find.byType(WallpaperTile).at(1));
+    await _settle(tester);
+
+    await tester.tap(find.byIcon(Icons.download_outlined));
+    await _settle(tester);
+    await _chooseGallery(tester);
+
+    expect(
+      find.text('Queued 1 of 2 — the rest were already waiting'),
+      findsOneWidget,
+    );
+    // And re-queuing did not reset the failed entry to a fresh pending one:
+    // an enqueue is idempotent, not a retry.
+    final QueuedDownload waiting = (await queue.entries()).single;
+    expect(waiting.ref.id, 'e7jvjd');
+    expect(waiting.state, DownloadQueueState.failed);
+  });
+
+  testWidgets('an unreachable folder is reported per entry, not per batch', (
+    WidgetTester tester,
+  ) async {
+    // This used to abandon the whole batch with one toast. The queue is a
+    // better place for it: each entry keeps its own reason and its own Retry,
+    // so reconnecting the card recovers them instead of costing the selection.
     final FakeImageStore images = FakeImageStore(
       failure: const ImageStoreFailure(ImageStoreProblem.folderUnavailable),
     );
-    await _pumpWall(tester, images: images);
+    final FakeDownloadQueue queue = FakeDownloadQueue();
+    await _pumpWall(tester, images: images, queue: queue);
     await _startSelecting(tester);
     await tester.tap(find.byType(WallpaperTile).at(1));
     await _settle(tester);
 
     await tester.tap(find.byIcon(Icons.download_outlined));
     await _settle(tester);
+    await _chooseGallery(tester);
 
+    expect(find.text('Queued 2 wallpapers'), findsOneWidget);
+    final List<QueuedDownload> left = await queue.entries();
+    expect(left, hasLength(2));
     expect(
-      find.text(
-        'Download folder unavailable. '
-        'Reconnect the storage or pick another in Settings.',
+      left.every(
+        (QueuedDownload e) => e.failure == ImageStoreProblem.folderUnavailable,
       ),
-      findsOneWidget,
+      isTrue,
     );
-    expect(find.textContaining('Downloaded 0 of 2'), findsNothing);
   });
 
   // K1 — a not-safe wallpaper in the batch is exactly what the single-download
@@ -264,15 +311,17 @@ void main() {
     expect(find.text('Private library'), findsOneWidget);
   });
 
-  // K2 — with a pin set, downloading no longer asks: the whole point is to skip
-  // the chooser, so even a not-safe batch routes straight to the pin.
-  testWidgets('a pin sends the batch straight through, no chooser', (
+  // K2 was "a pin sends the batch straight through, no chooser". That is no
+  // longer true, and deliberately so: a pin set weeks ago on a single wallpaper
+  // became an invisible standing order over every later selection, which is
+  // exactly how it presented on the device.
+  testWidgets('a pin does not silence a batch; it pre-fills the chooser', (
     WidgetTester tester,
   ) async {
-    final FakeImageStore images = FakeImageStore();
+    final FakeDownloadQueue queue = FakeDownloadQueue();
     await _pumpWall(
       tester,
-      images: images,
+      queue: queue,
       settings: FakeSettingsRepository(
         pinnedDownloadTier: StorageTier.appPrivate,
       ),
@@ -288,9 +337,72 @@ void main() {
     await tester.tap(find.byIcon(Icons.download_outlined));
     await _settle(tester);
 
-    expect(find.text('Download to'), findsNothing);
-    expect(find.text('Downloaded 2 wallpapers'), findsOneWidget);
-    expect(images.receivedTier, StorageTier.appPrivate);
+    // The chooser is up, and it names the pin instead of acting silently.
+    expect(find.text('Download 2 wallpapers to'), findsOneWidget);
+    expect(
+      find.text('Sending every download to Private library.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Private library'));
+    await _settle(tester);
+
+    expect(find.text('Queued 2 wallpapers'), findsOneWidget);
+  });
+
+  testWidgets('Stop clears the pin from the batch chooser', (
+    WidgetTester tester,
+  ) async {
+    // The only place a batch user could reach the pin at all. It used to answer
+    // "dismissed" without clearing anything, so the button did nothing.
+    final FakeSettingsRepository settings = FakeSettingsRepository(
+      pinnedDownloadTier: StorageTier.appPrivate,
+    );
+    final FakeDownloadQueue queue = FakeDownloadQueue();
+    await _pumpWall(tester, queue: queue, settings: settings);
+    await _startSelecting(tester);
+
+    await tester.tap(find.byIcon(Icons.download_outlined));
+    await _settle(tester);
+    await tester.tap(find.text('Stop'));
+    await _settle(tester);
+
+    expect(settings.pinnedTierSaved, isNull);
+    expect(await queue.entries(), isEmpty);
+  });
+
+  testWidgets('a wholly safe batch is asked where it lands too', (
+    WidgetTester tester,
+  ) async {
+    // It used to route silently, on the grounds that the chooser existed for
+    // the destination a not-safe download must not enter unasked — which left
+    // "put these two in my files folder" with no way to say it.
+    await _pumpWall(tester);
+    await _startSelecting(tester);
+    await tester.tap(find.byType(WallpaperTile).at(1));
+    await _settle(tester);
+
+    await tester.tap(find.byIcon(Icons.download_outlined));
+    await _settle(tester);
+
+    expect(find.text('Download 2 wallpapers to'), findsOneWidget);
+    expect(find.text('Gallery'), findsOneWidget);
+    expect(find.text('Private library'), findsOneWidget);
+  });
+
+  testWidgets('dismissing the chooser queues nothing and keeps the ticks', (
+    WidgetTester tester,
+  ) async {
+    final FakeDownloadQueue queue = FakeDownloadQueue();
+    await _pumpWall(tester, queue: queue);
+    await _startSelecting(tester);
+    await tester.tap(find.byIcon(Icons.download_outlined));
+    await _settle(tester);
+
+    await _pressBack(tester);
+
+    expect(await queue.entries(), isEmpty);
+    expect(find.text('1 selected'), findsOneWidget);
   });
 
   testWidgets('closing the bar drops the selection without acting', (
@@ -330,6 +442,7 @@ Future<void> _pumpWall(
   FakeFavoritesRepository? favorites,
   FakeImageStore? images,
   FakeSettingsRepository? settings,
+  FakeDownloadQueue? queue,
   List<Wallpaper>? wallpapers,
 }) async {
   // A real phone's geometry, not the 800x600 default — see the quick-sheet
@@ -368,10 +481,20 @@ Future<void> _pumpWall(
         ),
         downloadHistoryProvider.overrideWithValue(FakeDownloadHistory()),
         imageStoreProvider.overrideWithValue(images ?? FakeImageStore()),
+        downloadQueueProvider.overrideWithValue(queue ?? FakeDownloadQueue()),
       ],
       child: const TelaApp(),
     ),
   );
+  await _settle(tester);
+}
+
+/// Answers the batch destination chooser with the gallery.
+///
+/// Every unpinned batch shows it now, so a download test that does not answer
+/// it is a test that never downloads anything.
+Future<void> _chooseGallery(WidgetTester tester) async {
+  await tester.tap(find.text('Gallery'));
   await _settle(tester);
 }
 

@@ -21,9 +21,94 @@ data class ImageStoreRequest(
     val tier: String,
 )
 
+/**
+ * A copy of an image **already on this device** into one of the three tiers.
+ *
+ * The local-source twin of [ImageStoreRequest]: same destination fields, but
+ * the bytes come from [from] — a MediaStore URI, a SAF document, or a local
+ * file — instead of the network. It is what lets a download change tier without
+ * re-fetching several megabytes tela itself wrote.
+ */
+data class ImageCopyRequest(
+    val source: String,
+    val id: String,
+    val from: String,
+    val purity: String,
+    val tier: String,
+)
+
+/**
+ * One write into a tier: where it goes, what it is called, and where its bytes
+ * come from.
+ *
+ * The seam that lets a download and a local copy share all three tier writers.
+ * Everything those writers know is hard-won and specific — MediaStore
+ * de-duplicating rather than overwriting, the `.nomedia` marker, `"wt"` to
+ * truncate, and which failure paths may delete what they just created — and a
+ * second copy of it to serve local sources is precisely where that knowledge
+ * would rot. So the only thing that varies is [writeBytes].
+ */
+private class ImageWrite(
+    val source: String,
+    val id: String,
+    val extension: String,
+    val purity: String,
+    val tier: String,
+    val writeBytes: (OutputStream) -> Unit,
+)
+
 /** Android-only persistence boundary for tela's three image storage tiers. */
 class ImageStorage(private val context: Context) {
     fun store(request: ImageStoreRequest, outsideGalleryTree: String?): Map<String, Any> {
+        return write(
+            ImageWrite(
+                source = request.source,
+                id = request.id,
+                extension = urlExtension(request.imageUrl),
+                purity = request.purity,
+                tier = request.tier,
+                writeBytes = { output -> copyRemote(request.imageUrl, output) },
+            ),
+            outsideGalleryTree,
+        )
+    }
+
+    /**
+     * Copies a file that is already on this device into [request]'s tier.
+     *
+     * Copies only — deleting the original is [deleteDownloads]' job, and the
+     * two are kept apart so a caller can undo this when the user declines the
+     * system delete prompt.
+     *
+     * The extension comes from the source's MIME type rather than from a URL,
+     * because a `content://` URI has no suffix to read. It is load-bearing:
+     * [listPrivate] drops any file whose name does not match [PRIVATE_FILE], so
+     * a wrong extension would make a moved image silently vanish.
+     */
+    fun copy(request: ImageCopyRequest, outsideGalleryTree: String?): Map<String, Any> {
+        val from = Uri.parse(request.from)
+        return write(
+            ImageWrite(
+                source = request.source,
+                id = request.id,
+                extension = extensionOf(from),
+                purity = request.purity,
+                tier = request.tier,
+                writeBytes = { output -> copyLocal(from, output) },
+            ),
+            outsideGalleryTree,
+        )
+    }
+
+    /**
+     * The purity/tier gate and the routing, shared by [store] and [copy].
+     *
+     * **This is the only place the NSFW rule is applied**, which is why a
+     * caller that cannot prove an image is safe can hand it over as `nsfw` and
+     * rely on the gallery becoming impossible rather than on remembering an
+     * `if` of its own.
+     */
+    private fun write(request: ImageWrite, outsideGalleryTree: String?): Map<String, Any> {
         if (request.purity !in SUPPORTED_PURITIES || request.tier !in SUPPORTED_TIERS) {
             return failure("unavailable")
         }
@@ -52,7 +137,7 @@ class ImageStorage(private val context: Context) {
      * the user with duplicates rather than one current file (owner, 2026-07-19).
      * Looking the row up first makes a re-download idempotent.
      */
-    private fun storeInGallery(request: ImageStoreRequest): Map<String, Any> {
+    private fun storeInGallery(request: ImageWrite): Map<String, Any> {
         val existing = findGalleryImage(fileName(request))
         if (existing != null) return rewriteGalleryImage(existing, request)
         val values = ContentValues().apply {
@@ -65,7 +150,7 @@ class ImageStorage(private val context: Context) {
         val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
             ?: return failure("unavailable")
         return try {
-            resolver.openOutputStream(uri)?.use { output -> copyRemote(request.imageUrl, output) }
+            resolver.openOutputStream(uri)?.use { output -> request.writeBytes(output) }
                 ?: throw IllegalStateException("MediaStore output stream was null")
             markReady(uri)
             success(uri)
@@ -88,7 +173,7 @@ class ImageStorage(private val context: Context) {
      *   destroying a file the user already had, to no purpose — a failed
      *   re-download should leave the existing copy exactly where it was.
      */
-    private fun rewriteGalleryImage(uri: Uri, request: ImageStoreRequest): Map<String, Any> {
+    private fun rewriteGalleryImage(uri: Uri, request: ImageWrite): Map<String, Any> {
         val resolver = context.contentResolver
         // Hides the file from the gallery while it is half-written, the same
         // courtesy the insert path extends.
@@ -97,7 +182,7 @@ class ImageStorage(private val context: Context) {
         }, null, null)
         return try {
             resolver.openOutputStream(uri, "wt")?.use { output ->
-                copyRemote(request.imageUrl, output)
+                request.writeBytes(output)
             } ?: throw IllegalStateException("MediaStore output stream was null")
             markReady(uri)
             success(uri)
@@ -145,7 +230,7 @@ class ImageStorage(private val context: Context) {
     }
 
     private fun storeOutsideGallery(
-        request: ImageStoreRequest,
+        request: ImageWrite,
         outsideGalleryTree: String?,
     ): Map<String, Any> {
         val tree = outsideGalleryTree ?: return failure("notConfigured")
@@ -167,7 +252,7 @@ class ImageStorage(private val context: Context) {
             fileName(request),
         ) ?: return failure("unavailable")
         return try {
-            resolver.openOutputStream(file)?.use { output -> copyRemote(request.imageUrl, output) }
+            resolver.openOutputStream(file)?.use { output -> request.writeBytes(output) }
                 ?: throw IllegalStateException("document output stream was null")
             success(file)
         } catch (error: Exception) {
@@ -182,18 +267,18 @@ class ImageStorage(private val context: Context) {
      * `"wt"` and the absence of a delete-on-failure are load-bearing for the
      * same reasons [rewriteGalleryImage] gives.
      */
-    private fun rewriteDocument(file: Uri, request: ImageStoreRequest): Map<String, Any> {
+    private fun rewriteDocument(file: Uri, request: ImageWrite): Map<String, Any> {
         context.contentResolver.openOutputStream(file, "wt")?.use { output ->
-            copyRemote(request.imageUrl, output)
+            request.writeBytes(output)
         } ?: throw IllegalStateException("document output stream was null")
         return success(file)
     }
 
-    private fun storePrivately(request: ImageStoreRequest): Map<String, Any> {
+    private fun storePrivately(request: ImageWrite): Map<String, Any> {
         val directory = privateDirectory()
-        if (!directory.exists() && !directory.mkdirs()) return failure("unavailable")
+        if (!ensureDirectory(directory)) return failure("unavailable")
         val file = File(directory, fileName(request))
-        file.outputStream().use { output -> copyRemote(request.imageUrl, output) }
+        file.outputStream().use { output -> request.writeBytes(output) }
         return success(Uri.fromFile(file))
     }
 
@@ -349,7 +434,7 @@ class ImageStorage(private val context: Context) {
      */
     fun materialise(location: Uri): Map<String, Any> {
         val directory = previewDirectory()
-        if (!directory.exists() && !directory.mkdirs()) return mapOf("success" to false)
+        if (!ensureDirectory(directory)) return mapOf("success" to false)
         val target = File(directory, "preview-${System.nanoTime()}")
         return try {
             val copied = context.contentResolver.openInputStream(location)?.use { input ->
@@ -469,6 +554,36 @@ class ImageStorage(private val context: Context) {
         return null
     }
 
+    /**
+     * Makes sure [directory] exists, tolerating another thread creating it first.
+     *
+     * The obvious `!exists() && !mkdirs()` is **not** thread-safe, and stopped
+     * being merely theoretical when downloads moved onto a thread pool
+     * (`MainActivity.downloadExecutor`): two concurrent stores both see the
+     * directory missing, both call `mkdirs`, and the loser gets `false` for a
+     * directory that now exists — so a perfectly good download reported
+     * `unavailable` and wrote nothing. Found by `ConcurrentDownloadTest`.
+     *
+     * What matters is the state afterwards, not who created it.
+     */
+    private fun ensureDirectory(directory: File): Boolean {
+        directory.mkdirs()
+        return directory.isDirectory
+    }
+
+    /**
+     * Streams a file already on this device into [output].
+     *
+     * Goes through the ContentResolver, which is what makes one function cover
+     * all three tiers: a MediaStore image, a SAF document and a `file:` URI all
+     * open the same way.
+     */
+    private fun copyLocal(from: Uri, output: OutputStream) {
+        context.contentResolver.openInputStream(from)?.use { input ->
+            input.copyTo(output)
+        } ?: throw IllegalStateException("no input stream for the stored image")
+    }
+
     private fun copyRemote(imageUrl: String, output: OutputStream) {
         val connection = URL(imageUrl).openConnection() as HttpURLConnection
         try {
@@ -497,13 +612,13 @@ class ImageStorage(private val context: Context) {
      * a `SourceId` and a wallpaper's own id, so a bad shape here is a caller
      * bug, not a condition the user can be in.
      */
-    private fun fileName(request: ImageStoreRequest): String {
+    private fun fileName(request: ImageWrite): String {
         require(VALID_SOURCE.matches(request.source)) { "source id has an invalid shape" }
         require(VALID_ID.matches(request.id)) { "wallpaper id has an invalid shape" }
-        return "${request.source}-${request.id}.${imageExtension(request.imageUrl)}"
+        return "${request.source}-${request.id}.${request.extension}"
     }
 
-    private fun imageExtension(imageUrl: String): String {
+    private fun urlExtension(imageUrl: String): String {
         return when {
             imageUrl.substringBefore('?').endsWith(".png", true) -> "png"
             imageUrl.substringBefore('?').endsWith(".webp", true) -> "webp"
@@ -512,8 +627,37 @@ class ImageStorage(private val context: Context) {
         }
     }
 
-    private fun mimeType(request: ImageStoreRequest): String {
-        return when (imageExtension(request.imageUrl)) {
+    /**
+     * The extension for a file already on this device.
+     *
+     * A `content://` URI carries no suffix to read, so the MIME type the
+     * resolver reports is asked first; a `file:` URI answers null there and
+     * falls back to its own suffix. `jpg` is the last resort, matching
+     * [urlExtension] — an unknown type is far likelier to be a JPEG than to be
+     * worth refusing the move over.
+     *
+     * Only the four [PRIVATE_FILE] accepts are ever returned: anything else
+     * would make a copy into the private tier unlistable, which reads to the
+     * user as the image having vanished.
+     */
+    private fun extensionOf(from: Uri): String {
+        val mime = context.contentResolver.getType(from)
+        return when {
+            mime != null -> mimeExtension(mime)
+            else -> urlExtension(from.lastPathSegment.orEmpty())
+        }
+    }
+
+    private fun mimeExtension(mime: String): String {
+        return when (mime.substringBefore(';').trim().lowercase()) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> "jpg"
+        }
+    }
+
+    private fun mimeType(request: ImageWrite): String {
+        return when (request.extension) {
             "png" -> "image/png"
             "webp" -> "image/webp"
             else -> "image/jpeg"

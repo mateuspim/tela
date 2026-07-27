@@ -31,6 +31,36 @@ abstract interface class ImageStore {
     required StorageTier tier,
   });
 
+  /// Copies an image **already on this device** into [tier], under the same
+  /// `source-id` name [store] would give it.
+  ///
+  /// The local-source twin of [store], which can only fetch. It exists so a
+  /// download can change tier without the network: the bytes are already here,
+  /// and re-fetching several megabytes tela wrote itself is both slow and needs
+  /// a connection the user may not have — the same argument that made a past
+  /// download re-appliable from its own file.
+  ///
+  /// [from] is the current location in whatever tier holds it — a MediaStore
+  /// URI, a SAF document, or a local file — and reading all three is the
+  /// adapter's problem, not the caller's.
+  ///
+  /// **This copies; it does not move.** Deleting the original is
+  /// [deleteDownloads]' job, and keeping the two apart is what lets a caller
+  /// undo the copy when the delete is declined.
+  ///
+  /// Enforces the same purity rules [store] does, from the same place — so an
+  /// image whose purity is unknown, and therefore given as `nsfw`, can never be
+  /// copied into the gallery whatever the caller asks for.
+  ///
+  /// Throws a safe `ImageStoreFailure`, never one naming [from] or the result.
+  Future<StoredImage> copyStoredImage({
+    required SourceId source,
+    required String id,
+    required Uri from,
+    required Purity purity,
+    required StorageTier tier,
+  });
+
   /// Everything in the app-private tier, most recently saved first.
   ///
   /// Only this tier can be listed, and that is the point: the other two write

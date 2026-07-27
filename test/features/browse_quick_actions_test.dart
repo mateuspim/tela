@@ -18,6 +18,7 @@ import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 
 import '../fakes/fake_download_history.dart';
+import '../fakes/fake_download_queue.dart';
 import '../fakes/fake_favorites_repository.dart';
 import '../fakes/fake_image_store.dart';
 import '../fakes/fake_secret_store.dart';
@@ -257,6 +258,7 @@ Future<void> _pumpWall(
           history ?? FakeDownloadHistory(),
         ),
         imageStoreProvider.overrideWithValue(images ?? FakeImageStore()),
+        downloadQueueProvider.overrideWithValue(FakeDownloadQueue()),
         wallpaperApplierProvider.overrideWithValue(
           applier ?? FakeWallpaperApplier(),
         ),

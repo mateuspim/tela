@@ -616,6 +616,11 @@
     }
   },
 
+  "settingsDownloadPinHelp": "Downloading stops asking where files go while this is on.",
+  "@settingsDownloadPinHelp": {
+    "description": "Explains, in Settings, what an active pin is doing. The pin silences the destination chooser everywhere, so it is the one setting the user stops being shown at the moment it starts working — this is where they find out why downloading went quiet."
+  },
+
   "downloadPinStop": "Stop",
   "@downloadPinStop": {
     "description": "Action in the chooser that clears the active 'Keep sending here' pin without downloading anything."
@@ -1150,6 +1155,238 @@
     "description": "Subtitle of the settings entry that opens the download history."
   },
 
+  "moveToPrivateAction": "Move to private",
+  "@moveToPrivateAction": {
+    "description": "Label and confirm button for moving a download into the private library."
+  },
+
+  "moveToPrivateTitle": "{count, plural, =1{Move this to the private library?} other{Move {count} wallpapers to the private library?}}",
+  "@moveToPrivateTitle": {
+    "description": "Confirmation title before moving downloads into the private library.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "moveToPrivateBody": "{count, plural, =1{The file leaves Photos and moves behind the app lock. tela cannot move it back into Photos afterwards — to get it there again you would download it fresh.} other{The {count} files leave Photos and move behind the app lock. tela cannot move them back into Photos afterwards — to get them there again you would download them fresh.}}",
+  "@moveToPrivateBody": {
+    "description": "Says both halves plainly: where the file goes, and that the trip is one-way. The private tier keeps no record of what it holds beyond a file name, so tela can never prove a private image is safe for Photos — a user who is not told that will discover it when they try to undo the move.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "moveToPrivateDone": "{count, plural, =1{Moved to the private library} other{Moved {count} to the private library}}",
+  "@moveToPrivateDone": {
+    "description": "Confirms every wallpaper in the move landed in the private library.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "moveToPrivatePartial": "Moved {moved} of {total} — the rest are where they were",
+  "@moveToPrivatePartial": {
+    "description": "Reports a move where some files did not go — a dismissed system delete prompt, or a copy that failed. Says the rest are unchanged rather than leaving the user to guess whether they are now in two places, which is the outcome the rollback exists to prevent.",
+    "placeholders": {
+      "moved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+
+  "moveOutOfPrivateAction": "Move out",
+  "@moveOutOfPrivateAction": {
+    "description": "Label and confirm button for moving an image out of the private library into the files folder."
+  },
+
+  "moveOutOfPrivateTitle": "{count, plural, =1{Move this out of the private library?} other{Move {count} images out of the private library?}}",
+  "@moveOutOfPrivateTitle": {
+    "description": "Confirmation title before moving images out of the private library."
+  },
+
+  "moveOutOfPrivateBody": "{count, plural, =1{It moves to your downloads folder, where any file manager can reach it — never to Photos, because tela cannot tell whether a private image is safe to show there. tela stops tracking it: it will not appear anywhere in the app afterwards.} other{They move to your downloads folder, where any file manager can reach them — never to Photos, because tela cannot tell whether a private image is safe to show there. tela stops tracking them: they will not appear anywhere in the app afterwards.}}",
+  "@moveOutOfPrivateBody": {
+    "description": "The two surprises this move holds, said before it happens: it cannot go to Photos, and the image leaves every tela screen. Moving out of the private library sounds like it lands somewhere else in the app, and it does not — there is no history row to write, because the private tier keeps no wallpaper to write one from.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "moveOutOfPrivateDone": "{count, plural, =1{Moved to your downloads folder} other{Moved {count} to your downloads folder}}",
+  "@moveOutOfPrivateDone": {
+    "description": "Confirms images left the private library for the files folder. Names the destination rather than saying 'moved out', which would leave the user hunting for them.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "moveOutOfPrivatePartial": "Moved {moved} of {total} — the rest are still private",
+  "@moveOutOfPrivatePartial": {
+    "description": "Reports a partial move out of the private library, saying where the remainder still is.",
+    "placeholders": {
+      "moved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+
+  "moveFailure": "Could not move that. Nothing changed.",
+  "@moveFailure": {
+    "description": "Shown when the move itself failed. The second sentence is the point: the rollback means a failed move leaves the file exactly where it was, never in two places."
+  },
+
+  "downloadHistoryTab": "History",
+  "@downloadHistoryTab": {
+    "description": "Tab naming the finished downloads, beside the queue of ones still owed."
+  },
+
+  "downloadQueueTab": "Queue",
+  "@downloadQueueTab": {
+    "description": "Tab naming the downloads still owed. Badged with the count while any are waiting, so a batch draining in the background is visible without opening the tab."
+  },
+
+  "downloadQueueEmpty": "Nothing waiting. Wallpapers you download in a batch queue up here, where you can pause them or retry the ones that failed.",
+  "@downloadQueueEmpty": {
+    "description": "Empty state for the download queue. Says what the screen is for, since an empty queue is the normal state and gives no other clue."
+  },
+
+  "downloadQueueSummary": "{count, plural, =1{1 download left} other{{count} downloads left}}",
+  "@downloadQueueSummary": {
+    "description": "How many downloads are still owed — pending plus in flight.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "downloadQueueSummaryPaused": "{count, plural, =1{1 download left · paused} other{{count} downloads left · paused}}",
+  "@downloadQueueSummaryPaused": {
+    "description": "The same count while the queue is paused. Says so on the count itself, because a paused queue and a stalled one look identical otherwise.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "downloadQueueSummaryFailed": "{owed} left · {failed} failed",
+  "@downloadQueueSummaryFailed": {
+    "description": "Names the failures beside the remaining count. A bare 'N left' over failed downloads is the aggregate lie the old batch snackbar told: those wallpapers are not coming without the user acting.",
+    "placeholders": {
+      "owed": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+
+  "downloadQueueWaiting": "Waiting",
+  "@downloadQueueWaiting": {
+    "description": "State of a queued download that has not started."
+  },
+
+  "downloadQueueDownloading": "Downloading…",
+  "@downloadQueueDownloading": {
+    "description": "State of a queued download that is in flight right now."
+  },
+
+  "downloadQueueFailed": "{reason} · {attempts, plural, =1{1 try} other{{attempts} tries}}",
+  "@downloadQueueFailed": {
+    "description": "State of a failed queue entry: why, and how many times it has been tried. The attempt count is what distinguishes a wallpaper that failed once from one that will not download at all.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      },
+      "attempts": {
+        "type": "int"
+      }
+    }
+  },
+
+  "downloadQueueReasonSource": "Could not reach the image",
+  "@downloadQueueReasonSource": {
+    "description": "Failure reason: the download itself did not complete. Names the network rather than the device, because retrying is what fixes it."
+  },
+
+  "downloadQueueReasonUnavailable": "That destination is not available",
+  "@downloadQueueReasonUnavailable": {
+    "description": "Failure reason: the storage tier cannot be used on this device."
+  },
+
+  "downloadQueueReasonNotConfigured": "Choose a download folder first",
+  "@downloadQueueReasonNotConfigured": {
+    "description": "Failure reason: the files-outside-gallery tier has no folder yet. Phrased as the action that fixes it — the queue worker cannot open the folder picker itself, so the user has to."
+  },
+
+  "downloadQueueReasonFolderUnavailable": "Reconnect the storage it saves to",
+  "@downloadQueueReasonFolderUnavailable": {
+    "description": "Failure reason: a folder is set but unreachable, typically an ejected SD card. Deliberately distinct from having no folder at all — nothing was rerouted, and the fix is to reconnect rather than to choose again."
+  },
+
+  "downloadQueueReasonRestricted": "Not allowed in that destination",
+  "@downloadQueueReasonRestricted": {
+    "description": "Failure reason: the destination would break the image's privacy rules, e.g. an explicit wallpaper aimed at the gallery."
+  },
+
+  "downloadQueueReasonUnknown": "Something went wrong",
+  "@downloadQueueReasonUnknown": {
+    "description": "Failure reason for anything unclassified. Never names a path or a URL, matching the rule ImageStoreFailure follows."
+  },
+
+  "downloadQueuePrivateEntry": "Private download",
+  "@downloadQueuePrivateEntry": {
+    "description": "Stands in for an explicit wallpaper's id on the queue list, which sits behind no app-lock and no FLAG_SECURE. The entry still counts and still drains; only what identifies it is withheld until the private library has been unlocked this session."
+  },
+
+  "downloadQueueRetry": "Retry",
+  "@downloadQueueRetry": {
+    "description": "Puts one failed download back in line."
+  },
+
+  "downloadQueueRetryAll": "Retry all",
+  "@downloadQueueRetryAll": {
+    "description": "Puts every failed download back in line. Shown only when something has failed."
+  },
+
+  "downloadQueuePause": "Pause",
+  "@downloadQueuePause": {
+    "description": "Stops the queue starting anything new. Anything already downloading finishes — a half-written file is worse than one more download."
+  },
+
+  "downloadQueueResume": "Resume",
+  "@downloadQueueResume": {
+    "description": "Picks a paused queue back up."
+  },
+
+  "downloadQueueCancel": "Remove from queue",
+  "@downloadQueueCancel": {
+    "description": "Drops one entry. Says 'remove from queue' and not 'cancel' because a download already in flight still lands — this takes it out of the line, it cannot unwrite a file."
+  },
+
+  "downloadQueueCancelAll": "Empty the queue",
+  "@downloadQueueCancelAll": {
+    "description": "Drops every entry. Nothing already downloaded is touched, which the wording has to leave no room to doubt on a screen full of wallpapers."
+  },
+
   "downloadHistoryEmpty": "Nothing downloaded yet. Downloaded wallpapers land here, ready to set again without a second download.",
   "@downloadHistoryEmpty": {
     "description": "Shown when no download has been recorded. Explicit downloads are never recorded, so it stays empty for those by design."
@@ -1590,9 +1827,9 @@
     }
   },
 
-  "batchDownloadDone": "{count, plural, =1{Downloaded 1 wallpaper} other{Downloaded {count} wallpapers}}",
-  "@batchDownloadDone": {
-    "description": "Confirms every wallpaper in a batch download was saved.",
+  "batchDownloadQueued": "{count, plural, =1{Queued 1 wallpaper} other{Queued {count} wallpapers}}",
+  "@batchDownloadQueued": {
+    "description": "Confirms a batch went into the download queue. Says 'queued' and not 'downloaded' because at this moment nothing is on the device yet — the old wording promised a finished download that had not happened.",
     "placeholders": {
       "count": {
         "type": "int"
@@ -1600,20 +1837,22 @@
     }
   },
 
-  "batchDownloadPartial": "Downloaded {saved} of {total} — {failed} failed",
-  "@batchDownloadPartial": {
-    "description": "Reports a batch download where some wallpapers could not be saved. Never silently drops the failures.",
+  "batchDownloadQueuedPartial": "Queued {queued} of {total} — the rest were already waiting",
+  "@batchDownloadQueuedPartial": {
+    "description": "Shown when some of the ticked wallpapers were already in the queue, so the queue grew by less than the selection. Claiming the full count would be a lie about what the queue now holds.",
     "placeholders": {
-      "saved": {
+      "queued": {
         "type": "int"
       },
       "total": {
         "type": "int"
-      },
-      "failed": {
-        "type": "int"
       }
     }
+  },
+
+  "batchDownloadQueuedView": "View",
+  "@batchDownloadQueuedView": {
+    "description": "Snackbar action opening the download queue. A queued batch is otherwise invisible until the user goes looking for it."
   },
 
   "batchForgetTitle": "{count, plural, =1{Remove from history?} other{Remove {count} from history?}}",
