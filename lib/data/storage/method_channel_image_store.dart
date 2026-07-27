@@ -5,9 +5,11 @@ import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/image_store.dart';
 
 /// Signature of tela's native image-storage method.
@@ -33,6 +35,7 @@ class MethodChannelImageStore implements ImageStore {
 
   @override
   Future<StoredImage> store({
+    required SourceId source,
     required String id,
     required String imageUrl,
     required Purity purity,
@@ -42,6 +45,7 @@ class MethodChannelImageStore implements ImageStore {
       final Object? raw = await _invokeMethod(
         'storeImage',
         <String, String>{
+          'source': source.value,
           'id': id,
           'imageUrl': imageUrl,
           'purity': purity.name,
@@ -247,14 +251,19 @@ class MethodChannelImageStore implements ImageStore {
 
   PrivateImage? _privateImageFrom(Object? raw) {
     if (raw is! Map<Object?, Object?>) return null;
-    final Object? id = raw['id'];
+    final Object? ref = raw['ref'];
     final Object? location = raw['location'];
     final Object? savedAt = raw['savedAt'];
     final Object? sizeBytes = raw['sizeBytes'];
-    if (id is! String || location is! String) return null;
+    if (ref is! String || location is! String) return null;
     if (savedAt is! int || sizeBytes is! int) return null;
+    // Skipped rather than thrown on: the private directory holds names tela
+    // wrote, but nothing stops a file arriving there by other means, and one
+    // such file must cost its own tile and not the whole listing.
+    final WallpaperRef? parsed = WallpaperRef.tryParse(ref);
+    if (parsed == null) return null;
     return PrivateImage(
-      id: id,
+      ref: parsed,
       location: Uri.parse(location),
       savedAt: DateTime.fromMillisecondsSinceEpoch(savedAt),
       sizeBytes: sizeBytes,

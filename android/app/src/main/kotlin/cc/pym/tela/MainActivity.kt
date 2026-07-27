@@ -438,11 +438,12 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun imageStoreRequest(call: MethodCall): ImageStoreRequest? {
+        val source = call.argument<String>("source") ?: return null
         val id = call.argument<String>("id") ?: return null
         val imageUrl = call.argument<String>("imageUrl") ?: return null
         val purity = call.argument<String>("purity") ?: return null
         val tier = call.argument<String>("tier") ?: return null
-        return ImageStoreRequest(id, imageUrl, purity, tier)
+        return ImageStoreRequest(source, id, imageUrl, purity, tier)
     }
 
     /**

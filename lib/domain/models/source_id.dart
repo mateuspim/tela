@@ -26,13 +26,20 @@ class SourceId {
   /// a row or a route to blame and a silent default would attribute one
   /// source's wallpaper to another.
   factory SourceId.parse(String raw) {
-    if (!_shape.hasMatch(raw)) {
-      throw ArgumentError(
-        'source id must be lowercase letters, digits or "_", got "$raw"',
-      );
-    }
-    return SourceId(raw);
+    return SourceId.tryParse(raw) ??
+        (throw ArgumentError(
+          'source id must be lowercase letters, digits or "_", got "$raw"',
+        ));
   }
+
+  /// The same read as [SourceId.parse], answering null instead of throwing.
+  ///
+  /// For the callers that are *parsing untrusted text and expect misses* — a
+  /// file name found in a directory the user can also put their own files in —
+  /// where a throw would have to be caught, and catching an `Error` is exactly
+  /// what the analyzer forbids.
+  static SourceId? tryParse(String raw) =>
+      _shape.hasMatch(raw) ? SourceId(raw) : null;
 
   /// Wallhaven — the source tela shipped with, and the one every row written
   /// before schema v6 belongs to.

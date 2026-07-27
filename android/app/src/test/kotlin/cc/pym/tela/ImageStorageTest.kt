@@ -51,7 +51,13 @@ class ImageStorageTest {
         return File(directory, name).apply { writeText(contents) }
     }
 
-    private fun request(purity: String, tier: String, id: String = "abc123") = ImageStoreRequest(
+    private fun request(
+        purity: String,
+        tier: String,
+        id: String = "abc123",
+        source: String = "wallhaven",
+    ) = ImageStoreRequest(
+        source = source,
         id = id,
         imageUrl = unreachableImage,
         purity = purity,
@@ -106,12 +112,13 @@ class ImageStorageTest {
      * worth knowing before anyone "simplifies" either:
      *
      * - `require(VALID_ID…)` in `fileName`, the obvious one.
-     * - The `wallhaven-` **prefix**, which is the load-bearing one and does not
-     *   look like a guard at all. `../tela` becomes `wallhaven-../tela.jpg`, and
+     * - The **source prefix**, which is the load-bearing one and does not look
+     *   like a guard at all. `../tela` becomes `wallhaven-../tela.jpg`, and
      *   `wallhaven-..` is an ordinary directory name, not a parent reference —
      *   so the traversal is dead before the regex is consulted. Drop the prefix
      *   and the regex alone still holds; drop both and this test fails with a
-     *   file written into `filesDir`.
+     *   file written into `filesDir`. It became the *source's* name on
+     *   2026-07-26 and is no weaker for it: `VALID_SOURCE` admits no dot.
      *
      * `../tela` is chosen over a deeper `../../…` on purpose: it lands in
      * `filesDir`, which exists, so the escaping write would really happen. A
@@ -131,10 +138,10 @@ class ImageStorageTest {
     // --- deletePrivate, and the path guard ----------------------------------
 
     @Test
-    fun `deletePrivate removes the file for its id`() {
+    fun `deletePrivate removes the file for its key`() {
         val file = writePrivateImage("wallhaven-abc123.jpg")
 
-        val result = storage.deletePrivate("abc123")
+        val result = storage.deletePrivate("wallhaven-abc123")
 
         assertEquals(true, result["success"])
         assertFalse(file.exists())
@@ -149,7 +156,7 @@ class ImageStorageTest {
      * is pinned instead by the store path, where a path *is* built from the id.
      */
     @Test
-    fun `deletePrivate refuses a traversing id and deletes nothing`() {
+    fun `deletePrivate refuses a traversing key and deletes nothing`() {
         val outside = File(context.filesDir, "tela.db").apply { writeText("database") }
 
         val result = storage.deletePrivate("../tela.db")
@@ -160,10 +167,10 @@ class ImageStorageTest {
     }
 
     @Test
-    fun `deletePrivate reports an id it holds no file for`() {
+    fun `deletePrivate reports a key it holds no file for`() {
         writePrivateImage("wallhaven-abc123.jpg")
 
-        val result = storage.deletePrivate("zzz999")
+        val result = storage.deletePrivate("wallhaven-zzz999")
 
         assertEquals(false, result["success"])
         assertEquals("unavailable", errorCodeOf(result))
@@ -172,7 +179,7 @@ class ImageStorageTest {
     // --- deleteDownload, the hard delete (J) --------------------------------
 
     /**
-     * The app-private branch recovers the id from the file's own name and reuses
+     * The app-private branch recovers the key from the file's own name and reuses
      * [ImageStorage.deletePrivate], so its listing-filter guard still stands —
      * the only tier Robolectric can exercise, the other two being MediaStore and
      * SAF (device-only, as elsewhere in this file).
@@ -231,12 +238,15 @@ class ImageStorageTest {
 
         val images = imagesFrom(storage.listPrivate())
 
-        assertEquals(listOf("newer", "older"), images.map { it["id"] })
+        assertEquals(
+            listOf("wallhaven-newer", "wallhaven-older"),
+            images.map { it["ref"] },
+        )
     }
 
     /**
      * Only names tela itself wrote are listed. A stray file in that directory
-     * has no Wallhaven id to hand back, so it is skipped rather than surfaced
+     * has no `source-id` to hand back, so it is skipped rather than surfaced
      * with a guessed one.
      */
     @Test
@@ -244,10 +254,11 @@ class ImageStorageTest {
         writePrivateImage("wallhaven-abc123.jpg")
         writePrivateImage("notes.txt")
         writePrivateImage("screenshot.jpg")
+        writePrivateImage("IMG-20260726.jpg")
 
         val images = imagesFrom(storage.listPrivate())
 
-        assertEquals(listOf("abc123"), images.map { it["id"] })
+        assertEquals(listOf("wallhaven-abc123"), images.map { it["ref"] })
     }
 
     @Test
@@ -266,6 +277,90 @@ class ImageStorageTest {
 
         assertEquals(true, result["success"])
         assertTrue(imagesFrom(result).isEmpty())
+    }
+
+    // --- the source in the file name (2026-07-26) ---------------------------
+
+    /**
+     * The regression test for the bug this whole change exists for: `fileName`
+     * hardcoded a `wallhaven-` prefix, so **every Konachan download was filed
+     * under Wallhaven's name** — in all three tiers, and in the app-private one
+     * that name is the only record of where the image came from.
+     *
+     * The store fails (there is no route to the network here), but it fails
+     * *after* opening the file, which is the same seam the traversal test above
+     * uses to prove where a write did or did not land.
+     */
+    @Test
+    fun `a download is named for the source that issued it`() {
+        storage.store(request("sfw", "appPrivate", id = "406484", source = "konachan"), null)
+
+        assertTrue(File(privateDirectory(), "konachan-406484.jpg").exists())
+        assertFalse(
+            "the Konachan download was filed under Wallhaven's name",
+            File(privateDirectory(), "wallhaven-406484.jpg").exists(),
+        )
+    }
+
+    /** A source shape no `SourceId` could hold never reaches a path. */
+    @Test
+    fun `a traversing source cannot write outside the private tier`() {
+        val escaped = File(context.filesDir, "tela.jpg")
+
+        val result = storage.store(
+            request("sfw", "appPrivate", id = "tela", source = "../"),
+            null,
+        )
+
+        assertEquals(false, result["success"])
+        assertFalse("a file was written outside the tier", escaped.exists())
+    }
+
+    @Test
+    fun `listPrivate reports which source each file came from`() {
+        writePrivateImage("konachan-406484.jpg").setLastModified(9_000L)
+        writePrivateImage("wallhaven-abc123.jpg").setLastModified(1_000L)
+
+        val images = imagesFrom(storage.listPrivate())
+
+        assertEquals(
+            listOf("konachan-406484", "wallhaven-abc123"),
+            images.map { it["ref"] },
+        )
+    }
+
+    /**
+     * The migration that isn't one: every file written before names carried a
+     * source is Wallhaven's, and already carries `wallhaven` as its prefix — the
+     * hardcoded string happened to be right for the only source that had ever
+     * shipped. So an accumulated private tier lists unchanged across this
+     * upgrade, with no rename pass and no rows to rewrite.
+     */
+    @Test
+    fun `a file written before the source prefix still lists as wallhaven`() {
+        writePrivateImage("wallhaven-abc123.jpg")
+
+        val images = imagesFrom(storage.listPrivate())
+
+        assertEquals("wallhaven-abc123", images.single()["ref"])
+    }
+
+    /**
+     * Why the key is source-qualified rather than the bare id it used to be:
+     * `deletePrivate` deletes **every** file its filter matches, so two sources
+     * issuing the same number would have deleted each other's image. Konachan
+     * and yande.re really do share an id space this way.
+     */
+    @Test
+    fun `deletePrivate does not reach another source's file with the same id`() {
+        val konachan = writePrivateImage("konachan-406484.jpg")
+        val other = writePrivateImage("yandere-406484.jpg")
+
+        val result = storage.deletePrivate("konachan-406484")
+
+        assertEquals(true, result["success"])
+        assertFalse(konachan.exists())
+        assertTrue("another source's file with the same id was deleted", other.exists())
     }
 
     // --- releasePreview, and its own path guard -----------------------------

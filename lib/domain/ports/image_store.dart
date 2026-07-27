@@ -3,6 +3,7 @@ import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
@@ -14,9 +15,16 @@ import 'package:tela/domain/models/stored_image.dart';
 abstract interface class ImageStore {
   /// Downloads and persists one image.
   ///
+  /// [source] and [id] together name the file on disk (`wallhaven-e7jvjd.jpg`),
+  /// which is why the source is a parameter and not an afterthought: the
+  /// app-private tier is listed back off those names alone, so a file stored
+  /// without its source is a file whose origin is gone. Take them from
+  /// `Wallpaper.ref` rather than composing the pair by hand.
+  ///
   /// Throws a safe `ImageStoreFailure`, never one containing [imageUrl] or a
   /// private local path.
   Future<StoredImage> store({
+    required SourceId source,
     required String id,
     required String imageUrl,
     required Purity purity,

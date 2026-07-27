@@ -7,8 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
+import 'package:tela/core/ui/wallpaper_source_badge.dart';
+import 'package:tela/core/ui/wallpaper_source_labels_scope.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
 
 import '../fakes/fake_app_lock.dart';
@@ -174,7 +178,7 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
-      expect(store.deletedIds, isEmpty, reason: 'a deletion is not undoable');
+      expect(store.deletedRefs, isEmpty, reason: 'a deletion is not undoable');
       // The cancelled dialog leaves the tick alone: the user cancelled the
       // deletion, not the selection.
       expect(find.text('1 selected'), findsOneWidget);
@@ -184,7 +188,10 @@ void main() {
       await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();
 
-      expect(store.deletedIds, <String>['e7jvjd']);
+      expect(
+        store.deletedRefs,
+        <WallpaperRef>[const WallpaperRef(SourceId.wallhaven, 'e7jvjd')],
+      );
       expect(find.textContaining('Nothing here'), findsOneWidget);
     });
 
@@ -226,15 +233,101 @@ void main() {
       expect(find.text("Couldn't open the private library."), findsOneWidget);
     });
   });
+
+  group('source badge', () {
+    testWidgets('a private tile names the source its file came from', (
+      WidgetTester tester,
+    ) async {
+      // The one library grid the badge did not reach, because `PrivateImage`
+      // carried a bare id: this tier writes no history row, so its source had
+      // nowhere to live until the file name started carrying it.
+      await _pump(
+        tester,
+        FakeImageStore(
+          privateLibrary: <PrivateImage>[
+            _image('406484', source: SourceId.konachan),
+            _image('e7jvjd'),
+          ],
+        ),
+        labels: const <String, String>{
+          'wallhaven': 'Wallhaven',
+          'konachan': 'Konachan',
+        },
+      );
+
+      expect(find.text('Konachan'), findsOneWidget);
+      expect(find.text('Wallhaven'), findsOneWidget);
+    });
+
+    testWidgets('the badge is unconditional here, unlike the browse wall', (
+      WidgetTester tester,
+    ) async {
+      // No `showSourceBadge` flag on this grid: the private tier is mixed by
+      // nature — one folder holding whatever any source sent it — so there is
+      // no single-source case for a badge to say nothing in.
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[_image('e7jvjd')]),
+        labels: const <String, String>{'wallhaven': 'Wallhaven'},
+      );
+
+      expect(find.byType(WallpaperSourceBadge), findsOneWidget);
+    });
+
+    testWidgets('a screen reader hears where the wallpaper came from', (
+      WidgetTester tester,
+    ) async {
+      await _pump(
+        tester,
+        FakeImageStore(
+          privateLibrary: <PrivateImage>[
+            _image('406484', source: SourceId.konachan),
+          ],
+        ),
+        labels: const <String, String>{'konachan': 'Konachan'},
+      );
+
+      expect(find.bySemanticsLabel('From Konachan'), findsOneWidget);
+    });
+
+    testWidgets('an unnamed source draws no badge rather than a raw id', (
+      WidgetTester tester,
+    ) async {
+      // A file left by a build whose source this one has since retired. The
+      // no-scope case is the same claim: the tile must still draw.
+      await _pump(
+        tester,
+        FakeImageStore(
+          privateLibrary: <PrivateImage>[
+            _image('12345', source: const SourceId('yandere')),
+          ],
+        ),
+        labels: const <String, String>{'wallhaven': 'Wallhaven'},
+      );
+
+      expect(find.byType(WallpaperSourceBadge), findsNothing);
+      expect(find.text('yandere'), findsNothing);
+      expect(
+        find.bySemanticsLabel('Private wallpaper 12345'),
+        findsOneWidget,
+        reason: 'an unknown source must cost the badge, not the tile',
+      );
+    });
+  });
 }
 
+/// Mounts the screen. [labels] stands in for the root-level scope `app.dart`
+/// wires from the source registry; omitting it is the no-scope case, which must
+/// draw no badge rather than throw.
 Future<void> _pump(
   WidgetTester tester,
   FakeImageStore store, {
   FakeScreenGuard? guard,
   FakeAppLock? lock,
   bool locked = false,
+  Map<String, String>? labels,
 }) async {
+  const Widget screen = PrivateLibraryScreen();
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
@@ -246,26 +339,31 @@ Future<void> _pump(
           FakeSettingsRepository(privateLibraryLocked: locked),
         ),
       ],
-      child: const MaterialApp(
-        localizationsDelegates: <LocalizationsDelegate<Object>>[
+      child: MaterialApp(
+        localizationsDelegates: const <LocalizationsDelegate<Object>>[
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: PrivateLibraryScreen(),
+        home: labels == null
+            ? screen
+            : WallpaperSourceLabelsScope(labels: labels, child: screen),
       ),
     ),
   );
   await tester.pumpAndSettle();
 }
 
-PrivateImage _image(String id) => PrivateImage(
-  id: id,
-  location: Uri.file('/data/user/0/cc.pym.tela/files/wallpapers/w-$id.jpg'),
-  savedAt: DateTime.utc(2026, 7, 14),
-  sizeBytes: 2048,
-);
+PrivateImage _image(String id, {SourceId source = SourceId.wallhaven}) =>
+    PrivateImage(
+      ref: WallpaperRef(source, id),
+      location: Uri.file(
+        '/data/user/0/cc.pym.tela/files/wallpapers/${source.value}-$id.jpg',
+      ),
+      savedAt: DateTime.utc(2026, 7, 14),
+      sizeBytes: 2048,
+    );
 
 /// Long-presses the private tile into selection, then asks to delete it.
 Future<void> _deleteSelected(WidgetTester tester) async {

@@ -17,6 +17,41 @@ class WallpaperRef {
   /// Creates a reference to [id] as [source] issued it.
   const WallpaperRef(this.source, this.id);
 
+  /// Reads back a [key] — `'wallhaven-e7jvjd'` — into its two halves.
+  ///
+  /// The inverse of [key], and it exists for the one place a ref is stored as
+  /// a flat string rather than two columns: the **name of a downloaded file**.
+  /// The app-private tier writes no history row, so a private image's source
+  /// survives only in its file name.
+  ///
+  /// Splitting on the *first* `-` is unambiguous because [SourceId] admits no
+  /// hyphen, and the storage adapter refuses to write an id containing one.
+  ///
+  /// Throws [ArgumentError] for anything that is not two non-empty halves,
+  /// rather than guessing — attributing one source's wallpaper to another is
+  /// exactly the silent error this type was introduced to stop.
+  ///
+  /// ```dart
+  /// WallpaperRef.parse('konachan-406484').id; // '406484'
+  /// ```
+  factory WallpaperRef.parse(String key) {
+    return WallpaperRef.tryParse(key) ??
+        (throw ArgumentError('wallpaper ref must be "source-id", got "$key"'));
+  }
+
+  /// The same read as [WallpaperRef.parse], answering null instead of throwing.
+  ///
+  /// The form the private-tier listing wants: that directory holds file names
+  /// tela wrote, but nothing stops a user putting their own file beside them,
+  /// and one such file must cost its own tile rather than the whole library.
+  static WallpaperRef? tryParse(String key) {
+    final int split = key.indexOf('-');
+    if (split <= 0 || split == key.length - 1) return null;
+    final SourceId? source = SourceId.tryParse(key.substring(0, split));
+    if (source == null) return null;
+    return WallpaperRef(source, key.substring(split + 1));
+  }
+
   /// The site the wallpaper came from.
   final SourceId source;
 

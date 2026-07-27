@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/domain/use_cases/apply_private_image.dart';
 
@@ -39,7 +41,7 @@ Uri _location(String id) =>
     Uri.file('/data/user/0/cc.pym.tela/files/wallpapers/wallhaven-$id.jpg');
 
 PrivateImage _image(String id) => PrivateImage(
-  id: id,
+  ref: WallpaperRef(SourceId.wallhaven, id),
   location: _location(id),
   savedAt: DateTime.utc(2026, 7, 14),
   sizeBytes: 2048,

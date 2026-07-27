@@ -8,6 +8,8 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/features/private_library/private_immersive_session.dart';
 
@@ -217,18 +219,24 @@ void main() {
 
     // Delete 'b': 'c' slides up into its place — the next image, now last.
     await _confirmDelete(tester);
-    expect(store.deletedIds, <String>['b']);
+    expect(store.deletedRefs.map((WallpaperRef r) => r.id), <String>['b']);
     expect(find.bySemanticsLabel('Private wallpaper c'), findsWidgets);
     expect(find.bySemanticsLabel('2 of 2'), findsOneWidget);
 
     // Delete 'c' at the end: selection clamps back to 'a', the previous.
     await _confirmDelete(tester);
-    expect(store.deletedIds, <String>['b', 'c']);
+    expect(
+      store.deletedRefs.map((WallpaperRef r) => r.id),
+      <String>['b', 'c'],
+    );
     expect(find.bySemanticsLabel('Private wallpaper a'), findsWidgets);
 
     // Delete the last one: the viewer closes back to the grid stand-in.
     await _confirmDelete(tester);
-    expect(store.deletedIds, <String>['b', 'c', 'a']);
+    expect(
+      store.deletedRefs.map((WallpaperRef r) => r.id),
+      <String>['b', 'c', 'a'],
+    );
     expect(find.text('grid'), findsOneWidget);
     expect(find.byType(PrivateImmersiveSession), findsNothing);
   });
@@ -329,7 +337,7 @@ GallerySessionController<PrivateImage> _session(
     identity: 'private-library',
     items: images,
     initialIndex: initialIndex,
-    itemKey: (PrivateImage image) => image.id,
+    itemKey: (PrivateImage image) => image.ref.key,
   );
 }
 
@@ -338,7 +346,7 @@ Uri _location(String id) =>
 
 PrivateImage _image(String id, {int? width = 1080, int? height = 2400}) =>
     PrivateImage(
-      id: id,
+      ref: WallpaperRef(SourceId.wallhaven, id),
       location: _location(id),
       savedAt: DateTime.utc(2026, 7, 14),
       sizeBytes: 2048,

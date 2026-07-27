@@ -104,7 +104,7 @@ class _PrivateImmersiveSessionState
         // A corrupt file has no known ratio; a square canvas frames its safe
         // broken-image state without dividing by an unknown dimension.
         aspectRatio: image.aspectRatio ?? 1,
-        semanticsLabel: l10n.privateLibraryImageLabel(image.id),
+        semanticsLabel: l10n.privateLibraryImageLabel(image.ref.id),
         source: PrivateGallerySource(
           image: image,
           cache: ref.read(localPreviewCacheProvider),
@@ -117,7 +117,7 @@ class _PrivateImmersiveSessionState
         systemUi: widget.systemUi,
         heroTag: shelfHeroTag(
           session.identity,
-          image.id,
+          image.ref.key,
           session.selectedIndex,
         ),
         barActions: <Widget>[_setButton(l10n)],

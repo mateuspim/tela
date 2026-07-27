@@ -14,6 +14,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 data class ImageStoreRequest(
+    val source: String,
     val id: String,
     val imageUrl: String,
     val purity: String,
@@ -44,8 +45,8 @@ class ImageStorage(private val context: Context) {
     /**
      * Writes into the gallery, **reusing the row this wallpaper already owns**.
      *
-     * [fileName] is derived from the Wallhaven id, so re-downloading the same
-     * wallpaper always wants the same name — and `insert` does not overwrite,
+     * [fileName] is derived from the wallpaper's source and id, so re-downloading
+     * the same wallpaper always wants the same name — and `insert` does not overwrite,
      * it de-duplicates: MediaStore silently renames the second write to
      * `wallhaven-abc123 (1).jpg`. Downloading a wallpaper twice therefore left
      * the user with duplicates rather than one current file (owner, 2026-07-19).
@@ -208,10 +209,10 @@ class ImageStorage(private val context: Context) {
         val images = files
             .sortedByDescending { it.lastModified() }
             .mapNotNull { file ->
-                val id = idOf(file.name) ?: return@mapNotNull null
+                val key = keyOf(file.name) ?: return@mapNotNull null
                 val (width, height) = pixelBounds(file)
                 mapOf(
-                    "id" to id,
+                    "ref" to key,
                     "location" to Uri.fromFile(file).toString(),
                     "savedAt" to file.lastModified(),
                     "sizeBytes" to file.length(),
@@ -241,17 +242,22 @@ class ImageStorage(private val context: Context) {
     }
 
     /**
-     * Deletes one app-private image.
+     * Deletes one app-private image, named by its `source-id` [key].
      *
-     * The id is matched against [VALID_ID] before it is used to build any path.
-     * It arrives over a method channel, and an id like `../../databases/tela` is
-     * how a listing feature becomes an arbitrary-file-delete.
+     * The key is matched against [VALID_KEY] before it is used to build any
+     * path. It arrives over a method channel, and a key like
+     * `../../databases/tela` is how a listing feature becomes an
+     * arbitrary-file-delete.
+     *
+     * Source-qualified so that two sources issuing the same number cannot
+     * delete each other's file — the reason `WallpaperRef` exists on the Dart
+     * side, applied to the one tier whose identity lives in a file name.
      */
-    fun deletePrivate(id: String): Map<String, Any> {
-        if (!VALID_ID.matches(id)) return failure("unavailable")
+    fun deletePrivate(key: String): Map<String, Any> {
+        if (!VALID_KEY.matches(key)) return failure("unavailable")
         val matches = privateDirectory()
             .listFiles()
-            ?.filter { it.isFile && idOf(it.name) == id }
+            ?.filter { it.isFile && keyOf(it.name) == key }
             ?: emptyList()
         if (matches.isEmpty()) return failure("unavailable")
         if (!matches.all { it.delete() }) return failure("unavailable")
@@ -276,11 +282,11 @@ class ImageStorage(private val context: Context) {
         }
     }
 
-    /** Recovers the id from the private file's name so [deletePrivate]'s listing
+    /** Recovers the key from the private file's name so [deletePrivate]'s listing
      *  guard still stands — a location is a `file:` URI tela itself wrote. */
     private fun deletePrivateAt(location: Uri): Map<String, Any> {
-        val id = location.lastPathSegment?.let(::idOf) ?: return failure("unavailable")
-        val result = deletePrivate(id)
+        val key = location.lastPathSegment?.let(::keyOf) ?: return failure("unavailable")
+        val result = deletePrivate(key)
         return if (result["success"] == true) deleted(location) else result
     }
 
@@ -386,9 +392,25 @@ class ImageStorage(private val context: Context) {
 
     private fun privateDirectory(): File = File(context.filesDir, "wallpapers")
 
-    /** Recovers the Wallhaven id from a file tela itself wrote, or null. */
-    private fun idOf(fileName: String): String? =
-        PRIVATE_FILE.matchEntire(fileName)?.groupValues?.get(1)
+    /**
+     * Recovers the `source-id` key from a file tela itself wrote, or null.
+     *
+     * The key, not the bare id: the private tier writes no database row (an
+     * explicit download is deliberately absent from the history), so the file
+     * name is the *only* place a private image's source survives. Two sources
+     * can issue the same id — Konachan #12345 and yande.re #12345 — so a bare
+     * id is not an identity here.
+     *
+     * Files written before the source-qualified name (2026-07-26) parse
+     * unchanged: every one of them is Wallhaven's, and the prefix they already
+     * carry is `wallhaven`. Konachan files written between its arrival and this
+     * change are the one exception and read back as Wallhaven; re-downloading
+     * one corrects it.
+     */
+    private fun keyOf(fileName: String): String? {
+        val match = PRIVATE_FILE.matchEntire(fileName) ?: return null
+        return "${match.groupValues[1]}-${match.groupValues[2]}"
+    }
 
     private fun outsideGalleryDirectory(tree: Uri): Uri? {
         if (tree.authority != EXTERNAL_STORAGE_PROVIDER) return null
@@ -462,9 +484,23 @@ class ImageStorage(private val context: Context) {
         }
     }
 
+    /**
+     * The name a downloaded file takes on disk: `source-id.ext`.
+     *
+     * The source prefix is not decoration. It is what makes the app-private
+     * tier's listing able to say where an image came from, and it was a
+     * hardcoded `wallhaven-` until 2026-07-26 — which silently filed every
+     * Konachan download under Wallhaven's name in all three tiers.
+     *
+     * Both halves are matched against their allowlists before either reaches a
+     * path. `require` rather than a returned failure: Dart composes these from
+     * a `SourceId` and a wallpaper's own id, so a bad shape here is a caller
+     * bug, not a condition the user can be in.
+     */
     private fun fileName(request: ImageStoreRequest): String {
+        require(VALID_SOURCE.matches(request.source)) { "source id has an invalid shape" }
         require(VALID_ID.matches(request.id)) { "wallpaper id has an invalid shape" }
-        return "wallhaven-${request.id}.${imageExtension(request.imageUrl)}"
+        return "${request.source}-${request.id}.${imageExtension(request.imageUrl)}"
     }
 
     private fun imageExtension(imageUrl: String): String {
@@ -508,10 +544,31 @@ class ImageStorage(private val context: Context) {
     private companion object {
         const val EXTERNAL_STORAGE_PROVIDER = "com.android.externalstorage.documents"
         const val NETWORK_TIMEOUT_MS = 30_000
-        val VALID_ID = Regex("[A-Za-z0-9_-]{1,64}")
+        /**
+         * A wallpaper id, as its own source issued it.
+         *
+         * `-` is deliberately **not** here, though it was until 2026-07-26: a
+         * file is now named `source-id`, and a hyphen on either side of that
+         * join would make the split ambiguous. No source issues one — Wallhaven's
+         * ids are lowercase alphanumeric and a booru's are digits — so this
+         * narrows an allowlist without narrowing what tela can store.
+         */
+        val VALID_ID = Regex("[A-Za-z0-9_]{1,64}")
 
-        /** Matches only the names tela writes, and captures the id back out. */
-        val PRIVATE_FILE = Regex("wallhaven-([A-Za-z0-9_-]{1,64})\\.(jpg|jpeg|png|webp)")
+        /** Mirrors Dart's `SourceId` shape, which is what composes these names. */
+        val VALID_SOURCE = Regex("[a-z0-9_]{1,32}")
+
+        /** The `source-id` pair as one string, the form [deletePrivate] takes. */
+        val VALID_KEY = Regex("[a-z0-9_]{1,32}-[A-Za-z0-9_]{1,64}")
+
+        /**
+         * Matches only the names tela writes, capturing the source and the id.
+         *
+         * Old `wallhaven-*` files need no migration: they are all Wallhaven's,
+         * and group 1 reads back exactly that.
+         */
+        val PRIVATE_FILE =
+            Regex("([a-z0-9_]{1,32})-([A-Za-z0-9_]{1,64})\\.(jpg|jpeg|png|webp)")
         val SUPPORTED_PURITIES = setOf("sfw", "sketchy", "nsfw")
         val SUPPORTED_TIERS = setOf("sharedGallery", "filesOutsideGallery", "appPrivate")
     }

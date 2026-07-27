@@ -16,6 +16,8 @@ import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
+import 'package:tela/core/ui/wallpaper_source_badge.dart';
+import 'package:tela/core/ui/wallpaper_source_labels_scope.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
@@ -112,7 +114,7 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     // Rows keyed to each file's real aspect ratio now that the native listing
     // decodes its bounds; a corrupt file with none falls back square.
     return SelectionShelf(
-      itemIds: <String>[for (final PrivateImage image in stored) image.id],
+      itemIds: <String>[for (final PrivateImage image in stored) image.ref.key],
       // Deleting is the only batch that means anything here. These files are
       // already on the device, so there is nothing to download, and favoriting
       // is a Wallhaven-wallpaper idea the private tier deliberately has no part
@@ -136,7 +138,7 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   Widget _tile(BuildContext context, List<PrivateImage> stored, int index) {
     final gestures = selectableTileGestures(
       context: context,
-      wallpaperKey: stored[index].id,
+      wallpaperKey: stored[index].ref.key,
       onOpen: () => _open(context, stored, index),
       longPressSelects: true,
     );
@@ -166,7 +168,7 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
           identity: 'private-library',
           items: stored,
           initialIndex: index,
-          itemKey: (PrivateImage image) => image.id,
+          itemKey: (PrivateImage image) => image.ref.key,
         );
     try {
       await context.pushNamed<void>(
@@ -182,14 +184,14 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   ///
   /// Answers false on a declined confirmation so the ticks survive it — the
   /// user cancelled the deletion, not the selection.
-  Future<bool> _deleteSelected(List<String> ids) async {
-    if (ids.isEmpty) return false;
-    if (!await _confirmDelete(ids.length)) return false;
+  Future<bool> _deleteSelected(List<String> keys) async {
+    if (keys.isEmpty) return false;
+    if (!await _confirmDelete(keys.length)) return false;
     if (!mounted) return false;
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final int deleted = await _deleteAll(ids);
+    final int deleted = await _deleteAll(keys);
     ref.invalidate(privateImagesProvider);
-    if (mounted) _show(_deleteOutcome(l10n, deleted, ids.length));
+    if (mounted) _show(_deleteOutcome(l10n, deleted, keys.length));
     return true;
   }
 
@@ -200,28 +202,28 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   /// download history and detail screen use (J). For the app-private tier that
   /// is a file delete plus a history `forget` that no-ops, since nothing
   /// private is ever recorded there.
-  Future<int> _deleteAll(List<String> ids) async {
-    final Map<String, Uri> locations = _locationsFor(ids);
+  Future<int> _deleteAll(List<String> keys) async {
+    final Map<String, Uri> locations = _locationsFor(keys);
     int deleted = 0;
-    for (final String id in ids) {
-      final Uri? location = locations[id];
-      if (location != null && await _deleteOne(id, location)) deleted++;
+    for (final String key in keys) {
+      final Uri? location = locations[key];
+      if (location != null && await _deleteOne(location)) deleted++;
     }
     return deleted;
   }
 
-  /// The on-disk location of each selected id, from the listing already loaded.
-  Map<String, Uri> _locationsFor(List<String> ids) {
+  /// The on-disk location of each selected key, from the loaded listing.
+  Map<String, Uri> _locationsFor(List<String> keys) {
     final List<PrivateImage> stored =
         ref.read(privateImagesProvider).value ?? const <PrivateImage>[];
-    final Set<String> wanted = ids.toSet();
+    final Set<String> wanted = keys.toSet();
     return <String, Uri>{
       for (final PrivateImage image in stored)
-        if (wanted.contains(image.id)) image.id: image.location,
+        if (wanted.contains(image.ref.key)) image.ref.key: image.location,
     };
   }
 
-  Future<bool> _deleteOne(String id, Uri location) async {
+  Future<bool> _deleteOne(Uri location) async {
     try {
       await ref.read(deleteDownloadProvider)(
         // An app-private image has no history row, by design.
@@ -291,9 +293,9 @@ class _PrivateTile extends StatelessWidget {
       // Null outside selection so the tile is not announced as "not selected"
       // in ordinary browsing — the same rule WallpaperTile follows.
       selected: WallpaperSelectionScope.isActive(context)
-          ? WallpaperSelectionScope.isSelected(context, image.id)
+          ? WallpaperSelectionScope.isSelected(context, image.ref.key)
           : null,
-      label: l10n.privateLibraryImageLabel(image.id),
+      label: l10n.privateLibraryImageLabel(image.ref.id),
       child: Material(
         clipBehavior: Clip.antiAlias,
         borderRadius: BorderRadius.circular(wallpaperTileRadius),
@@ -311,11 +313,34 @@ class _PrivateTile extends StatelessWidget {
             fit: StackFit.expand,
             children: <Widget>[
               _thumbnail(context),
-              WallpaperSelectionOverlay(wallpaperKey: image.id),
+              ?_badge(context),
+              WallpaperSelectionOverlay(wallpaperKey: image.ref.key),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// The source pill, in the same corner every other shelf puts it.
+  ///
+  /// Unconditional here, unlike `WallpaperTile`'s opt-in flag: this grid is
+  /// mixed by nature — one folder holding whatever any source sent to the
+  /// private tier — so there is no single-source case for it to say nothing in.
+  ///
+  /// Null when no `WallpaperSourceLabelsScope` names the source: a file written
+  /// by a build whose source this one has since retired draws no badge rather
+  /// than a raw lowercase id.
+  Widget? _badge(BuildContext context) {
+    final String? name = WallpaperSourceLabelsScope.labelFor(
+      context,
+      image.ref.source.value,
+    );
+    if (name == null) return null;
+    return Positioned(
+      bottom: 6,
+      left: 6,
+      child: WallpaperSourceBadge(sourceName: name),
     );
   }
 
@@ -324,7 +349,7 @@ class _PrivateTile extends StatelessWidget {
   Widget _thumbnail(BuildContext context) {
     final double devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     return Hero(
-      tag: shelfHeroTag('private-library', image.id, position),
+      tag: shelfHeroTag('private-library', image.ref.key, position),
       child: Container(
         foregroundDecoration: wallpaperTileEdge(Theme.of(context).colorScheme),
         child: Image.file(
