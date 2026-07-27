@@ -144,18 +144,39 @@ class SelectionShelf extends StatelessWidget {
   /// has no flex to take and would throw. There the bar simply stacks above.
   final bool expandChild;
 
+  /// The layout is the **same shape whether or not the shelf is selecting**,
+  /// and that is a bug fix, not a tidiness preference.
+  ///
+  /// This used to return [child] bare while idle and wrap it in a [Column] on
+  /// the way into the mode. Those are different widgets at the same slot, so
+  /// Flutter could not update the element — it tore the whole shelf down and
+  /// inflated a new one, and the scroll position went with it. Starting a
+  /// multi-select threw the wall back to the top, so picking the *second*
+  /// wallpaper meant scrolling all the way down again (owner, on device).
+  /// Cancelling did it a second time, right after the batch ran.
+  ///
+  /// So the [Column] is always here and the bar's slot is filled by a
+  /// zero-height box while idle: only the first child changes type, and the
+  /// shelf below it keeps its element, its [ScrollPosition] and its decoded
+  /// images. Guarded by `selection_shelf_test.dart`.
   @override
   Widget build(BuildContext context) {
     final WallpaperSelection? selection = WallpaperSelectionScope.of(context);
-    if (selection == null || !selection.isActive) return child;
+    // No scope above us is a mount-time fact, not a mode: a shelf that can
+    // never select keeps the bare child and never takes the Column's bounded
+    // height requirement.
+    if (selection == null) return child;
     return Column(
       mainAxisSize: expandChild ? MainAxisSize.max : MainAxisSize.min,
       children: <Widget>[
-        _SelectionBar(
-          selection: selection,
-          itemIds: itemIds,
-          actions: actions,
-        ),
+        if (selection.isActive)
+          _SelectionBar(
+            selection: selection,
+            itemIds: itemIds,
+            actions: actions,
+          )
+        else
+          const SizedBox.shrink(),
         if (expandChild) Expanded(child: child) else child,
       ],
     );
