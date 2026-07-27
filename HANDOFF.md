@@ -2,11 +2,19 @@
 
 Updated: 2026-07-26
 
-> **START HERE — the ID-JUMP feature is BUILT on `feat/id-jump`, unmerged, and
-> owes a device pass** (its own block just below). Typing a wallpaper id like
-> `je9ldp` into the browse search box now offers a **suggestion chip** that
-> jumps to it; Enter still runs an ordinary text search. Dart **1061** green,
-> `flutter analyze` clean.
+> **START HERE — the multi-select scroll reset is FIXED on
+> `fix/selection-scroll-reset`** (its own block just below). Starting a
+> multi-select threw the shelf back to the top, so picking the second wallpaper
+> meant scrolling all the way down again. All four shelves had it. Dart **1069**
+> green, `flutter analyze` clean, no `android/` change.
+>
+> **ID-JUMP IS MERGED AND DEVICE-VERIFIED** (`e511f6f`, 2026-07-26) — this banner
+> used to say it was unmerged and owed a device pass, which its own section below
+> already contradicted. Typing a wallpaper id like `je9ldp` into the browse
+> search box offers a **suggestion chip** that jumps to it; Enter still runs an
+> ordinary text search. That closes PLAN §17.5 stage 5, and with it every stage
+> of the multi-source work. What remains there is the handful of **device-owed**
+> checks listed in that section, not code.
 >
 > **Read the CORRECTED note in that section before touching the pattern:** this
 > file used to claim Wallhaven ids are not lowercase-only, on the strength of the
@@ -66,7 +74,53 @@ Updated: 2026-07-26
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
-## BUILT, DEVICE PASS OWED — jump to a wallpaper by its id (`feat/id-jump`)
+## FIXED — a multi-select threw the shelf back to the top (`fix/selection-scroll-reset`)
+
+**The report, from the owner on the device:** ticking more than one wallpaper
+was near-unusable, because the moment selection mode began the wall jumped to
+the top — so choosing the second wallpaper to download meant scrolling all the
+way back down to where you already were.
+
+**It was not a scroll bug, it was a widget-identity bug.** `SelectionShelf`
+returned its `child` bare while idle and wrapped it in a `Column` when the mode
+started. Those are different widgets at the same slot, and `Widget.canUpdate` is
+false across a type change, so Flutter did not update the shelf — it deactivated
+the whole subtree and inflated a fresh one. The `ScrollPosition` is owned by the
+`ScrollableState` that went with it, so the offset reset to zero; the decoded
+thumbnails were thrown away at the same time. Leaving the mode did it again, in
+the worst possible place: immediately after a batch action ran.
+
+**The fix** (`db9834c`) is that the `Column` is now *always* in the tree, with a
+`SizedBox.shrink()` holding the bar's slot while idle. Only the first child ever
+changes type; `Column`'s child-matching scan updates the second one in place, so
+the shelf keeps its element and everything hanging off it. The **no-scope early
+return stays**, and that asymmetry is deliberate: having no `SelectionShelfScope`
+above you is a mount-time fact rather than a mode, so it can never cause a
+mid-life reparent — and wrapping there would impose `Column`'s bounded-height
+requirement on shelves that can never select.
+
+**All four shelves had this** — browse, Favorites, Download History and the
+private library — since they all render through the one `SelectionShelf`. Three
+of them pass no `ScrollController` at all and scroll on the one `ListView` makes
+for itself, so there is no offset to assert on. `selection_shelf_test.dart` asks
+the question both ways: the offset for the shelf that owns a controller, and
+*is the same row still under the same pixel* for one that does not. Six tests,
+covering entering, leaving, the `expandChild: false` strip (the Library hub's
+fixed-height branch, which takes the other side of the layout), a plain toggle,
+and the no-scope courtesy. **Mutation-checked** — all four scroll cases fail
+against the unfixed file, so none of them is vacuous.
+
+**Worth knowing for the next UI change:** this failure mode is silent and
+structural. Any conditional that swaps a scrolling subtree's *shape* rather than
+its contents will do the same thing, and no analyzer or unit test will say a
+word — it only shows up as "why did it jump?" on a device.
+
+**Device eye owed** (cheap, ride it along with the next deploy): start a
+multi-select part-way down the browse wall, and again on Favorites and Download
+History, and confirm the wall stays put — both entering the mode and cancelling
+out of it.
+
+## MERGED AND DEVICE-VERIFIED — jump to a wallpaper by its id (`feat/id-jump`)
 
 **The ask.** Paste a wallpaper's id into the browse search box — `Je9ldp` on
 Wallhaven, `406484` on Konachan — and go straight to that wallpaper's detail
