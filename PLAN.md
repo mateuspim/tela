@@ -463,9 +463,16 @@ Each stage ends green on `make ci` and is mergeable alone.
    library grids that can hold more than one (Favorites, Download History, the
    recent-downloads strip) — a bottom-left pill read from a root-level
    `WallpaperSourceLabelsScope`, off on the single-source browse wall. The
-   **private library** is the one remaining grid: its tile draws from
-   `PrivateImage`, which carries no `SourceId`, so badging it is a follow-up that
-   first threads source onto that model.
+   The **private library** is badged too, since 2026-07-26 — and getting
+   there turned up a real bug rather than a UI gap. `ImageStorage.fileName`
+   hardcoded a `wallhaven-` prefix, so every Konachan download was named
+   for Wallhaven **in all three tiers**; and because the app-private tier
+   writes no history row, that name is the only record of a private
+   image's source. `store()` now takes the source beside the id,
+   `PrivateImage` carries a whole `WallpaperRef`, and `deletePrivate`
+   keys on `source-id` so two sources' identical ids cannot delete each
+   other's file. No migration: pre-existing files are all Wallhaven's and
+   already carry that prefix.
 5. **Jump to a wallpaper by its id — built** (`feat/id-jump`, 2026-07-26).
    Typing an id into the browse search box offers a chip that opens it; Enter
    still runs an ordinary text search, so a real six-character search term is

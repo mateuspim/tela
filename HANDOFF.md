@@ -2,11 +2,19 @@
 
 Updated: 2026-07-26
 
-> **START HERE — the multi-select scroll reset is FIXED on
-> `fix/selection-scroll-reset`** (its own block just below). Starting a
-> multi-select threw the shelf back to the top, so picking the second wallpaper
-> meant scrolling all the way down again. All four shelves had it. Dart **1069**
-> green, `flutter analyze` clean, no `android/` change.
+> **START HERE — every downloaded file was named `wallhaven-*`, whatever source
+> it came from** (`feat/private-source-badge`, its own block just below). What
+> began as "badge the last un-badged grid" turned out to be a storage bug: the
+> native `fileName` hardcoded the prefix, so every Konachan download since
+> `ffb2e95` was filed under Wallhaven's name in **all three tiers** — and for the
+> app-private tier that name is the only record of where an image came from.
+> Fixed, with the badge falling out of it. Dart **1080** green, Kotlin **43**,
+> `analyze` and `format` clean. **Touches `android/`, so both suites are owed** —
+> both were run.
+>
+> **The multi-select scroll reset is MERGED** (`beb9435`, 2026-07-26) — this
+> banner used to call it unmerged. All four shelves had it; the fix is in
+> `db9834c` and its section below still describes it accurately.
 >
 > **ID-JUMP IS MERGED AND DEVICE-VERIFIED** (`e511f6f`, 2026-07-26) — this banner
 > used to say it was unmerged and owed a device pass, which its own section below
@@ -60,10 +68,10 @@ Updated: 2026-07-26
 >   Konachan" via l10n key `wallpaperSourceBadge` (`ExcludeSemantics` on the
 >   Text stops a doubled read).
 >
-> **The one grid left out, on purpose:** the **private library**. Its tile draws
-> from `PrivateImage`, which carries no `SourceId` (the id is recovered from the
-> filename), so badging it is a larger, lower-value follow-up that first has to
-> thread source onto that model. Noted in PLAN §17.5 item 4.
+> **The one grid left out at the time:** the **private library**. Its tile drew
+> from `PrivateImage`, which carried no `SourceId`. **Now done** — see the
+> `feat/private-source-badge` block at the top, which found that the reason it
+> carried none was a storage bug, not a modelling gap.
 >
 > **Device eye owed** (owner-only, not unit-testable): look at the pill over
 > real thumbnails on the tablet — placement, legibility, and that it does not
@@ -73,6 +81,77 @@ Updated: 2026-07-26
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## FIXED — every download was named for Wallhaven (`feat/private-source-badge`)
+
+**Picked up as the small follow-up PLAN §17.5 item 4 left open** — the private
+library was the one library grid without a source badge, blocked on
+`PrivateImage` carrying no `SourceId`. Reading why turned up the actual reason.
+
+**The bug.** `ImageStorage.fileName` (Kotlin) composed
+`"wallhaven-${request.id}.${ext}"` — a hardcoded prefix — and `store()` only ever
+received a bare id. So a Konachan post downloaded any time after `ffb2e95`
+landed as `wallhaven-406484.jpg` in the gallery, in the SAF tree, and in the
+app-private tier. Meanwhile Dart already had the right convention:
+`WallpaperRef.key` gives `konachan-406484`, and `wallpaperFileName()` builds
+exactly that for the share and system-editor hand-offs. Two composers of one
+convention, one of them wrong — and `wallpaper_ref.dart`'s own docstring already
+asserted the thing that wasn't true ("The form a downloaded file is already
+named"). It is true now.
+
+**Why it blocked the badge, and why the filename is the only place to fix it.**
+The app-private tier writes **no database row at all**: `DownloadWallpaper._remember`
+withholds a history row for NSFW *and* for `appPrivate`, deliberately, because a
+browsable index of the private tier is exactly what that tier exists to prevent.
+So there is no table to join a source out of — the file name is the sole carrier.
+That is also why "store the source somewhere else instead" is not an option
+anyone should re-propose.
+
+**What changed:**
+
+- `ImageStore.store` takes a `SourceId` beside the id; native composes
+  `source-id.ext` and `require`s both halves against their allowlists before
+  either reaches a path. `DownloadWallpaper` passes `wallpaper.ref`.
+- `PrivateImage.id` → `PrivateImage.ref`, a whole `WallpaperRef`. The screen's
+  selection keys, hero tags and the viewer's `itemKey` moved to `ref.key` with it.
+- `WallpaperRef.parse` / `tryParse` (and `SourceId.tryParse`) read a flat key
+  back into its halves — the inverse of `key`, for the one place a ref is stored
+  as one string. `tryParse` exists because the listing mapper must answer null
+  for a file it cannot read rather than throw, and `avoid_catching_errors`
+  forbids catching the `ArgumentError` `parse` raises.
+- `deletePrivate` now keys on the whole `source-id`. It filtered on the bare id
+  and deletes **every** match, so Konachan #12345 and yande.re #12345 would have
+  deleted each other. Not reachable from the channel (the live path is
+  `deleteDownload` by location), so this is defence in depth — but it is pinned.
+- `VALID_ID` drops `-` from its character class. Nothing issues a hyphenated id,
+  and without this the `source-id` split is ambiguous.
+- `_PrivateTile` draws `WallpaperSourceBadge` bottom-left, like every other
+  shelf. **Unconditional**, unlike `WallpaperTile`'s `showSourceBadge` flag: the
+  private tier is mixed by nature — one folder holding whatever any source sent
+  it — so there is no single-source case for a badge to say nothing in.
+
+**Migration: none, and that is luck rather than foresight.** Every file written
+before this is Wallhaven's and already carries `wallhaven` as its prefix, because
+the hardcoded string happened to be right for the only source that had ever
+shipped. An accumulated private tier lists unchanged. Pinned by its own Kotlin
+test so nobody has to re-derive it.
+
+**The one wart, accepted by the owner rather than migrated:** Konachan files
+already downloaded to the tablet parse back as Wallhaven and will wear the wrong
+badge. Nothing on disk records what they really were, so a rename pass could only
+guess from id shape — the kind of heuristic this project has rejected before.
+Re-downloading one corrects it.
+
+**Mutation-checked, both halves.** Reinstating the hardcoded prefix fails exactly
+one Kotlin test (`a download is named for the source that issued it`); removing
+the badge from the tile fails three Dart ones. The fourth badge test asserts an
+*absence* (an unknown source draws no pill and no raw lowercase id) and correctly
+survives that mutation — it guards a different one.
+
+**Device eye owed** (cheap, ride it along with the next deploy): download one
+Konachan wallpaper to the private tier and confirm the new file is
+`konachan-<id>.jpg` and the tile says Konachan. Same trip as the other badge
+check below.
 
 ## FIXED — a multi-select threw the shelf back to the top (`fix/selection-scroll-reset`)
 
