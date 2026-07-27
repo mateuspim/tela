@@ -48,6 +48,36 @@ void main() {
     expect(failure.duration, greaterThan(success.duration));
   });
 
+  testWidgets('a toast with an action still dismisses itself', (
+    WidgetTester tester,
+  ) async {
+    await _pumpAccessible(
+      tester,
+      action: SnackBarAction(label: 'View', onPressed: () {}),
+    );
+    expect(find.text('Queued 30 wallpapers'), findsOneWidget);
+
+    // Past the success life, plus the exit animation.
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Queued 30 wallpapers'), findsNothing);
+  });
+
+  testWidgets('an actionless toast is left to the framework to dismiss', (
+    WidgetTester tester,
+  ) async {
+    // No second timer where Flutter already runs one: two would race, and the
+    // loser would close a toast that had already been replaced.
+    await _pumpAccessible(tester);
+    expect(find.text('Queued 30 wallpapers'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Queued 30 wallpapers'), findsNothing);
+  });
+
   testWidgets('a second toast replaces the first instead of queueing', (
     WidgetTester tester,
   ) async {
@@ -87,6 +117,20 @@ void main() {
   );
 }
 
+/// The regression: a toast carrying an action never went away on a device with
+/// accessible navigation on.
+///
+/// `ScaffoldMessenger` deliberately does not start its dismissal timer for a
+/// SnackBar with an action while that setting is on, so the queued-download
+/// toast — the first one in the app to carry an action — sat there until
+/// something else replaced it (owner, 2026-07-27).
+Widget _accessibleHost() {
+  return MediaQuery(
+    data: const MediaQueryData(accessibleNavigation: true),
+    child: _host(),
+  );
+}
+
 Future<void> _pump(
   WidgetTester tester,
   String message, {
@@ -98,6 +142,24 @@ Future<void> _pump(
   );
   showTelaToast(messenger, message, kind: kind);
   await tester.pumpAndSettle();
+}
+
+Future<void> _pumpAccessible(WidgetTester tester, {SnackBarAction? action}) {
+  return _showIn(tester, _accessibleHost(), action: action);
+}
+
+Future<void> _showIn(
+  WidgetTester tester,
+  Widget host, {
+  SnackBarAction? action,
+}) async {
+  await tester.pumpWidget(host);
+  final ScaffoldMessengerState messenger = tester.state<ScaffoldMessengerState>(
+    find.byType(ScaffoldMessenger),
+  );
+  showTelaToast(messenger, 'Queued 30 wallpapers', action: action);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
 }
 
 Widget _host() {
