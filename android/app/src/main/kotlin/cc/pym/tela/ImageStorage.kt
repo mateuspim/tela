@@ -5,7 +5,6 @@ import android.content.ContentValues
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import java.io.File
@@ -143,7 +142,7 @@ class ImageStorage(private val context: Context) {
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName(request))
             put(MediaStore.MediaColumns.MIME_TYPE, mimeType(request))
-            put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/tela")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, TreeLocation.GALLERY_FOLDER_PATH)
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         val resolver = context.contentResolver
@@ -210,7 +209,7 @@ class ImageStorage(private val context: Context) {
         val projection = arrayOf(MediaStore.MediaColumns._ID)
         val selection = "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND " +
             "${MediaStore.MediaColumns.DISPLAY_NAME}=?"
-        val arguments = arrayOf("${Environment.DIRECTORY_PICTURES}/tela/", name)
+        val arguments = arrayOf("${TreeLocation.GALLERY_FOLDER_PATH}/", name)
         context.contentResolver.query(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             projection,
@@ -233,9 +232,15 @@ class ImageStorage(private val context: Context) {
         request: ImageWrite,
         outsideGalleryTree: String?,
     ): Map<String, Any> {
-        val tree = outsideGalleryTree ?: return failure("notConfigured")
-        val directory = outsideGalleryDirectory(Uri.parse(tree))
-            ?: return failure("unavailable")
+        val tree = outsideGalleryTree?.let(Uri::parse) ?: return failure("notConfigured")
+        // Before anything is created: this tier writes a `.nomedia`, and a tree
+        // that resolves onto the gallery's folder would hide it whole. A tree
+        // tela cannot even read is refused as well — "is this somebody else's
+        // directory" is not answerable there, and unanswerable is not no.
+        if (TreeLocation.of(tree)?.overlapsGallery != false) {
+            return failure("folderUnavailable")
+        }
+        val directory = outsideGalleryDirectory(tree) ?: return failure("unavailable")
         if (!ensureNoMediaMarker(directory)) return failure("unavailable")
         val resolver = context.contentResolver
         // Same duplicate trap as the gallery tier, through a different door:
@@ -503,7 +508,27 @@ class ImageStorage(private val context: Context) {
             tree,
             DocumentsContract.getTreeDocumentId(tree),
         )
-        return findOrCreateDirectory(root, "tela")
+        return findOrCreateDirectory(root, TreeLocation.TELA_FOLDER)
+    }
+
+    /**
+     * Whether MediaStore still has a row at [location].
+     *
+     * Asked before a gallery delete, and deliberately **not** [canRead]: a row
+     * can outlive its file, and such a row is still perfectly deletable. Only the
+     * row's existence decides whether `MediaStore.createDeleteRequest` will
+     * accept it — see `MainActivity.planDeletions` for why a stale one may never
+     * reach it.
+     */
+    fun galleryRowExists(location: Uri): Boolean {
+        val projection = arrayOf(MediaStore.MediaColumns._ID)
+        return try {
+            context.contentResolver
+                .query(location, projection, null, null, null)
+                ?.use { cursor -> cursor.moveToFirst() } ?: false
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun ensureNoMediaMarker(directory: Uri): Boolean {

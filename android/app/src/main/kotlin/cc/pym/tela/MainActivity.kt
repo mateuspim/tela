@@ -1,7 +1,6 @@
 package cc.pym.tela
 
 import android.content.Intent
-import android.content.IntentSender
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
@@ -355,10 +354,30 @@ class MainActivity : FlutterFragmentActivity() {
         }
         val uri = Uri.parse(location)
         if (tier == "sharedGallery" && systemConfirmsGalleryDelete()) {
-            requestGalleryDeletions(listOf(uri), emptyList(), result)
+            confirmGalleryDeletion(uri, result)
             return
         }
         onStorageThread(result) { ImageStorage(this).deleteDownload(tier, uri) }
+    }
+
+    /**
+     * Asks the OS to delete one gallery image — unless its row is already gone.
+     *
+     * Off the UI thread for the MediaStore query, then back onto it because only
+     * an Activity can launch the confirmation. Same stale-row rule as
+     * [planDeletions], which is where it is explained.
+     */
+    private fun confirmGalleryDeletion(uri: Uri, result: MethodChannel.Result) {
+        imageStoreExecutor.execute {
+            val live = ImageStorage(this).galleryRowExists(uri)
+            runOnUiThread {
+                if (live) {
+                    requestGalleryDeletions(listOf(uri), emptyList(), result)
+                } else {
+                    result.success(deletionOutcome(listOf(uri.toString())))
+                }
+            }
+        }
     }
 
     /**
@@ -376,24 +395,55 @@ class MainActivity : FlutterFragmentActivity() {
             return
         }
         imageStoreExecutor.execute {
-            val storage = ImageStorage(this)
-            val galleryUris = mutableListOf<Uri>()
-            val deleted = mutableListOf<String>()
-            for ((tier, uri) in items) {
-                if (tier == "sharedGallery" && systemConfirmsGalleryDelete()) {
-                    galleryUris.add(uri)
-                } else if (storage.deleteDownload(tier, uri)["success"] == true) {
-                    deleted.add(uri.toString())
-                }
-            }
+            val plan = planDeletions(ImageStorage(this), items)
             runOnUiThread {
-                if (galleryUris.isEmpty()) {
-                    result.success(mapOf("success" to true, "deleted" to deleted))
+                if (plan.confirm.isEmpty()) {
+                    result.success(deletionOutcome(plan.deleted))
                 } else {
-                    requestGalleryDeletions(galleryUris, deleted, result)
+                    requestGalleryDeletions(plan.confirm, plan.deleted, result)
                 }
             }
         }
+    }
+
+    /**
+     * What a delete batch resolved to before any prompt: the gallery rows the OS
+     * must confirm, and the locations that are already gone.
+     */
+    private data class DeletionPlan(val confirm: List<Uri>, val deleted: List<String>)
+
+    /**
+     * Deletes what tela can delete itself, and sorts the rest into live gallery
+     * rows and stale ones.
+     *
+     * **A gallery row whose MediaStore row no longer exists counts as deleted**,
+     * because it is: the end state the user asked for is already true. Handing it
+     * to `MediaStore.createDeleteRequest` instead throws `IllegalArgumentException`
+     * on the main thread and kills the process — and since the history is where
+     * those rows live and *clearing the history is the only gesture that removes
+     * them*, every retry died before trimming anything and the user could not
+     * escape without wiping app data (owner, 2026-07-28).
+     *
+     * It needs no mistake of ours to happen: a `sharedGallery` row outlives its
+     * file whenever the file goes away behind tela's back — deleted from Photos,
+     * from a file manager, by a storage cleaner, or on a card that was unmounted.
+     * Rendering already tolerates that; it is what the missing badge shows.
+     */
+    private fun planDeletions(
+        storage: ImageStorage,
+        items: List<Pair<String, Uri>>,
+    ): DeletionPlan {
+        val gallery = mutableListOf<Uri>()
+        val deleted = mutableListOf<String>()
+        for ((tier, uri) in items) {
+            if (tier == "sharedGallery" && systemConfirmsGalleryDelete()) {
+                gallery.add(uri)
+            } else if (storage.deleteDownload(tier, uri)["success"] == true) {
+                deleted.add(uri.toString())
+            }
+        }
+        val (live, stale) = gallery.partition { storage.galleryRowExists(it) }
+        return DeletionPlan(live, deleted + stale.map(Uri::toString))
     }
 
     private fun readDeletionItems(call: MethodCall): List<Pair<String, Uri>>? {
@@ -427,19 +477,34 @@ class MainActivity : FlutterFragmentActivity() {
             result.success(imageStoreFailure("unavailable"))
             return
         }
-        val request = MediaStore.createDeleteRequest(contentResolver, galleryUris)
-        pendingGalleryDeletion = PendingGalleryDeletion(
-            result,
-            galleryUris.map { it.toString() },
-            alreadyDeleted,
-        )
+        // Both calls are inside the guard on purpose. `createDeleteRequest` is
+        // the one that actually threw (a stale row, which [planDeletions] now
+        // filters out); it ran outside the `try` while the `catch` guarded
+        // `startIntentSenderForResult` against a different exception entirely,
+        // and an uncaught throw here is on the main thread — it kills the app.
         try {
+            val request = MediaStore.createDeleteRequest(contentResolver, galleryUris)
+            pendingGalleryDeletion = PendingGalleryDeletion(
+                result,
+                galleryUris.map { it.toString() },
+                alreadyDeleted,
+            )
             startIntentSenderForResult(request.intentSender, GALLERY_DELETE_REQUEST, null, 0, 0, 0)
-        } catch (_: IntentSender.SendIntentException) {
+        } catch (_: Exception) {
             pendingGalleryDeletion = null
-            result.success(mapOf("success" to true, "deleted" to alreadyDeleted))
+            result.success(deletionOutcome(alreadyDeleted))
         }
     }
+
+    /**
+     * A delete batch's answer: what went, whether or not everything did.
+     *
+     * Always a success, because "some of these were already gone" and "the user
+     * declined the prompt" are outcomes, not failures — Dart forgets exactly the
+     * rows named here and leaves the others alone.
+     */
+    private fun deletionOutcome(deleted: List<String>): Map<String, Any> =
+        mapOf("success" to true, "deleted" to deleted)
 
     /** Runs filesystem work off the UI thread, answering on it. */
     private fun onStorageThread(
@@ -547,7 +612,7 @@ class MainActivity : FlutterFragmentActivity() {
         pendingGalleryDeletion = null
         val deleted = pending.alreadyDeleted +
             if (resultCode == RESULT_OK) pending.galleryLocations else emptyList()
-        pending.result.success(mapOf("success" to true, "deleted" to deleted))
+        pending.result.success(deletionOutcome(deleted))
     }
 
     private fun onOutsideGalleryGrant(resultCode: Int, data: Intent?) {
@@ -564,8 +629,18 @@ class MainActivity : FlutterFragmentActivity() {
         handleDescribeDownloadLocation(pending.result)
     }
 
+    /**
+     * Persists the granted tree, refusing one that would shadow the gallery.
+     *
+     * [ImageStorage] refuses it again at write time and that is the gate that
+     * matters; this one only makes the user find out at the picker, where they
+     * can pick another folder, instead of at the first download. `Pictures` is
+     * the obvious thing to grant and it is the one that must not be taken — see
+     * [TreeLocation.overlapsGallery].
+     */
     private fun saveOutsideGalleryTree(tree: Uri, returnedFlags: Int): Boolean {
         if (tree.authority != EXTERNAL_STORAGE_PROVIDER) return false
+        if (TreeLocation.of(tree)?.overlapsGallery != false) return false
         val grantedFlags = returnedFlags and PERSISTED_DIRECTORY_ACCESS_FLAGS
         return try {
             contentResolver.takePersistableUriPermission(tree, grantedFlags)
