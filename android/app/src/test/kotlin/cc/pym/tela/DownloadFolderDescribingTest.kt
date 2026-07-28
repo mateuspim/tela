@@ -70,6 +70,13 @@ class DownloadFolderDescribingTest {
     }
 
     @Test
+    fun `the path shown is the tela child, not the folder the user pointed at`() {
+        // The row would otherwise name a folder tela never writes into.
+        assertEquals("Wallpapers/tela", TreeLocation.parse("1A2B-3C4D:Wallpapers")?.telaFolderPath)
+        assertEquals("tela", TreeLocation.parse("primary:")?.telaFolderPath)
+    }
+
+    @Test
     fun `an id starting with the separator has no volume to name`() {
         // Guards the `<= 0` boundary: substring(0, 0) would otherwise hand back
         // an empty volume id that matches no volume and reads as a card.

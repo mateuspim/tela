@@ -19,8 +19,87 @@ data class TreeLocation(val volumeId: String, val relativePath: String) {
     /** Whether this is the device's built-in shared storage. */
     val isPrimary: Boolean get() = volumeId == PRIMARY_VOLUME
 
+    /**
+     * Where the files-outside-gallery tier actually writes inside this tree.
+     *
+     * The tier appends its own `tela` child to whatever folder the user granted,
+     * so this — not [relativePath] — is the directory to show the user, to guard,
+     * and to compare against another tier's.
+     */
+    val telaFolderPath: String
+        get() = if (relativePath.isEmpty()) TELA_FOLDER else "$relativePath/$TELA_FOLDER"
+
+    /**
+     * Whether the files tier here would share a directory with the gallery tier.
+     *
+     * **The two tiers are only ever distinct by convention.** One is
+     * MediaStore-indexed and the other carries a `.nomedia`, but on disk that is
+     * a property of the *directory*, not of the tier — so one tier can reach into
+     * the other's and flip it. Granting `Pictures` at the folder prompt (the
+     * obvious pick, and the one left after the SAF picker refuses storage root)
+     * resolves this tier onto `Pictures/tela`, which is the gallery tier's own
+     * folder; tela then adopts it and marks it `.nomedia`, and every wallpaper
+     * ever downloaded to the gallery — plus whatever else the user kept there —
+     * disappears from Photos and every gallery app at once. Nothing is deleted,
+     * which is exactly what made it hard to see (owner, 2026-07-28).
+     *
+     * Overlap is refused in **both** directions, because a `.nomedia` in a
+     * directory tela does not exclusively own affects the whole folder and
+     * outlives the app. Only the primary volume can collide: the gallery tier
+     * inserts into `MediaStore.Images.Media.EXTERNAL_CONTENT_URI`, which is that
+     * volume, so a card's own `Pictures/tela` is nobody else's directory.
+     *
+     * ```kotlin
+     * TreeLocation.parse("primary:Pictures")?.overlapsGallery  // true
+     * TreeLocation.parse("primary:Download")?.overlapsGallery  // false
+     * ```
+     */
+    val overlapsGallery: Boolean
+        get() {
+            if (!isPrimary) return false
+            // Shared storage is case-insensitive, so `pictures` is `Pictures`.
+            val ours = telaFolderPath.lowercase()
+            val gallery = GALLERY_FOLDER_PATH.lowercase()
+            return ours == gallery ||
+                ours.startsWith("$gallery/") ||
+                gallery.startsWith("$ours/")
+        }
+
     companion object {
         const val PRIMARY_VOLUME = "primary"
+
+        /** The child every tier of tela's writes into, under its own root. */
+        const val TELA_FOLDER = "tela"
+
+        /**
+         * The gallery tier's directory, spelled as MediaStore's `RELATIVE_PATH`
+         * does. The one definition, so the guard above cannot drift from the
+         * folder [ImageStorage] actually writes to.
+         */
+        val GALLERY_FOLDER_PATH = "${Environment.DIRECTORY_PICTURES}/$TELA_FOLDER"
+
+        /**
+         * The location a granted SAF tree names, or null when it names none.
+         *
+         * [parse]'s companion for callers holding the tree URI rather than its
+         * document id — and, unlike `DocumentsContract.getTreeDocumentId`, it
+         * answers null for a URI that is not a tree instead of throwing. Both
+         * of its callers guard a folder on the answer and one of them runs on
+         * the main thread, so a throw here would be a crash.
+         *
+         * ```kotlin
+         * TreeLocation.of(Uri.parse("content://…/tree/primary%3APictures"))
+         * // TreeLocation("primary", "Pictures")
+         * ```
+         */
+        fun of(tree: Uri): TreeLocation? {
+            val documentId = try {
+                DocumentsContract.getTreeDocumentId(tree)
+            } catch (_: IllegalArgumentException) {
+                return null
+            }
+            return parse(documentId)
+        }
 
         /**
          * Splits a SAF tree document id, or null when it is not one.
@@ -91,7 +170,7 @@ class DownloadFolderDescribing(private val context: Context) {
             "volumeLabel" to (volume?.getDescription(context) ?: fallbackLabel(location)),
             // The tier writes into a "tela" child of the granted tree, so that
             // is the path to show — not the folder the user pointed at.
-            "relativePath" to appendTelaFolder(location.relativePath),
+            "relativePath" to location.telaFolderPath,
             "isRemovable" to (volume?.isRemovable ?: !location.isPrimary),
             "isAvailable" to isAvailable(uri, volume),
         ) + freeBytesOf(uri)
@@ -106,9 +185,6 @@ class DownloadFolderDescribing(private val context: Context) {
         }
         return TreeLocation.parse(documentId)
     }
-
-    private fun appendTelaFolder(relativePath: String): String =
-        if (relativePath.isEmpty()) TELA_FOLDER else "$relativePath/$TELA_FOLDER"
 
     /** Used only when the volume is gone and cannot name itself. */
     private fun fallbackLabel(location: TreeLocation): String =
@@ -152,6 +228,5 @@ class DownloadFolderDescribing(private val context: Context) {
 
     private companion object {
         const val EXTERNAL_STORAGE_PROVIDER = "com.android.externalstorage.documents"
-        const val TELA_FOLDER = "tela"
     }
 }
