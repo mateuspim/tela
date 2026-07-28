@@ -48,10 +48,13 @@ void main() {
     expect(failure.duration, greaterThan(success.duration));
   });
 
-  testWidgets('a toast with an action still dismisses itself', (
+  testWidgets('a toast with an action dismisses itself on an ordinary device', (
     WidgetTester tester,
   ) async {
-    await _pumpAccessible(
+    // The regression, and the one the first fix could not see: Flutter's
+    // `persist` defaults to `action != null`, so the toast camped on screen
+    // with no accessibility setting involved at all.
+    await _pumpPlain(
       tester,
       action: SnackBarAction(label: 'View', onPressed: () {}),
     );
@@ -64,11 +67,22 @@ void main() {
     expect(find.text('Queued 30 wallpapers'), findsNothing);
   });
 
-  testWidgets('an actionless toast is left to the framework to dismiss', (
+  testWidgets('a toast with an action dismisses under accessible navigation', (
     WidgetTester tester,
   ) async {
-    // No second timer where Flutter already runs one: two would race, and the
-    // loser would close a toast that had already been replaced.
+    await _pumpAccessible(
+      tester,
+      action: SnackBarAction(label: 'View', onPressed: () {}),
+    );
+    expect(find.text('Queued 30 wallpapers'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Queued 30 wallpapers'), findsNothing);
+  });
+
+  testWidgets('an actionless toast dismisses too', (WidgetTester tester) async {
     await _pumpAccessible(tester);
     expect(find.text('Queued 30 wallpapers'), findsOneWidget);
 
@@ -117,13 +131,15 @@ void main() {
   );
 }
 
-/// The regression: a toast carrying an action never went away on a device with
-/// accessible navigation on.
+/// A device with accessible navigation on, which is where the *first* attempt
+/// at the toast regression thought the bug lived.
 ///
-/// `ScaffoldMessenger` deliberately does not start its dismissal timer for a
-/// SnackBar with an action while that setting is on, so the queued-download
-/// toast — the first one in the app to carry an action — sat there until
-/// something else replaced it (owner, 2026-07-27).
+/// It did not: `SnackBar.persist` defaults to `action != null` and never
+/// consults this setting, so the queued-download toast — the first one in the
+/// app to carry an action — sat there on any device until something else
+/// replaced it (owner, 2026-07-27, still reproducing 2026-07-28). Kept because
+/// the setting changes how `ScaffoldMessenger` dismisses (instantly, no exit
+/// animation) and that path is worth holding onto.
 Widget _accessibleHost() {
   return MediaQuery(
     data: const MediaQueryData(accessibleNavigation: true),
@@ -146,6 +162,11 @@ Future<void> _pump(
 
 Future<void> _pumpAccessible(WidgetTester tester, {SnackBarAction? action}) {
   return _showIn(tester, _accessibleHost(), action: action);
+}
+
+/// No accessibility setting at all — the SM-X730 as the owner holds it.
+Future<void> _pumpPlain(WidgetTester tester, {SnackBarAction? action}) {
+  return _showIn(tester, _host(), action: action);
 }
 
 Future<void> _showIn(
