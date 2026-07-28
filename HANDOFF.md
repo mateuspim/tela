@@ -2,6 +2,28 @@
 
 Updated: 2026-07-28
 
+> **START HERE — the download queue holds its own process now** (slice 2, first
+> half; `feat/queue-foreground-service`, committed as `1ff14aa`, **device pass
+> owed**). `make ci` green — analyze clean, Dart **1168**, Kotlin **70**;
+> release APK builds and the service merges into its manifest.
+>
+> **The scope in the old slice-2 note does not survive contact and was not
+> built.** It asked for a Kotlin service *draining the same table*. The per-entry
+> work around a download is tier resolution, the pin, the history withholding and
+> two NSFW invariants — domain rules `PLAN.md` requires be enforced in the domain.
+> A second drainer restates all of it in Kotlin against the same SQLite file,
+> where the two copies can disagree with nothing failing. **There is one drainer,
+> and the service raises the priority of the process it already runs in**, so
+> "the service and the Dart worker never both drain" is structural rather than a
+> rule anyone has to keep. Read that block before re-opening the direction.
+>
+> **What it does not cover, and this is deliberate: a swipe out of recents.** The
+> Flutter engine belongs to `MainActivity`, so the drain dies with the task
+> whatever the service does — and an anchor that outlived it would be an ongoing,
+> undismissable "Downloading… 7 left" over a queue that is not moving. The
+> service stops itself instead. **Caching the engine is the second half**, scoped
+> in that block and not built.
+>
 > **START HERE — the device pass found three bugs no test had reached, and all
 > three are now fixed and back on the tablet.** Uncommitted on `master`; `make
 > ci` is green — analyze clean, Dart **1152**, Kotlin **64**. The toast was
@@ -143,6 +165,140 @@ Updated: 2026-07-28
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## BUILT — the queue holds its own process (slice 2, first half; `1ff14aa`)
+
+**Device pass owed.** Everything below is `make ci` and a release build; none of
+it has been on the tablet.
+
+### The scope this came from, and why it was not built
+
+The slice-2 note said: *"a Kotlin foreground service draining the same table with
+a progress notification, `POST_NOTIFICATIONS` + `FOREGROUND_SERVICE_DATA_SYNC`,
+and a rule that the service and the Dart worker never both drain (both claim
+through `claimNext`)."* Four lines, written before slice 1's device pass.
+
+Following it through: a Kotlin drainer would have to restate, against the same
+SQLite file, everything Dart does per entry —
+
+- `claimNext` / `markFailed` / `remove` against the v7 Drift schema,
+- **tier resolution** — `StorageSettings.tierWithPin`, the pin, per-purity
+  routing, and the explicit-under-a-gallery-pin fallback
+  (`download_wallpaper.dart:97`),
+- the **history row and its two withholdings** (`_remember`, `:80`),
+- `recordDestination`.
+
+That is the whole download policy in a second language, including two NSFW
+invariants `PLAN.md` requires be enforced *in the domain*, and the two copies
+could disagree without anything failing. **The heavy part is already native
+anyway** — `storeImage` streams and writes on the download pool; Dart only
+decides and records. So the service does not drain: **it keeps alive the drain
+that already exists.** One drainer means "never both drain" needs no coordination
+rule at all. `claimNext` stays the safety net it was.
+
+### The three things that had to move first
+
+Found while wiring it, and each was a real obstacle, not tidying:
+
+1. **The download pool was a field on `MainActivity`, shut down in `onDestroy`**
+   (`:93`). A queue whose whole promise is outliving the screen cannot own its
+   threads from an activity — pressing Back part-way through a hundred
+   wallpapers cancelled the rest. It is `Downloads.executor` now,
+   application-scoped, never shut down. The three serial executors still stop
+   with the activity; only the download pool does not.
+2. **`storeImage` and `copyStoredImage` took the activity as `Context`** and
+   answered through `runOnUiThread`, which does nothing useful once the activity
+   is gone. Both take `applicationContext` now and post through a main-thread
+   `Handler` (`onMainThread`). The storage object and the granted folder are also
+   resolved *before* the work is submitted, not inside the lambda.
+3. **The notification's words are Dart's.** Every user-facing string comes from
+   the ARB (CLAUDE.md), so `downloadQueueNoticeTitle` / `downloadQueueNoticeBody`
+   cross in the service's intent. The **one** exception is the channel name, in a
+   new `res/values/strings.xml`: Android shows it in system notification settings
+   without ever asking the app, so there is no moment Dart could supply it.
+
+### The flaw following it through turned up — read before changing `stopWithTask`
+
+Swiping tela out of recents destroys `MainActivity`, and **the Flutter engine is
+the activity's**, so the Dart drain stops there whatever the service does. A
+service that survived it — which is what `stopWithTask="false"` reads like it
+means — would leave an ongoing, undismissable *"Downloading… 7 left"* over a
+queue that is not moving. That is **worse than no anchor**: the one notification
+the user cannot clear, telling them something false.
+
+So `onTaskRemoved` stops the service, and `resumeInterrupted` picks the queue up
+at the next launch — the recovery rule the queue already had. `stopWithTask`
+stays **false** precisely so `onTaskRemoved` runs at all; the system never calls
+it for a service it is tearing down itself. **That override is the single line
+that changes when the engine outlives the activity.**
+
+### The second half, scoped and not built
+
+Caching the `FlutterEngine` so the drain survives the activity:
+`FlutterEngineCache` + `provideFlutterEngine` + `shouldDestroyEngineWithHost()`
+false, with the engine created lazily on first launch rather than pre-warmed in
+`Application.onCreate` — **cold start has bitten this project before** (see *the
+release cold-launch hang*), and pre-warming rewires it. The three items above are
+its prerequisites and are done. What it then owes: `onTaskRemoved` comes out;
+`DownloadQueueNotice` stops being able to live in the widget tree (no tree once
+the activity is gone), so the l10n strings need resolving another way; and the
+plugins detach from the activity, so anything on the download path that still
+reaches for one has to be found.
+
+### What is covered, and what the anchor being refused means
+
+- **Backgrounded, process alive** — the common "I closed the app" — is covered.
+  A Riverpod listener fires on state change, not on a frame, so the count keeps
+  updating with no screen rendering.
+- **Refused holds are not an error.** From Android 12 a foreground service cannot
+  be started from the background; `DownloadQueueService.anchor` answers false and
+  the drain carries on, merely killable — where it stood before this existed. The
+  adapter deliberately **does not remember** a refusal, so the next settled entry
+  retries; the restriction lifts when the user returns.
+- **`POST_NOTIFICATIONS` is declared and never requested.** A foreground service
+  still runs when it is denied — only the shade entry is suppressed — so the
+  anchor holds either way, and a download the user just asked for is a poor
+  moment for a permission dialog.
+- **Paused drops the anchor**, even holding ninety entries: nothing is
+  downloading, so there is nothing to protect, and an ongoing notification for
+  stopped work is a lie the user cannot dismiss. Failed-only queues likewise —
+  they are waiting on the user, not the network.
+
+### Files and tests
+
+New: `DownloadQueueService.kt`, `res/values/strings.xml`,
+`domain/ports/download_queue_anchor.dart`,
+`data/downloads/method_channel_download_queue_anchor.dart`,
+`app/download_queue_notice.dart`, plus `DownloadQueueServiceTest.kt`,
+`download_queue_notice_test.dart`,
+`method_channel_download_queue_anchor_test.dart`,
+`fakes/fake_download_queue_anchor.dart`. Edited: `Downloads.kt`,
+`MainActivity.kt`, `AndroidManifest.xml`, `app.dart`, `providers.dart`, the ARB.
+
+Dart **1168** (from 1152), Kotlin **70** (from 64). Mutation-checked, all four
+caught by the intended test: the pause guard, the adapter's dedupe, the stop
+short-circuit, and the task-removed stop.
+
+**Two notes for the next person writing tests here:**
+
+- The notice's tests **cannot use `pause` to freeze the line** the way
+  `download_queue_tab_test` does — pausing is one of the things asserted, and it
+  drops the anchor by design. They override `drainDownloadQueueProvider` with a
+  `perform` that never completes instead.
+- `FakeDownloadQueueAnchor.releases` counts **raw calls**, repeats included.
+  Dropping a repeat is the adapter's job, not the port's, so asserting an exact
+  count against the fake asserts the wrong layer.
+
+### Owed on the device
+
+- **Watch the shade through a real batch**: the count going down, one entry not
+  three, and the notification *gone* when the queue empties.
+- **Background mid-batch and come back** — downloads should have continued.
+- **Swipe out of recents mid-batch**: the notification must disappear, and the
+  next launch must resume what was owed with no duplicates.
+- **Deny tela's notifications and run a batch**: the drain must still work.
+- Still unrun from slice 1: **airplane-mode mid-batch, then *Retry all*** —
+  blocked on needing USB rather than wifi `adb`.
 
 ## FIXED — the files tier could unindex the gallery tier (2026-07-28)
 
@@ -618,10 +774,15 @@ surfaces as an unrelated `AsyncError`, not as a named failure.
   not the Queue tab) and crash-resume clean with zero duplicates. The pool is not
   the bottleneck and slice 2 is unblocked. **Airplane-mode + *Retry all* is the
   one part still unrun**, blocked on needing USB rather than wifi `adb`.
-- **Slice 2**, scoped and not built: a Kotlin foreground service draining the
-  same table with a progress notification, `POST_NOTIFICATIONS` +
-  `FOREGROUND_SERVICE_DATA_SYNC`, and a rule that the service and the Dart
-  worker never both drain (both claim through `claimNext`).
+- ~~**Slice 2**, scoped and not built: a Kotlin foreground service draining the
+  same table…~~ **Superseded.** The first half is BUILT (`1ff14aa`, its own
+  block at the top) and **this scope was deliberately not followed**: a service
+  that drains would restate the tier resolution, the pin, the history
+  withholding and two NSFW invariants in Kotlin. The service anchors the
+  process; Dart stays the only drainer. `POST_NOTIFICATIONS` and
+  `FOREGROUND_SERVICE_DATA_SYNC` are declared as this note said. The second
+  half — caching the engine so a swipe out of recents does not stop the drain —
+  is scoped in that block and not built.
 - **Byte-level per-file progress is deliberately out of scope.** `storeImage` is
   one method-channel call that returns when the file is written; a percentage
   per entry needs an `EventChannel` out of `copyRemote`. The tab gives per-entry
