@@ -7,6 +7,7 @@ import 'package:tela/core/network/wallhaven_client.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/downloads/drift_download_history.dart';
 import 'package:tela/data/downloads/drift_download_queue.dart';
+import 'package:tela/data/downloads/method_channel_download_queue_anchor.dart';
 import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/images/cache_manager_fetched_image_cache.dart';
 import 'package:tela/data/konachan/dio_konachan_source.dart';
@@ -27,6 +28,7 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/download_queue.dart';
+import 'package:tela/domain/ports/download_queue_anchor.dart';
 import 'package:tela/domain/ports/external_link.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/fetched_image_cache.dart';
@@ -222,6 +224,12 @@ final Provider<DownloadHistory> downloadHistoryProvider =
 final Provider<DownloadQueue> downloadQueueProvider = Provider<DownloadQueue>(
   (Ref ref) => DriftDownloadQueue(ref.watch(telaDatabaseProvider)),
 );
+
+/// The queue's process anchor, bound to Android's foreground service.
+final Provider<DownloadQueueAnchor> downloadQueueAnchorProvider =
+    Provider<DownloadQueueAnchor>(
+      (Ref ref) => MethodChannelDownloadQueueAnchor(),
+    );
 
 /// The tag-blocklist port, bound to its Drift adapter.
 final Provider<TagBlocklistRepository> tagBlocklistRepositoryProvider =

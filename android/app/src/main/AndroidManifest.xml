@@ -9,6 +9,20 @@
     <uses-permission android:name="android.permission.SET_WALLPAPER"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 
+    <!-- The download queue's foreground service, and both are normal
+         permissions too. dataSync is the type that fits: the service transfers
+         the user's chosen files and ends when they have landed. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+
+    <!-- Runtime-prompted from API 33, and tela deliberately never asks. A
+         foreground service still runs when it is denied — only its shade entry
+         is suppressed — so the queue keeps its anchor either way, and the
+         download the user just asked for is a poor moment to interrupt with a
+         permission dialog. Declared so the notification shows for anyone who
+         has already allowed tela's notifications. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <!-- The API key is excluded from both backup paths: it is encrypted with a
          Keystore key that no backup carries, so a restored copy would be
          undecryptable. See res/xml/backup_rules.xml. -->
@@ -40,6 +54,21 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Anchors the process while the download queue drains; it never
+             downloads anything itself. exported=false because nothing outside
+             tela may start it.
+
+             stopWithTask=false does NOT mean the service survives a swipe out
+             of recents — it means the service is told about it, in
+             onTaskRemoved, and decides. Today it stops, because the Flutter
+             engine belongs to MainActivity and the drain dies with the task
+             regardless; see that override for what changes when it doesn't. -->
+        <service
+            android:name=".DownloadQueueService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="dataSync"/>
+
         <!-- Exposes a single cached image to the app the user shares to, through a
              one-shot read grant. exported=false + grantUriPermissions means no
              other app can reach tela's files except the exact URI it is handed.

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The only user-facing strings tela keeps outside its Dart ARB, and each one is
+  here because Android reads it without ever asking the app for it.
+
+  Everything else — including the download notification's own title and body —
+  is composed in Dart from the ARB and handed to the service in its intent, so
+  adding a locale stays a translation file rather than a refactor (CLAUDE.md).
+-->
+<resources>
+    <!-- Shown in the system's per-app notification settings, where Dart is
+         never running to supply it. -->
+    <string name="download_queue_channel_name">Downloads</string>
+</resources>

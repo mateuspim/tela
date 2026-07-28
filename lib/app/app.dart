@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/download_queue_controller.dart';
+import 'package:tela/app/download_queue_notice.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/router.dart';
 import 'package:tela/app/theme.dart';
@@ -86,7 +87,12 @@ class _TelaAppState extends ConsumerState<TelaApp> {
                 downloaded: downloaded,
                 child: WallpaperSourceLabelsScope(
                   labels: sourceLabels,
-                  child: child ?? const SizedBox.shrink(),
+                  // Inside the builder, so it sits under the localizations
+                  // delegate and can name the notification; above the router,
+                  // so the anchor does not come and go with the open route.
+                  child: DownloadQueueNotice(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
             ),

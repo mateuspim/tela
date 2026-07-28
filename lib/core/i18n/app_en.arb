@@ -1286,6 +1286,21 @@
     }
   },
 
+  "downloadQueueNoticeTitle": "Downloading wallpapers",
+  "@downloadQueueNoticeTitle": {
+    "description": "Title of the ongoing system notification shown while the download queue drains. Composed here rather than in Kotlin so the notification is translated with everything else — the service is handed these words in its intent."
+  },
+
+  "downloadQueueNoticeBody": "{count, plural, =1{1 left} other{{count} left}}",
+  "@downloadQueueNoticeBody": {
+    "description": "Body of the ongoing download notification: how many are still owed. Terse because it sits in the shade under the title, not on a screen with room to explain.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
   "downloadQueueSummaryFailed": "{owed} left · {failed} failed",
   "@downloadQueueSummaryFailed": {
     "description": "Names the failures beside the remaining count. A bare 'N left' over failed downloads is the aggregate lie the old batch snackbar told: those wallpapers are not coming without the user acting.",

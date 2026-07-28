@@ -4,6 +4,8 @@ import android.content.Intent
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.app.WallpaperManager
 import android.view.WindowManager
@@ -26,6 +28,7 @@ class MainActivity : FlutterFragmentActivity() {
     private val wallpaperExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val imageStoreExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val shareExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val mainThread = Handler(Looper.getMainLooper())
 
     /**
      * Downloads, and **only** downloads. Separate from [imageStoreExecutor],
@@ -40,9 +43,13 @@ class MainActivity : FlutterFragmentActivity() {
      * [imageStoreExecutor] stays serial for listing, deleting and preview
      * caching. Those have no reason to overlap, and their ordering is free
      * correctness that a pool would give away for nothing.
+     *
+     * **It lives on [Downloads], not on this activity, and that is a fix.** As
+     * a field here it was shut down in [onDestroy], so a queue anchored by
+     * [DownloadQueueService] would have kept its process alive around a pool
+     * that had already stopped accepting work.
      */
-    private val downloadExecutor: ExecutorService =
-        Executors.newFixedThreadPool(MAX_CONCURRENT_DOWNLOADS)
+    private val downloadExecutor: ExecutorService get() = Downloads.executor
     private var pendingOutsideGalleryGrant: PendingOutsideGalleryGrant? = null
     private var pendingGalleryDeletion: PendingGalleryDeletion? = null
 
@@ -64,6 +71,39 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             SHARE_CHANNEL,
         ).setMethodCallHandler(::handleShareCall)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            QUEUE_CHANNEL,
+        ).setMethodCallHandler(::handleQueueCall)
+    }
+
+    /**
+     * Raises and lowers the download queue's foreground anchor.
+     *
+     * Takes the notification's words from Dart rather than composing them: the
+     * ARB is the only place tela writes user-facing text, and the count in the
+     * body is Dart's to know anyway.
+     *
+     * Uses [applicationContext], not `this`, for the same reason the download
+     * itself does — see [storeImage]. The service outlives the activity by
+     * design, and handing it a context that does not is how that stops working
+     * on the one gesture it exists for.
+     */
+    private fun handleQueueCall(call: MethodCall, result: MethodChannel.Result) {
+        when (call.method) {
+            "anchor" -> result.success(
+                DownloadQueueService.anchor(
+                    applicationContext,
+                    call.argument<String>("title").orEmpty(),
+                    call.argument<String>("body").orEmpty(),
+                ),
+            )
+            "release" -> {
+                DownloadQueueService.release(applicationContext)
+                result.success(null)
+            }
+            else -> result.notImplemented()
+        }
     }
 
     /**
@@ -87,10 +127,16 @@ class MainActivity : FlutterFragmentActivity() {
         result.success(null)
     }
 
+    /**
+     * The three activity-owned executors stop with the activity; the download
+     * pool deliberately does not. Everything on [downloadExecutor] answers
+     * through a main-thread post rather than `runOnUiThread` and touches only
+     * the application context, so a download in flight here finishes rather
+     * than dying with the screen that asked for it.
+     */
     override fun onDestroy() {
         wallpaperExecutor.shutdown()
         imageStoreExecutor.shutdown()
-        downloadExecutor.shutdown()
         shareExecutor.shutdown()
         super.onDestroy()
     }
@@ -507,6 +553,17 @@ class MainActivity : FlutterFragmentActivity() {
         mapOf("success" to true, "deleted" to deleted)
 
     /** Runs filesystem work off the UI thread, answering on it. */
+    /**
+     * Posts back to the main thread without going through the activity.
+     *
+     * `runOnUiThread` is an Activity method and silently does nothing useful
+     * once the activity is gone — which is precisely the window a download
+     * anchored by [DownloadQueueService] runs in. A method-channel reply must
+     * be delivered on the main thread whether or not a screen is still there
+     * to have asked for it.
+     */
+    private fun onMainThread(reply: () -> Unit) = mainThread.post(reply)
+
     private fun onStorageThread(
         result: MethodChannel.Result,
         work: () -> Map<String, Any>,
@@ -542,9 +599,11 @@ class MainActivity : FlutterFragmentActivity() {
         // On [downloadExecutor] for the same reason a download is: this is bulk
         // file I/O, and a selection of thirty would otherwise queue behind the
         // serial storage thread that listing and deleting share.
+        val storage = ImageStorage(applicationContext)
+        val folder = outsideGalleryTree()
         downloadExecutor.execute {
-            val response = ImageStorage(this).copy(request, outsideGalleryTree())
-            runOnUiThread { result.success(response) }
+            val response = storage.copy(request, folder)
+            onMainThread { result.success(response) }
         }
     }
 
@@ -667,9 +726,11 @@ class MainActivity : FlutterFragmentActivity() {
      * queue waited for the one in front of it however many Dart ran at once.
      */
     private fun storeImage(request: ImageStoreRequest, result: MethodChannel.Result) {
+        val storage = ImageStorage(applicationContext)
+        val folder = outsideGalleryTree()
         downloadExecutor.execute {
-            val response = ImageStorage(this).store(request, outsideGalleryTree())
-            runOnUiThread { result.success(response) }
+            val response = storage.store(request, folder)
+            onMainThread { result.success(response) }
         }
     }
 
@@ -788,6 +849,7 @@ class MainActivity : FlutterFragmentActivity() {
         const val IMAGE_STORE_CHANNEL = "cc.pym.tela/images"
         const val SCREEN_CHANNEL = "cc.pym.tela/screen"
         const val SHARE_CHANNEL = "cc.pym.tela/share"
+        const val QUEUE_CHANNEL = "cc.pym.tela/download_queue"
         const val OUTSIDE_GALLERY_DIRECTORY_REQUEST = 401
         const val GALLERY_DELETE_REQUEST = 402
         const val PREFERENCES = "tela.storage"
