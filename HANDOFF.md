@@ -1,7 +1,42 @@
 # tela handoff
 
-Updated: 2026-07-27
+Updated: 2026-07-28
 
+> **START HERE — the device pass found three bugs no test had reached, and all
+> three are now fixed and back on the tablet.** Uncommitted on `master`; `make
+> ci` is green — analyze clean, Dart **1152**, Kotlin **64**. The toast was
+> confirmed by the owner; the two native fixes were verified against a deployed
+> release APK, md5-checked against the local artifact:
+>
+> 1. **The files tier can no longer `.nomedia` the gallery tier's folder.** The
+>    two tiers were distinct only by convention; `TreeLocation.overlapsGallery`
+>    now makes the overlap a fact the code can check, and both the storage
+>    adapter *and* the folder grant refuse it. `Pictures/tela` also has exactly
+>    one definition now, so the guard cannot drift from the folder the gallery
+>    tier writes to. See its block below.
+> 2. **Clearing download history no longer crashes.** A gallery row whose file is
+>    already gone now **counts as deleted** instead of being handed to
+>    `MediaStore.createDeleteRequest`, which threw on it, on the main thread,
+>    outside the `try`. Both that call and the intent launch are inside a guard
+>    now, so no future shape of this can kill the process.
+> 3. **`showTelaToast` dismisses.** `685b7fd` was aimed at a carve-out **that no
+>    longer exists**: Flutter 3.44 replaced it with `SnackBar.persist`, which
+>    defaults to `action != null` and never consults accessibility at all. The
+>    hypothesis in the old block — a context mismatch — was wrong, and so was the
+>    assumption that only a device with a screen reader could see it. Every
+>    device did. Every toast now says `persist: false`.
+>
+> **The device left in a test state, worth resetting before the next pass:** the
+> SFW destination is now *Files, not gallery* → `Download/tela-outside-test`
+> (it was *Gallery*), download history is empty, and `Pictures/tela` is empty —
+> its 8 files went with the history clear that proved bug 2. Favorites and the
+> private library were not touched.
+>
+> **Everything the queue itself was asked to prove, it proved.** Concurrency is a
+> measured **3**, crash-resume is clean with zero duplicates, the declined-delete
+> rollback holds against the real OS prompt, and five moves raise one prompt. The
+> queue and `MoveStoredImages` need no code. Blocks for all of it below.
+>
 > **ALSO ON THIS BRANCH — a download can change tier now, and every batch is
 > asked where it lands.** Two owner requests after the queue: *"transfer media
 > to private library"* and *"when downloading a batch I can choose where I
@@ -22,9 +57,9 @@ Updated: 2026-07-27
 > one that had not landed, because the only record of what was still owed was a
 > stack frame. There is now a Drift-backed queue, a three-slot worker, and a
 > **Queue tab** beside History with per-entry state, retry, cancel and pause.
-> **Uncommitted on the branch**; `make ci` is green — analyze clean, Dart
-> **1122**, Kotlin **46**. Slice 2 (a foreground service, so it drains with the
-> app closed) is scoped and not built.
+> **Merged as `85065aa`** (this banner used to call it uncommitted); `make ci` is
+> green — analyze clean, Dart **1122**, Kotlin **46**. Slice 2 (a foreground
+> service, so it drains with the app closed) is scoped and not built.
 >
 > **It also found a real native race.** See that block: `mkdirs()` was not
 > thread-safe, and it only mattered once downloads moved onto a pool.
@@ -109,7 +144,378 @@ Updated: 2026-07-27
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
-## BUILT — the download queue, slice 1 (`feat/download-queue`, uncommitted)
+## FIXED — the files tier could unindex the gallery tier (2026-07-28)
+
+**Found on the tablet, first try, by an ordinary user choice.** Moving images
+**out** of the private library asks for a folder. Grant **`Pictures`** — the
+obvious pick, and the one left after the SAF picker rejects storage root with
+*"Can't use this folder"* — and tela writes a `.nomedia` into
+**`Pictures/tela`**, which is *the gallery tier's own folder*. Every wallpaper
+ever downloaded to the gallery **vanishes from Photos and every gallery app at
+once.**
+
+Measured, not inferred: `content query … relative_path like 'Pictures/tela%'`
+went from 80 rows to `No result found`, while the same query against `DCIM%`
+still returned rows — so MediaStore was healthy and the folder specifically was
+suppressed. **Nothing is deleted**; all 80 files stayed on disk. It is a
+visibility bug with a very large blast radius, and it takes the user's *own*
+wallpapers with it, not just tela's test data.
+
+### The collision, exactly
+
+```kotlin
+// ImageStorage.kt:500 — the files-outside-gallery tier
+private fun outsideGalleryDirectory(tree: Uri): Uri? {
+    …
+    return findOrCreateDirectory(root, "tela")   // ← hardcoded, inside ANY granted tree
+}
+```
+
+- `sharedGallery` writes to `Pictures/tela` — `RELATIVE_PATH` =
+  `"${Environment.DIRECTORY_PICTURES}/tela"`, `ImageStorage.kt:146`.
+- `filesOutsideGallery` appends a hardcoded `"tela"` to **whatever tree the user
+  granted**, then calls `ensureNoMediaMarker` on it (`:509`).
+- Grant `Pictures` and those two resolve to **the same directory**.
+  `findOrCreateDirectory` calls `findChild` first, so it does not even create a
+  fresh folder — **it finds and adopts the gallery's**, then marks it `.nomedia`.
+
+**The two tiers are only ever distinct by convention**, and nothing enforces it.
+`PLAN.md`'s three-tier model treats "indexed" and "not indexed" as a property of
+the tier; on disk it is a property of the *directory*, and one tier can therefore
+reach into the other's and flip it.
+
+### The fix
+
+**The overlap is now a fact the code can state**, on `TreeLocation` beside the
+existing volume/path split, as `overlapsGallery` over the tier's *resolved*
+directory — `telaFolderPath`, the `tela` child, not the folder the user pointed
+at. Rejecting a grant of `Pictures` by name would have missed `Pictures/tela`
+itself and every ancestor; comparing resolved directories catches all of them,
+**in both directions**, since a marker anywhere in a shared folder is the
+problem.
+
+- The refusal lives in **`ImageStorage.storeOutsideGallery`**, beside the NSFW
+  gate and for the same reason: a caller that forgets it must not be able to
+  cause the damage. It answers `folderUnavailable` — the folder *is* set, and
+  that string already tells the user to pick another.
+- **`MainActivity.saveOutsideGalleryTree` refuses the grant too**, so the user
+  finds out at the picker instead of at the first download. That one is
+  convenience; the adapter is the gate.
+- **`Pictures/tela` has exactly one definition now** —
+  `TreeLocation.GALLERY_FOLDER_PATH`, used by the guard, by the gallery tier's
+  `RELATIVE_PATH`, and by `findGalleryImage`'s lookup. It was written out three
+  times, which is how a guard silently stops guarding.
+- Only the primary volume can collide: the gallery tier inserts into
+  `MediaStore.Images.Media.EXTERNAL_CONTENT_URI`. A card's own `Pictures/tela` is
+  nobody else's directory and stays usable.
+- **`OutsideGalleryTreeTest`** covers it — the exact grant that caused this, the
+  folder itself, case, a card, ordinary folders, and the adapter's refusal.
+  Mutation-checked: deleting the guard line fails it.
+
+### Device-verified, 2026-07-28
+
+Against the deployed release APK, **md5-compared against the local artifact**
+before anything was believed.
+
+- Granted **`Pictures`** through the real SAF picker — navigated into it, saw the
+  gallery's own `tela` child sitting there, tapped *Use this folder*, tapped
+  *Allow*. **The grant was refused**: the "Where files are saved" card did not
+  move, it reverted to the previous folder. `ls /sdcard/Pictures/tela/` showed the
+  same 8 files and **no `.nomedia`**.
+- The legitimate path still works: `Download/tela-outside-test` was accepted, a
+  wallpaper landed at `…/tela/wallhaven-mlg8e9.jpg` (14.5 MB, matching the detail
+  screen) with a `.nomedia` beside it, and it was **absent from MediaStore** —
+  which is the tier doing its actual job.
+- Gallery stayed healthy across all of it: the `Pictures/tela%` query matched the
+  filesystem exactly, 8 rows against 8 files.
+
+**Worth knowing before the next folder test:** Android's own SAF refuses a grant
+of the bare `Download` or `DCIM` root with *"Can't use this folder"* — a system
+restriction, nothing to do with tela's guard. Create a child folder in the picker
+and grant that. This is the same dead end that pushed the original report toward
+`Pictures` in the first place.
+
+Still unexplained, and left that way: the marker was **33 bytes containing the
+literal path** `/storage/emulated/0/Pictures/tela`, where
+`DocumentsContract.createDocument` should have produced an **empty** file.
+
+### Device state after the pass
+
+The owner asked for the folder to be cleared rather than repaired, so
+`Pictures/tela` is now **empty** (marker included) and MediaStore is clean. Their
+ten pre-existing wallpapers were backed up first to
+`/tmp/tela-device-pass/originals-backup/` (7.5 MB, all ten verified). **Download
+History still holds rows for the deleted files** and should show them as missing
+— which is itself the C4 missing-badge path getting an unplanned workout.
+
+## FIXED — clearing history crashed the app, and it could not recover (2026-07-28)
+
+**Reported by the owner immediately after the folder was cleared: "I tried
+clearing all the history and it crashed the app."** Reproduced in the crash
+buffer twice, twelve seconds apart — so it is not a one-off, it is a **loop**.
+
+```
+java.lang.IllegalArgumentException: Invalid Uri: content://media/external/images/media/178222
+  at android.provider.MediaStore.createDeleteRequest(MediaStore.java:2292)
+  at cc.pym.tela.MainActivity.requestGalleryDeletions(…)
+  at cc.pym.tela.MainActivity.handleDeleteDownloads$lambda$1$0(…)
+```
+
+### The bug
+
+`MainActivity.kt:430`:
+
+```kotlin
+val request = MediaStore.createDeleteRequest(contentResolver, galleryUris)  // ← unguarded
+pendingGalleryDeletion = …
+try {
+    startIntentSenderForResult(request.intentSender, …)
+} catch (_: IntentSender.SendIntentException) { … }               // ← guards the wrong call
+```
+
+**`createDeleteRequest` throws `IllegalArgumentException` when any URI in the
+batch names a MediaStore row that no longer exists**, and it sits *outside* the
+`try`. The `catch` guards `startIntentSenderForResult` against a different
+exception entirely. It runs on the main thread, so the throw kills the process.
+
+### Why it is unrecoverable, which is the part that matters
+
+The stale rows are in the **download history**, and the only UI gesture that
+removes them is the one that crashes. Every attempt dies **before** anything is
+deleted, so the history is never trimmed and the next attempt fails identically.
+**The user is stuck in the UI** — the only escape is clearing app data, which
+takes the Drift database and the Keystore-backed API key with it. There is no
+workaround; this one needs the code.
+
+### It is reachable without any of our testing
+
+A `sharedGallery` history row outlives its MediaStore row whenever the file goes
+away behind tela's back — **deleted from Photos, from a file manager, by a
+storage cleaner, or on an SD card that was unmounted**. The app already knows
+this happens: that is exactly what the **missing badge** exists to show
+(`downloadsMissingProvider`). *Rendering* tolerates a missing file; **deleting
+does not.** Here it was triggered by clearing `Pictures/tela` out of band, which
+is also the natural thing a user does to escape the `.nomedia` collision above —
+**the two bugs chain.**
+
+### The fix, and the semantic decision inside it
+
+**A row whose file is already gone counts as deleted**, because it *is*: the end
+state the user asked for has been reached by other means. Swallowing the throw
+and reporting failure would have left the history equally unclearable, which is
+the whole complaint. So stale URIs join the `deleted` list the batch already
+carries, and Dart's `DeleteDownloads` forgets them.
+
+**Filter up front, not catch-and-retry** — of the two options weighed here, the
+first. `ImageStorage.galleryRowExists` asks MediaStore whether the row is still
+there and `MainActivity.planDeletions` partitions on it, so `createDeleteRequest`
+only ever sees rows that resolve. Catch-and-retry cannot say *which* URI was
+invalid without bisecting; the exception names one, and parsing an exception
+string is not a contract. The cost is one query per gallery item, on the storage
+executor, which is nothing beside the OS prompt that follows.
+
+Deliberately **not** `canRead`: a MediaStore row can outlive its file, and such a
+row is perfectly deletable. Only the row's existence decides what
+`createDeleteRequest` accepts.
+
+Three more things came with it:
+
+- **Both calls are inside the guard now**, and it catches `Exception`. The
+  filter makes the known throw unreachable; the guard makes any future shape of
+  it not a process death. It answers with what was already deleted, which is
+  honest.
+- **The single-image delete goes through the same check** —
+  `confirmGalleryDeletion` — so it cannot crash where the batch no longer does.
+- **A stale row now needs no prompt at all.** Clear a history whose files are all
+  gone and the OS is never asked; the rows just go.
+
+**`MoveStoredImages` routes through the same `deleteDownloads` call**, so it was
+crashing identically and is fixed by the same change: a move over a stale gallery
+row now reads as "already gone", keeps the copy, and forgets the row.
+
+`GalleryRowLivenessTest` covers both answers of the liveness check against a
+`FakeMediaProvider`, plus a provider that throws. What it cannot reach is
+`createDeleteRequest` itself — that is real MediaStore.
+
+### Device-verified, 2026-07-28
+
+**The stale-row fixture this file promised was not there.** An earlier draft said
+the rows for the out-of-band deletions were "still there, waiting"; the history
+held 9 entries and every one matched a live file. Do not plan a run around it.
+
+**Manufacture the stale row instead — it takes one command.** `adb shell rm` the
+file out from under MediaStore: this device is FUSE-backed, so the row went the
+instant the file did (`content query` for `_id=178241` came back empty right
+after), while the Drift history row survived. That *is* the bug's precondition,
+reached honestly. Two notes on doing it:
+
+- **The missing-check is not live.** The tile only flipped to *"Download mdjrqy
+  again and set it"* after a fresh app relaunch. Do not read a still-normal tile
+  as the row being fine.
+- The window is narrower than assumed here — on FUSE the row does not linger
+  after the file. The bug is reached by *history* outliving MediaStore, not by
+  MediaStore outliving the file.
+
+Then, with one genuine stale row among 9 history entries:
+
+- The system prompt read **"Allow tela to delete 7 photos?"** — and 7 is the
+  discriminating number. 8 gallery rows minus the 1 stale, plus the files-tier
+  download that deletes without a prompt, is exactly 9 entries. **The stale row
+  was filtered before `createDeleteRequest`**, which is the fix.
+- **No crash.** `pidof cc.pym.tela` was 10285 before, during and after, and
+  `logcat -b crash -d` (buffer cleared first) came back empty.
+- The history emptied, and **stayed empty across a force-stop and relaunch** — a
+  real Drift trim, not a repainted screen. `Pictures/tela` and its MediaStore
+  rows agreed at zero afterwards.
+
+## ALSO DEVICE-VERIFIED — the two move tests that pass (2026-07-28)
+
+Both of the move block's own owed cases were run, and **both pass**.
+
+- **The declined-delete rollback — the "one case above all" — works.** Moved a
+  gallery download to private and tapped **Deny** on Android's *"Allow tela to
+  delete this photo?"*. The app reported *"Moved 0 of 1 — the rest are where they
+  were"*, the gallery count was **unchanged at 83 with the file still listed**,
+  the private library was **empty**, and the wallpaper was still in Download
+  History. Exactly one place. `MoveStoredImages._settle`'s rollback holds against
+  the real OS prompt.
+- **Five moves raise exactly one system prompt.** *"Allow tela to delete 5
+  photos?"*, one dialog, three thumbnails and a `+3` badge. Gallery went 83 → 78,
+  down by precisely the five. Step 2's single `deleteDownloads` call does what its
+  docstring claims.
+
+**Method worth reusing: `FLAG_SECURE` blocks `screencap`, but not
+`uiautomator dump`.** The private library returns a black frame, so the grid
+cannot be read from a screenshot — the accessibility tree reads it fine and is
+how both the "private library is empty" and "the five arrived" checks were made.
+Better than the item-count inference this file previously assumed was the ceiling.
+
+## FIXED — a toast with an action never dismissed, and the first fix aimed wrong
+(2026-07-28)
+
+**`685b7fd` did not hold on a real device.** Reproduced twice on the SM-X730,
+photographed both times: a *"Queued 33 wallpapers"* toast still on screen **~4
+minutes** after its batch, and a **separate** *"Queued 35 wallpapers"* toast still
+up **~3 minutes** after its own. Two independent reproductions, not one long one.
+Duration is three seconds — `_successLife`, with no override at the `_sayQueued`
+call site, which passes an action and nothing else.
+
+The device pass concluded, correctly, that **something was arming no timer at
+all**, and proposed a context mismatch between `messenger.context` and the point
+`ScaffoldMessenger` reads accessibility from. **That hypothesis was wrong** — it
+is the same element, so the two can never disagree — and it is recorded here only
+because the *symptom* it was reasoning from was right.
+
+### What it actually was: the carve-out no longer exists
+
+Read against the pinned SDK rather than from memory (`flutter/lib/src/material/`
+in the toolchain image — 3.44.6):
+
+```dart
+// snack_bar.dart — SnackBar's constructor
+persist = persist ?? action != null;
+
+// scaffold.dart — ScaffoldMessengerState.build
+_snackBarTimer = Timer(snackBar.duration, () {
+  if (snackBar.persist) return;          // ← the whole gate, and it is not
+  hideCurrentSnackBar(reason: …timeout); //   accessibility any more
+});
+```
+
+Flutter replaced the accessible-navigation carve-out with an explicit
+`SnackBar.persist`, **defaulting to `action != null`**. So a toast with a button
+never times out — on any device, with no accessibility setting involved. The gate
+in `showTelaToast` (`action != null && accessibleNavigation`) armed our own timer
+only in the branch that no longer mattered, and the SM-X730 was in the other one:
+its `accessibility_enabled=1` comes from **Bitwarden's autofill service**, which
+is not touch exploration, so Flutter reports `accessibleNavigation` **false**.
+Neither timer fired. Exactly the observed behaviour, and no context mismatch
+needed to explain it.
+
+### The fix
+
+`persist: false` on the SnackBar, and `_dismissAfter` deleted — a timer of ours
+beside the framework's was never the right shape. **Every toast in the app times
+out now, action or not.**
+
+### Why the old test passed against a broken device, and what replaced it
+
+`tela_toast_test` only ever pumped an `accessibleNavigation: true` host, which is
+precisely the branch where our own timer *did* fire. The suite was green because
+it was testing the one configuration the bug spared. There is now a **plain host**
+too — no MediaQuery override, the tablet as the owner holds it — and a toast with
+an action is asserted to go. Mutation-checked: removing `persist: false` fails
+**both** the plain and the accessible case.
+
+**The lesson worth keeping:** the docstring described framework behaviour from an
+older Flutter and nobody re-read the source. When a fix rests on what the
+framework does, read the framework in the pinned toolchain — `docker run --rm
+tela-toolchain` has it — not the version you remember.
+
+## DEVICE-VERIFIED — the queue's own two questions are closed (2026-07-28)
+
+Run against a release build whose **APK md5 was compared against the local
+artifact** before anything was believed, so there is no ambiguity about which
+binary answered. Both results were re-checked independently rather than taken
+from the screenshots.
+
+### Concurrency: three, confirmed — and never measure it from the Queue tab
+
+`DrainDownloadQueue`'s three slots over `MAX_CONCURRENT_DOWNLOADS = 3` do what
+they claim. **A first attempt counted spinner rows in the Queue tab, reported a
+steady two, and was wrong** — that claim is withdrawn, and it cost a whole run.
+The rendered rows are not a census of what is in flight.
+
+Measure it from outside the app, by counting its own established sockets:
+
+```bash
+# uid from: adb shell cat /proc/<pid>/status | grep ^Uid
+adb shell "cat /proc/net/tcp /proc/net/tcp6 | awk '\$4==\"01\" && \$8==\"10420\"' | wc -l"
+```
+
+`01` is ESTABLISHED and column 8 is the owning uid. **It reads 0 at idle**, which
+is what makes it a clean signal. Sampled once a second across a 33-wallpaper
+batch: **45 consecutive samples read exactly 3, 60 read 0, and not one sample
+ever read 1, 2 or 4+.** MediaStore went 10 → 43: **33 of 33**, exact.
+
+### Crash-resume: clean, and nothing downloaded twice
+
+Queued 38 from the **Random** tab — use Random, not Latest, or the selection
+overlaps wallpapers already downloaded and the batch drains before it can be
+caught. Force-stopped at 25 of 38 (MediaStore 70 against a 45 baseline), then
+relaunched and **waited without opening the Queue tab**: it reached exactly
+45+38 = **83** on its own. So `resumeInterrupted`'s `running`→`pending` demotion
+works and the drain starts from `app.dart`'s watch, not from the tab being
+opened. No entry stuck in `Downloading`. `uniq -d` over all 83 display names
+returned **empty** — zero duplicates.
+
+### A claim from the first attempt that was wrong, so it is not re-derived
+
+**"~15 downloads silently vanished."** They did not. That run counted the
+*Recent downloads* strip, and `recentDownloadsProvider` **excludes the private
+tier by design** — documented at `recent_downloads_strip.dart:28` and
+`library_listings.dart:68`. There is no data-integrity bug here.
+
+**"The chooser's confirm button is labelled Stop."** It is not. *Stop* is the
+control that clears the **pin**, exactly as the K block describes. And in fact
+**no pin was set at all** during the pass: no pin banner in Settings, every
+chooser showed only *Cancel*, and the per-purity destinations were already at
+their defaults (SFW → Gallery, NSFW → Private library).
+
+### Still owed on the device
+
+**All three fixes above are now device-verified** — see their own blocks. What is
+left is what it was:
+
+- **Airplane-mode mid-batch, then *Retry all*.** Blocked on hardware, not on
+  time: the tablet was reachable only over `adb` on **wifi**, and airplane mode
+  cuts that transport. **This one needs the USB cable.**
+- The source-badge eye at maximum tile density.
+
+**`screen_off_timeout` is back to 120000** (2 min). An earlier draft of this
+section claimed it was still at 600000; it was not.
+
+## BUILT — the download queue, slice 1 (`feat/download-queue`, merged as `85065aa`)
 
 **Asked for by the owner, 2026-07-27:** downloading ~100 wallpapers "takes too
 long", and "if I close the app I lose progress". Both were true, and the first
@@ -207,11 +613,11 @@ surfaces as an unrelated `AsyncError`, not as a named failure.
 
 ### Owed
 
-- **A device pass.** Nothing here has been on the tablet. Time a ~30-wallpaper
-  batch against master's sequential loop — if the pool does not make it visibly
-  faster, the bottleneck is somewhere else and worth finding before slice 2.
-  Kill the app mid-batch and confirm it resumes with nothing lost and nothing
-  downloaded twice. Airplane-mode mid-batch, then *Retry all*.
+- ~~**A device pass.**~~ **Done, 2026-07-28 — see the DEVICE-VERIFIED block
+  above.** Concurrency measured at a steady **3** (via established-socket count,
+  not the Queue tab) and crash-resume clean with zero duplicates. The pool is not
+  the bottleneck and slice 2 is unblocked. **Airplane-mode + *Retry all* is the
+  one part still unrun**, blocked on needing USB rather than wifi `adb`.
 - **Slice 2**, scoped and not built: a Kotlin foreground service draining the
   same table with a progress notification, `POST_NOTIFICATIONS` +
   `FOREGROUND_SERVICE_DATA_SYNC`, and a rule that the service and the Dart
@@ -355,6 +761,14 @@ different thing.
 Settings notice. Neither existed when this was reported.
 
 ## ALSO FIXED — the queued toast never went away
+
+> **SUPERSEDED, 2026-07-28 — this fix did not hold on a device, and its
+> diagnosis was wrong.** The accessible-navigation carve-out described below was
+> removed from Flutter before this was written; `SnackBar.persist` replaced it
+> and defaults to `action != null`, so the toast hung on *every* device and the
+> timer added here armed only in the branch that no longer mattered. Read
+> **"FIXED — a toast with an action never dismissed"** at the top. Kept for the
+> shape of the mistake, not for its content.
 
 Reported by the owner while the above was being built. `showTelaToast` already
 asked for 3 seconds, so the duration was not the bug.
