@@ -1425,6 +1425,36 @@
     "description": "Tooltip on a history tile whose downloaded file is no longer on the device. The tile still works; it just costs a re-download and needs a network, which the other rows do not."
   },
 
+  "downloadHistoryCleanupTooltip": "Clean up missing downloads",
+  "@downloadHistoryCleanupTooltip": {
+    "description": "Tooltip on the history app-bar action that gathers every missing-file row without the user ticking each one first. Hidden entirely when nothing is missing."
+  },
+
+  "downloadHistoryCleanupTitle": "{count, plural, =1{1 download lost its file} other{{count} downloads lost their file}}",
+  "@downloadHistoryCleanupTitle": {
+    "description": "Title of the dialog offered by the cleanup action, naming how many rows it found missing.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "downloadHistoryCleanupBody": "Remove them from history, or download them again?",
+  "@downloadHistoryCleanupBody": {
+    "description": "Body of the cleanup dialog. Offers the same two fates a manual selection already could — batchDeleteTitle/batchDeleteBody still confirm the delete on its own, so this does not repeat that warning."
+  },
+
+  "downloadHistoryCleanupRedownload": "Redownload all",
+  "@downloadHistoryCleanupRedownload": {
+    "description": "Button in the cleanup dialog that queues every missing row for re-download, via the same WallpaperBatchAction.download path a manual selection uses."
+  },
+
+  "downloadHistoryCleanupDelete": "Delete rows",
+  "@downloadHistoryCleanupDelete": {
+    "description": "Button in the cleanup dialog that hard-deletes every missing row. The file is already gone, so this resolves through the FileNotFoundException fast path (d106e81)."
+  },
+
   "wallpaperMarkFavorited": "In your favorites",
   "@wallpaperMarkFavorited": {
     "description": "Corner mark on a grid tile for a wallpaper the user has already favorited, so browsing can tell you what you already have."

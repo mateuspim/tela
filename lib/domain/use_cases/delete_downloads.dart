@@ -1,5 +1,6 @@
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/image_store.dart';
 
@@ -90,15 +91,18 @@ class DeleteDownloads {
   ///
   /// Not per chunk: the history write is the cheap half and doing it in one
   /// pass keeps a half-finished delete from leaving rows and files disagreeing
-  /// if the batch is interrupted part-way.
+  /// if the batch is interrupted part-way. And not one row at a time either —
+  /// [DownloadHistory.forgetAll] takes the whole list in one call, which is
+  /// the difference between this and the loop that used to sit here: a
+  /// history cleanup of 601 stale rows visibly stalled for seconds on nothing
+  /// but round trips (owner, on device, 2026-07-29).
   Future<void> _forgetDeleted(
     List<DownloadRecord> records,
     Set<Uri> deleted,
-  ) async {
-    for (final DownloadRecord record in records) {
-      if (deleted.contains(record.location)) {
-        await _history.forget(record.wallpaper.ref);
-      }
-    }
+  ) {
+    return _history.forgetAll(<WallpaperRef>[
+      for (final DownloadRecord record in records)
+        if (deleted.contains(record.location)) record.wallpaper.ref,
+    ]);
   }
 }

@@ -17,6 +17,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/use_cases/delete_downloads.dart';
@@ -437,9 +438,9 @@ Future<({bool proceed, StorageTier? tier})> _resolveBatchDestination(
 }
 
 Future<void> _forgetAll(WidgetRef ref, List<Wallpaper> wallpapers) async {
-  for (final Wallpaper wallpaper in wallpapers) {
-    await ref.read(downloadHistoryProvider).forget(wallpaper.ref);
-  }
+  await ref.read(downloadHistoryProvider).forgetAll(<WallpaperRef>[
+    for (final Wallpaper wallpaper in wallpapers) wallpaper.ref,
+  ]);
   ref.invalidate(recentDownloadsProvider);
 }
 

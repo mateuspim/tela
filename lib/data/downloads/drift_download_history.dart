@@ -68,6 +68,11 @@ class DriftDownloadHistory implements DownloadHistory {
   @override
   Future<void> forget(WallpaperRef ref) => _db.deleteDownload(ref);
 
+  /// The bulk sibling of [forget]. See [DownloadHistory.forgetAll].
+  @override
+  Future<void> forgetAll(Iterable<WallpaperRef> refs) =>
+      _db.deleteDownloads(refs);
+
   DownloadedWallpapersCompanion _toRow(
     Wallpaper wallpaper,
     StorageTier tier,
