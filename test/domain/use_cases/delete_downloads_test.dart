@@ -80,8 +80,118 @@ void main() {
       expect(await delete(const <DownloadRecord>[]), 0);
       expect(imageStore.batchSizes, isEmpty);
     });
+
+    // A selection of hundreds crossed once and answered only when the last
+    // file had settled, so there was no number to show and the screen looked
+    // frozen (owner, 2026-07-28).
+    test('a large selection of files reports progress as it goes', () async {
+      final FakeImageStore imageStore = FakeImageStore();
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[
+          for (int i = 0; i < 45; i++) _fileRecord('id$i'),
+        ],
+      );
+      final DeleteDownloads delete = DeleteDownloads(
+        imageStore: imageStore,
+        history: history,
+      );
+
+      final List<int> reported = <int>[];
+      final int gone = await delete(
+        await history.downloads(),
+        onProgress: (int done, int total) {
+          expect(total, 45);
+          reported.add(done);
+        },
+      );
+
+      expect(gone, 45);
+      // Chunks of 20, then the final call that closes the count out.
+      expect(reported, <int>[20, 40, 45, 45]);
+      expect(imageStore.batchSizes, <int>[20, 20, 5]);
+    });
+
+    /// The gallery tier's deletes need the OS's own confirmation, and the
+    /// platform folds whatever it is handed into **one** prompt. Splitting them
+    /// across chunks would ask the user to confirm the same delete over and
+    /// over, once per chunk — so they go last, whole, however many there are.
+    test('the gallery tier still crosses in exactly one call', () async {
+      final FakeImageStore imageStore = FakeImageStore();
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[
+          for (int i = 0; i < 30; i++) _record('gallery$i'),
+        ],
+      );
+      final DeleteDownloads delete = DeleteDownloads(
+        imageStore: imageStore,
+        history: history,
+      );
+
+      await delete(await history.downloads());
+
+      expect(imageStore.batchSizes, <int>[30]);
+    });
+
+    test(
+      'a mixed selection chunks the files and keeps one gallery call',
+      () async {
+        final FakeImageStore imageStore = FakeImageStore();
+        final FakeDownloadHistory history = FakeDownloadHistory(
+          initial: <DownloadRecord>[
+            for (int i = 0; i < 25; i++) _fileRecord('file$i'),
+            for (int i = 0; i < 25; i++) _record('gallery$i'),
+          ],
+        );
+        final DeleteDownloads delete = DeleteDownloads(
+          imageStore: imageStore,
+          history: history,
+        );
+
+        await delete(await history.downloads());
+
+        // 20 + 5 files, then the 25 gallery rows together — never interleaved,
+        // or the prompt would land in the middle of the silent work.
+        expect(imageStore.batchSizes, <int>[20, 5, 25]);
+      },
+    );
+
+    test(
+      'progress ends at the whole selection even when nothing went',
+      () async {
+        final FakeImageStore imageStore = FakeImageStore(
+          declined: <Uri>{_locationOf('e7jvjd'), _locationOf('9dm5kg')},
+        );
+        final FakeDownloadHistory history = FakeDownloadHistory(
+          initial: <DownloadRecord>[_record('e7jvjd'), _record('9dm5kg')],
+        );
+        final DeleteDownloads delete = DeleteDownloads(
+          imageStore: imageStore,
+          history: history,
+        );
+
+        final List<int> reported = <int>[];
+        final int gone = await delete(
+          await history.downloads(),
+          onProgress: (int done, int _) => reported.add(done),
+        );
+
+        // A declined prompt deletes nothing, but the batch is still over — a
+        // progress bar stuck below full would leave the dialog looking hung.
+        expect(gone, 0);
+        expect(reported.last, 2);
+      },
+    );
   });
 }
+
+/// A download in the files-outside-gallery tier, which needs no system prompt
+/// and is therefore the tier that gets chunked.
+DownloadRecord _fileRecord(String id) => DownloadRecord(
+  wallpaper: _wallpaper(id),
+  tier: StorageTier.filesOutsideGallery,
+  location: _locationOf(id),
+  downloadedAt: DateTime.utc(2026, 7, 14),
+);
 
 Uri _locationOf(String id) =>
     Uri.parse('content://media/external/images/media/$id');

@@ -196,6 +196,17 @@ class FakeImageStore implements ImageStore {
   @override
   Future<bool> canRead(Uri location) async => !_unreadable.contains(location);
 
+  /// Counts its calls, so a test can prove the history probes its rows in
+  /// **one** crossing rather than one per row — the whole point of the bulk
+  /// method, and something an answer-only fake cannot show.
+  int canReadAllCalls = 0;
+
+  @override
+  Future<List<bool>> canReadAll(List<Uri> locations) async {
+    canReadAllCalls++;
+    return <bool>[for (final Uri l in locations) !_unreadable.contains(l)];
+  }
+
   /// The folder already granted, or null for a tier nobody has configured.
   final DownloadFolder? folder;
 

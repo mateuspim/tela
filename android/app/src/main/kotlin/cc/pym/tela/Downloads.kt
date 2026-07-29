@@ -3,6 +3,8 @@ package cc.pym.tela
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /**
  * How many wallpaper downloads may be in flight at once.
@@ -27,6 +29,24 @@ internal const val MAX_CONCURRENT_DOWNLOADS = 3
  */
 object Downloads {
     private const val TIMEOUT_MS = 30_000
+
+    /**
+     * The pool every wallpaper download and bulk tier-move runs on.
+     *
+     * **Application-scoped on purpose, and it used not to be.** This was a field
+     * on `MainActivity`, shut down in `onDestroy` along with the three serial
+     * executors. A queue whose whole promise is that it keeps draining while the
+     * app is closed cannot own its threads from an activity: pressing Back part
+     * way through a hundred wallpapers cancelled the rest of them. Nothing here
+     * holds a `Context`, so outliving the activity leaks nothing — the work
+     * submitted to it takes the application context instead.
+     *
+     * Sized from [MAX_CONCURRENT_DOWNLOADS], the Dart cap's other end. Never
+     * shut down: the process owns it, and the process ending takes it.
+     */
+    val executor: ExecutorService by lazy {
+        Executors.newFixedThreadPool(MAX_CONCURRENT_DOWNLOADS)
+    }
 
     /** Downloads [imageUrl] into [into], following redirects. Throws on failure. */
     fun fetch(imageUrl: String, into: File) {

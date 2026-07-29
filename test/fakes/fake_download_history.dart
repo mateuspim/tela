@@ -29,6 +29,19 @@ class FakeDownloadHistory implements DownloadHistory {
     _recorded.removeWhere((DownloadRecord d) => d.wallpaper.ref == ref);
   }
 
+  /// Batch sizes [forgetAll] was called with, in call order — so a test can
+  /// prove a bulk cleanup made one call rather than one per row.
+  final List<int> forgetAllBatchSizes = <int>[];
+
+  @override
+  Future<void> forgetAll(Iterable<WallpaperRef> refs) async {
+    final Set<WallpaperRef> targets = Set<WallpaperRef>.of(refs);
+    forgetAllBatchSizes.add(targets.length);
+    _recorded.removeWhere(
+      (DownloadRecord d) => targets.contains(d.wallpaper.ref),
+    );
+  }
+
   @override
   Future<void> record({
     required Wallpaper wallpaper,

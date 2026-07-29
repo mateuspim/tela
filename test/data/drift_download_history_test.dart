@@ -179,6 +179,60 @@ void main() {
 
       expect(await history.downloads(), hasLength(1));
     });
+
+    test('forgetAll drops every named row in one call', () async {
+      await _record(history, _wallpaper('e7jvjd'));
+      await _record(history, _wallpaper('7j1mzo'));
+      await _record(history, _wallpaper('k8lvqm'));
+
+      await history.forgetAll(<WallpaperRef>[_ref('e7jvjd'), _ref('k8lvqm')]);
+
+      expect(
+        (await history.downloads()).map((DownloadRecord d) => d.wallpaper.id),
+        <String>['7j1mzo'],
+      );
+    });
+
+    test(
+      'forgetAll groups by source rather than matching ids across them',
+      () async {
+        // _matches compares both halves of a WallpaperRef; a batch spanning two
+        // sources must not let a konachan id collide with a same-numbered
+        // wallhaven row it was never meant to touch.
+        await _record(history, _wallpaper('e7jvjd'));
+        await _record(
+          history,
+          _wallpaper('e7jvjd', source: SourceId.konachan),
+        );
+
+        await history.forgetAll(<WallpaperRef>[
+          const WallpaperRef(SourceId.konachan, 'e7jvjd'),
+        ]);
+
+        final List<WallpaperRef> left = (await history.downloads())
+            .map((DownloadRecord d) => d.wallpaper.ref)
+            .toList();
+        expect(left, <WallpaperRef>[
+          const WallpaperRef(SourceId.wallhaven, 'e7jvjd'),
+        ]);
+      },
+    );
+
+    test('forgetAll with refs that are not there is not an error', () async {
+      await _record(history, _wallpaper('e7jvjd'));
+
+      await history.forgetAll(<WallpaperRef>[_ref('nothere')]);
+
+      expect(await history.downloads(), hasLength(1));
+    });
+
+    test('forgetAll of nothing is a no-op', () async {
+      await _record(history, _wallpaper('e7jvjd'));
+
+      await history.forgetAll(const <WallpaperRef>[]);
+
+      expect(await history.downloads(), hasLength(1));
+    });
   });
 }
 
@@ -213,10 +267,11 @@ Wallpaper _wallpaper(
   String id, {
   Purity purity = Purity.sfw,
   List<String> colors = const <String>[],
+  SourceId source = SourceId.wallhaven,
 }) {
   return Wallpaper(
     id: id,
-    source: SourceId.wallhaven,
+    source: source,
     pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
     fullImageUrl: 'https://w.wallhaven.cc/full/e7/wallhaven-$id.jpg',
     thumbSmallUrl: 'https://th.wallhaven.cc/small/e7/$id.jpg',

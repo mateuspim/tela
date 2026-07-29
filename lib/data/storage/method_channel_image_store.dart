@@ -195,6 +195,37 @@ class MethodChannelImageStore implements ImageStore {
   }
 
   @override
+  Future<List<bool>> canReadAll(List<Uri> locations) async {
+    if (locations.isEmpty) return const <bool>[];
+    try {
+      final Object? raw = await _invokeMethod('canReadImages', <String, Object>{
+        'locations': <String>[for (final Uri l in locations) l.toString()],
+      });
+      return _readableFlags(raw, locations.length);
+    } on PlatformException {
+      return List<bool>.filled(locations.length, false);
+    }
+  }
+
+  /// Reads the native answer, padding to [expected] if it is short.
+  ///
+  /// A truncated or malformed reply reads as "cannot open", never as an
+  /// exception and never as a shorter list: the caller pairs these with its
+  /// records **by index**, so a list of the wrong length would silently badge
+  /// the wrong wallpapers as missing.
+  List<bool> _readableFlags(Object? raw, int expected) {
+    final List<bool> flags = <bool>[
+      if (raw is Map<Object?, Object?> && raw['readable'] is List<Object?>)
+        for (final Object? flag in raw['readable']! as List<Object?>)
+          flag == true,
+    ];
+    if (flags.length == expected) return flags;
+    return <bool>[
+      for (int i = 0; i < expected; i++) i < flags.length && flags[i],
+    ];
+  }
+
+  @override
   Future<DownloadLocation> downloadLocation() async {
     try {
       final Object? raw = await _invokeMethod(

@@ -131,8 +131,13 @@ final FutureProvider<Set<String>> missingDownloadsProvider =
         recentDownloadsProvider.future,
       );
       final ImageStore images = ref.watch(imageStoreProvider);
-      final List<bool> readable = await Future.wait(
-        recent.map((DownloadRecord d) => images.canRead(d.location)),
+      // One crossing, not one per row. A `Future.wait` over `canRead` looked
+      // concurrent and was not: every call queued on the same native thread, so
+      // a history of hundreds paid hundreds of round trips and the badges took
+      // long enough to arrive that the screen looked broken (owner,
+      // 2026-07-28).
+      final List<bool> readable = await images.canReadAll(
+        <Uri>[for (final DownloadRecord d in recent) d.location],
       );
       return <String>{
         for (int i = 0; i < recent.length; i++)

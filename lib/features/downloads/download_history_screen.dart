@@ -19,6 +19,7 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/downloads/download_queue_tab.dart';
 import 'package:tela/features/downloads/download_viewer_launch.dart';
+import 'package:tela/features/downloads/missing_downloads_cleanup_button.dart';
 
 /// The wallpapers already on this device, each one tap away from being set.
 ///
@@ -53,7 +54,11 @@ class DownloadHistoryScreen extends ConsumerWidget {
               l10n.downloadHistoryTitle,
               style: Theme.of(context).textTheme.headlineSmall,
             ),
-            actions: const <Widget>[SelectModeButton(), SizedBox(width: 8)],
+            actions: const <Widget>[
+              MissingDownloadsCleanupButton(),
+              SelectModeButton(),
+              SizedBox(width: 8),
+            ],
             bottom: TabBar(
               tabs: <Widget>[
                 Tab(text: l10n.downloadHistoryTab),

@@ -318,6 +318,34 @@ class TelaDatabase extends _$TelaDatabase {
     return statement.go();
   }
 
+  /// Drops every download row named in [refs] — one statement per distinct
+  /// source, an `id IN (...)` rather than a query per row.
+  ///
+  /// A stale-history cleanup ticks every row whose file is already gone, and
+  /// that can run into the hundreds; [deleteDownload] in a loop paid one
+  /// round trip per row for it, which was the whole five seconds a cleanup of
+  /// 601 rows visibly stalled on (owner, on device, 2026-07-29). Grouped by
+  /// source because [_matches] must not compare an id across sources, and
+  /// [SourceId] admits few enough values that this is at most a handful of
+  /// statements even for a history that spans every one of them.
+  Future<void> deleteDownloads(Iterable<WallpaperRef> refs) async {
+    final Map<SourceId, List<String>> idsBySource = <SourceId, List<String>>{};
+    for (final WallpaperRef ref in refs) {
+      (idsBySource[ref.source] ??= <String>[]).add(ref.id);
+    }
+    if (idsBySource.isEmpty) return;
+    await batch((Batch batch) {
+      for (final MapEntry<SourceId, List<String>> entry
+          in idsBySource.entries) {
+        batch.deleteWhere(
+          downloadedWallpapers,
+          ($DownloadedWallpapersTable row) =>
+              row.source.equals(entry.key.value) & row.id.isIn(entry.value),
+        );
+      }
+    });
+  }
+
   /// Every queue entry, oldest first — a queue is a line.
   Future<List<QueueRow>> queueRows() {
     final SimpleSelectStatement<$DownloadQueueEntriesTable, QueueRow> query =

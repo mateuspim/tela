@@ -392,6 +392,98 @@ void main() {
     });
   });
 
+  group('canReadAll', () {
+    test('asks about every location in one crossing', () async {
+      final _FakeImageStoreChannel fake = _FakeImageStoreChannel(
+        response: <Object?, Object?>{
+          'success': true,
+          'readable': <Object?>[true, false, true],
+        },
+      );
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: fake.call,
+      );
+
+      final List<bool> readable = await store.canReadAll(<Uri>[
+        Uri.parse('file:///a.jpg'),
+        Uri.parse('file:///b.jpg'),
+        Uri.parse('file:///c.jpg'),
+      ]);
+
+      expect(readable, <bool>[true, false, true]);
+      expect(fake.receivedMethod, 'canReadImages');
+      expect(fake.receivedArguments, <String, Object>{
+        'locations': <String>[
+          'file:///a.jpg',
+          'file:///b.jpg',
+          'file:///c.jpg',
+        ],
+      });
+    });
+
+    // The caller pairs these with its records **by index**, so a reply of the
+    // wrong length must never come back as a shorter list — it would shift
+    // every answer after the gap and badge the wrong wallpapers as missing.
+    test('a short reply is padded, never returned short', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: <Object?, Object?>{
+            'success': true,
+            'readable': <Object?>[true],
+          },
+        ).call,
+      );
+
+      expect(
+        await store.canReadAll(<Uri>[
+          Uri.parse('file:///a.jpg'),
+          Uri.parse('file:///b.jpg'),
+          Uri.parse('file:///c.jpg'),
+        ]),
+        <bool>[true, false, false],
+      );
+    });
+
+    test('a malformed reply reads as all gone', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          response: <Object?, Object?>{'success': true, 'readable': 'nonsense'},
+        ).call,
+      );
+
+      expect(
+        await store.canReadAll(<Uri>[
+          Uri.parse('file:///a.jpg'),
+          Uri.parse('file:///b.jpg'),
+        ]),
+        <bool>[false, false],
+      );
+    });
+
+    test('a native error costs the badges, not the screen', () async {
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: _FakeImageStoreChannel(
+          platformError: PlatformException(code: 'unavailable'),
+        ).call,
+      );
+
+      expect(
+        await store.canReadAll(<Uri>[Uri.parse('file:///a.jpg')]),
+        <bool>[false],
+      );
+    });
+
+    test('an empty history never crosses to the platform at all', () async {
+      final _FakeImageStoreChannel fake = _FakeImageStoreChannel();
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: fake.call,
+      );
+
+      expect(await store.canReadAll(const <Uri>[]), isEmpty);
+      expect(fake.receivedMethod, isNull);
+    });
+  });
+
   group('download location', () {
     Map<Object?, Object?> folderPayload({
       String label = 'SD card',

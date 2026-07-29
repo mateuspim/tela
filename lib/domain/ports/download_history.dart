@@ -56,4 +56,13 @@ abstract interface class DownloadHistory {
   /// A no-op for a wallpaper that is not recorded — forgetting twice is not
   /// an error.
   Future<void> forget(WallpaperRef ref);
+
+  /// Forgets every row in [refs], in as few writes as the adapter can manage.
+  ///
+  /// The bulk sibling of [forget], for a batch that may run into the hundreds
+  /// — a stale-history cleanup ticks every row whose file is already gone, and
+  /// [forget] awaited in a loop paid one round trip per row for it, which is
+  /// what a large cleanup visibly stalled on. Same contract as [forget]
+  /// otherwise: a ref that is not recorded is silently skipped, not an error.
+  Future<void> forgetAll(Iterable<WallpaperRef> refs);
 }

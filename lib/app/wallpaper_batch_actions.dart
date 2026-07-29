@@ -8,6 +8,7 @@ import 'package:tela/app/pinned_download_tier.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/bulk_progress_dialog.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/tela_toast.dart';
@@ -16,8 +17,10 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
+import 'package:tela/domain/use_cases/delete_downloads.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 
 /// What a shelf can do to every ticked wallpaper at once.
@@ -128,7 +131,7 @@ Future<bool> _perform(
       _say(messenger, l10n.batchForgetDone(wallpapers.length));
       return true;
     case WallpaperBatchAction.delete:
-      return _deleteAll(ref, wallpapers, messenger, l10n);
+      return _deleteAll(context, ref, wallpapers, messenger, l10n);
     case WallpaperBatchAction.moveToPrivate:
       return _moveAllToPrivate(context, ref, wallpapers);
   }
@@ -160,14 +163,24 @@ Future<bool> _moveAllToPrivate(
 /// subset, and "deleted 3 of 5" is a different fact than "deleted 5". Reads the
 /// records from the history listing, since a hard delete needs each file's tier
 /// and location, not just its id.
+///
+/// Shows its progress while it runs: a selection of hundreds takes long enough
+/// that a silent screen reads as a broken button (owner, 2026-07-28).
 Future<bool> _deleteAll(
+  BuildContext context,
   WidgetRef ref,
   List<Wallpaper> wallpapers,
   ScaffoldMessengerState messenger,
   AppLocalizations l10n,
 ) async {
   final List<DownloadRecord> records = await _recordsFor(ref, wallpapers);
-  final int deleted = await ref.read(deleteDownloadsProvider)(records);
+  if (!context.mounted) return true;
+  final int deleted = await showBulkProgress<int>(
+    context: context,
+    label: (int done, int total) => l10n.batchDeleteProgress(done, total),
+    work: (DeletionProgress report) =>
+        ref.read(deleteDownloadsProvider)(records, onProgress: report),
+  );
   refreshDownloads(ref);
   _sayDeleteOutcome(messenger, l10n, deleted, wallpapers.length);
   return true;
@@ -425,9 +438,9 @@ Future<({bool proceed, StorageTier? tier})> _resolveBatchDestination(
 }
 
 Future<void> _forgetAll(WidgetRef ref, List<Wallpaper> wallpapers) async {
-  for (final Wallpaper wallpaper in wallpapers) {
-    await ref.read(downloadHistoryProvider).forget(wallpaper.ref);
-  }
+  await ref.read(downloadHistoryProvider).forgetAll(<WallpaperRef>[
+    for (final Wallpaper wallpaper in wallpapers) wallpaper.ref,
+  ]);
   ref.invalidate(recentDownloadsProvider);
 }
 
