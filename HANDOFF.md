@@ -1,10 +1,43 @@
 # tela handoff
 
-Updated: 2026-07-28
+Updated: 2026-07-29
 
-> **START HERE — the download queue holds its own process now** (slice 2, first
-> half; `feat/queue-foreground-service`, committed as `1ff14aa`, **device pass
-> owed**). `make ci` green — analyze clean, Dart **1168**, Kotlin **70**;
+> **START HERE — the queue survives a swipe out of recents, and it is
+> device-proven** (slice 2, second half; `feat/queue-cached-engine`, committed as
+> `b1f1d5e`, **not yet merged**). The Flutter engine is cached on the process
+> rather than owned by `MainActivity`, so the Dart drain — and the anchor over it
+> — outlive the activity. `make ci` green: analyze clean, Dart **1190**, Kotlin
+> **83**; release APK builds and was run on the SM-X730, md5-checked against the
+> local artifact.
+>
+> **What the tablet showed, 2026-07-29.** A 144-wallpaper batch, swiped out of
+> recents mid-drain: the task went (`dumpsys activity activities` reports **0**
+> `MainActivity` records, and the card is gone from the switcher), the **process
+> did not** (pid unchanged across the whole run), and the shade kept counting
+> down — **86 → 81 → 77 → 75 → 73 → 71 left** over thirty seconds while the files
+> kept landing. All 144 arrived. Relaunching came back to the *same* Random grid
+> at the *same* scroll position, which is the cached engine reattaching to a live
+> widget tree; a fresh engine restarts at Latest, as it did earlier in the pass
+> when the process really had been killed. The notification vanishes the moment
+> the queue empties — seen twice.
+>
+> **Three things had to move for that, and the third is the subtle one.** The
+> channels a download uses are the process's now (`ImageStoreChannel`,
+> `DownloadQueueChannel`), the two storage prompts go out through a
+> `StoragePrompts` port the activity lends and withdraws, and **the queue notice
+> left the widget tree**: a destroyed activity takes the rendering surface, so no
+> frames are produced and no widget rebuilds — a notice announcing from `build`
+> would freeze at whatever count was on screen and never release. Its block below
+> has the details, including why a Riverpod listener still fires without frames.
+>
+> **Still owed on the device:** a run with tela's notifications denied (the drain
+> must work anyway), and the airplane-mode/*Retry all* test, which needs the USB
+> cable. **The pass left ~183 wallpapers in `Pictures/tela`** (4 → 187) and the
+> matching history rows; the SFW pin was already *Gallery* and was not changed.
+>
+> **The older START HERE — the download queue holds its own process** (slice 2,
+> first half; `feat/queue-foreground-service`, committed as `1ff14aa`, merged as
+> `b8422ec`). `make ci` green — analyze clean, Dart **1168**, Kotlin **70**;
 > release APK builds and the service merges into its manifest.
 >
 > **The scope in the old slice-2 note does not survive contact and was not
@@ -17,12 +50,13 @@ Updated: 2026-07-28
 > "the service and the Dart worker never both drain" is structural rather than a
 > rule anyone has to keep. Read that block before re-opening the direction.
 >
-> **What it does not cover, and this is deliberate: a swipe out of recents.** The
-> Flutter engine belongs to `MainActivity`, so the drain dies with the task
-> whatever the service does — and an anchor that outlived it would be an ongoing,
-> undismissable "Downloading… 7 left" over a queue that is not moving. The
-> service stops itself instead. **Caching the engine is the second half**, scoped
-> in that block and not built.
+> **What it did not cover — a swipe out of recents — is now covered**, by the
+> block above. At the time the Flutter engine belonged to `MainActivity`, so the
+> drain died with the task whatever the service did, and an anchor that outlived
+> it would have been an ongoing, undismissable "Downloading… 7 left" over a queue
+> that was not moving; the service stopped itself instead. The engine is cached
+> now, `onTaskRemoved` is gone, and `stopWithTask="false"` finally means what it
+> looks like it means.
 >
 > **START HERE — the device pass found three bugs no test had reached, and all
 > three are now fixed and back on the tablet.** Uncommitted on `master`; `make
@@ -166,6 +200,142 @@ Updated: 2026-07-28
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
+## BUILT AND DEVICE-PROVEN — the engine outlives the screen (slice 2, second half; `b1f1d5e`)
+
+The last thing the download queue was missing. `TelaEngine` caches the
+`FlutterEngine` on the process, `MainActivity` reaches it through
+`getCachedEngineId()` with `shouldDestroyEngineWithHost()` **false**, and
+`DownloadQueueService.onTaskRemoved` — which stopped the anchor because the drain
+used to die with the task — is gone.
+
+**The engine is built on first launch, in the activity's own `onCreate`, not
+pre-warmed in `Application.onCreate`.** Pre-warming moves engine startup ahead of
+everything the system does for a cold start, and cold start has bitten this
+project before (see *the release cold-launch hang*). `ensure()` runs at the
+moment the fragment would have built one anyway; the only difference is that the
+next activity reuses it.
+
+### The Flutter internals this rests on, checked rather than assumed
+
+Both were read out of the embedding's own bytecode before the code was written,
+because a wrong guess here is invisible until a device test:
+
+- `FlutterFragmentActivity.createFlutterFragment()` branches on
+  `getCachedEngineId()`, and the cached branch passes
+  `.destroyEngineWithFragment(shouldDestroyEngineWithHost())`. Overriding those
+  two is enough; **overriding `provideFlutterEngine` alone is not** — the
+  new-engine branch does not pass that flag, and the fragment's default is to
+  destroy.
+- `FlutterFragment.configureFlutterEngine` / `cleanUpFlutterEngine` forward to
+  the host activity when it implements `FlutterEngineConfigurator`, which
+  `FlutterFragmentActivity` does. That is what makes the cleanup hook below run
+  at all.
+
+### The channels belong to the process now, and that is not tidying
+
+`ImageStoreChannel` and `DownloadQueueChannel` are attached to the engine once,
+on the application context. A handler left on `MainActivity` would answer a
+backgrounded batch **through a destroyed activity**, holding its window and its
+whole view hierarchy for the length of the batch — which is exactly the memory
+`DownloadQueueService` is asking the OS not to reclaim. The activity keeps only
+what needs a window: apply, share, crop, `FLAG_SECURE`, and the two prompts.
+
+`MainActivity` is **489 lines** now, from 901, and finally under the file limit
+CLAUDE.md sets.
+
+**`StoragePrompts` is the seam.** The SAF folder picker and
+`MediaStore.createDeleteRequest`'s confirmation are `startActivityForResult` in
+disguise, so an Activity must launch them and hear the answer. The activity lends
+itself on attach and withdraws on detach, and both methods answer **false when
+they could not ask** — no screen, or one prompt already in flight. That is an
+ordinary state now rather than an impossible one: a gallery delete with no screen
+**refuses** (`unavailable`) instead of hanging, and Dart hears it. The
+non-gallery files in the same batch are still deleted and still reported, because
+they go before any prompt is raised.
+
+The three activity-only channels are cleared in `cleanUpFlutterEngine` rather
+than pointed at a stand-in. Every one of them is a screen doing something, so a
+call arriving with no screen is a bug, and a `MissingPluginException` naming the
+channel is a better way to find it than a quiet failure code.
+
+### The queue notice left the widget tree — read this before putting it back
+
+It was a `ConsumerWidget` for one reason: the notification's words come from the
+ARB, and `AppLocalizations` is reached through a `BuildContext`. That stopped
+working the moment the engine outlived the activity. **A destroyed activity takes
+the rendering surface, so no frames are produced and no widget rebuilds** — a
+notice announcing from `build` would freeze at whatever count was on screen when
+the user swiped tela away, and would never release. It hangs off the
+`ProviderContainer` in `main` now.
+
+**Why a Riverpod listener still fires when a widget would not**, and this is
+version-specific enough to be worth naming: flutter_riverpod 3.3.2's
+`_UncontrolledProviderScopeState.scheduleRefresh` does a `setState` *and* starts
+a zero-duration timer chain that runs the task regardless; with no frame to
+carry it, the timers still fire (and an unmounted scope removes itself from
+`flutterVsyncs`, falling back to the plain timer scheduler). The drain itself
+never needed frames — it is futures.
+
+The words come from `shadeWords()`, which resolves the platform's preferred
+locales against `AppLocalizations.supportedLocales` exactly as `WidgetsApp` does
+and then calls `lookupAppLocalizations`. No context, and adding a locale is still
+a translation file.
+
+`app.dart` lost its `ref.watch(downloadQueueControllerProvider)` with this: the
+container listener starts the controller now, so there is one place that does it
+rather than two.
+
+### Also fixed while here
+
+`DownloadQueueController._drain` reads its `Ref` after a `Duration.zero` gap, and
+a container disposed inside that gap made it throw. Every other await in the file
+already checked `_disposed`; this one now does too.
+
+### Tests
+
+Dart **1190**, Kotlin **83** (from 75). The notice's suite is **plain unit tests
+now — no widget, no pump**, which is the same claim the code makes; `_settle` is
+`pumpEventQueue()`, and its comment says why there is nothing to pump.
+`ImageStoreChannelTest` drives the channel with **no prompts attached**: the file
+work goes through, the picker refuses with `notConfigured`, the gallery delete
+refuses with `unavailable` rather than hanging, and an accepted/declined prompt
+reports the right rows.
+
+**Two notes for whoever writes the next Kotlin test here:**
+
+- `ImageStoreChannel.handle` is `internal`, not private, because a `FlutterEngine`
+  cannot be built under Robolectric. The behaviour worth pinning is on this side
+  of the channel anyway.
+- Reaching `createDeleteRequest` at all needs **two** pieces of scaffolding: a
+  stand-in media provider (Robolectric ships no MediaStore) *and*
+  `attachInfo(context, ProviderInfo(authority = MediaStore.AUTHORITY))` on it —
+  a provider registered without ProviderInfo reads its authority as null and the
+  call is refused with a `SecurityException`. Without both, the batch quietly
+  takes the stale-row path and the test asserts nothing.
+
+### The device pass, 2026-07-29 (release APK, md5-checked)
+
+- **The swipe.** 144 queued, swiped out of recents mid-drain. `MainActivity`
+  records went to **0** and the card left the switcher, the pid did **not**
+  change, and the live notification kept counting: **86 → 81 → 77 → 75 → 73 →
+  71** across thirty seconds, with `Pictures/tela` going 102 → 116 underneath it.
+  All 144 landed.
+- **Reattach.** Relaunching returned to the same Random grid at the same scroll
+  offset. Earlier in the same session, after the process had actually been
+  killed, a relaunch came back at Latest — so this is the cached engine, not a
+  coincidence.
+- **The anchor empties honestly.** Twice: notification gone from the live list
+  the moment the queue drained, and the count matched the queue exactly (18 left
+  against 30 of 48 done).
+- **Read the notification the careful way.** `dumpsys notification` puts
+  `mArchive` *after* the live list and formats it identically — a first attempt
+  here reported a live anchor that was actually an archived one. Take only the
+  lines under `Notification List:` up to the next unindented section, then look
+  for `pkg=cc.pym.tela` inside that; grepping the whole dump cannot tell the two
+  apart. `--noredact` is what turns `String [length=22]` into the real text.
+- **Not run:** notifications denied, and airplane-mode then *Retry all* (still
+  wants USB).
+
 ## BUILT — the queue holds its own process (slice 2, first half; `1ff14aa`)
 
 **Device pass owed.** Everything below is `make ci` and a release build; none of
@@ -299,6 +469,46 @@ short-circuit, and the task-removed stop.
 - **Deny tela's notifications and run a batch**: the drain must still work.
 - Still unrun from slice 1: **airplane-mode mid-batch, then *Retry all*** —
   blocked on needing USB rather than wifi `adb`.
+
+## FOUR COMMITS THAT NEVER GOT A BLOCK — a large history, and what it broke
+
+Landed on `feat/queue-foreground-service` *after* its docs commit (`64124e8`) and
+merged with it as `b8422ec`, so nothing above describes them. Summarised from the
+commits themselves — read those for the full reasoning; the device work behind
+them was the owner's and its results are not recorded here.
+
+- **`d106e81` — a download whose file is already gone can be deleted again.**
+  Reported as: selecting a large part of download history and deleting removes
+  nothing, *silently*. "A row whose file is already gone counts as deleted" had
+  been applied to exactly one tier — `sharedGallery` got it because a stale row
+  **threw** there and killed the process, which forced the issue. The other two
+  kept answering `unavailable`, and `DeleteDownloads` forgets only rows whose
+  files came back deleted, so those rows could never leave. `deleteDocumentAt`
+  now tells "it was not there" from "it would not go" (`DocumentsContract`
+  reports both as false), and `deletePrivate` treats an empty match list as
+  already deleted — with the `VALID_KEY` traversal guard untouched, pinned by its
+  own test. Two tests that asserted the old failure were reversed deliberately.
+- **`3c602f4` — stop asking the platform once per row.** The missing-badge probe
+  crossed the method channel once per history row, and `Future.wait` over them
+  *looked* concurrent while queueing on the serial `imageStoreExecutor`: ~868
+  rows meant ~868 round trips before a single badge appeared. `ImageStore.canReadAll`
+  crosses once; natively it loops on the download pool, not the serial thread.
+  The adapter pads a short or malformed reply, because callers pair answers with
+  records **by index** and a gap would badge the wrong wallpapers.
+- **`091e3be` — a bulk delete says how far it has got.** `DeleteDownloads` chunks
+  the files it can delete without a prompt, twenty at a time, and reports after
+  each chunk. **The gallery tier still crosses whole, and last**: the platform
+  folds whatever it is handed into ONE prompt, so splitting it would ask the user
+  to confirm the same delete over and over. Progress always ends at the full
+  count — a declined prompt still ends the batch, and a bar stuck below full
+  reads as hung.
+- **`1cf9845` — a button to clean up rows that lost their file.** The
+  missing-badge check already knew which rows point at a file that is gone;
+  acting on them meant ticking each one. An app-bar action gathers them and
+  offers delete or redownload in one dialog. Testing it on device found the
+  second half: forgetting rows was one Drift round trip per wallpaper, so 601
+  stale rows stalled for seconds — `DownloadHistory.forgetAll` batches by source,
+  and the multi-select "forget" uses it too.
 
 ## FIXED — the files tier could unindex the gallery tier (2026-07-28)
 
