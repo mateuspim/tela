@@ -109,6 +109,31 @@ class StaleDownloadDeletionTest {
         assertEquals(true, response["success"])
     }
 
+    /**
+     * A failed delete asks about existence **once**, never in a loop.
+     *
+     * Clearing a history of hundreds of stale rows runs this path hundreds of
+     * times, and every extra round trip here is multiplied by the whole
+     * selection — this is the slowest thing the screen does (owner,
+     * 2026-07-28: "taking too long when we have too many images").
+     *
+     * **What this cannot reach**, and it is the faster path of the two:
+     * `deleteDocumentAt` answers a `FileNotFoundException` from the provider
+     * with *no* query at all. Robolectric shadows
+     * `DocumentsContract.deleteDocument` and returns false without ever
+     * entering a provider, so that exception cannot be raised here and the
+     * zero-query case is device-only. Do not "fix" this test to assert 0.
+     */
+    @Test
+    fun `a failed delete asks about existence exactly once`() {
+        val documents = FakeDocumentProvider(holds = false)
+        ShadowContentResolver.registerProviderInternal(AUTHORITY, documents)
+
+        storage.deleteDownload("filesOutsideGallery", documentUri())
+
+        assertEquals(1, documents.queries)
+    }
+
     private fun documentUri(): Uri =
         Uri.parse("content://$AUTHORITY/tree/primary%3ADownload/document/primary%3ADownload%2Ftela%2Fa.jpg")
 
@@ -122,6 +147,10 @@ class StaleDownloadDeletionTest {
         private val holds: Boolean,
         private val throwsOnQuery: Boolean = false,
     ) : ContentProvider() {
+        /** How many existence checks reached the provider. */
+        var queries: Int = 0
+            private set
+
         override fun onCreate(): Boolean = true
 
         override fun query(
@@ -131,6 +160,7 @@ class StaleDownloadDeletionTest {
             selectionArgs: Array<out String>?,
             sortOrder: String?,
         ): Cursor? {
+            queries++
             if (throwsOnQuery) throw SecurityException("grant revoked")
             val cursor = MatrixCursor(arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID))
             if (holds) cursor.addRow(arrayOf("primary:Download/tela/a.jpg"))

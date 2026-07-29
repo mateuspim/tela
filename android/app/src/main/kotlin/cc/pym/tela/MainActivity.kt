@@ -290,6 +290,7 @@ class MainActivity : FlutterFragmentActivity() {
             "galleryDeleteConfirmedBySystem" ->
                 result.success(mapOf("confirmed" to systemConfirmsGalleryDelete()))
             "canReadImage" -> handleCanReadImage(call, result)
+            "canReadImages" -> handleCanReadImages(call, result)
             "materializeImage" -> handleMaterializeImage(call, result)
             "releasePreview" -> handleReleasePreview(call, result)
             "describeDownloadLocation" -> handleDescribeDownloadLocation(result)
@@ -312,6 +313,39 @@ class MainActivity : FlutterFragmentActivity() {
             return
         }
         onStorageThread(result) { ImageStorage(this).releasePreview(path) }
+    }
+
+    /**
+     * Probes a whole history's worth of files in one crossing.
+     *
+     * The download history asks about **every** row it shows, and one call per
+     * row meant hundreds of method-channel round trips all queueing behind each
+     * other on the serial [imageStoreExecutor] — the badges took long enough to
+     * arrive that the screen looked broken (owner, 2026-07-28). The probes
+     * themselves are unchanged; what goes away is the traffic.
+     *
+     * On [downloadExecutor], not [imageStoreExecutor]: this is bulk read-only
+     * I/O with no ordering to preserve, and leaving it on the serial thread
+     * would make a long probe block the delete or listing the user is waiting
+     * on. Each file is opened exactly as the single probe opens it, because
+     * only opening it answers the question honestly.
+     */
+    private fun handleCanReadImages(call: MethodCall, result: MethodChannel.Result) {
+        val locations = call.argument<List<String>>("locations") ?: run {
+            result.success(mapOf("success" to true, "readable" to emptyList<Boolean>()))
+            return
+        }
+        val storage = ImageStorage(applicationContext)
+        downloadExecutor.execute {
+            val readable = locations.map { location ->
+                try {
+                    storage.canRead(Uri.parse(location))["readable"] == true
+                } catch (_: Exception) {
+                    false
+                }
+            }
+            onMainThread { result.success(mapOf("success" to true, "readable" to readable)) }
+        }
     }
 
     private fun handleCanReadImage(call: MethodCall, result: MethodChannel.Result) {

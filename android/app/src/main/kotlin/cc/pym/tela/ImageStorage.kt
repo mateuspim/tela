@@ -8,6 +8,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -407,12 +408,23 @@ class ImageStorage(private val context: Context) {
      * Checked *after* the delete rather than before it, unlike the gallery
      * tier's up-front `galleryRowExists`. There the check exists because
      * `createDeleteRequest` throws on a stale row and had to never see one;
-     * nothing here throws, so the happy path pays nothing and only a failure
-     * asks the second question.
+     * nothing here throws, so the happy path pays nothing.
+     *
+     * **`FileNotFoundException` is answered without a second question**, and
+     * that is a cost decision, not a tidiness one. It is what the storage
+     * provider raises for a document that is not there, so it *is* the "already
+     * gone" answer — and clearing a history of hundreds of stale rows is
+     * exactly when this path runs hundreds of times. Paying a delete and then a
+     * query for every one of them doubled the binder traffic of the slowest
+     * thing the screen does (owner, 2026-07-28: "taking too long when we have
+     * too many images"). Only a provider that reports failure *without* saying
+     * why still gets asked.
      */
     private fun deleteDocumentAt(location: Uri): Map<String, Any> {
         val removed = try {
             DocumentsContract.deleteDocument(context.contentResolver, location)
+        } catch (_: FileNotFoundException) {
+            return deleted(location)
         } catch (_: Exception) {
             false
         }

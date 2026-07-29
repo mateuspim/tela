@@ -128,6 +128,21 @@ abstract interface class ImageStore {
   /// the caller wants, and none of the ways to fail are worth distinguishing.
   Future<bool> canRead(Uri location);
 
+  /// Which of [locations] can still be opened, answered in one crossing.
+  ///
+  /// The bulk sibling of [canRead], and it exists for a reason a loop cannot
+  /// solve: the download history probes **every** row it shows, so a library of
+  /// hundreds asked hundreds of separate questions, each a platform round trip
+  /// that queued behind the last on a single native thread. The badges took
+  /// long enough to arrive that the screen looked broken (owner, 2026-07-28).
+  ///
+  /// The order of the answers matches the order of [locations], so a caller can
+  /// pair them by index. A location that cannot be opened — gone, revoked,
+  /// unreadable — is false, exactly as in [canRead]; nothing here throws for a
+  /// single bad entry, because one unreadable file must not cost the caller
+  /// every other answer in the batch.
+  Future<List<bool>> canReadAll(List<Uri> locations);
+
   /// Where files-outside-gallery writes, and whether a card is offered.
   ///
   /// Never throws for the ordinary "nothing chosen yet" state — that is a
