@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Riverpod 3 keeps `Override` out of the default export surface.
 import 'package:flutter_riverpod/misc.dart';
@@ -9,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/download_queue_controller.dart';
 import 'package:tela/app/download_queue_notice.dart';
 import 'package:tela/app/providers.dart';
-import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -26,28 +23,24 @@ import '../fakes/fake_image_store.dart';
 
 void main() {
   group('the notice rule', () {
-    testWidgets('an owed queue anchors the process, naming the count', (
-      WidgetTester tester,
-    ) async {
+    test('an owed queue anchors the process, naming the count', () async {
       final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
-      await _pump(tester, _queueOf(<String>['a', 'b', 'c']), anchor);
+      await _start(_queueOf(<String>['a', 'b', 'c']), anchor);
 
       expect(anchor.holds.last, 'Downloading wallpapers|3 left');
       expect(anchor.held, isTrue);
     });
 
-    testWidgets('one owed download says so in the singular', (
-      WidgetTester tester,
-    ) async {
+    test('one owed download says so in the singular', () async {
       final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
-      await _pump(tester, _queueOf(<String>['a']), anchor);
+      await _start(_queueOf(<String>['a']), anchor);
 
       expect(anchor.holds.last, 'Downloading wallpapers|1 left');
     });
 
-    testWidgets('an empty queue anchors nothing', (WidgetTester tester) async {
+    test('an empty queue anchors nothing', () async {
       final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
-      await _pump(tester, FakeDownloadQueue(), anchor);
+      await _start(FakeDownloadQueue(), anchor);
 
       expect(anchor.holds, isEmpty);
     });
@@ -55,110 +48,102 @@ void main() {
     // Nothing is downloading, so there is nothing to protect from a low-memory
     // kill — and an ongoing notification for work that has stopped is a lie in
     // the one place the user cannot dismiss it.
-    testWidgets('a paused queue drops the anchor even holding entries', (
-      WidgetTester tester,
-    ) async {
+    test('a paused queue drops the anchor even holding entries', () async {
       final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
-      final ProviderContainer container = await _pump(
-        tester,
+      final ProviderContainer container = await _start(
         _queueOf(<String>['a', 'b']),
         anchor,
       );
       expect(anchor.held, isTrue);
 
       container.read(downloadQueuePausedProvider.notifier).hold();
-      await tester.pumpAndSettle();
+      await _settle();
 
-      // Not an exact count: the notice re-announces on every rebuild and it is
-      // the adapter that drops the repeats, which its own test pins.
       expect(anchor.held, isFalse);
       expect(anchor.releases, isNonZero);
     });
 
     // A queue of nothing but failures is waiting on the user, not on the
     // network, so keeping the process pinned for it buys nothing.
-    testWidgets('a queue of only failures anchors nothing', (
-      WidgetTester tester,
-    ) async {
+    test('a queue of only failures anchors nothing', () async {
       final FakeDownloadQueue queue = _queueOf(<String>['a']);
       await queue.markFailed(_wallpaper('a').ref, ImageStoreProblem.source);
       final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
-      await _pump(tester, queue, anchor);
+      await _start(queue, anchor);
 
       expect(anchor.holds, isEmpty);
     });
 
-    testWidgets('a failure beside live entries is not counted as owed', (
-      WidgetTester tester,
-    ) async {
+    test('a failure beside live entries is not counted as owed', () async {
       final FakeDownloadQueue queue = _queueOf(<String>['a', 'b', 'c']);
       await queue.markFailed(_wallpaper('a').ref, ImageStoreProblem.source);
       final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
-      await _pump(tester, queue, anchor);
+      await _start(queue, anchor);
 
       expect(anchor.holds.last, 'Downloading wallpapers|2 left');
     });
   });
 
   group('what reaches the platform', () {
-    // The notice re-announces on every rebuild by design; the dedupe lives in
-    // the adapter. What must never happen is a *count* that stops updating,
-    // which is what a rebuild-only announcement would give.
-    testWidgets('the count follows the queue down', (
-      WidgetTester tester,
-    ) async {
+    test('the count follows the queue down', () async {
       final FakeDownloadQueue queue = _queueOf(<String>['a', 'b']);
       final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
-      final ProviderContainer container = await _pump(tester, queue, anchor);
+      final ProviderContainer container = await _start(queue, anchor);
 
       await container
           .read(downloadQueueControllerProvider.notifier)
           .cancel(_wallpaper('a').ref);
-      await tester.pumpAndSettle();
+      await _settle();
 
       expect(anchor.holds.last, 'Downloading wallpapers|1 left');
     });
 
-    testWidgets('emptying the queue drops the anchor', (
-      WidgetTester tester,
-    ) async {
+    test('emptying the queue drops the anchor', () async {
       final FakeDownloadQueue queue = _queueOf(<String>['a', 'b']);
       final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
-      final ProviderContainer container = await _pump(tester, queue, anchor);
+      final ProviderContainer container = await _start(queue, anchor);
 
       await container
           .read(downloadQueueControllerProvider.notifier)
           .cancelAll();
-      await tester.pumpAndSettle();
+      await _settle();
 
-      // Not an exact count: the notice re-announces on every rebuild and it is
-      // the adapter that drops the repeats, which its own test pins.
+      // Not an exact count: the adapter is what drops repeats, which its own
+      // test pins.
       expect(anchor.held, isFalse);
       expect(anchor.releases, isNonZero);
     });
 
     // A refused hold is Android's background-start restriction, not a failed
     // download. It must not stop the queue or reach the user as an error.
-    testWidgets('a refused anchor leaves the queue alone', (
-      WidgetTester tester,
-    ) async {
+    test('a refused anchor leaves the queue alone', () async {
       final FakeDownloadQueue queue = _queueOf(<String>['a', 'b']);
       final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor(
         refuses: true,
       );
-      final ProviderContainer container = await _pump(tester, queue, anchor);
+      final ProviderContainer container = await _start(queue, anchor);
 
       expect(anchor.holds, isNotEmpty);
       expect(
         container.read(downloadQueueControllerProvider).value,
         hasLength(2),
       );
-      expect(tester.takeException(), isNull);
     });
+  });
+
+  // The notification's words are the ARB's, resolved with no BuildContext —
+  // which is the whole reason the notice can live outside the widget tree.
+  test('the shade reads its words from the ARB', () {
+    expect(shadeWords().downloadQueueNoticeTitle, 'Downloading wallpapers');
+    expect(shadeWords().downloadQueueNoticeBody(4), '4 left');
   });
 }
 
 /// Boots the notice over [queue] with its downloads held mid-flight.
+///
+/// **No widget, and that is the point.** The anchor has to keep reporting after
+/// the activity — and every frame with it — is gone, so it hangs off the
+/// container rather than a `build`. Nothing here pumps anything.
 ///
 /// **It cannot use `pause` to freeze the line, the way the queue tab's tests
 /// do** — pausing is one of the things being asserted, and it drops the anchor
@@ -166,13 +151,7 @@ void main() {
 /// settle: entries are claimed and stay claimed, which leaves the count still
 /// owed and stable under the assertions, and is what a real batch looks like
 /// while it runs.
-///
-/// The notice renders nothing of its own, so there is no widget to find — every
-/// assertion here is about what crossed to [anchor]. It is mounted under a
-/// `MaterialApp` because the notification's words come from the ARB, which
-/// needs the localizations delegate above it.
-Future<ProviderContainer> _pump(
-  WidgetTester tester,
+Future<ProviderContainer> _start(
   FakeDownloadQueue queue,
   FakeDownloadQueueAnchor anchor,
 ) async {
@@ -191,23 +170,18 @@ Future<ProviderContainer> _pump(
     ],
   );
   addTearDown(container.dispose);
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(
-        localizationsDelegates: <LocalizationsDelegate<Object>>[
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-        ],
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: DownloadQueueNotice(child: SizedBox.shrink()),
-      ),
-    ),
-  );
-  await tester.pumpAndSettle();
+  anchorOwedDownloads(container);
+  await _settle();
   return container;
 }
+
+/// Lets the queue's own futures and Riverpod's refresh timer run.
+///
+/// Timers, not frames: nothing is pumped here because there is nothing to pump.
+/// Riverpod refreshes a derived provider on a zero-duration timer when no
+/// mounted scope offers it a vsync — which is exactly the state the app is in
+/// once its activity is destroyed, and why the anchor keeps working there.
+Future<void> _settle() => pumpEventQueue();
 
 FakeDownloadQueue _queueOf(List<String> ids) => FakeDownloadQueue(
   initial: <QueuedDownload>[

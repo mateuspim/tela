@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -106,26 +107,33 @@ class DownloadQueueServiceTest {
     }
 
     /**
-     * The notification must never outlive the work it describes.
+     * A swipe out of recents is the gesture the queue exists to survive.
      *
-     * Swiping tela out of recents destroys `MainActivity`, and the Flutter
-     * engine is the activity's — so the Dart drain stops there whatever this
-     * service does. An anchor that survived would leave an ongoing,
-     * undismissable "Downloading… 7 left" over a queue that is not moving:
-     * worse than no anchor, because it is the one notification the user cannot
-     * clear and it is lying to them.
+     * It destroys `MainActivity`, but the Flutter engine is cached on the
+     * process ([TelaEngine]), so the Dart drain carries on — and the anchor has
+     * to carry on with it or the OS reclaims the process mid-batch. This service
+     * used to stop itself here, back when the engine went down with the activity
+     * and an anchor that survived would have been an ongoing, undismissable
+     * "Downloading… 7 left" over a queue that was not moving.
+     *
+     * The notification must still be honest, and it is: `release` takes it down
+     * the moment nothing is owed, from the same Dart the drain runs on.
      */
     @Test
-    fun `a swipe out of recents takes the notification with it`() {
+    fun `a swipe out of recents leaves the drain anchored`() {
         val service = serviceUnder(
             DownloadQueueService.start(context, "Downloading wallpapers", "7 left"),
         )
 
         service.onTaskRemoved(null)
 
-        assertTrue(
-            "an anchor must not outlive the drain it describes",
+        assertFalse(
+            "the queue keeps draining past the task, so the anchor must too",
             shadowOf(service).isStoppedBySelf,
+        )
+        assertNotNull(
+            "the shade must still say what is happening",
+            shadowOf(service).lastForegroundNotification,
         )
     }
 
