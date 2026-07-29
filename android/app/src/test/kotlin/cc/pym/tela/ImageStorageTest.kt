@@ -166,14 +166,20 @@ class ImageStorageTest {
         assertTrue("the file outside the tier survived", outside.exists())
     }
 
+    /**
+     * **Changed on 2026-07-28, deliberately** — this used to assert failure, and
+     * asserting it is what kept the bug in place. A file that is already gone
+     * counts as deleted, because it is; answering `unavailable` left a download
+     * history row that could never be removed. See `StaleDownloadDeletionTest`
+     * for the whole argument. The traversal guard above is untouched.
+     */
     @Test
-    fun `deletePrivate reports a key it holds no file for`() {
+    fun `deletePrivate counts a key it holds no file for as deleted`() {
         writePrivateImage("wallhaven-abc123.jpg")
 
         val result = storage.deletePrivate("wallhaven-zzz999")
 
-        assertEquals(false, result["success"])
-        assertEquals("unavailable", errorCodeOf(result))
+        assertEquals(true, result["success"])
     }
 
     // --- deleteDownload, the hard delete (J) --------------------------------
@@ -208,8 +214,9 @@ class ImageStorageTest {
         assertTrue("the file outside the tier survived", outside.exists())
     }
 
+    /** The same reversal as `deletePrivate counts a key it holds no file for`. */
     @Test
-    fun `deleteDownload reports an app-private id it holds no file for`() {
+    fun `deleteDownload counts an app-private id it holds no file for as deleted`() {
         writePrivateImage("wallhaven-abc123.jpg")
 
         val result = storage.deleteDownload(
@@ -217,8 +224,7 @@ class ImageStorageTest {
             Uri.parse("file:///data/user/0/cc.pym.tela/files/wallpapers/wallhaven-zzz999.jpg"),
         )
 
-        assertEquals(false, result["success"])
-        assertEquals("unavailable", errorCodeOf(result))
+        assertEquals(true, result["success"])
     }
 
     @Test

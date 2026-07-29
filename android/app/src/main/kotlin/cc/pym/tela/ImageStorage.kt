@@ -343,13 +343,19 @@ class ImageStorage(private val context: Context) {
      * delete each other's file — the reason `WallpaperRef` exists on the Dart
      * side, applied to the one tier whose identity lives in a file name.
      */
+    /**
+     * **A file that is already gone counts as deleted**, and answering
+     * `unavailable` for one is the bug this used to have. See
+     * [deleteDocumentAt] for the whole argument; it is the same rule, and the
+     * empty match list here is exactly the "already gone" case.
+     */
     fun deletePrivate(key: String): Map<String, Any> {
         if (!VALID_KEY.matches(key)) return failure("unavailable")
         val matches = privateDirectory()
             .listFiles()
             ?.filter { it.isFile && keyOf(it.name) == key }
             ?: emptyList()
-        if (matches.isEmpty()) return failure("unavailable")
+        if (matches.isEmpty()) return mapOf("success" to true)
         if (!matches.all { it.delete() }) return failure("unavailable")
         return mapOf("success" to true)
     }
@@ -380,14 +386,59 @@ class ImageStorage(private val context: Context) {
         return if (result["success"] == true) deleted(location) else result
     }
 
-    /** Deletes the SAF document tela created under the user's granted tree. */
+    /**
+     * Deletes the SAF document tela created under the user's granted tree.
+     *
+     * **A document that is already gone counts as deleted**, because it is: the
+     * end state the user asked for has been reached by other means. This is the
+     * same decision `MainActivity.planDeletions` records for the gallery tier —
+     * it was made on 2026-07-28 and applied only there, because there a stale
+     * row *crashed* and here it merely failed in silence.
+     *
+     * Silence is its own trap. `DeleteDownloads` forgets only the rows whose
+     * files came back deleted, so a `filesOutsideGallery` row whose file went
+     * away behind tela's back — deleted from a file manager, over USB, by a
+     * storage cleaner, or on a card that was unmounted — could **never be
+     * removed from download history**. The user selects it, taps delete, and
+     * nothing happens, with no error to explain why. Reported by the owner,
+     * 2026-07-28, against a history full of rows whose files had been removed
+     * out of band.
+     *
+     * Checked *after* the delete rather than before it, unlike the gallery
+     * tier's up-front `galleryRowExists`. There the check exists because
+     * `createDeleteRequest` throws on a stale row and had to never see one;
+     * nothing here throws, so the happy path pays nothing and only a failure
+     * asks the second question.
+     */
     private fun deleteDocumentAt(location: Uri): Map<String, Any> {
         val removed = try {
             DocumentsContract.deleteDocument(context.contentResolver, location)
         } catch (_: Exception) {
             false
         }
-        return if (removed) deleted(location) else failure("unavailable")
+        if (removed || !documentExists(location)) return deleted(location)
+        return failure("unavailable")
+    }
+
+    /**
+     * Whether the granted tree still holds a document at [location].
+     *
+     * Asked only when a delete has already failed, to tell "it was not there"
+     * from "it would not go" — the provider reports both as false, and one of
+     * them is the user's request already satisfied. A revoked grant or an
+     * ejected card answers false too, and that is the right answer: tela cannot
+     * reach the file, and holding an unclearable history row for it helps
+     * nobody.
+     */
+    private fun documentExists(location: Uri): Boolean {
+        val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+        return try {
+            context.contentResolver
+                .query(location, projection, null, null, null)
+                ?.use { cursor -> cursor.moveToFirst() } ?: false
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /**
