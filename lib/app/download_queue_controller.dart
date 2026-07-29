@@ -155,6 +155,9 @@ class DownloadQueueController extends AsyncNotifier<List<QueuedDownload>> {
     // running, and a fake queue whose futures complete immediately would
     // otherwise do exactly that.
     await Future<void>.delayed(Duration.zero);
+    // The container can go during that gap — a disposed process on the way out
+    // is the ordinary case — and reading a Ref past disposal throws.
+    if (_disposed) return;
     try {
       await ref.read(drainDownloadQueueProvider)(
         paused: () => _disposed || ref.read(downloadQueuePausedProvider),

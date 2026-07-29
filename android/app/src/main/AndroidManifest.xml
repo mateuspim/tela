@@ -58,11 +58,11 @@
              downloads anything itself. exported=false because nothing outside
              tela may start it.
 
-             stopWithTask=false does NOT mean the service survives a swipe out
-             of recents — it means the service is told about it, in
-             onTaskRemoved, and decides. Today it stops, because the Flutter
-             engine belongs to MainActivity and the drain dies with the task
-             regardless; see that override for what changes when it doesn't. -->
+             stopWithTask=false is what keeps it running when the user swipes
+             tela out of recents, which is the gesture the queue exists to
+             survive. It is only honest because the Flutter engine is cached on
+             the process (TelaEngine) rather than owned by MainActivity, so the
+             drain the notification describes really is still going. -->
         <service
             android:name=".DownloadQueueService"
             android:exported="false"

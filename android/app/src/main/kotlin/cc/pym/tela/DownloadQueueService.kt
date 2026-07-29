@@ -30,6 +30,14 @@ import android.os.IBinder
  * makes the process the last thing the OS reclaims, and puts a notification in
  * the shade saying why.
  *
+ * **It survives a swipe out of recents**, and that is only honest because the
+ * engine does too. The drain is Dart, so an anchor that outlived the engine
+ * would be an ongoing, undismissable "Downloading… 7 left" over a queue that is
+ * not moving — worse than no anchor at all. [TelaEngine] caches the engine past
+ * the activity, so the work the notification describes really is still running;
+ * before that, this service stopped itself in `onTaskRemoved`. The manifest's
+ * `stopWithTask="false"` is what leaves the choice to us.
+ *
  * ```kotlin
  * startService(DownloadQueueService.start(context, "Downloading", "3 left"))
  * ```
@@ -39,10 +47,10 @@ class DownloadQueueService : Service() {
 
     /**
      * Answers [START_NOT_STICKY] deliberately: a service the system restarts on
-     * its own comes back with no engine, no queue and nothing to anchor — a
-     * notification for work that is not happening. A killed drain is picked up
-     * by `resumeInterrupted` at the next launch, which is where the recovery
-     * rule already lives.
+     * its own comes back with a fresh process, no queue loaded and nothing to
+     * anchor — a notification for work that is not happening. A killed drain is
+     * picked up by `resumeInterrupted` at the next launch, which is where the
+     * recovery rule already lives.
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
@@ -53,30 +61,6 @@ class DownloadQueueService : Service() {
         val body = intent?.getStringExtra(EXTRA_BODY).orEmpty()
         goForeground(title, body)
         return START_NOT_STICKY
-    }
-
-    /**
-     * Goes down with the task, because today the drain goes down with it too.
-     *
-     * **This is the line to revisit, and only this one.** Swiping tela out of
-     * recents destroys `MainActivity`, and the Flutter engine is the activity's
-     * — so the Dart worker stops there whatever this service does. Surviving
-     * that would leave an ongoing, undismissable "Downloading… 7 left" over a
-     * queue that is not moving, which is worse than no anchor at all: it is the
-     * one notification the user cannot get rid of, telling them something false.
-     *
-     * So the honest behaviour for now is to stop, and let `resumeInterrupted`
-     * pick the queue up at the next launch — the recovery rule the queue
-     * already has. When the engine is cached and outlives the activity (slice
-     * 2's second half, see HANDOFF.md), this override comes out and the
-     * manifest's `stopWithTask="false"` starts meaning what it says.
-     *
-     * `stopWithTask` stays false so this runs at all: the system never calls
-     * [onTaskRemoved] for a service it is already tearing down itself.
-     */
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        stopSelf()
-        super.onTaskRemoved(rootIntent)
     }
 
     /**

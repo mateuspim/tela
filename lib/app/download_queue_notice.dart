@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:ui';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/widgets.dart'
+    show BuildContext, basicLocaleListResolution;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/download_queue_controller.dart';
 import 'package:tela/app/providers.dart';
@@ -31,59 +33,66 @@ final Provider<int?> owedDownloadNoticeProvider = Provider<int?>((Ref ref) {
 /// Raises the queue's process anchor while downloads are owed, and drops it
 /// after.
 ///
-/// **A widget, and it has to be one, for the strings.** The notification's
-/// title and body are user-facing text, so they come from the ARB like
-/// everything else (CLAUDE.md); [AppLocalizations] is reached through a
-/// [BuildContext], and the controller has none. Sitting inside
-/// `MaterialApp.builder` puts it under the
-/// localizations delegate while still above every route, so the anchor does not
-/// come and go with whichever screen is open — a queue draining behind the
-/// browse wall is the ordinary case.
+/// **Started from `main`, on the container, and deliberately not from a
+/// widget.** It used to be one, for the strings — [AppLocalizations] is
+/// normally reached through a [BuildContext] — and that stopped being possible
+/// the moment the Flutter engine outlived the activity. A destroyed activity
+/// takes the rendering surface with it, so no frames are produced and no widget
+/// rebuilds: a notice that announced from `build` would freeze at whatever
+/// count was on screen when the user swiped tela away, and never release. The
+/// queue itself is unaffected — the drain is futures, not frames — and so is
+/// this, because a Riverpod listener falls back to a timer when no frame
+/// arrives to carry it.
 ///
-/// It renders [child] untouched and lays out nothing of its own.
+/// The words come from [shadeWords] instead, which needs no context and still
+/// reads the ARB, so adding a locale stays a translation file (CLAUDE.md).
 ///
-/// Backgrounding does not stop it: a Riverpod listener fires on the state
-/// change, not on a frame, so a batch the user switched away from keeps
-/// updating its own count. What does stop it is the activity being destroyed,
-/// which today takes the Flutter engine and the drain with it — see the queue's
-/// slice-2 notes in HANDOFF.md.
-class DownloadQueueNotice extends ConsumerWidget {
-  /// Wraps [child], watching the queue on its behalf.
-  const DownloadQueueNotice({required this.child, super.key});
+/// ```dart
+/// anchorOwedDownloads(container); // in main, once
+/// ```
+void anchorOwedDownloads(ProviderContainer container) {
+  final DownloadQueueAnchor anchor = container.read(
+    downloadQueueAnchorProvider,
+  );
+  container.listen<int?>(
+    owedDownloadNoticeProvider,
+    (int? previous, int? owed) => _announce(anchor, owed),
+    // The queue a killed session left behind is already owed before anything
+    // else runs, and there is no change to wait for: it is the state we start
+    // in. Announcing it immediately is what re-raises the anchor for a batch
+    // the user never got to see finish.
+    fireImmediately: true,
+  );
+}
 
-  /// The tree this reports for, returned from `build` unchanged.
-  final Widget child;
+/// The shipped strings for the platform's locale, with no [BuildContext].
+///
+/// Resolved the way `WidgetsApp` resolves its own — the platform's preferred
+/// locales against the ones tela ships — so a second locale is picked up here
+/// by existing, not by editing this function. English is the only one shipped
+/// today, and that stays a fact about the ARB rather than one written in Dart.
+AppLocalizations shadeWords() {
+  return lookupAppLocalizations(
+    basicLocaleListResolution(
+      PlatformDispatcher.instance.locales,
+      AppLocalizations.supportedLocales,
+    ),
+  );
+}
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Watched and announced on every build rather than listened for changes:
-    // a change listener says nothing about the value it *starts* at, and the
-    // queue a killed session left behind is already loaded before any route
-    // mounts. Re-announcing costs nothing — the adapter drops a hold whose
-    // words have not changed — and nothing here feeds back into a provider, so
-    // there is no rebuild to loop on.
-    _announce(
-      ref.read(downloadQueueAnchorProvider),
-      ref.watch(owedDownloadNoticeProvider),
-      context,
-    );
-    return child;
+/// Tells [anchor] about [owed]. Fire-and-forget on purpose: the shade catching
+/// up a frame late costs nothing, and awaiting a platform channel here would
+/// put the queue's own progress behind a notification.
+void _announce(DownloadQueueAnchor anchor, int? owed) {
+  if (owed == null) {
+    unawaited(anchor.release());
+    return;
   }
-
-  /// Tells the anchor about [owed]. Fire-and-forget on purpose: the shade
-  /// catching up a frame late costs nothing, and awaiting a platform channel
-  /// here would put the queue's own progress behind a notification.
-  void _announce(DownloadQueueAnchor anchor, int? owed, BuildContext context) {
-    if (owed == null) {
-      unawaited(anchor.release());
-      return;
-    }
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    unawaited(
-      anchor.hold(
-        title: l10n.downloadQueueNoticeTitle,
-        body: l10n.downloadQueueNoticeBody(owed),
-      ),
-    );
-  }
+  final AppLocalizations l10n = shadeWords();
+  unawaited(
+    anchor.hold(
+      title: l10n.downloadQueueNoticeTitle,
+      body: l10n.downloadQueueNoticeBody(owed),
+    ),
+  );
 }
