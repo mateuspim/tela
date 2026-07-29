@@ -240,8 +240,15 @@ whole view hierarchy for the length of the batch — which is exactly the memory
 `DownloadQueueService` is asking the OS not to reclaim. The activity keeps only
 what needs a window: apply, share, crop, `FLAG_SECURE`, and the two prompts.
 
-`MainActivity` is **489 lines** now, from 901, and finally under the file limit
-CLAUDE.md sets.
+`MainActivity` is **420 lines** now, from 901, and finally under the file limit
+CLAUDE.md sets. The channel it gave way to overshot that limit on the first cut
+(558) and was split again straight after: `DownloadDeleting` takes the one tier
+that needs a screen, `DownloadDeletionPlan` the decision about which rows go
+silently and which are already gone, and the two helpers both need —
+`imageStoreFailure` and `answerOffThread` — are top-level rather than copied,
+because Dart reads exactly those two keys and a Dart future that never completes
+is the one failure nothing above can recover from. **`ImageStorage.kt` is still
+807 lines and is the last of these left.**
 
 **`StoragePrompts` is the seam.** The SAF folder picker and
 `MediaStore.createDeleteRequest`'s confirmation are `startActivityForResult` in

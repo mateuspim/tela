@@ -87,6 +87,17 @@ class ImageStoreChannel(context: Context) {
      */
     var prompts: StoragePrompts? = null
 
+    /**
+     * The one storage call that needs a screen, and everything that follows from
+     * that. It reads [prompts] through a lambda rather than being handed the
+     * value, so a batch running past a detach sees the withdrawal.
+     */
+    private val deleting = DownloadDeleting(
+        this.context,
+        storageExecutor,
+        ::onMainThread,
+    ) { prompts }
+
     /** Answers `cc.pym.tela/images` on [engine] for as long as it lives. */
     fun attachTo(engine: FlutterEngine) {
         MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)
@@ -104,8 +115,8 @@ class ImageStoreChannel(context: Context) {
             "storeImage" -> handleStoreImage(call, result)
             "copyStoredImage" -> handleCopyStoredImage(call, result)
             "listPrivateImages" -> onStorageThread(result) { ImageStorage(context).listPrivate() }
-            "deleteDownload" -> handleDeleteDownload(call, result)
-            "deleteDownloads" -> handleDeleteDownloads(call, result)
+            "deleteDownload" -> deleting.deleteOne(call, result)
+            "deleteDownloads" -> deleting.deleteBatch(call, result)
             "galleryDeleteConfirmedBySystem" ->
                 result.success(mapOf("confirmed" to systemConfirmsGalleryDelete()))
             "canReadImage" -> handleCanReadImage(call, result)
@@ -240,172 +251,6 @@ class ImageStoreChannel(context: Context) {
     }
 
     /**
-     * Hard-deletes a downloaded file, routing the gallery tier by API level.
-     *
-     * appPrivate and the SAF document delete synchronously off the UI thread.
-     * The gallery tier on API 30+ cannot: `MediaStore.createDeleteRequest`
-     * shows the OS's own confirmation and returns through an activity result, so
-     * it is launched like the folder grant. On API 29 a direct delete works, so
-     * it stays on the storage thread with the other two.
-     */
-    private fun handleDeleteDownload(call: MethodCall, result: MethodChannel.Result) {
-        val tier = call.argument<String>("tier")
-        val location = call.argument<String>("location")
-        if (tier == null || location == null) {
-            result.success(imageStoreFailure("unavailable"))
-            return
-        }
-        val uri = Uri.parse(location)
-        if (tier == "sharedGallery" && systemConfirmsGalleryDelete()) {
-            confirmGalleryDeletion(uri, result)
-            return
-        }
-        onStorageThread(result) { ImageStorage(context).deleteDownload(tier, uri) }
-    }
-
-    /**
-     * Asks the OS to delete one gallery image — unless its row is already gone.
-     *
-     * Off the UI thread for the MediaStore query, then back onto it because only
-     * an Activity can launch the confirmation. Same stale-row rule as
-     * [planDeletions], which is where it is explained.
-     */
-    private fun confirmGalleryDeletion(uri: Uri, result: MethodChannel.Result) {
-        storageExecutor.execute {
-            val live = ImageStorage(context).galleryRowExists(uri)
-            onMainThread {
-                if (live) {
-                    requestGalleryDeletions(listOf(uri), emptyList(), result)
-                } else {
-                    result.success(deletionOutcome(listOf(uri.toString())))
-                }
-            }
-        }
-    }
-
-    /**
-     * Hard-deletes a whole selection, batching the gallery tier into one prompt.
-     *
-     * The files and SAF documents delete on the storage thread; the gallery
-     * items (on API 30+) are gathered and handed to a single
-     * `createDeleteRequest`, so a selection of twenty gallery downloads is one
-     * OS prompt rather than twenty. The already-deleted locations are carried
-     * into that prompt so the final answer is the whole batch's outcome.
-     */
-    private fun handleDeleteDownloads(call: MethodCall, result: MethodChannel.Result) {
-        val items = readDeletionItems(call) ?: run {
-            result.success(imageStoreFailure("unavailable"))
-            return
-        }
-        storageExecutor.execute {
-            val plan = planDeletions(ImageStorage(context), items)
-            onMainThread {
-                if (plan.confirm.isEmpty()) {
-                    result.success(deletionOutcome(plan.deleted))
-                } else {
-                    requestGalleryDeletions(plan.confirm, plan.deleted, result)
-                }
-            }
-        }
-    }
-
-    /**
-     * Launches one system confirmation for every gallery delete in the batch.
-     *
-     * [alreadyDeleted] are the non-gallery files already removed, kept in the
-     * answer either way — including when there is no screen to ask on, which is
-     * an ordinary state now that the queue drains without one. A gallery delete
-     * simply cannot happen then: the OS owns that prompt, and Dart is told the
-     * truth about what went.
-     */
-    @RequiresApi(Build.VERSION_CODES.R)
-    private fun requestGalleryDeletions(
-        galleryUris: List<Uri>,
-        alreadyDeleted: List<String>,
-        result: MethodChannel.Result,
-    ) {
-        // Guarded because `createDeleteRequest` is the call that actually threw
-        // (a stale row, which [planDeletions] now filters out) and an uncaught
-        // throw here is on the main thread — it kills the app. The launch is
-        // guarded too, inside [StoragePrompts.askDeleteConfirmation], which is
-        // where it now lives.
-        val request = try {
-            MediaStore.createDeleteRequest(context.contentResolver, galleryUris)
-        } catch (_: Exception) {
-            result.success(deletionOutcome(alreadyDeleted))
-            return
-        }
-        val asked = prompts?.askDeleteConfirmation(request.intentSender) { accepted ->
-            val locations = if (accepted) galleryUris.map(Uri::toString) else emptyList()
-            result.success(deletionOutcome(alreadyDeleted + locations))
-        }
-        if (asked != true) result.success(imageStoreFailure("unavailable"))
-    }
-
-    /**
-     * What a delete batch resolved to before any prompt: the gallery rows the OS
-     * must confirm, and the locations that are already gone.
-     */
-    private data class DeletionPlan(val confirm: List<Uri>, val deleted: List<String>)
-
-    /**
-     * Deletes what tela can delete itself, and sorts the rest into live gallery
-     * rows and stale ones.
-     *
-     * **A gallery row whose MediaStore row no longer exists counts as deleted**,
-     * because it is: the end state the user asked for is already true. Handing it
-     * to `MediaStore.createDeleteRequest` instead throws `IllegalArgumentException`
-     * on the main thread and kills the process — and since the history is where
-     * those rows live and *clearing the history is the only gesture that removes
-     * them*, every retry died before trimming anything and the user could not
-     * escape without wiping app data (owner, 2026-07-28).
-     *
-     * It needs no mistake of ours to happen: a `sharedGallery` row outlives its
-     * file whenever the file goes away behind tela's back — deleted from Photos,
-     * from a file manager, by a storage cleaner, or on a card that was unmounted.
-     * Rendering already tolerates that; it is what the missing badge shows.
-     */
-    private fun planDeletions(
-        storage: ImageStorage,
-        items: List<Pair<String, Uri>>,
-    ): DeletionPlan {
-        val gallery = mutableListOf<Uri>()
-        val deleted = mutableListOf<String>()
-        for ((tier, uri) in items) {
-            if (tier == "sharedGallery" && systemConfirmsGalleryDelete()) {
-                gallery.add(uri)
-            } else if (storage.deleteDownload(tier, uri)["success"] == true) {
-                deleted.add(uri.toString())
-            }
-        }
-        val (live, stale) = gallery.partition { storage.galleryRowExists(it) }
-        return DeletionPlan(live, deleted + stale.map(Uri::toString))
-    }
-
-    private fun readDeletionItems(call: MethodCall): List<Pair<String, Uri>>? {
-        val raw = call.argument<List<Map<String, String>>>("items") ?: return null
-        return raw.mapNotNull { item ->
-            val tier = item["tier"]
-            val location = item["location"]
-            if (tier == null || location == null) null else tier to Uri.parse(location)
-        }
-    }
-
-    /** True on API 30+, where every gallery delete goes through the OS prompt. */
-    private fun systemConfirmsGalleryDelete(): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
-
-    /**
-     * A delete batch's answer: what went, whether or not everything did.
-     *
-     * Always a success, because "some of these were already gone" and "the user
-     * declined the prompt" are outcomes, not failures — Dart forgets exactly the
-     * rows named here and leaves the others alone.
-     */
-    private fun deletionOutcome(deleted: List<String>): Map<String, Any> =
-        mapOf("success" to true, "deleted" to deleted)
-
-    /**
      * Opens the folder picker pointed at the chosen volume, no download waiting.
      *
      * The `kind` ("device" or "sdCard") pre-aims the picker so the user confirms
@@ -515,16 +360,7 @@ class ImageStoreChannel(context: Context) {
     private fun onStorageThread(
         result: MethodChannel.Result,
         work: () -> Map<String, Any>,
-    ) {
-        storageExecutor.execute {
-            val response = try {
-                work()
-            } catch (_: Exception) {
-                imageStoreFailure("unavailable")
-            }
-            onMainThread { result.success(response) }
-        }
-    }
+    ) = answerOffThread(storageExecutor, ::onMainThread, result, work)
 
     /**
      * Posts back to the main thread without going through an activity.
@@ -536,11 +372,6 @@ class ImageStoreChannel(context: Context) {
      * to have asked for it.
      */
     private fun onMainThread(reply: () -> Unit) = mainThread.post(reply)
-
-    private fun imageStoreFailure(code: String): Map<String, Any> = mapOf(
-        "success" to false,
-        "errorCode" to code,
-    )
 
     private companion object {
         const val CHANNEL = "cc.pym.tela/images"
@@ -554,5 +385,41 @@ class ImageStoreChannel(context: Context) {
                 Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
         const val PERSISTED_DIRECTORY_ACCESS_FLAGS =
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+    }
+}
+
+/**
+ * The failure shape every image-store method answers with.
+ *
+ * Top-level because [DownloadDeleting] speaks the same contract and Dart's
+ * `MethodChannelImageStore` reads exactly these two keys; two definitions of it
+ * is how they would drift.
+ */
+internal fun imageStoreFailure(code: String): Map<String, Any> = mapOf(
+    "success" to false,
+    "errorCode" to code,
+)
+
+/**
+ * Runs storage work on [executor] and answers [result] on the main thread, with
+ * an unexpected throw becoming `unavailable` rather than a dropped reply.
+ *
+ * Shared for the same reason as [imageStoreFailure]: the delete path needs the
+ * identical guarantee, and a Dart future that never completes is the one failure
+ * mode nothing above can recover from.
+ */
+internal fun answerOffThread(
+    executor: ExecutorService,
+    onMainThread: (() -> Unit) -> Unit,
+    result: MethodChannel.Result,
+    work: () -> Map<String, Any>,
+) {
+    executor.execute {
+        val response = try {
+            work()
+        } catch (_: Exception) {
+            imageStoreFailure("unavailable")
+        }
+        onMainThread { result.success(response) }
     }
 }
