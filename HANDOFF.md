@@ -86,14 +86,20 @@ Updated: 2026-08-11
 > **device-confirmed**; nothing about Detail's zoom is owed a device pass any
 > more.
 >
-> **Still over the limit and not touched:** `ImageStorageTest.kt` at **536**. It
-> is a test file and was not in this pass's scope; its groups now map cleanly
-> onto the collaborators `ImageStorage` was split into, so it splits the same
-> way whenever someone wants it.
+> **`ImageStorageTest.kt` is split too, and now nothing hand-written is over the
+> limit** (`refactor/split-image-storage-test`, merged 2026-08-11). The 536-line
+> file left out of that pass went the way its own subject had: `TierWritingTest`
+> (12), `TierDeletingTest` (8), `PrivateTierListingTest` (6) and
+> `StoredImageReadingTest` (5) — the same **31** tests, none rewritten, Kotlin
+> still **91** and green. Shared setup lives in `ImageStorageTestCase`; the
+> Robolectric SDK-35 pin is repeated on each concrete class on purpose, so a
+> suite read alone still says which framework it ran against. The only files over
+> 500 lines now are generated (`tela_database.g.dart`, the l10n pair).
 >
 > **The older START HERE — the queue survives a swipe out of recents, and it is
-> device-proven** (slice 2, second half; `feat/queue-cached-engine`, committed as
-> `b1f1d5e`, **not yet merged**). The Flutter engine is cached on the process
+> device-proven** (slice 2, second half; `feat/queue-cached-engine`, `b1f1d5e`).
+> **Corrected 2026-08-11: this is merged** — the line saying "not yet merged" was
+> stale, and `git branch --contains b1f1d5e` names `master`. The Flutter engine is cached on the process
 > rather than owned by `MainActivity`, so the Dart drain — and the anchor over it
 > — outlive the activity. `make ci` green: analyze clean, Dart **1190**, Kotlin
 > **83**; release APK builds and was run on the SM-X730, md5-checked against the
