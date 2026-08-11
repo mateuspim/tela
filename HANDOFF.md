@@ -57,6 +57,13 @@ Updated: 2026-08-11
 > running, and its database and private library are gone by the owner's
 > decision. See *Device state after the reinstall*.
 >
+> **The regression pass ran on it and all six areas passed** — the splits are
+> device-proven, not just suite-proven. It did surface one bug that predates
+> them: **pinch-to-zoom is unreliable in Detail's preview pager** while fullscreen
+> is solid, because Detail wraps the zoomable viewport in a `PageView` and the
+> page-drag recognizer wins the gesture arena off the first finger. That is the
+> **next slice** — see *NEXT* below for the cause and the shape of the fix.
+>
 > **Still over the limit and not touched:** `ImageStorageTest.kt` at **536**. It
 > is a test file and was not in this pass's scope; its groups now map cleanly
 > onto the collaborators `ImageStorage` was split into, so it splits the same
@@ -260,6 +267,53 @@ Updated: 2026-08-11
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
+## NEXT — Detail's preview pager loses the pinch to the PageView (2026-08-11)
+
+**The report, from the device pass:** pinch-to-zoom on the Detail screen's
+wallpaper "sometimes doesn't work — it keeps seeing it as one finger even
+pinching in the middle of the screen". Fullscreen zoom is fine. Both surfaces
+render the *same* `GalleryViewport`, so the difference is not in the zoom code.
+
+**The cause, read off the two call sites rather than guessed:**
+
+- **Fullscreen** (`core/ui/immersive_gallery_viewer.dart`) has **no
+  `PageView`**. Paging is a hand-rolled `Listener` that counts pointers and
+  measures the swipe itself (`_startSwipe`/`_finishSwipe`, and it already bails
+  when `_pointerCount != 1` or the image is zoomed). A `Listener` is not a
+  gesture recognizer and never enters the arena, so `InteractiveViewer`'s
+  `ScaleGestureRecognizer` is the *only* contender for the drag. Pinch always
+  wins. That is why fullscreen "works ok".
+- **Detail** (`features/detail/detail_preview_pager.dart`) wraps the same
+  viewport in a **`PageView.builder`**, whose `Scrollable` installs a
+  `HorizontalDragGestureRecognizer`. Now two recognizers share the arena. The
+  drag recognizer declares victory the moment the *first* finger crosses
+  horizontal touch slop, the arena is swept, and the scale recognizer is
+  rejected **for the rest of the pointer sequence** — so the second finger
+  landing afterwards is ignored. Hence "it keeps seeing as one finger", and
+  hence *sometimes*: it depends entirely on whether the two fingers land close
+  enough together that neither has drifted past slop yet.
+
+**A second gap in the same place, worth fixing in the same slice:** Detail's
+viewport is handed **no `transformationController`** (`ProgressiveWallpaperPreview`
+does not take one), so each page's `InteractiveViewer` owns private zoom state
+that nothing can read. Detail therefore cannot know it is zoomed, which means it
+cannot suppress the page turn while panning a zoomed image, cannot reset zoom on
+selection change the way `WallpaperImmersiveSession` does, and has no
+double-tap-to-zoom. The pinch fix needs that state anyway, so the controller is
+part of the work, not a follow-up.
+
+**The shape of the fix**, in the order it has to happen: a `Listener` above the
+`PageView` counting pointers (free — it does not compete), Detail owning a
+`GalleryZoomController` per selection, and the pager's `physics` going
+`NeverScrollableScrollPhysics` while a second pointer is down **or** the image is
+zoomed. `onPointerDown` fires before the arena resolves, so dropping the drag
+recognizer on the second finger's down event rejects it in time and the scale
+recognizer wins. The one case that stays lost is a pinch begun *during* an
+already-committed page swipe, which is the correct outcome.
+
+**Do not** "fix" this by disabling zoom in Detail or by routing pinch to the
+fullscreen route. The owner asked for pinch to work in place.
+
 ## READ BEFORE TOUCHING THE DEVICE OR SHIPPING — the app now has a real signing key, and the old install cannot be updated (2026-08-11)
 
 **The state in one line:** every release build from now on is signed with
@@ -439,14 +493,23 @@ Done, verified, and left in this state:
 **From here every update is an ordinary `make deploy`** — same key, in place, no
 data loss. That is the whole point of the block above.
 
-### Then: the regression pass this was all for
+### The regression pass this was all for — PASSED (2026-08-11)
 
-The point of getting a build onto the device is checking the six-file refactor
-below for regressions. Nothing in that pass changed behaviour — `make ci` is
-green (analyze clean, Dart **1198**, Kotlin **91**), no key, tooltip, semantic
-label or generated line moved — so the device pass is looking for what tests
-structurally cannot see: the wall, detail's actions and pager, the filter sheet,
-the batch flows, the download queue, and the private library.
+The point of getting a build onto the device was checking the six-file refactor
+below for regressions. Nothing in that pass changed behaviour — `make ci` green
+(analyze clean, Dart **1198**, Kotlin **91**), no key, tooltip, semantic label or
+generated line moved — so the device pass was looking for what tests structurally
+cannot see: the wall, detail's actions and pager, the filter sheet, the batch
+flows, the download queue, and the private library.
+
+**The owner ran it on the SM-X730 and reported all six areas passing.** No
+regression from the splits. That closes the file-limit pass: it is behaviour-
+preserving in the only way that could still have been doubted, on a device,
+against a release build.
+
+The one thing the pass surfaced is **not** a regression — it predates the splits
+and is now the next slice: pinch-to-zoom is unreliable in Detail's preview pager
+while it is solid in fullscreen. See *NEXT* at the top of this file.
 
 ## DONE — the file limits, and what each split was actually for (2026-08-11)
 
