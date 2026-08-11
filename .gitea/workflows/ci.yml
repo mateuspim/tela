@@ -62,7 +62,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          # Hardcoded, not ${{ env.FLUTTER_VERSION }}: this act_runner's
+          # expression evaluator mangles bare env-context interpolation into
+          # garbage (`%!t(string=3.44.6)`) instead of the literal. Must still
+          # match FLUTTER_VERSION above and tool/docker/Dockerfile.
+          flutter-version: '3.44.6'
           channel: stable
           cache: true
       - run: flutter pub get
@@ -80,10 +84,11 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
+          # Hardcoded — see the flutter-version comment in the dart job above.
+          java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: '3.44.6'
           channel: stable
           cache: true
       - uses: gradle/actions/setup-gradle@v4
