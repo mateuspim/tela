@@ -1,8 +1,45 @@
 # tela handoff
 
-Updated: 2026-07-29
+Updated: 2026-08-11
 
-> **START HERE — the queue survives a swipe out of recents, and it is
+> **START HERE — every file is under the 500-line limit again, and the merge
+> gate proved each split on its way in** (2026-08-11, six branches merged to
+> `master`). `make ci` green from a clean checkout: analyze clean, Dart **1198**
+> (from 1190), Kotlin **91** (from 83). No behaviour changed anywhere in this
+> pass — no key, tooltip, semantic label, or generated line moved.
+>
+> Six files were over CLAUDE.md's limit; the block *the file limits, and what
+> each split was actually for* below has the reasoning per file. In short:
+> `ImageStorage.kt` 807 → 81 behind a facade over five collaborators (the one
+> the channel split named as still owed); `wallpaper_detail_screen.dart` 891 →
+> 320 by giving the apply button, the action bar and the preview pager their own
+> state; `wallpaper_batch_actions.dart` 521 → 330; `filter_sheet.dart` 563 →
+> 474; `wallpaper_grid.dart` 528 → 434, with the paging logic deliberately
+> untouched; `tela_database.dart` 553 → 386, tables into their own file with a
+> **byte-identical** `.g.dart` to prove it was a relocation.
+>
+> **Two new test files came out of it, and they are the part worth keeping**:
+> `ImageFileNamingTest.kt` (8) pins `source-id.ext` at the seam three Kotlin
+> modules now share, and `filter_draft_edits_test.dart` (8) pins the filter
+> sheet's asymmetric rules — the last category and purity chip may **not** be
+> turned off, the last ratio chip **may** — which previously needed a pumped
+> modal to reach.
+>
+> **Two things a fresh clone needs, found the hard way here.** `make hooks` had
+> never been run in this clone, so the merge gate was not installed (it is now).
+> And `make kotlin-test` fails on a fresh clone with `./gradlew: No such file or
+> directory` — the wrapper is gitignored and only Flutter's own Android build
+> writes it, so **one `flutter build apk` must happen before the Kotlin suite
+> can run at all**. `flutter gen-l10n` is likewise owed before `flutter analyze`
+> is meaningful: the generated l10n is gitignored, and without it analyze
+> reports 628 errors that are not real.
+>
+> **Still over the limit and not touched:** `ImageStorageTest.kt` at **536**. It
+> is a test file and was not in this pass's scope; its groups now map cleanly
+> onto the collaborators `ImageStorage` was split into, so it splits the same
+> way whenever someone wants it.
+>
+> **The older START HERE — the queue survives a swipe out of recents, and it is
 > device-proven** (slice 2, second half; `feat/queue-cached-engine`, committed as
 > `b1f1d5e`, **not yet merged**). The Flutter engine is cached on the process
 > rather than owned by `MainActivity`, so the Dart drain — and the anchor over it
@@ -199,6 +236,124 @@ Updated: 2026-07-29
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## DONE — the file limits, and what each split was actually for (2026-08-11)
+
+Six files were over CLAUDE.md's 500-line rule. One branch and one merge each, so
+the gate ran both suites six times and a bad split would be one revert. Nothing
+here changes behaviour: every existing test passed unchanged at every step, and
+the two suites went up only by the tests the splits made cheap to write.
+
+The shape every one of them follows is the one `061c4a1` set when
+`ImageStoreChannel` overshot: **the public entry point stays exactly where
+callers already look, and a whole responsibility moves out behind it.** No call
+site in `lib/` or `android/` was edited to accommodate a split.
+
+### `ImageStorage.kt` — 807 → 81 (`09940c1`)
+
+The one the cached-engine block named as "the last of these left". `ImageStorage`
+is a facade now; five collaborators hold the work: `TierWriting` (the purity gate
+and the three tier writers), `TierDeleting` (the counterpart, and the "a file
+that is already gone counts as deleted" rule), `PrivateTierListing`,
+`StoredImageReading` (`canRead` + the preview materialisation), `ImageFileNaming`,
+plus `SafDocuments` and `TelaDirectories`.
+
+**Named for the tier, not the download**, deliberately: `DownloadDeleting`
+already owns the batch the user confirms on screen, and two classes a letter
+apart is how the wrong one gets edited.
+
+Three duplications went rather than being copied forward — `failure`/`deleted`
+are the top-level `imageStoreFailure`/`deletionOutcome` the channel already
+defines, and `documentExists`/`galleryRowExists` were the same query under two
+names (they share `rowExists` and differ only in the column).
+
+New `ImageFileNamingTest` pins the naming seam directly. It matters more than a
+unit test usually would: the private tier writes no database row, so the file
+name is the **only** record of where such an image came from, and three modules
+now depend on composing and parsing it identically.
+
+### `wallpaper_detail_screen.dart` — 891 → 320 (`9847baa`)
+
+One state class held the gallery session, the pager, six busy flags, eleven
+action handlers and six button builders — so a spinner on the download icon
+rebuilt the metadata, the preview and the Set button with it. `DetailApplyButton`,
+`DetailActionBar` and `DetailPreviewPager` each own the state that is genuinely
+theirs.
+
+**The gate that had to stay whole:** `_downloadedRecord()`. It reads the download
+history, which never holds an explicit or app-private download, and *both* the
+move and the delete button hang off that one lookup — which is what stops this
+ungated screen from disclosing that such a download exists. It moved into
+`DetailActionBar` intact; a second gate written for one of the two buttons would
+be a second chance to get it wrong.
+
+### `wallpaper_batch_actions.dart` — 521 → 330 (`d7ecacc`)
+
+Five functions were one story — where a batch lands and how it gets into the
+queue — and they carry most of the reasoning in the file: why a batch always
+asks even under a pin, why the folder grant must happen before anything is
+enqueued, why the toast reports the *newly* queued count. They are
+`batch_download_queueing.dart` now, behind `queueBatchDownload`.
+
+### `filter_sheet.dart` — 563 → 474 (`bc6c7e6`)
+
+`FilterCards` takes the card/group widgets and the withholding that was spread
+across eight call sites (a group the source cannot honour is not rendered; a card
+whose every group was withheld is not either). `filter_draft_edits.dart` takes
+the five draft edits as plain functions over a `SearchQuery`.
+
+That second one is the point. Those edits were the only logic in the file and the
+only part that could not be tested without pumping a modal, and the rules are
+asymmetric in a way worth pinning: the last **category** and the last **purity**
+chip may not be turned off (Wallhaven's masks throw on `'000'`), the last
+**ratio** chip may (an empty `ratios` is how you ask for every shape), and
+choosing the current colour clears it. `filter_draft_edits_test.dart` pins all
+four.
+
+**One trap for whoever writes more of those tests:** `const SearchQuery()` is not
+an empty query — it already carries the device's own 9x16 shape in `ratios`. A
+test about what a tap adds and removes has to start from `ratios: <RatioChoice>[]`.
+
+### `wallpaper_grid.dart` — 528 → 434 (`052eb22`)
+
+The wall's status views (`wallpaper_wall_status.dart`) and the two ways off a
+tile (`wallpaper_wall_navigation.dart`). **The paging was deliberately left
+alone** — it carries the cold-launch-hang reasoning (#hang, 2026-07-16), the
+superseded-fetch generation guard and the under-filled top-up, and none of that
+is worth moving for a line count.
+
+### `tela_database.dart` — 553 → 386 (`eaa957c`)
+
+Tables and the mixin to `tela_tables.dart`; the connection, the migrations and
+the statements stay. They change on different clocks — a table shape changes
+rarely and every change is a migration.
+
+**Drift needs no accommodation for this**: tables carry no part file of their
+own, only the `@DriftDatabase` that lists them does. The proof is that
+`build_runner` returned `tela_database.g.dart` **byte-identical** — worth knowing
+before anyone fears a schema file split.
+
+### Two things a fresh clone needs, and neither is in the commands list
+
+Both cost a confusing failure here before they were understood:
+
+- **`flutter gen-l10n` before `flutter analyze` means anything.** The generated
+  l10n is gitignored, so a fresh clone's analyze reports **628 errors** that are
+  entirely the missing `AppLocalizations`. `flutter build` regenerates it on its
+  own; `analyze` and `test` do not.
+- **One `flutter build apk` before `make kotlin-test` can run at all.** The
+  Gradle wrapper is gitignored (Flutter's own `android/.gitignore`) and only an
+  Android build writes it, so the target fails with `./gradlew: No such file or
+  directory` and nothing about that message says why.
+
+`make hooks` had also never been run in this clone — `core.hooksPath` was unset,
+so the merge gate was not installed at all. It is now.
+
+### Left over the limit, on purpose
+
+`ImageStorageTest.kt`, **536**. A test file, and outside this pass's scope. Its
+groups now map onto the collaborators above, so it splits the same way whenever
+someone wants it.
 
 ## BUILT AND DEVICE-PROVEN — the engine outlives the screen (slice 2, second half; `b1f1d5e`)
 
