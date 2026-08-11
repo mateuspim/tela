@@ -48,8 +48,14 @@ Updated: 2026-08-11
 > BEFORE TOUCHING THE DEVICE OR SHIPPING* has the sequence.
 >
 > **It also turned up a privacy defect that should block a Play launch:** the
-> backup rules exclude only the secure-storage file, so **the private library is
-> being uploaded to Google's cloud backup**. Same block, *SECURITY* section.
+> backup rules exclude only the secure-storage file, so on any device with
+> backup enabled — the default — **the private library goes to the user's Google
+> account**. This tablet has backup disabled, so it has not fired here. Same
+> block, *SECURITY* section.
+>
+> **The tablet has been reinstalled** (2026-08-11): release-signed, md5-verified,
+> running, and its database and private library are gone by the owner's
+> decision. See *Device state after the reinstall*.
 >
 > **Still over the limit and not touched:** `ImageStorageTest.kt` at **536**. It
 > is a test file and was not in this pass's scope; its groups now map cleanly
@@ -366,10 +372,17 @@ the key is stable and committed to (well, gitignored beside) the repo.
 Found while reading the rules for the above, and it should block a Play launch.
 
 `backup_rules.xml` and `data_extraction_rules.xml` both exclude exactly one
-thing: `FlutterSecureStorage.xml`. Everything else is backed up and
-device-transferred — **including `files/wallpapers/`, which is the app-private
-tier**. The private library is therefore being uploaded to Google's cloud backup
-and copied onto any device the user transfers to.
+thing: `FlutterSecureStorage.xml`. Everything else is eligible for cloud backup
+and device transfer — **including `files/wallpapers/`, which is the app-private
+tier**. `ALLOW_BACKUP` is set on the package, and Android's backup is **on by
+default**, so for an ordinary user the private library goes to their Google
+account and onto any device they transfer to.
+
+**Not on this tablet, as it happens:** `bmgr enabled` reports *Backup Manager
+currently disabled*, so nothing here has ever been backed up. An earlier draft
+of this block asserted the owner's private library was already in the cloud —
+that was wrong, and measured wrong before it did any harm. The defect is real
+for every device with the default setting; it just has not fired on this one.
 
 That is the precise exposure the v5 migration already reasoned about and acted
 on for the *database*: "this database is backed up … an unpurged row keeps a
@@ -399,6 +412,32 @@ update after the device is back on its feet.
   versionCode-1 APK is fine for the tablet and not for Play.
 - The backup exposure above is a genuine privacy defect in a wallpaper app whose
   headline feature is a private library. Fix it before, not after.
+
+### Device state after the reinstall (SM-X730, 2026-08-11)
+
+Done, verified, and left in this state:
+
+- **tela is reinstalled and release-signed.** `adb uninstall` then `make deploy`.
+  Installed APK md5 `201fdc903681241f309bc2ff8fae4146`, identical to the local
+  artifact; signer `CN=tela, O=tela` / `33b859cc…40cb64`; `MainActivity` reached
+  `topResumedActivity` and logcat shows no `FATAL`/`AndroidRuntime`.
+- **The database is empty.** Favorites, download history, blocked tags and every
+  setting are gone, by the owner's explicit decision after the options were laid
+  out. The destination pins and per-purity routing are back to defaults.
+- **The private library is gone** — it went with the uninstall.
+- **The API key is not set.** It must be re-pasted before anything NSFW,
+  `nsfw` purity, or account sync is exercised.
+- **The files survive**: `Pictures/tela` and the files-outside-gallery folder
+  were never touched, so the download *images* are all still on disk while the
+  history that described them is empty. Expect the history screen to look empty
+  over a full gallery folder — that is correct, not a regression.
+- The folder grant for the files-outside-gallery tier is gone with the app, so
+  the first download to that tier will ask for it again.
+- Backup Manager on the device is **disabled**, and the backup transport was put
+  back to Google's after a local-transport experiment that could not run.
+
+**From here every update is an ordinary `make deploy`** — same key, in place, no
+data loss. That is the whole point of the block above.
 
 ### Then: the regression pass this was all for
 
