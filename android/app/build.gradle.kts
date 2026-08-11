@@ -57,6 +57,29 @@ android {
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
+
+                // v3 is off by default in AGP, and it is the one that matters
+                // here: it carries a signing-certificate *lineage*, which is
+                // the only way to move this app to a new key without asking
+                // every user to uninstall — the exact wall this project hit on
+                // 2026-08-11, when the debug key that had signed the tablet's
+                // build was lost with a Docker volume and the update was
+                // refused with INSTALL_FAILED_UPDATE_INCOMPATIBLE.
+                //
+                // It cannot rescue a key that is already gone (rotation is
+                // authorised by signing with the *old* key), so it buys nothing
+                // retroactively. It is here so the next key change is an
+                // update rather than a reinstall.
+                //
+                // What the built APK actually carries, measured with
+                // `apksigner verify -v`: **v3 only**. Asking for v2 as well is
+                // a no-op at minSdk 29 — v3 supersedes it from API 28, so AGP
+                // emits one block rather than both, and every device this app
+                // runs on verifies it. v1 (JAR signing) is only needed below
+                // API 24. v4 is for incremental ADB install and needs a
+                // matching .idsig beside the APK, which `make deploy` does not
+                // carry.
+                enableV3Signing = true
             }
         }
     }

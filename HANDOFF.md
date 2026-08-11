@@ -34,6 +34,21 @@ Updated: 2026-08-11
 > is meaningful: the generated l10n is gitignored, and without it analyze
 > reports 628 errors that are not real.
 >
+> **The device install is blocked, and the fix has landed.** `make deploy` was
+> refused with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`: the debug key that signed
+> the tablet's 2026-07-29 build was lost with a Docker volume around 08-01, and
+> Android has no override for a signature mismatch. tela now has a **real
+> release keystore** (`android/tela-release.jks`, gitignored, v3 signing on), so
+> any machine holding that file can build an APK that updates any device — but
+> the tablet's existing install has to be replaced **once**, and its data
+> carried across by hand. The block *READ BEFORE TOUCHING THE DEVICE OR
+> SHIPPING* has the order of operations; doing it in the wrong order loses the
+> private library permanently.
+>
+> **It also turned up a privacy defect that should block a Play launch:** the
+> backup rules exclude only the secure-storage file, so **the private library is
+> being uploaded to Google's cloud backup**. Same block, *SECURITY* section.
+>
 > **Still over the limit and not touched:** `ImageStorageTest.kt` at **536**. It
 > is a test file and was not in this pass's scope; its groups now map cleanly
 > onto the collaborators `ImageStorage` was split into, so it splits the same
@@ -236,6 +251,152 @@ Updated: 2026-08-11
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## READ BEFORE TOUCHING THE DEVICE OR SHIPPING — the app now has a real signing key, and the old install cannot be updated (2026-08-11)
+
+**The state in one line:** every release build from now on is signed with
+`android/tela-release.jks` (`CN=tela, O=tela`, SHA-256
+`33b859cc2dce878345bd6c04e9b53e02808e7c6cd03de3ebc38ac2cfff40cb64`), so any
+machine holding that file can build an APK that updates any device — but the
+tablet's *current* install was signed by a debug key that no longer exists, so
+**that one install has to be replaced once**, and its data has to be carried
+across by hand.
+
+### What went wrong, precisely, so the diagnosis is not re-run
+
+`make deploy` failed with `INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package
+cc.pym.tela signatures do not match newer version`. Measured, not guessed:
+
+| | signer SHA-256 |
+|---|---|
+| installed on the SM-X730 (2026-07-29) | `7d947935…4d27d1` |
+| a fresh build, 2026-08-11 | `058074de…256273` |
+
+`build.gradle.kts` falls back to the **debug** key when `android/key.properties`
+is absent, and the debug key lives in the `tela-android` Docker volume. That
+volume is the only copy. It was gone before this session started: every snapper
+snapshot from **2026-08-01** onward shows `/var/lib/docker/volumes` holding no
+named volumes at all, while Docker itself has been installed since 07-27, and
+the oldest snapshot is named `before-restore-oomd-regression`. The key died in
+whatever happened around 08-01. Searched and empty: the home directory, a
+whole-filesystem scan, every Docker volume (enumerated by bind-mounting
+`/var/lib/docker` read-only, since the daemon runs as root), and all six
+snapshots via a read-only mount of `/.snapshots`.
+
+**There is no way around a signature mismatch.** `-r` is the update that failed,
+`-d` allows a version downgrade only, `-t` is for test packages. The one
+legitimate escape hatch is v3 signing-certificate rotation, and rotation is
+authorised by signing with the *old* key. Do not spend time here again.
+
+### The fix, and what has to travel between machines
+
+- **`android/tela-release.jks`** — RSA 4096, PKCS12, alias `tela`, 10000 days.
+- **`android/key.properties`** — points at it with a **relative** `storeFile`
+  (`../tela-release.jks`, resolved from `android/app`). Relative on purpose: the
+  build runs inside the Docker toolchain, where an absolute host path like
+  `/home/you/tela-release.jks` does not exist. A keystore outside the repo
+  directory is simply not visible to the build.
+- Both are gitignored already (`android/.gitignore:12-14`), so neither is in
+  history and neither can be.
+- `enableV3Signing = true` on the release config. It buys nothing retroactively
+  — see above — but it means the *next* key change can be a rotation rather than
+  another mass uninstall. Measured result: the APK carries **v3 only**; asking
+  for v2 as well is a no-op at minSdk 29, because v3 supersedes it from API 28.
+
+**To build an updatable APK on another PC**, clone the repo and copy exactly
+those two files into `android/`. Nothing else is needed and nothing else is
+machine-specific. **Back the `.jks` and its passphrase up somewhere that is not
+this machine and not a Docker volume** — a password manager, an encrypted
+external drive. Losing it again means every user of every future release
+reinstalls from scratch. There is no recovery, only prevention.
+
+### Carrying the tablet's data across the one unavoidable reinstall
+
+The data worth saving, in order of how badly it is lost:
+
+1. **The app-private tier — the private library.** App-internal storage; gone on
+   uninstall, unrecoverable, and the only category with no second copy.
+2. **The Drift database** — download history, favorites, blocked tags, settings.
+3. **The Wallhaven API key** — Keystore-backed and deliberately excluded from
+   every backup path, because the Keystore key itself never leaves the device
+   (see `backup_rules.xml`). It cannot be carried; **re-paste it afterwards.**
+   That is a five-second job and the app already handles its absence.
+
+Downloads in `Pictures/tela` and the files-outside-gallery tier are on shared
+storage and survive an uninstall untouched.
+
+**`adb backup` should capture 1 and 2**, and the reason is the same finding as
+the security bug below: the rules exclude only `FlutterSecureStorage.xml`, so
+`files/wallpapers/` and the database are both in scope. It needs a **tap on the
+tablet** — Android shows a confirmation dialog and no adb flag replaces it.
+
+**Order matters, and getting it wrong loses the private library:**
+
+1. `adb backup -f tela.ab cc.pym.tela` **while the permissive rules are still
+   installed**, and confirm on the device. Verify the `.ab` is not a stub before
+   trusting it (a refused backup still writes a small file).
+2. `adb uninstall cc.pym.tela`.
+3. `adb install` the release-signed APK **built from this commit**, whose backup
+   rules are still the permissive ones.
+4. `adb restore tela.ab`, confirm on device, re-paste the API key.
+5. **Only then** tighten the backup rules (below) and ship it as an ordinary
+   in-place update — which now works, because the key is stable.
+
+Tightening the rules *before* step 4 would make `adb restore` skip the private
+wallpapers, since restore consults the installed app's rules. If `adb backup`
+turns out to be refused — Samsung on Android 13+ often does — the fallback that
+saves the only unrecoverable category is **in-app**: the private library's
+*Move out of private* action (`move_to_private_action.dart:103`,
+`private_immersive_session.dart:125`) writes those images to a shared tier,
+where an uninstall cannot reach them.
+
+### SECURITY — the private library is in the user's cloud backup today
+
+Found while reading the rules for the above, and it should block a Play launch.
+
+`backup_rules.xml` and `data_extraction_rules.xml` both exclude exactly one
+thing: `FlutterSecureStorage.xml`. Everything else is backed up and
+device-transferred — **including `files/wallpapers/`, which is the app-private
+tier**. The private library is therefore being uploaded to Google's cloud backup
+and copied onto any device the user transfers to.
+
+That is the precise exposure the v5 migration already reasoned about and acted
+on for the *database*: "this database is backed up … an unpurged row keeps a
+private file's location and thumbnails in the user's cloud backup — the exact
+exposure the tier exists to prevent." The rows were purged. **The images
+themselves were never excluded.** The tier's promise in `PLAN.md` is that only
+tela can see them, and an ungated copy in a cloud account is not that.
+
+The fix is a few lines in both XML files (exclude the `file` domain path
+`wallpapers`, or opt the whole app out with `android:allowBackup="false"`), plus
+a test. It is deliberately **not** applied yet, because doing so before the
+restore above would strand the tablet's private library. Do it as the first
+update after the device is back on its feet.
+
+### Play Store — what is settled and what is not
+
+- **Decide Play App Signing before the first upload.** If Google generates the
+  app signing key, Play-distributed builds are signed by *Google's* key and
+  local sideloads by this one — the two can never update each other, and the
+  tablet ends up in exactly today's situation again the first time it installs
+  from Play. Uploading `tela-release.jks` as the app signing key keeps one
+  signature everywhere. Whichever is chosen, write it down here.
+- **Play takes an AAB**, not this APK: `flutter build appbundle --release`.
+- **`versionCode` is 1** (`pubspec.yaml: version: 1.0.0+1`, read through
+  `flutter.versionCode`). Play refuses a re-upload at the same code, so the
+  release process needs a bump discipline. The deploy path's universal
+  versionCode-1 APK is fine for the tablet and not for Play.
+- The backup exposure above is a genuine privacy defect in a wallpaper app whose
+  headline feature is a private library. Fix it before, not after.
+
+### Then: the regression pass this was all for
+
+The point of getting a build onto the device is checking the six-file refactor
+below for regressions. Nothing in that pass changed behaviour — `make ci` is
+green (analyze clean, Dart **1198**, Kotlin **91**), no key, tooltip, semantic
+label or generated line moved — so the device pass is looking for what tests
+structurally cannot see: the wall, detail's actions and pager, the filter sheet,
+the batch flows, the download queue, and the private library.
 
 ## DONE — the file limits, and what each split was actually for (2026-08-11)
 
