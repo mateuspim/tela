@@ -58,11 +58,16 @@ Updated: 2026-08-11
 > decision. See *Device state after the reinstall*.
 >
 > **The regression pass ran on it and all six areas passed** — the splits are
-> device-proven, not just suite-proven. It did surface one bug that predates
-> them: **pinch-to-zoom is unreliable in Detail's preview pager** while fullscreen
-> is solid, because Detail wraps the zoomable viewport in a `PageView` and the
-> page-drag recognizer wins the gesture arena off the first finger. That is the
-> **next slice** — see *NEXT* below for the cause and the shape of the fix.
+> device-proven, not just suite-proven. It surfaced one bug that predates them,
+> and that bug is now **fixed and merged** (`f0686d7`, Dart **1211**): Detail's
+> pinch was losing the gesture to its own `PageView`, whose drag recognizer wins
+> the arena off the *first* finger and leaves the second one arriving to a
+> decided gesture. The `PageView` no longer scrolls at all; paging is a
+> `Listener`-measured swipe (`ShelfSwipe`), which is how fullscreen — the surface
+> that never had the bug — has always done it. The first attempt, swapping
+> physics when a second finger lands, is measured **not** to work; the block
+> *Detail's preview pager was losing the pinch* has the numbers and the reason.
+> **Nobody has pinched it on the device yet.**
 >
 > **Still over the limit and not touched:** `ImageStorageTest.kt` at **536**. It
 > is a test file and was not in this pass's scope; its groups now map cleanly
@@ -267,7 +272,10 @@ Updated: 2026-08-11
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
-## NEXT — Detail's preview pager loses the pinch to the PageView (2026-08-11)
+## FIXED — Detail's preview pager was losing the pinch to the PageView (2026-08-11, `f0686d7`)
+
+**Merged through the gate, both suites green: analyze clean, Dart 1211 (from
+1198), Kotlin 91.** Not yet looked at on the device.
 
 **The report, from the device pass:** pinch-to-zoom on the Detail screen's
 wallpaper "sometimes doesn't work — it keeps seeing it as one finger even
@@ -302,17 +310,62 @@ selection change the way `WallpaperImmersiveSession` does, and has no
 double-tap-to-zoom. The pinch fix needs that state anyway, so the controller is
 part of the work, not a follow-up.
 
-**The shape of the fix**, in the order it has to happen: a `Listener` above the
-`PageView` counting pointers (free — it does not compete), Detail owning a
-`GalleryZoomController` per selection, and the pager's `physics` going
-`NeverScrollableScrollPhysics` while a second pointer is down **or** the image is
-zoomed. `onPointerDown` fires before the arena resolves, so dropping the drag
-recognizer on the second finger's down event rejects it in time and the scale
-recognizer wins. The one case that stays lost is a pinch begun *during* an
-already-committed page swipe, which is the correct outcome.
+**Measured, not reasoned about** — the numbers are in
+`test/features/detail_preview_pager_test.dart`, and they are the reason the
+first fix was thrown away:
 
-**Do not** "fix" this by disabling zoom in Detail or by routing pinch to the
+| pinch | before | after |
+|---|---|---|
+| both fingers land together | scale 2.5 | scale 4.0 |
+| first finger drifts three frames, then the second lands | **scale 1.0** | scale 3.3 |
+
+The staggered row is the bug. A fix proved against the simultaneous case alone
+proves nothing, because that case was never broken.
+
+**The obvious fix does not work, and this is the part worth not re-deriving.**
+Counting pointers with a `Listener` and swapping the pager to
+`NeverScrollableScrollPhysics` once a second finger is down *looks* right —
+`onPointerDown` really does run before the arena resolves — and it moved the
+simultaneous pinch from 2.5 to 4.0 while leaving the staggered pinch at exactly
+1.0. By the time the second pointer arrives the drag recognizer has already won
+pointer one's arena and the scale recognizer has already been rejected for it;
+disposing the drag recognizer afterwards frees nobody. `ScaleGestureRecognizer`
+then holds one pointer, and one pointer is not a scale.
+
+**So the recognizer has to not exist.** The `PageView` is permanently
+`NeverScrollableScrollPhysics` and paging is a `Listener` measuring the swipe
+itself — which is precisely what `ImmersiveGalleryViewer` has always done, and
+precisely why fullscreen never had the bug. That logic is now **`ShelfSwipe`**
+(`core/ui/shelf_swipe.dart`), used by both surfaces, so the two cannot drift; the
+immersive viewer lost its inline copy and three fields with it.
+
+**What it costs:** the page no longer tracks the finger mid-drag. It animates on
+release instead. Fullscreen has behaved this way all along. If someone wants the
+finger-tracking back, it means driving the `PageController` from the `Listener`'s
+deltas and hand-rolling the settle/fling physics `PageScrollPhysics` was doing —
+possible, but it is a re-implementation of scroll physics, not a tweak.
+
+**The second gap, closed in the same slice.** Detail's viewport was handed no
+`transformationController`, so Detail could not know it was zoomed. It owns a
+`GalleryZoomController` now, wired to the **selected page only** — shared, a
+neighbour would sit pre-zoomed under the turn — which buys the two rules
+fullscreen already had: a swipe across a zoomed wallpaper pans instead of paging,
+and zoom resets when the selection actually changes (never on a mere append,
+which would fling the examined wallpaper back to fitted scale the moment the
+shelf grew).
+
+**Still not done here:** double-tap-to-zoom in Detail. `GalleryViewport` already
+takes `onDoubleTapDown`/`onDoubleTap` and the controller is now in place, so it
+is small — it needs an `AnimationController` for the transition, the way
+`ImmersiveGalleryViewer._animateZoomTo` does it.
+
+**Do not** "fix" any of this by disabling zoom in Detail or routing pinch to the
 fullscreen route. The owner asked for pinch to work in place.
+
+**Owed on the device:** nobody has pinched the real thing yet. Check both
+timings, that a swipe still turns the page and feels acceptable now that it
+snaps on release rather than following the thumb, and that a swipe across a
+zoomed wallpaper pans it instead of paging.
 
 ## READ BEFORE TOUCHING THE DEVICE OR SHIPPING — the app now has a real signing key, and the old install cannot be updated (2026-08-11)
 
