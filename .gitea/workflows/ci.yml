@@ -50,7 +50,7 @@ jobs:
           if [[ "$dockerfile_version" != "${FLUTTER_VERSION}" ]]; then
             echo "flutter pin drifted:" >&2
             echo "  tool/docker/Dockerfile : $dockerfile_version" >&2
-            echo "  .github/workflows/ci.yml: ${FLUTTER_VERSION}" >&2
+            echo "  .gitea/workflows/ci.yml: ${FLUTTER_VERSION}" >&2
             exit 1
           fi
           echo "both pinned to $dockerfile_version"
