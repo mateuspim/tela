@@ -11,6 +11,7 @@ class ProgressiveWallpaperPreview extends StatelessWidget {
   const ProgressiveWallpaperPreview({
     required this.wallpaper,
     this.heroTag,
+    this.transformationController,
     this.fillLetterbox = false,
     super.key,
   });
@@ -20,6 +21,13 @@ class ProgressiveWallpaperPreview extends StatelessWidget {
 
   /// Optional shared-element tag flying the shelf tile into this preview.
   final Object? heroTag;
+
+  /// Optional externally owned zoom state for this preview's pinch gestures.
+  ///
+  /// Null leaves the viewport's zoom private, which is all a surface needs when
+  /// nothing around it has to react. Detail's pager passes one because it has
+  /// to know: a pan across a magnified image must not turn the page.
+  final TransformationController? transformationController;
 
   /// Whether to paint the letterbox with a blurred copy of the wallpaper.
   ///
@@ -50,6 +58,7 @@ class ProgressiveWallpaperPreview extends StatelessWidget {
       semanticsLabel: l10n.detailPreviewLabel(wallpaper.id),
       source: sourceFor(wallpaper),
       heroTag: heroTag,
+      transformationController: transformationController,
       backdrop: fillLetterbox
           // The same thumbnail the preview and the shelf tile already fetched,
           // so the fill costs no request.

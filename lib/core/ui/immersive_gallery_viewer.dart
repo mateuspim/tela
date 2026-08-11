@@ -7,6 +7,7 @@ import 'package:tela/core/ui/gallery_viewport.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
 import 'package:tela/core/ui/immersive_gallery_controls.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
+import 'package:tela/core/ui/shelf_swipe.dart';
 
 /// A reusable edge-to-edge gallery surface with zoom and transient chrome.
 class ImmersiveGalleryViewer extends StatefulWidget {
@@ -105,9 +106,6 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
   bool _isExiting = false;
   bool _allowPop = false;
   Offset _doubleTapPosition = Offset.zero;
-  int _pointerCount = 0;
-  Offset? _swipeStart;
-  Offset? _swipeLatest;
 
   @override
   void initState() {
@@ -245,12 +243,10 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
   }
 
   Widget _imageCanvas(AppLocalizations l10n) {
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: _startSwipe,
-      onPointerMove: _updateSwipe,
-      onPointerUp: _finishSwipe,
-      onPointerCancel: _cancelSwipe,
+    return ShelfSwipe(
+      isZoomed: _zoomController.isZoomed,
+      onPrevious: widget.onPrevious,
+      onNext: widget.onNext,
       child: Semantics(
         container: true,
         explicitChildNodes: true,
@@ -271,44 +267,6 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
         ),
       ),
     );
-  }
-
-  void _startSwipe(PointerDownEvent event) {
-    _pointerCount++;
-    if (_pointerCount != 1 || _zoomController.isZoomed) {
-      _swipeStart = null;
-      return;
-    }
-    _swipeStart = event.localPosition;
-    _swipeLatest = event.localPosition;
-  }
-
-  void _updateSwipe(PointerMoveEvent event) {
-    if (_pointerCount == 1 && _swipeStart != null) {
-      _swipeLatest = event.localPosition;
-    }
-  }
-
-  void _finishSwipe(PointerUpEvent event) {
-    final Offset? start = _swipeStart;
-    final Offset end = _swipeLatest ?? event.localPosition;
-    if (_pointerCount > 0) _pointerCount--;
-    _swipeStart = null;
-    _swipeLatest = null;
-    if (_pointerCount != 0 || start == null || _zoomController.isZoomed) return;
-    final Offset delta = end - start;
-    if (delta.dx.abs() < 64 || delta.dx.abs() <= delta.dy.abs()) return;
-    if (delta.dx < 0) {
-      widget.onNext?.call();
-    } else {
-      widget.onPrevious?.call();
-    }
-  }
-
-  void _cancelSwipe(PointerCancelEvent event) {
-    if (_pointerCount > 0) _pointerCount--;
-    _swipeStart = null;
-    _swipeLatest = null;
   }
 
   /// Handles a *directional* left — an arrow key or D-pad, where the user is

@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/gallery_zoom_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
+import 'package:tela/core/ui/shelf_swipe.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/detail/progressive_wallpaper_preview.dart';
 import 'package:tela/features/detail/wallpaper_immersive_session.dart';
@@ -46,13 +48,17 @@ class DetailPreviewPager extends StatefulWidget {
 
 class _DetailPreviewPagerState extends State<DetailPreviewPager> {
   late final PageController _pages;
+  late final GalleryZoomController _zoom;
+  late int _selectedIndex;
 
   GallerySessionController<Wallpaper> get _gallery => widget.gallery;
 
   @override
   void initState() {
     super.initState();
-    _pages = PageController(initialPage: _gallery.selectedIndex);
+    _selectedIndex = _gallery.selectedIndex;
+    _pages = PageController(initialPage: _selectedIndex);
+    _zoom = GalleryZoomController()..addListener(_zoomChanged);
     _gallery.addListener(_selectionChanged);
   }
 
@@ -63,38 +69,51 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager> {
   /// sits behind it — moves the session first, and the pager is caught up here.
   /// The guard makes the two directions one loop, not two: a swipe leaves the
   /// pager already on the selection, so nothing is jumped back.
+  ///
+  /// Zoom is reset only when the *selected image* changes, matching
+  /// `WallpaperImmersiveSession`: a page appended to the shelf notifies too,
+  /// and it must not fling the examined wallpaper back to fitted scale.
   void _selectionChanged() {
     if (!mounted) return;
-    if (_pages.hasClients && _pages.page?.round() != _gallery.selectedIndex) {
-      _pages.jumpToPage(_gallery.selectedIndex);
+    if (_gallery.selectedIndex != _selectedIndex) {
+      _selectedIndex = _gallery.selectedIndex;
+      _zoom.reset();
+    }
+    if (_pages.hasClients && _pages.page?.round() != _selectedIndex) {
+      _pages.jumpToPage(_selectedIndex);
     }
     setState(() {});
+  }
+
+  /// Rebuilds when zoom crosses the fitted/zoomed line, so [ShelfSwipe] stops
+  /// offering to turn the page across a magnified image.
+  void _zoomChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _gallery.removeListener(_selectionChanged);
+    _zoom
+      ..removeListener(_zoomChanged)
+      ..dispose();
     _pages.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        PageView.builder(
-          controller: _pages,
-          onPageChanged: _onPageTurned,
-          itemCount: _gallery.items.length,
-          itemBuilder: (BuildContext context, int index) => _previewPage(index),
-        ),
+        _pinchablePager(),
         Positioned(
           top: 12,
           right: 12,
           child: IconButton.filledTonal(
             onPressed: _enterFullscreen,
-            tooltip: AppLocalizations.of(context).detailEnterFullscreen,
+            tooltip: l10n.detailEnterFullscreen,
             icon: const Icon(Icons.fullscreen),
           ),
         ),
@@ -103,18 +122,49 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager> {
             key: const Key('detail-previous'),
             alignment: Alignment.centerLeft,
             icon: Icons.chevron_left,
-            tooltip: AppLocalizations.of(context).galleryPrevious,
-            onPressed: () => _turnTo(_gallery.selectedIndex - 1),
+            tooltip: l10n.galleryPrevious,
+            onPressed: () => _turnTo(_selectedIndex - 1),
           ),
         if (_gallery.canSelectNext)
           _pageChevron(
             key: const Key('detail-next'),
             alignment: Alignment.centerRight,
             icon: Icons.chevron_right,
-            tooltip: AppLocalizations.of(context).galleryNext,
-            onPressed: () => _turnTo(_gallery.selectedIndex + 1),
+            tooltip: l10n.galleryNext,
+            onPressed: () => _turnTo(_selectedIndex + 1),
           ),
       ],
+    );
+  }
+
+  /// The pager, with the pinch taken back off it.
+  ///
+  /// The [PageView] is deliberately unscrollable and the swipe comes from
+  /// [ShelfSwipe] instead. A [Scrollable] whose physics accept a user offset
+  /// installs a horizontal drag recognizer, and that recognizer is the whole
+  /// bug: it wins the arena off the first finger and the pinch never happens.
+  /// Withholding physics only while a second finger is down does *not* fix it —
+  /// measured — because by then the drag has already won and the scale
+  /// recognizer has already been rejected for that pointer. The recognizer has
+  /// to not exist. [ShelfSwipe] explains the arena in full.
+  ///
+  /// What is lost is the page tracking the finger mid-drag; what is kept is the
+  /// animated turn, the pre-built neighbours, and a pinch that works every
+  /// time. Fullscreen has paged exactly this way all along.
+  Widget _pinchablePager() {
+    return ShelfSwipe(
+      isZoomed: _zoom.isZoomed,
+      onPrevious: _gallery.canSelectPrevious
+          ? () => _turnTo(_selectedIndex - 1)
+          : null,
+      onNext: _gallery.canSelectNext ? () => _turnTo(_selectedIndex + 1) : null,
+      child: PageView.builder(
+        controller: _pages,
+        physics: const NeverScrollableScrollPhysics(),
+        onPageChanged: _onPageTurned,
+        itemCount: _gallery.items.length,
+        itemBuilder: (BuildContext context, int index) => _previewPage(index),
+      ),
     );
   }
 
@@ -124,12 +174,20 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager> {
   /// one tile in, and a second Hero whose tag matches another grid tile would
   /// be the "multiple heroes" crash, so the neighbours the pager pre-builds
   /// stay heroless until they are the one on screen.
+  ///
+  /// The zoom controller is withheld from the neighbours for the same shape of
+  /// reason: shared, an off-screen page would sit pre-zoomed under the swipe,
+  /// and the pager builds neighbours before they are ever seen.
   Widget _previewPage(int index) {
     final Wallpaper wallpaper = _gallery.items[index];
+    final bool isSelected = index == _selectedIndex;
     return ProgressiveWallpaperPreview(
       wallpaper: wallpaper,
       fillLetterbox: true,
-      heroTag: index == _gallery.selectedIndex
+      transformationController: isSelected
+          ? _zoom.transformationController
+          : null,
+      heroTag: isSelected
           ? shelfHeroTag(_gallery.identity, wallpaper.ref.key, index)
           : null,
     );
