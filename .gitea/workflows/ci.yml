@@ -91,7 +91,9 @@ jobs:
           flutter-version: '3.44.6'
           channel: stable
           cache: true
-      - uses: gradle/actions/setup-gradle@v4
+      # No gradle/actions/setup-gradle here: it's build-cache/wrapper-validation
+      # convenience only, and this runner's git client can't resolve its v4
+      # tag ("unsupported object type"). ./gradlew below bootstraps itself.
       # The Gradle build reads flutter.sdk from here, and local.properties is
       # gitignored (it holds machine paths). The runner's Flutter lives wherever
       # the action put it, so this is written rather than checked in.
