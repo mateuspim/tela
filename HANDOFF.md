@@ -67,7 +67,23 @@ Updated: 2026-08-11
 > that never had the bug — has always done it. The first attempt, swapping
 > physics when a second finger lands, is measured **not** to work; the block
 > *Detail's preview pager was losing the pinch* has the numbers and the reason.
-> **Nobody has pinched it on the device yet.**
+>
+> **The one thing that fix left open is now closed too: Detail has double-tap
+> zoom** (`feat/detail-double-tap-zoom`, merged 2026-08-11; Dart **1220**, Kotlin
+> 91, analyze clean). Double tap toggles fitted↔magnified around the point under
+> the thumb, the gesture fullscreen always had and Detail could not have while
+> the pager owned the zoom state. The transition behind it — ticker, `Matrix4`
+> tween, and the focal point carried between `onDoubleTapDown` and `onDoubleTap`
+> — moved out of `ImmersiveGalleryViewer` into **`GalleryZoomAnimator`**
+> (`core/ui`) rather than being copied, so the two surfaces cannot drift and the
+> transition's duration has one definition. Its block below has the ordering trap
+> that came with it.
+>
+> **That build is on the tablet** (`make deploy`, 2026-08-11): installed md5
+> `8f8690c722e6d45abfaef9a10c8ea72a`, identical to the local artifact,
+> `MainActivity` resumed, logcat clean. **Nobody has pinched or double-tapped the
+> real thing yet** — that is the one thing still owed, and it is the owner's
+> fingers to run.
 >
 > **Still over the limit and not touched:** `ImageStorageTest.kt` at **536**. It
 > is a test file and was not in this pass's scope; its groups now map cleanly
@@ -354,11 +370,6 @@ and zoom resets when the selection actually changes (never on a mere append,
 which would fling the examined wallpaper back to fitted scale the moment the
 shelf grew).
 
-**Still not done here:** double-tap-to-zoom in Detail. `GalleryViewport` already
-takes `onDoubleTapDown`/`onDoubleTap` and the controller is now in place, so it
-is small — it needs an `AnimationController` for the transition, the way
-`ImmersiveGalleryViewer._animateZoomTo` does it.
-
 **Do not** "fix" any of this by disabling zoom in Detail or routing pinch to the
 fullscreen route. The owner asked for pinch to work in place.
 
@@ -366,6 +377,59 @@ fullscreen route. The owner asked for pinch to work in place.
 timings, that a swipe still turns the page and feels acceptable now that it
 snaps on release rather than following the thumb, and that a swipe across a
 zoomed wallpaper pans it instead of paging.
+
+## DONE — the double tap that fix left open, and the animator both surfaces now share (2026-08-11, `feat/detail-double-tap-zoom`)
+
+**Merged through the gate: analyze clean, Dart 1220 (from 1211), Kotlin 91. On
+the tablet, unpinched.** The block above closed the pinch and named this as the
+one thing left: Detail had the zoom state but only one gesture to reach it with.
+
+**What the user gets:** a double tap on Detail's wallpaper zooms to
+`GalleryZoomController.doubleTapScale` (2.5) around the tapped point, and a
+second returns it to fitted — the same gesture, at the same speed, as fullscreen.
+
+**Where the code went, and why it moved rather than got copied.** The transition
+is four moving parts: an `AnimationController`, a `Matrix4Tween`, the focal point
+that arrives in `onDoubleTapDown` and is spent in `onDoubleTap`, and the rule
+that fingers on the glass abandon an in-flight tween. All four already existed
+inside `ImmersiveGalleryViewer`. A second copy in the pager would be two
+definitions of how zoom *feels*, free to drift apart, so they are now
+**`GalleryZoomAnimator`** (`core/ui/gallery_zoom_animator.dart`, 124 lines) and
+both surfaces drive it. The viewer lost three fields and four methods (359 lines,
+from 392) and no longer passes a duration — 180ms is the animator's to define.
+
+Whether to animate stays with the callers: `MediaQuery.disableAnimationsOf` needs
+a `BuildContext`, and a `core/ui` collaborator that reached for one would be
+harder to test than the two widgets holding it. `animate: false` writes the
+target matrix outright, which is also what keeps the platform's
+reduce-motion setting honest here.
+
+**The ordering trap, which is the part worth not re-deriving.** Turning the page
+resets the zoom; a double-tap transition is still writing a frame at a time. Reset
+first and the remaining tween frames land *on top* of the reset — the next
+wallpaper opens at the previous one's scale, intermittently, depending on how far
+into the 180ms the chevron was tapped. `_selectionChanged` therefore stops the
+animator **before** `_zoom.reset()`, and
+`detail_preview_pager_test.dart` pins it by tapping the chevron 60ms into a
+transition.
+
+**Also withheld from the neighbours:** the double-tap callbacks, for the same
+reason as the transformation controller. The pager pre-builds the pages either
+side, and a gesture on one of them would write into the zoom state of the
+wallpaper actually on screen. `_previewPage` now early-returns a bare preview for
+anything that is not the selection.
+
+**Tests (9 new):** `test/core/ui/gallery_zoom_animator_test.dart` (6) covers the
+animator alone — it moves partway by the halfway frame and settles on the target,
+a second toggle returns to identity, the remembered focal point is what the zoom
+grows around, `animate: false` lands in one frame, `stopForInteraction` leaves the
+image exactly where the transition had reached, and `retarget` abandons the old
+controller's transition instead of writing frames into something nothing shows.
+Three more in `detail_preview_pager_test.dart` cover the gesture end-to-end,
+including the ordering trap above.
+
+**Owed on the device:** the same pass the pinch owes, plus the double tap itself
+— both directions, and that the focal point is the thumb rather than the centre.
 
 ## READ BEFORE TOUCHING THE DEVICE OR SHIPPING — the app now has a real signing key, and the old install cannot be updated (2026-08-11)
 
