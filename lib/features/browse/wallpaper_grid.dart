@@ -3,21 +3,16 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:tela/app/providers.dart';
-import 'package:tela/app/routes.dart';
 import 'package:tela/app/selectable_wallpaper_shelf.dart';
 import 'package:tela/app/wallpaper_batch_actions.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
-import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/tile_density_scope.dart';
-import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
-import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
@@ -25,9 +20,9 @@ import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/ports/tag_blocklist_repository.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
 import 'package:tela/features/browse/gallery_paging_bridge.dart';
-import 'package:tela/features/browse/wallpaper_quick_sheet.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
-import 'package:tela/features/detail/wallpaper_detail_args.dart';
+import 'package:tela/features/browse/wallpaper_wall_navigation.dart';
+import 'package:tela/features/browse/wallpaper_wall_status.dart';
 import 'package:tela/features/detail/wallpaper_gallery_session.dart';
 import 'package:tela/features/settings/blocked_tags_providers.dart';
 
@@ -252,6 +247,15 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     );
   }
 
+  /// This shelf's stable identity, which the Hero tags and the detail session
+  /// both key off.
+  String get _identity =>
+      wallpaperListingIdentity(widget.galleryIdentity, widget.query);
+
+  /// The name the active source calls itself, for a failure that has to say
+  /// who refused.
+  String get _sourceName => ref.read(activeWallpaperSourceProvider).displayName;
+
   Widget _grid(
     BuildContext context,
     PagingState<int, Wallpaper> state,
@@ -259,15 +263,16 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
   ) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final List<Wallpaper> loaded = state.items ?? const <Wallpaper>[];
-    final String identity = wallpaperListingIdentity(
-      widget.galleryIdentity,
-      widget.query,
-    );
     return RefreshIndicator(
       onRefresh: () async => _retry(),
       child: loaded.isEmpty
-          ? _firstPage(context, l10n, state)
-          : _wall(context, l10n, state, fetchNextPage, loaded, identity),
+          ? wallFirstPage(
+              l10n,
+              state,
+              sourceName: _sourceName,
+              onRetry: _retry,
+            )
+          : _wall(context, l10n, state, fetchNextPage, loaded, _identity),
     );
   }
 
@@ -317,7 +322,12 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
           aspectRatioOf: (int index) => loaded[index].resolution.aspectRatio,
           itemBuilder: (BuildContext context, int index, double _, double _) =>
               _tile(context, loaded, index, identity),
-          footer: _footer(l10n, state),
+          footer: wallFooter(
+            l10n,
+            state,
+            sourceName: _sourceName,
+            onRetry: _retry,
+          ),
         ),
       ),
     );
@@ -393,136 +403,32 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     fetchNextPage();
   }
 
-  /// What sits below the last row: nothing, a next-page spinner, or a retry.
-  Widget? _footer(AppLocalizations l10n, PagingState<int, Wallpaper> state) {
-    if (state.error != null) return _failure(l10n, state.error);
-    if (!state.isLoading) return null;
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 24),
-      child: Center(child: CircularProgressIndicator()),
-    );
-  }
-
-  /// The whole-screen state before any wallpaper has arrived.
-  ///
-  /// Kept scrollable so pull-to-refresh still works when there is nothing to
-  /// scroll — a listing that came back empty or failed is exactly when the user
-  /// reaches for it, and [RefreshIndicator] ignores a non-scrolling child.
-  Widget _firstPage(
-    BuildContext context,
-    AppLocalizations l10n,
-    PagingState<int, Wallpaper> state,
-  ) {
-    final Widget body = switch (state) {
-      PagingState<int, Wallpaper>(error: final Object error?) => _failure(
-        l10n,
-        error,
+  void _openDetail(BuildContext context, List<Wallpaper> loaded, int index) {
+    unawaited(
+      openWallpaperDetail(
+        context: context,
+        bridge: _bridge,
+        identity: _identity,
+        query: widget.query,
+        wallpapers: loaded,
+        selectedIndex: index,
       ),
-      PagingState<int, Wallpaper>(isLoading: true) =>
-        const WallpaperGridSkeleton(),
-      _ => WallpaperStatusView(
-        icon: Icons.search_off,
-        message: l10n.browseEmpty,
-      ),
-    };
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) =>
-          SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            // Exactly the viewport's height, not a minimum: the skeleton packs
-            // its rows against a bounded box and overruns it deliberately, so
-            // an unbounded child here makes it size to infinity and throw.
-            child: SizedBox(height: constraints.maxHeight, child: body),
-          ),
     );
   }
 
-  Widget _failure(AppLocalizations l10n, Object? error) {
-    return WallpaperStatusView.failure(
-      l10n: l10n,
-      error: error,
-      sourceName: ref.read(activeWallpaperSourceProvider).displayName,
-      onRetry: _retry,
-    );
-  }
-
-  void _openDetail(
-    BuildContext context,
-    List<Wallpaper> loaded,
-    int selectedIndex,
-  ) {
-    unawaited(_pushDetail(context, loaded, selectedIndex));
-  }
-
-  /// Favorite, download or set the pressed wallpaper without opening it.
-  ///
-  /// Only this wall has the gesture free. The download history's tiles spend
-  /// their long press on "forget this row", and taking it over would cost a
-  /// destructive action its confirmation step; Favorites is left alone for now
-  /// because the same sheet there would offer to favorite what is already
-  /// favorited.
   void _openQuickActions(
     BuildContext context,
     List<Wallpaper> loaded,
     int index,
   ) {
-    unawaited(_runQuickAction(context, loaded, index));
-  }
-
-  Future<void> _runQuickAction(
-    BuildContext context,
-    List<Wallpaper> loaded,
-    int index,
-  ) async {
-    final Wallpaper wallpaper = loaded[index];
-    final WallpaperQuickAction? action = await chooseWallpaperQuickAction(
-      context,
-      wallpaper,
-    );
-    if (action == null || !context.mounted) return;
-    await runWallpaperQuickAction(
-      context: context,
-      ref: ref,
-      wallpaper: wallpaper,
-      action: action,
-      openDetail: () => _openDetail(context, loaded, index),
-    );
-  }
-
-  Future<void> _pushDetail(
-    BuildContext context,
-    List<Wallpaper> loaded,
-    int selectedIndex,
-  ) async {
-    // `late` so the request-more seam can hand the bridge the very session it
-    // belongs to; the closure only runs once the viewer nears the loaded end.
-    late final GallerySessionController<Wallpaper> session;
-    session = createWallpaperGallerySession(
-      context: context,
-      identity: wallpaperListingIdentity(
-        widget.galleryIdentity,
-        widget.query,
+    unawaited(
+      openWallpaperQuickActions(
+        context: context,
+        ref: ref,
+        wallpapers: loaded,
+        index: index,
+        openDetail: () => _openDetail(context, loaded, index),
       ),
-      wallpapers: loaded,
-      initialIndex: selectedIndex,
-      requestMore: () => _bridge.appendNextPageInto(session),
     );
-    try {
-      await context.pushNamed<void>(
-        TelaRoutes.detailName,
-        pathParameters: <String, String>{
-          'wallpaperKey': session.selectedItem.ref.key,
-        },
-        // The grid's own query travels with the session so a tag or colour
-        // followed from the detail screen inherits the filters this listing is
-        // under, not Browse's global ones (see WallpaperDetailArgs).
-        extra: WallpaperDetailArgs(
-          session: session,
-          originFilters: widget.query,
-        ),
-      );
-    } finally {
-      session.dispose();
-    }
   }
 }
