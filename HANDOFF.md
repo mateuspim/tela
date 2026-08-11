@@ -41,9 +41,11 @@ Updated: 2026-08-11
 > release keystore** (`android/tela-release.jks`, gitignored, v3 signing on), so
 > any machine holding that file can build an APK that updates any device — but
 > the tablet's existing install has to be replaced **once**, and its data
-> carried across by hand. The block *READ BEFORE TOUCHING THE DEVICE OR
-> SHIPPING* has the order of operations; doing it in the wrong order loses the
-> private library permanently.
+> carried across by hand — and mostly cannot be. `adb backup` is measured dead
+> here (targetSdk 36, not debuggable, Android 16) and a cloud restore is refused
+> across a key change, so **the Drift database is lost** and the private library
+> survives only if it is evacuated *from inside the app* first. The block *READ
+> BEFORE TOUCHING THE DEVICE OR SHIPPING* has the sequence.
 >
 > **It also turned up a privacy defect that should block a Play launch:** the
 > backup rules exclude only the secure-storage file, so **the private library is
@@ -325,30 +327,39 @@ The data worth saving, in order of how badly it is lost:
 Downloads in `Pictures/tela` and the files-outside-gallery tier are on shared
 storage and survive an uninstall untouched.
 
-**`adb backup` should capture 1 and 2**, and the reason is the same finding as
-the security bug below: the rules exclude only `FlutterSecureStorage.xml`, so
-`files/wallpapers/` and the database are both in scope. It needs a **tap on the
-tablet** — Android shows a confirmation dialog and no adb flag replaces it.
+**`adb backup` cannot carry any of it, and this is measured, not assumed.** The
+installed package reports `targetSdk=36` with **no `DEBUGGABLE` flag**
+(`dumpsys package cc.pym.tela` → `pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA
+ALLOW_BACKUP KILL_AFTER_RESTORE ]`), and from Android 12 `adb backup` excludes
+app data for every app targeting 12+ unless it is debuggable. The tablet runs
+Android **16**. An earlier draft of this block proposed an adb backup/restore
+dance; it does not work and was removed rather than left to waste someone's
+afternoon.
 
-**Order matters, and getting it wrong loses the private library:**
+**Cloud backup does not rescue it either.** `ALLOW_BACKUP` is set, so the data
+*is* in the user's Google backup (that is the security defect below) — but a
+restore is refused when the app's signing certificate does not match the one
+recorded with the backup, and a new key is exactly what we have. The same wall,
+one layer further in.
 
-1. `adb backup -f tela.ab cc.pym.tela` **while the permissive rules are still
-   installed**, and confirm on the device. Verify the `.ab` is not a stub before
-   trusting it (a refused backup still writes a small file).
-2. `adb uninstall cc.pym.tela`.
-3. `adb install` the release-signed APK **built from this commit**, whose backup
-   rules are still the permissive ones.
-4. `adb restore tela.ab`, confirm on device, re-paste the API key.
-5. **Only then** tighten the backup rules (below) and ship it as an ordinary
-   in-place update — which now works, because the key is stable.
+So, honestly, across the one reinstall:
 
-Tightening the rules *before* step 4 would make `adb restore` skip the private
-wallpapers, since restore consults the installed app's rules. If `adb backup`
-turns out to be refused — Samsung on Android 13+ often does — the fallback that
-saves the only unrecoverable category is **in-app**: the private library's
-*Move out of private* action (`move_to_private_action.dart:103`,
-`private_immersive_session.dart:125`) writes those images to a shared tier,
-where an uninstall cannot reach them.
+- **The private library can be saved, but only from inside the app, before the
+  uninstall.** Its *Move out of private* action
+  (`move_to_private_action.dart:103`, `private_immersive_session.dart:125`)
+  writes those images to a shared tier, where an uninstall cannot reach them.
+  This is the only lever that exists for the only unrecoverable category, and it
+  is manual.
+- **The Drift database is lost** — favorites, download history, blocked tags and
+  settings. There is no non-root path to app-private storage on a
+  non-debuggable release build. Favorites are re-favoritable, history rows
+  describe files that survive on shared storage, and settings are a few taps.
+- **The API key is re-pasted**, as it always was going to be.
+
+The sequence, then: evacuate the private library in-app → `adb uninstall
+cc.pym.tela` → install the release-signed APK → re-paste the API key → and from
+that point on **every** update is an ordinary in-place `make deploy`, because
+the key is stable and committed to (well, gitignored beside) the repo.
 
 ### SECURITY — the private library is in the user's cloud backup today
 
