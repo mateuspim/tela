@@ -79,11 +79,12 @@ Updated: 2026-08-11
 > transition's duration has one definition. Its block below has the ordering trap
 > that came with it.
 >
-> **That build is on the tablet** (`make deploy`, 2026-08-11): installed md5
-> `8f8690c722e6d45abfaef9a10c8ea72a`, identical to the local artifact,
-> `MainActivity` resumed, logcat clean. **Nobody has pinched or double-tapped the
-> real thing yet** — that is the one thing still owed, and it is the owner's
-> fingers to run.
+> **That build is on the tablet and the owner has now used it** (`make deploy`,
+> 2026-08-11): installed md5 `8f8690c722e6d45abfaef9a10c8ea72a`, identical to the
+> local artifact, `MainActivity` resumed, logcat clean — and the verdict on the
+> gestures was **"working flawlessly"**. Both the pinch and the double tap are
+> **device-confirmed**; nothing about Detail's zoom is owed a device pass any
+> more.
 >
 > **Still over the limit and not touched:** `ImageStorageTest.kt` at **536**. It
 > is a test file and was not in this pass's scope; its groups now map cleanly
@@ -373,10 +374,12 @@ shelf grew).
 **Do not** "fix" any of this by disabling zoom in Detail or routing pinch to the
 fullscreen route. The owner asked for pinch to work in place.
 
-**Owed on the device:** nobody has pinched the real thing yet. Check both
-timings, that a swipe still turns the page and feels acceptable now that it
-snaps on release rather than following the thumb, and that a swipe across a
-zoomed wallpaper pans it instead of paging.
+**DEVICE-CONFIRMED, 2026-08-11.** The owner used the deployed build (md5
+`8f8690c7…a72a`, carrying this fix *and* the double tap below) and reported it
+"working flawlessly". That covers what the suites could not reach: the arena on
+real hardware, and the swipe now snapping on release rather than following the
+thumb, which was this fix's one deliberate cost. Nothing here is device-owed any
+more — treat a future regression as new, not as this returning.
 
 ## DONE — the double tap that fix left open, and the animator both surfaces now share (2026-08-11, `feat/detail-double-tap-zoom`)
 
@@ -428,8 +431,8 @@ controller's transition instead of writing frames into something nothing shows.
 Three more in `detail_preview_pager_test.dart` cover the gesture end-to-end,
 including the ordering trap above.
 
-**Owed on the device:** the same pass the pinch owes, plus the double tap itself
-— both directions, and that the focal point is the thumb rather than the centre.
+**Device-confirmed with the pinch**, same build, same session: "working
+flawlessly". The gesture is closed.
 
 ## READ BEFORE TOUCHING THE DEVICE OR SHIPPING — the app now has a real signing key, and the old install cannot be updated (2026-08-11)
 
