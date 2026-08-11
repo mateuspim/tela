@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/gallery_zoom_animator.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
@@ -46,9 +47,11 @@ class DetailPreviewPager extends StatefulWidget {
   State<DetailPreviewPager> createState() => _DetailPreviewPagerState();
 }
 
-class _DetailPreviewPagerState extends State<DetailPreviewPager> {
+class _DetailPreviewPagerState extends State<DetailPreviewPager>
+    with SingleTickerProviderStateMixin {
   late final PageController _pages;
   late final GalleryZoomController _zoom;
+  late final GalleryZoomAnimator _zoomAnimator;
   late int _selectedIndex;
 
   GallerySessionController<Wallpaper> get _gallery => widget.gallery;
@@ -59,6 +62,7 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager> {
     _selectedIndex = _gallery.selectedIndex;
     _pages = PageController(initialPage: _selectedIndex);
     _zoom = GalleryZoomController()..addListener(_zoomChanged);
+    _zoomAnimator = GalleryZoomAnimator(vsync: this, zoom: _zoom);
     _gallery.addListener(_selectionChanged);
   }
 
@@ -77,6 +81,10 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager> {
     if (!mounted) return;
     if (_gallery.selectedIndex != _selectedIndex) {
       _selectedIndex = _gallery.selectedIndex;
+      // Before the reset, not after: a double-tap transition still in flight
+      // would keep writing its tween into the freshly fitted controller and
+      // land the *new* wallpaper at the old one's zoom.
+      _zoomAnimator.stop();
       _zoom.reset();
     }
     if (_pages.hasClients && _pages.page?.round() != _selectedIndex) {
@@ -94,6 +102,7 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager> {
   @override
   void dispose() {
     _gallery.removeListener(_selectionChanged);
+    _zoomAnimator.dispose();
     _zoom
       ..removeListener(_zoomChanged)
       ..dispose();
@@ -175,21 +184,41 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager> {
   /// be the "multiple heroes" crash, so the neighbours the pager pre-builds
   /// stay heroless until they are the one on screen.
   ///
-  /// The zoom controller is withheld from the neighbours for the same shape of
-  /// reason: shared, an off-screen page would sit pre-zoomed under the swipe,
-  /// and the pager builds neighbours before they are ever seen.
+  /// The zoom controller and the gestures that write to it are withheld from
+  /// the neighbours for the same shape of reason: shared, an off-screen page
+  /// would sit pre-zoomed under the swipe, and the pager builds neighbours
+  /// before they are ever seen.
   Widget _previewPage(int index) {
+    if (index != _selectedIndex) {
+      return ProgressiveWallpaperPreview(
+        wallpaper: _gallery.items[index],
+        fillLetterbox: true,
+      );
+    }
+    return _zoomablePage(index);
+  }
+
+  /// The page on screen: the only one holding zoom state, and so the only one
+  /// that can be pinched, double-tapped, or panned.
+  Widget _zoomablePage(int index) {
     final Wallpaper wallpaper = _gallery.items[index];
-    final bool isSelected = index == _selectedIndex;
     return ProgressiveWallpaperPreview(
       wallpaper: wallpaper,
       fillLetterbox: true,
-      transformationController: isSelected
-          ? _zoom.transformationController
-          : null,
-      heroTag: isSelected
-          ? shelfHeroTag(_gallery.identity, wallpaper.ref.key, index)
-          : null,
+      transformationController: _zoom.transformationController,
+      onInteractionStart: _zoomAnimator.stopForInteraction,
+      onDoubleTapDown: _zoomAnimator.rememberDoubleTap,
+      onDoubleTap: _toggleDoubleTapZoom,
+      heroTag: shelfHeroTag(_gallery.identity, wallpaper.ref.key, index),
+    );
+  }
+
+  /// Double tap toggles between fitted and magnified around the tapped point —
+  /// the gesture fullscreen has always had, and the last thing Detail's own
+  /// zoom was missing once the pinch was won back from the pager.
+  void _toggleDoubleTapZoom() {
+    _zoomAnimator.toggleDoubleTapZoom(
+      animate: !MediaQuery.disableAnimationsOf(context),
     );
   }
 
