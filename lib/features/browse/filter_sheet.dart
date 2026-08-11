@@ -17,6 +17,8 @@ import 'package:tela/domain/models/source_capabilities.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/features/browse/browse_filter_scope.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
+import 'package:tela/features/browse/filter_cards.dart';
+import 'package:tela/features/browse/filter_draft_edits.dart';
 import 'package:tela/features/browse/resolution_filter_field.dart';
 import 'package:tela/features/browse/tag_filter_field.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
@@ -110,27 +112,9 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
     ];
   }
 
-  /// What the active source can be asked for.
-  SourceCapabilities get _capabilities =>
-      ref.watch(activeWallpaperSourceProvider).capabilities;
-
-  /// One group, or nothing at all where the source has no such axis.
-  _FilterGroup? _group(SourceFilter filter, String title, Widget child) {
-    if (!_capabilities.supports(filter)) return null;
-    return _FilterGroup(title: title, child: child);
-  }
-
-  /// One card, or nothing when every group in it was withheld — an empty card
-  /// is a heading promising filters that are not there.
-  _FilterCard? _card({
-    required IconData icon,
-    required String title,
-    required List<_FilterGroup?> groups,
-  }) {
-    final List<_FilterGroup> present = groups.nonNulls.toList();
-    if (present.isEmpty) return null;
-    return _FilterCard(icon: icon, title: title, children: present);
-  }
+  /// Cards and groups, withheld where the active source has no such axis.
+  FilterCards get _cardsFor =>
+      FilterCards(ref.watch(activeWallpaperSourceProvider).capabilities);
 
   Widget _sheetHeading(AppLocalizations l10n) {
     final ThemeData theme = Theme.of(context);
@@ -170,50 +154,62 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
     );
   }
 
-  _FilterCard? _contentCard(AppLocalizations l10n) {
-    return _card(
+  FilterCard? _contentCard(AppLocalizations l10n) {
+    final FilterCards cards = _cardsFor;
+    return cards.card(
       icon: Icons.collections_outlined,
       title: l10n.filterContentGroup,
-      groups: <_FilterGroup?>[
-        _group(
+      groups: <FilterGroup?>[
+        cards.group(
           SourceFilter.categories,
           l10n.filterCategories,
           _categories(l10n),
         ),
-        _group(SourceFilter.purity, l10n.filterPurity, _purities(l10n)),
-        _group(SourceFilter.tags, l10n.filterTags, _tags()),
+        cards.group(SourceFilter.purity, l10n.filterPurity, _purities(l10n)),
+        cards.group(SourceFilter.tags, l10n.filterTags, _tags()),
       ],
     );
   }
 
-  _FilterCard? _fitCard(AppLocalizations l10n) {
-    return _card(
+  FilterCard? _fitCard(AppLocalizations l10n) {
+    final FilterCards cards = _cardsFor;
+    return cards.card(
       icon: Icons.fit_screen_outlined,
       title: l10n.filterFitGroup,
-      groups: <_FilterGroup?>[
-        _group(SourceFilter.ratios, l10n.filterRatio, _ratios(l10n)),
-        _group(SourceFilter.resolutions, l10n.filterResolution, _resolution()),
+      groups: <FilterGroup?>[
+        cards.group(SourceFilter.ratios, l10n.filterRatio, _ratios(l10n)),
+        cards.group(
+          SourceFilter.resolutions,
+          l10n.filterResolution,
+          _resolution(),
+        ),
       ],
     );
   }
 
-  _FilterCard? _appearanceCard(AppLocalizations l10n) {
-    return _card(
+  FilterCard? _appearanceCard(AppLocalizations l10n) {
+    final FilterCards cards = _cardsFor;
+    return cards.card(
       icon: Icons.palette_outlined,
       title: l10n.filterAppearanceGroup,
-      groups: <_FilterGroup?>[
-        _group(SourceFilter.colors, l10n.filterColor, _colors(l10n)),
+      groups: <FilterGroup?>[
+        cards.group(SourceFilter.colors, l10n.filterColor, _colors(l10n)),
       ],
     );
   }
 
-  _FilterCard? _resultsCard(AppLocalizations l10n) {
-    return _card(
+  FilterCard? _resultsCard(AppLocalizations l10n) {
+    final FilterCards cards = _cardsFor;
+    return cards.card(
       icon: Icons.sort,
       title: l10n.filterResultsGroup,
-      groups: <_FilterGroup?>[
-        _group(SourceFilter.order, l10n.filterOrder, _order(l10n)),
-        _group(SourceFilter.topRange, l10n.filterTopRange, _topRange(l10n)),
+      groups: <FilterGroup?>[
+        cards.group(SourceFilter.order, l10n.filterOrder, _order(l10n)),
+        cards.group(
+          SourceFilter.topRange,
+          l10n.filterTopRange,
+          _topRange(l10n),
+        ),
       ],
     );
   }
@@ -244,7 +240,7 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
           spacing: 8,
           children: <Widget>[
             for (final Purity purity in offerablePurities(
-              capabilities: _capabilities,
+              capabilities: _cardsFor.capabilities,
               hasApiKey: hasKey,
             ))
               FilterChip(
@@ -416,39 +412,23 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
   }
 
   void _toggleCategory(Category category) {
-    final Set<Category> next = toggledChoice(
-      _draft.categories.categories,
-      category,
-    );
-    setState(() => _draft = _draft.copyWith(categories: CategoryFilter(next)));
+    setState(() => _draft = withCategoryToggled(_draft, category));
   }
 
   void _togglePurity(Purity purity) {
-    final Set<Purity> next = toggledChoice(_draft.purity.purities, purity);
-    setState(() => _draft = _draft.copyWith(purity: PurityFilter(next)));
+    setState(() => _draft = withPurityToggled(_draft, purity));
   }
 
-  /// Adds or removes one shape. Unlike the categories and the purities, the
-  /// last chip *may* be turned off: an empty `ratios` is a legitimate request —
-  /// it is how you ask Wallhaven for every shape — where an empty category mask
-  /// is a 400.
   void _toggleRatio(RatioChoice choice) {
-    final List<RatioChoice> next = <RatioChoice>[..._draft.ratios];
-    if (!next.remove(choice)) next.add(choice);
-    setState(() => _draft = _draft.copyWith(ratios: next));
+    setState(() => _draft = withRatioToggled(_draft, choice));
   }
 
   void _clearRatios() {
-    setState(() => _draft = _draft.copyWith(ratios: const <RatioChoice>[]));
+    setState(() => _draft = withRatiosCleared(_draft));
   }
 
-  /// Selects [color], or clears the filter when it is null or already selected.
-  ///
-  /// Tapping the chosen swatch again is how you take it off without hunting for
-  /// the "Any color" chip.
   void _chooseColor(WallpaperColor? color) {
-    final WallpaperColor? next = color == _draft.color ? null : color;
-    setState(() => _draft = _draft.withColor(next));
+    setState(() => _draft = withColorChosen(_draft, color));
   }
 
   void _chooseTopRange(TopRange? range) {
@@ -490,74 +470,5 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
     Navigator.of(context).pop();
     await ref.read(browseDefaultsProvider.notifier).saveDeviceDefaults(saved);
     messenger.showSnackBar(SnackBar(content: Text(confirmation)));
-  }
-}
-
-/// One group inside a filter card.
-class _FilterGroup extends StatelessWidget {
-  const _FilterGroup({required this.title, required this.child});
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 8),
-            child: Text(
-              title,
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: theme.colorScheme.primary,
-              ),
-            ),
-          ),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-/// A related set of filters, separated from the next concern by tonal depth.
-class _FilterCard extends StatelessWidget {
-  const _FilterCard({
-    required this.icon,
-    required this.title,
-    required this.children,
-  });
-
-  final IconData icon;
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: <Widget>[
-                Icon(icon, color: theme.colorScheme.primary),
-                const SizedBox(width: 12),
-                Text(title, style: theme.textTheme.titleMedium),
-              ],
-            ),
-          ),
-          const Divider(),
-          ...children,
-        ],
-      ),
-    );
   }
 }
