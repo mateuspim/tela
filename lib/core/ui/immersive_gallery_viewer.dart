@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
+import 'package:tela/core/ui/gallery_zoom_animator.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
 import 'package:tela/core/ui/immersive_gallery_controls.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
@@ -97,25 +98,23 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
 
   late GalleryZoomController _zoomController;
   late bool _ownsZoomController;
-  late final AnimationController _zoomAnimationController;
-  Matrix4Tween? _zoomTween;
+  late final GalleryZoomAnimator _zoomAnimator;
   late final ImmersiveSystemUi _activeSystemUi;
   late final Future<void> _enterSystemUi;
   bool _chromeVisible = true;
   bool _systemUiRestored = false;
   bool _isExiting = false;
   bool _allowPop = false;
-  Offset _doubleTapPosition = Offset.zero;
 
   @override
   void initState() {
     super.initState();
     _adoptZoomController(widget.zoomController);
     _zoomController.addListener(_rebuildZoomChrome);
-    _zoomAnimationController = AnimationController(
-      vsync: this,
-      duration: _transitionDuration,
-    )..addListener(_applyZoomAnimation);
+    // No duration passed: the zoom transition's length is the animator's to
+    // define, so both surfaces offering the gesture move at the same speed.
+    // `_transitionDuration` here is the chrome's fade, which happens to match.
+    _zoomAnimator = GalleryZoomAnimator(vsync: this, zoom: _zoomController);
     _activeSystemUi = widget.systemUi;
     _enterSystemUi = _activeSystemUi.enterImmersive();
   }
@@ -124,12 +123,11 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
   void didUpdateWidget(ImmersiveGalleryViewer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.zoomController == widget.zoomController) return;
-    _zoomAnimationController.stop();
-    _zoomTween = null;
     _zoomController.removeListener(_rebuildZoomChrome);
     if (_ownsZoomController) _zoomController.dispose();
     _adoptZoomController(widget.zoomController);
     _zoomController.addListener(_rebuildZoomChrome);
+    _zoomAnimator.retarget(_zoomController);
   }
 
   void _adoptZoomController(GalleryZoomController? controller) {
@@ -140,7 +138,7 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
   @override
   void dispose() {
     unawaited(_restoreSystemUi());
-    _zoomAnimationController.dispose();
+    _zoomAnimator.dispose();
     _zoomController.removeListener(_rebuildZoomChrome);
     if (_ownsZoomController) _zoomController.dispose();
     super.dispose();
@@ -148,14 +146,6 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
 
   void _rebuildZoomChrome() {
     if (mounted) setState(() {});
-  }
-
-  void _applyZoomAnimation() {
-    final Matrix4Tween? tween = _zoomTween;
-    if (tween == null) return;
-    _zoomController.transformationController.value = tween.evaluate(
-      _zoomAnimationController,
-    );
   }
 
   Future<void> _restoreSystemUi() async {
@@ -199,42 +189,19 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
     if (_chromeVisible) setState(() => _chromeVisible = false);
   }
 
-  void _rememberDoubleTap(TapDownDetails details) {
-    _doubleTapPosition = details.localPosition;
-  }
-
   void _toggleDoubleTapZoom() {
-    _toggleZoomAt(_doubleTapPosition);
+    _zoomAnimator.toggleDoubleTapZoom(animate: _zoomAnimates());
   }
 
   void _toggleCenteredZoom() {
     final Size viewport = MediaQuery.sizeOf(context);
-    _toggleZoomAt(viewport.center(Offset.zero));
-  }
-
-  void _toggleZoomAt(Offset focalPoint) {
-    final Matrix4 target = _zoomController.isZoomed
-        ? Matrix4.identity()
-        : _zoomController.zoomedMatrixAt(focalPoint);
-    _animateZoomTo(target);
-  }
-
-  void _animateZoomTo(Matrix4 target) {
-    _zoomAnimationController.stop();
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _zoomController.transformationController.value = target;
-      return;
-    }
-    _zoomTween = Matrix4Tween(
-      begin: Matrix4.copy(_zoomController.transformationController.value),
-      end: target,
+    _zoomAnimator.toggleZoomAt(
+      viewport.center(Offset.zero),
+      animate: _zoomAnimates(),
     );
-    unawaited(_zoomAnimationController.forward(from: 0));
   }
 
-  void _stopProgrammaticZoom(ScaleStartDetails details) {
-    _zoomAnimationController.stop();
-  }
+  bool _zoomAnimates() => !MediaQuery.disableAnimationsOf(context);
 
   Duration _chromeDuration() {
     return MediaQuery.disableAnimationsOf(context)
@@ -260,9 +227,9 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
           source: widget.source,
           heroTag: widget.heroTag,
           transformationController: _zoomController.transformationController,
-          onInteractionStart: _stopProgrammaticZoom,
+          onInteractionStart: _zoomAnimator.stopForInteraction,
           onTap: _toggleChrome,
-          onDoubleTapDown: _rememberDoubleTap,
+          onDoubleTapDown: _zoomAnimator.rememberDoubleTap,
           onDoubleTap: _toggleDoubleTapZoom,
         ),
       ),

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -124,6 +125,57 @@ void main() {
     expect(_zoom(tester).value, zoomed);
   });
 
+  testWidgets('a double tap zooms in, and a second one returns to fitted', (
+    WidgetTester tester,
+  ) async {
+    // The gesture fullscreen always had. It could not exist in Detail until
+    // the pager stopped owning the zoom state, so it lands with the pinch fix.
+    await _pumpPager(tester, _session());
+
+    await _doubleTap(tester, tester.getCenter(find.byType(PageView)));
+    expect(_zoomScale(tester), greaterThan(1));
+
+    await _doubleTap(tester, tester.getCenter(find.byType(PageView)));
+    expect(_zoomScale(tester), closeTo(1, 0.001));
+  });
+
+  testWidgets('a double tap zooms around the point that was tapped', (
+    WidgetTester tester,
+  ) async {
+    // Zooming around the centre regardless of the thumb sends whatever the
+    // user was looking at off the edge of the screen.
+    await _pumpPager(tester, _session());
+    final Rect pager = tester.getRect(find.byType(PageView));
+
+    await _doubleTap(tester, pager.centerLeft + const Offset(24, 0));
+
+    final Matrix4 zoomed = _zoom(tester).value;
+    expect(zoomed.getMaxScaleOnAxis(), greaterThan(1));
+    expect(
+      zoomed.entry(0, 3),
+      isNot(closeTo(0, 0.001)),
+      reason: 'an off-centre focal point has to translate the image',
+    );
+  });
+
+  testWidgets('turning the page mid-zoom does not carry the zoom across', (
+    WidgetTester tester,
+  ) async {
+    // The transition writes a frame at a time; a chevron during one used to
+    // reset the controller and then have the rest of the tween written over
+    // it, landing the next wallpaper at the previous one's scale.
+    final GallerySessionController<Wallpaper> session = _session();
+    await _pumpPager(tester, session);
+
+    await _startDoubleTap(tester, tester.getCenter(find.byType(PageView)));
+    await tester.pump(const Duration(milliseconds: 60));
+    await tester.tap(find.byKey(const Key('detail-next')));
+    await tester.pumpAndSettle();
+
+    expect(session.selectedIndex, 1);
+    expect(_zoom(tester).value, Matrix4.identity());
+  });
+
   testWidgets('only the page on screen is wired to the zoom state', (
     WidgetTester tester,
   ) async {
@@ -178,6 +230,21 @@ Future<void> _swipe(WidgetTester tester, Offset travel) async {
   );
   await _travel(tester, finger, travel / 8, 8);
   await finger.up();
+  await tester.pumpAndSettle();
+}
+
+/// Two taps close enough together to read as one double tap, left running so a
+/// test can act during the zoom transition they start.
+Future<void> _startDoubleTap(WidgetTester tester, Offset at) async {
+  await tester.tapAt(at);
+  await tester.pump(kDoubleTapMinTime);
+  await tester.tapAt(at);
+  await tester.pump();
+}
+
+/// [_startDoubleTap], carried through to a settled zoom.
+Future<void> _doubleTap(WidgetTester tester, Offset at) async {
+  await _startDoubleTap(tester, at);
   await tester.pumpAndSettle();
 }
 

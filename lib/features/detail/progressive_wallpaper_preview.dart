@@ -12,6 +12,9 @@ class ProgressiveWallpaperPreview extends StatelessWidget {
     required this.wallpaper,
     this.heroTag,
     this.transformationController,
+    this.onInteractionStart,
+    this.onDoubleTapDown,
+    this.onDoubleTap,
     this.fillLetterbox = false,
     super.key,
   });
@@ -28,6 +31,20 @@ class ProgressiveWallpaperPreview extends StatelessWidget {
   /// nothing around it has to react. Detail's pager passes one because it has
   /// to know: a pan across a magnified image must not turn the page.
   final TransformationController? transformationController;
+
+  /// Called when a pinch or pan begins, so an owner animating the zoom can drop
+  /// the transition rather than fight the fingers for the same matrix.
+  final GestureScaleStartCallback? onInteractionStart;
+
+  /// Records the focal point a following [onDoubleTap] zooms around.
+  final GestureTapDownCallback? onDoubleTapDown;
+
+  /// Called for a double tap on the image, conventionally a zoom toggle.
+  ///
+  /// Withheld — like [transformationController] — from the pages a pager
+  /// pre-builds: an off-screen neighbour's gesture would write to zoom state
+  /// belonging to the wallpaper actually on screen.
+  final GestureTapCallback? onDoubleTap;
 
   /// Whether to paint the letterbox with a blurred copy of the wallpaper.
   ///
@@ -59,6 +76,9 @@ class ProgressiveWallpaperPreview extends StatelessWidget {
       source: sourceFor(wallpaper),
       heroTag: heroTag,
       transformationController: transformationController,
+      onInteractionStart: onInteractionStart,
+      onDoubleTapDown: onDoubleTapDown,
+      onDoubleTap: onDoubleTap,
       backdrop: fillLetterbox
           // The same thumbnail the preview and the shelf tile already fetched,
           // so the fill costs no request.
