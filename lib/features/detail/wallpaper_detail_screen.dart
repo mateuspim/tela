@@ -3,54 +3,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:tela/app/configured_download.dart';
-import 'package:tela/app/delete_download_action.dart';
-import 'package:tela/app/library_listings.dart';
-import 'package:tela/app/move_to_private_action.dart';
-import 'package:tela/app/pinned_download_tier.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
-import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
-import 'package:tela/core/ui/download_destination_dialog.dart';
-import 'package:tela/core/ui/download_volume_sheet.dart';
-import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
-import 'package:tela/core/ui/purity_alert_tint.dart';
-import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
-import 'package:tela/core/ui/wallpaper_share_sheet.dart';
-import 'package:tela/core/ui/wallpaper_target_sheet.dart';
-import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
-import 'package:tela/domain/models/bitmap_export_rule.dart';
-import 'package:tela/domain/models/download_destination_streak.dart';
-import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/share_option.dart';
 import 'package:tela/domain/models/source_failure.dart';
-import 'package:tela/domain/models/storage_settings.dart';
-import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
-import 'package:tela/domain/models/wallpaper_adjust_failure.dart';
-import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
-import 'package:tela/domain/models/wallpaper_share_failure.dart';
-import 'package:tela/domain/models/wallpaper_target.dart';
-import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/ports/wallpaper_source.dart';
-import 'package:tela/domain/use_cases/share_wallpaper.dart';
 import 'package:tela/features/browse/linked_listing_args.dart';
-import 'package:tela/features/detail/crop_wallpaper_screen.dart';
-import 'package:tela/features/detail/progressive_wallpaper_preview.dart';
-import 'package:tela/features/detail/wallpaper_immersive_session.dart';
+import 'package:tela/features/detail/detail_action_bar.dart';
+import 'package:tela/features/detail/detail_apply_button.dart';
+import 'package:tela/features/detail/detail_preview_pager.dart';
 import 'package:tela/features/detail/wallpaper_metadata.dart';
-import 'package:tela/features/favorites/favorite_button.dart';
 import 'package:tela/features/settings/blocked_tags_providers.dart';
 
 /// Loads complete metadata independently of the grid's fast listing response.
@@ -71,6 +44,13 @@ wallpaperDetailsProvider = FutureProvider.autoDispose
     });
 
 /// Full-screen preview, metadata, and the shortest path to wallpaper apply.
+///
+/// The screen itself is a layout and a shelf: it holds the gallery session
+/// every part of it reads from, and arranges three pieces that own their own
+/// state — [DetailPreviewPager], [DetailActionBar] and [DetailApplyButton] —
+/// around the metadata. What is left here is what genuinely belongs to the
+/// screen: which body the width gets, and where a tag, an uploader or a credit
+/// link takes you next.
 class WallpaperDetailScreen extends ConsumerStatefulWidget {
   /// Creates the detail screen for a grid [wallpaper].
   const WallpaperDetailScreen({
@@ -108,13 +88,6 @@ class WallpaperDetailScreen extends ConsumerStatefulWidget {
 class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   late final GallerySessionController<Wallpaper> _gallery;
   late final bool _ownsGallery;
-  late final PageController _pages;
-  bool _isApplying = false;
-  bool _isDownloading = false;
-  bool _isSharing = false;
-  bool _isAdjusting = false;
-  bool _isDeleting = false;
-  bool _isMoving = false;
 
   Wallpaper get _wallpaper => _gallery.selectedItem;
 
@@ -129,283 +102,23 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
           items: <Wallpaper>[widget.wallpaper!],
           initialIndex: 0,
         );
-    _pages = PageController(initialPage: _gallery.selectedIndex);
     _gallery.addListener(_selectionChanged);
   }
 
-  /// Keeps the preview pager and the rest of the screen on the session's
-  /// selection, whichever moved it.
-  ///
-  /// A swipe drives the session through [_onPageTurned]; anything else — the
-  /// chevrons, or the fullscreen viewer paging the shared session while Detail
-  /// sits behind it — moves the session first, and the pager is caught up here.
-  /// The guard makes the two directions one loop, not two: a swipe leaves the
-  /// pager already on the selection, so nothing is jumped back.
+  /// Keeps the rest of the screen on the session's selection, whichever moved
+  /// it — a swipe in the pager, a chevron, or the fullscreen viewer paging the
+  /// shared session while Detail sits behind it. The pager keeps *itself* in
+  /// step; this is only about the metadata and the actions below it.
   void _selectionChanged() {
     if (!mounted) return;
-    if (_pages.hasClients && _pages.page?.round() != _gallery.selectedIndex) {
-      _pages.jumpToPage(_gallery.selectedIndex);
-    }
     setState(() {});
   }
 
   @override
   void dispose() {
     _gallery.removeListener(_selectionChanged);
-    _pages.dispose();
     if (_ownsGallery) _gallery.dispose();
     super.dispose();
-  }
-
-  Future<void> _chooseTarget() async {
-    final WallpaperTarget? target = await chooseWallpaperTarget(context);
-    if (target == null || !mounted) return;
-    await _apply(target);
-  }
-
-  Future<void> _apply(WallpaperTarget target) async {
-    setState(() => _isApplying = true);
-    try {
-      await ref.read(applyWallpaperProvider)(_wallpaper, target);
-      if (mounted) _showResult(AppLocalizations.of(context).detailApplySuccess);
-    } on WallpaperApplyFailure {
-      if (mounted) {
-        _showResult(
-          AppLocalizations.of(context).detailApplyFailure,
-          kind: ToastKind.failure,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isApplying = false);
-    }
-  }
-
-  /// Frames the wallpaper before setting it — the long way round beside
-  /// [_apply], which stays the shortest path (Wave 1's "≤3 taps").
-  ///
-  /// Two editors behind one button. An explicit wallpaper's pixels may not
-  /// reach the OEM's editor (a separate app, [mayExportBitmap]), so it goes
-  /// straight to tela's own in-app cropper. A safe one prefers the OEM editor —
-  /// the same screen the gallery opens — and falls back to tela's cropper only
-  /// where the device has none.
-  Future<void> _adjust() async {
-    if (!mayExportBitmap(_wallpaper.purity)) {
-      _openCropEditor();
-      return;
-    }
-    setState(() => _isAdjusting = true);
-    final WallpaperAdjustFailure? failure = await _tryOpenSystemEditor();
-    if (mounted) setState(() => _isAdjusting = false);
-    if (failure == null || !mounted) return;
-    if (failure.problem == WallpaperAdjustProblem.unavailable) {
-      _openCropEditor();
-    } else {
-      _showResult(
-        AppLocalizations.of(context).detailAdjustFailure,
-        kind: ToastKind.failure,
-      );
-    }
-  }
-
-  /// Opens the OEM editor; returns null on success, or the failure to route on.
-  ///
-  /// Deliberately silent on success: tela launches the editor and never hears
-  /// what the user did there, so it has no outcome it could honestly report.
-  Future<WallpaperAdjustFailure?> _tryOpenSystemEditor() async {
-    try {
-      await ref.read(adjustWallpaperProvider)(_wallpaper);
-      return null;
-    } on WallpaperAdjustFailure catch (failure) {
-      return failure;
-    }
-  }
-
-  /// Pushes tela's own cropper. It applies and pops itself, so nothing is
-  /// awaited here — the detail screen simply returns to view when it closes.
-  void _openCropEditor() {
-    unawaited(
-      Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (BuildContext context) =>
-              CropWallpaperScreen(wallpaper: _wallpaper),
-        ),
-      ),
-    );
-  }
-
-  /// Offers only the tiers this wallpaper's purity is allowed to land in, so a
-  /// one-off override cannot do what the settings screen forbids — the dialog
-  /// asks the domain for that list rather than being told it from here.
-  ///
-  /// Feeds the chooser what it needs to notice a habit: where a plain tap
-  /// already routes, and the run of recent same-destination downloads. When the
-  /// user takes the "Always" offer, the new default is persisted through the
-  /// same controller the settings screen writes, so that screen stays in step.
-  Future<void> _chooseDownloadTier() async {
-    final SettingsRepository settings = ref.read(settingsRepositoryProvider);
-    final StorageSettings storage = await ref.read(
-      storageSettingsProvider.future,
-    );
-    final DownloadDestinationStreak? streak = await settings
-        .loadDestinationStreak(_wallpaper.purity);
-    final StorageTier? pin = await ref.read(
-      pinnedDownloadTierProvider.future,
-    );
-    if (!mounted) return;
-    final DownloadDestinationChoice? choice = await chooseDownloadDestination(
-      context,
-      purity: _wallpaper.purity,
-      configuredTier: storage.tierFor(_wallpaper.purity),
-      streak: streak,
-      pinnedTier: pin,
-    );
-    if (choice == null) return;
-    // Stop clears the pin and downloads nothing — the deliberate way out.
-    if (choice.stopsPin) {
-      await ref.read(pinnedDownloadTierProvider.notifier).clear();
-      return;
-    }
-    if (choice.remember) {
-      await ref
-          .read(storageSettingsProvider.notifier)
-          .route(_wallpaper.purity, choice.tier!);
-    }
-    if (choice.pin) {
-      await ref.read(pinnedDownloadTierProvider.notifier).pin(choice.tier!);
-    }
-    if (!mounted) return;
-    await _download(choice.tier);
-  }
-
-  /// Downloads to [tier], or to the configured destination when it is null.
-  ///
-  /// [refreshDownloads] is what makes the new file visible to the screens that
-  /// exist to show it; see its docstring for why skipping it looked like the
-  /// download never saved.
-  Future<void> _download([StorageTier? tier]) async {
-    setState(() => _isDownloading = true);
-    try {
-      final DownloadOutcome outcome =
-          await ref.read(configuredDownloadProvider)(
-            _wallpaper,
-            tier: tier,
-            chooseVolume: ({required bool offerSdCard}) =>
-                chooseDownloadVolume(context, offerSdCard: offerSdCard),
-          );
-      _reportDownload(outcome);
-    } finally {
-      if (mounted) setState(() => _isDownloading = false);
-    }
-  }
-
-  /// A dismissed folder chooser is silent: the user stopped, did not fail.
-  void _reportDownload(DownloadOutcome outcome) {
-    if (!mounted) return;
-    switch (outcome) {
-      case DownloadOutcome.saved:
-        refreshDownloads(ref);
-        _showResult(AppLocalizations.of(context).detailDownloadSuccess);
-      case DownloadOutcome.folderUnavailable:
-        _showResult(
-          AppLocalizations.of(context).detailDownloadFolderUnavailable,
-          kind: ToastKind.failure,
-        );
-      case DownloadOutcome.failed:
-        _showResult(
-          AppLocalizations.of(context).detailDownloadFailure,
-          kind: ToastKind.failure,
-        );
-      case DownloadOutcome.cancelled:
-        break;
-    }
-  }
-
-  /// The history row for the shown wallpaper, or null when it is not a download
-  /// tela can reach from here.
-  ///
-  /// The "free" lookup J leans on: the history already carries the tier and the
-  /// location a hard delete needs, so the detail screen offers *Delete from
-  /// device* only for a wallpaper that is in it. Explicit and app-private
-  /// downloads are deliberately absent — they live behind the private library's
-  /// lock, and offering their delete on this ungated screen would leak that
-  /// they exist.
-  DownloadRecord? _downloadedRecord() {
-    final List<DownloadRecord> recent =
-        ref.watch(recentDownloadsProvider).value ?? const <DownloadRecord>[];
-    for (final DownloadRecord record in recent) {
-      if (record.wallpaper.id == _wallpaper.id) return record;
-    }
-    return null;
-  }
-
-  /// Moves the downloaded file into the private library.
-  ///
-  /// Both buttons retire themselves afterwards, and correctly: the history row
-  /// is forgotten by the move, so `_downloadedRecord()` answers null and this
-  /// screen goes back to offering a plain download. The wallpaper stays
-  /// browsable — only tela's record of having it here does not.
-  Future<void> _moveToPrivateLibrary(DownloadRecord record) async {
-    setState(() => _isMoving = true);
-    await confirmAndMoveToPrivate(
-      context: context,
-      ref: ref,
-      records: <DownloadRecord>[record],
-    );
-    if (!mounted) return;
-    setState(() => _isMoving = false);
-  }
-
-  /// Hard-deletes the downloaded file, then refreshes so the button that opened
-  /// this retires itself — the wallpaper stays browsable, only its download is
-  /// gone.
-  Future<void> _deleteFromDevice(DownloadRecord record) async {
-    setState(() => _isDeleting = true);
-    final bool deleted = await confirmAndDeleteDownload(
-      context: context,
-      ref: ref,
-      wallpaper: record.wallpaper.ref,
-      tier: record.tier,
-      location: record.location,
-    );
-    if (!mounted) return;
-    setState(() => _isDeleting = false);
-    if (deleted) refreshDownloads(ref);
-  }
-
-  /// Offers only the share options this wallpaper's purity allows, so an
-  /// explicit wallpaper is never given the chance to send its image file — the
-  /// menu and the use case enforce the same rule (see [shareOptionsFor]).
-  Future<void> _chooseShare() async {
-    final String sourceName = ref
-        .read(wallpaperSourceForProvider(_wallpaper.source))
-        .displayName;
-    final ShareOption? option = await chooseShareOption(
-      context,
-      shareOptionsFor(_wallpaper.purity),
-      sourceName: sourceName,
-    );
-    if (option == null || !mounted) return;
-    await _share(option);
-  }
-
-  Future<void> _share(ShareOption option) async {
-    setState(() => _isSharing = true);
-    try {
-      final ShareWallpaper share = ref.read(shareWallpaperProvider);
-      await switch (option) {
-        ShareOption.link => share.link(_wallpaper),
-        ShareOption.image => share.image(_wallpaper),
-      };
-    } on WallpaperShareFailure {
-      if (mounted) {
-        _showResult(
-          AppLocalizations.of(context).detailShareFailure,
-          kind: ToastKind.failure,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSharing = false);
-    }
   }
 
   /// Pushes the listing behind a tag or an uploader, rather than replacing this
@@ -489,7 +202,9 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       // "2880x1800" labelled the screen with a number. The image is the
       // subject, so the bar carries only the back affordance and the actions.
       appBar: AppBar(
-        actions: expanded ? null : _compactActions(l10n),
+        actions: expanded
+            ? null
+            : <Widget>[DetailActionBar(wallpaper: _wallpaper)],
       ),
       body: expanded
           ? _expandedBody(details, l10n, sourceName)
@@ -498,18 +213,6 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   }
 
   static const double _expandedWidth = 840;
-
-  List<Widget> _compactActions(AppLocalizations l10n) {
-    final DownloadRecord? downloaded = _downloadedRecord();
-    return <Widget>[
-      FavoriteButton(wallpaper: _wallpaper),
-      _adjustButton(l10n),
-      _shareButton(l10n),
-      _downloadButton(l10n),
-      if (downloaded != null) _moveToPrivateButton(l10n, downloaded),
-      if (downloaded != null) _deleteButton(l10n, downloaded),
-    ];
-  }
 
   Widget _compactBody(
     AsyncValue<WallpaperDetails> details,
@@ -528,7 +231,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
             ],
           ),
         ),
-        _applyButton(l10n),
+        DetailApplyButton(wallpaper: _wallpaper),
       ],
     );
   }
@@ -561,14 +264,17 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
             color: colors.surfaceContainerLow,
             child: Column(
               children: <Widget>[
-                _expandedActions(l10n),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                  child: DetailActionBar(wallpaper: _wallpaper, expanded: true),
+                ),
                 const Divider(),
                 Expanded(
                   child: SingleChildScrollView(
                     child: _metadata(details, l10n, sourceName),
                   ),
                 ),
-                _applyButton(l10n),
+                DetailApplyButton(wallpaper: _wallpaper),
               ],
             ),
           ),
@@ -577,161 +283,10 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
   }
 
-  /// The wallpaper, swipeable across the whole shelf without leaving Detail.
-  ///
-  /// A [PageView] over the same session the fullscreen viewer pages, so a swipe
-  /// here moves the selection and the metadata, actions, and Set button below
-  /// all follow. Chevrons offer the same step for a thumb that would rather
-  /// tap, each shown only while there is a loaded neighbour to reach.
   Widget _preview() {
-    return Stack(
-      fit: StackFit.expand,
-      children: <Widget>[
-        PageView.builder(
-          controller: _pages,
-          onPageChanged: _onPageTurned,
-          itemCount: _gallery.items.length,
-          itemBuilder: (BuildContext context, int index) => _previewPage(index),
-        ),
-        Positioned(
-          top: 12,
-          right: 12,
-          child: IconButton.filledTonal(
-            onPressed: _enterFullscreen,
-            tooltip: AppLocalizations.of(context).detailEnterFullscreen,
-            icon: const Icon(Icons.fullscreen),
-          ),
-        ),
-        if (_gallery.canSelectPrevious)
-          _pageChevron(
-            key: const Key('detail-previous'),
-            alignment: Alignment.centerLeft,
-            icon: Icons.chevron_left,
-            tooltip: AppLocalizations.of(context).galleryPrevious,
-            onPressed: () => _turnTo(_gallery.selectedIndex - 1),
-          ),
-        if (_gallery.canSelectNext)
-          _pageChevron(
-            key: const Key('detail-next'),
-            alignment: Alignment.centerRight,
-            icon: Icons.chevron_right,
-            tooltip: AppLocalizations.of(context).galleryNext,
-            onPressed: () => _turnTo(_gallery.selectedIndex + 1),
-          ),
-      ],
-    );
-  }
-
-  /// One page of the preview pager.
-  ///
-  /// Only the selected page carries the shared-element [Hero]: the grid flies
-  /// one tile in, and a second Hero whose tag matches another grid tile would
-  /// be the "multiple heroes" crash, so the neighbours the pager pre-builds
-  /// stay heroless until they are the one on screen.
-  Widget _previewPage(int index) {
-    final Wallpaper wallpaper = _gallery.items[index];
-    return ProgressiveWallpaperPreview(
-      wallpaper: wallpaper,
-      fillLetterbox: true,
-      heroTag: index == _gallery.selectedIndex
-          ? shelfHeroTag(_gallery.identity, wallpaper.ref.key, index)
-          : null,
-    );
-  }
-
-  Widget _pageChevron({
-    required Key key,
-    required Alignment alignment,
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onPressed,
-  }) {
-    return Align(
-      alignment: alignment,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: IconButton.filledTonal(
-          key: key,
-          onPressed: onPressed,
-          tooltip: tooltip,
-          icon: Icon(icon),
-        ),
-      ),
-    );
-  }
-
-  /// A swipe (or a chevron's animation) landed on [index]: move the session,
-  /// which reselect-ignores a no-op and rebinds everything else.
-  void _onPageTurned(int index) => _gallery.select(index);
-
-  /// Steps the pager to [index], animating unless the platform asked not to —
-  /// where a jump keeps the step instant and testable.
-  void _turnTo(int index) {
-    if (index < 0 || index >= _gallery.items.length) return;
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _pages.jumpToPage(index);
-      return;
-    }
-    unawaited(
-      _pages.animateToPage(
-        index,
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-      ),
-    );
-  }
-
-  void _enterFullscreen() {
-    unawaited(Navigator.of(context).push<void>(_fullscreenRoute(context)));
-  }
-
-  PageRoute<void> _fullscreenRoute(BuildContext context) {
-    final Duration duration = galleryTransitionDuration(context);
-    return PageRouteBuilder<void>(
-      transitionDuration: duration,
-      reverseTransitionDuration: duration,
-      pageBuilder:
-          (
-            BuildContext context,
-            Animation<double> animation,
-            Animation<double> secondaryAnimation,
-          ) => _fullscreenSurface(context),
-      transitionsBuilder: _fadeFullscreenRoute,
-    );
-  }
-
-  Widget _fullscreenSurface(BuildContext routeContext) {
-    return WallpaperImmersiveSession(
+    return DetailPreviewPager(
       gallery: _gallery,
       systemUi: widget.immersiveSystemUi,
-      onClose: () async => Navigator.of(routeContext).pop(),
-    );
-  }
-
-  Widget _fadeFullscreenRoute(
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    Widget child,
-  ) {
-    return FadeTransition(opacity: animation, child: child);
-  }
-
-  Widget _expandedActions(AppLocalizations l10n) {
-    final DownloadRecord? downloaded = _downloadedRecord();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: Row(
-        children: <Widget>[
-          FavoriteButton(wallpaper: _wallpaper),
-          const Spacer(),
-          _adjustButton(l10n),
-          _shareButton(l10n),
-          _downloadButton(l10n),
-          if (downloaded != null) _moveToPrivateButton(l10n, downloaded),
-          if (downloaded != null) _deleteButton(l10n, downloaded),
-        ],
-      ),
     );
   }
 
@@ -760,132 +315,6 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
               : l10n.errorUnexpected,
         ),
       ),
-    );
-  }
-
-  Widget _applyButton(AppLocalizations l10n) {
-    return SafeArea(
-      top: false,
-      minimum: const EdgeInsets.all(16),
-      child: SizedBox(
-        width: double.infinity,
-        child: FilledButton.icon(
-          onPressed: _isApplying ? null : _chooseTarget,
-          icon: _isApplying
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.wallpaper_outlined),
-          label: Text(l10n.detailSetWallpaper),
-        ),
-      ),
-    );
-  }
-
-  /// Shown for every purity now that tela has its own in-app cropper: [_adjust]
-  /// routes explicit wallpapers there rather than to the OEM editor, so the
-  /// button no longer needs to be withheld to honour [mayExportBitmap].
-  Widget _adjustButton(AppLocalizations l10n) {
-    return IconButton(
-      key: const Key('detail-adjust'),
-      onPressed: _isAdjusting ? null : _adjust,
-      tooltip: l10n.detailAdjust,
-      icon: _isAdjusting
-          ? const SizedBox.square(
-              dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.crop_outlined),
-    );
-  }
-
-  Widget _shareButton(AppLocalizations l10n) {
-    return IconButton(
-      onPressed: _isSharing ? null : _chooseShare,
-      tooltip: l10n.detailShare,
-      icon: _isSharing
-          ? const SizedBox.square(
-              dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.share_outlined),
-    );
-  }
-
-  /// Downloads on a tap, offers the destination on a long press — and says
-  /// which of the two this wallpaper wants before either happens.
-  ///
-  /// The tint is the whole point (see `purityAlertTint`): a long press is an
-  /// invisible affordance, so a wallpaper that deserves a deliberate
-  /// destination has to *ask* for one. Sketchy is the case that stings —
-  /// nothing else on this screen distinguishes it from safe, and it routes to
-  /// the gallery by default.
-  Widget _downloadButton(AppLocalizations l10n) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    final Color? tint = purityAlertTint(colors, _wallpaper.purity);
-    return Semantics(
-      button: true,
-      label: l10n.detailDownload,
-      // The purity rides in the hint, not the label: the label is what the
-      // control *is*, and every caller that looks this button up by name —
-      // including the tests — must keep finding one called "Download".
-      hint: tint == null
-          ? null
-          : l10n.detailDownloadPurity(purityLabel(l10n, _wallpaper.purity)),
-      child: InkWell(
-        onTap: _isDownloading ? null : _download,
-        onLongPress: _isDownloading ? null : _chooseDownloadTier,
-        borderRadius: BorderRadius.circular(24),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: _isDownloading
-              ? const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Icon(Icons.download_outlined, color: tint),
-        ),
-      ),
-    );
-  }
-
-  /// Shown only for a wallpaper already in the download history: the file and
-  /// its row, deleted together. Its own confirmation lives in
-  /// [confirmAndDeleteDownload], suppressed where Android's own takes over.
-  /// Moves the downloaded file into the private library.
-  ///
-  /// Behind the **same gate as [_deleteButton]** — `_downloadedRecord()` — and
-  /// that is deliberate rather than convenient. That lookup reads the download
-  /// history, which never holds an explicit or app-private download, so an
-  /// action offered from it can never disclose that one exists on this ungated
-  /// screen. A second gate written for this button is a second chance to get
-  /// that wrong.
-  Widget _moveToPrivateButton(AppLocalizations l10n, DownloadRecord record) {
-    return IconButton(
-      key: const Key('detail-move-to-private'),
-      onPressed: _isMoving ? null : () => _moveToPrivateLibrary(record),
-      tooltip: l10n.moveToPrivateAction,
-      icon: _isMoving
-          ? const SizedBox.square(
-              dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.lock_outline),
-    );
-  }
-
-  Widget _deleteButton(AppLocalizations l10n, DownloadRecord record) {
-    return IconButton(
-      key: const Key('detail-delete'),
-      onPressed: _isDeleting ? null : () => _deleteFromDevice(record),
-      tooltip: l10n.downloadDeleteMenu,
-      icon: _isDeleting
-          ? const SizedBox.square(
-              dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.delete_outline),
     );
   }
 }
