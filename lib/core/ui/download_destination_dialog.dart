@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/download_destination_card.dart';
 import 'package:tela/core/ui/download_destination_choice.dart';
 import 'package:tela/core/ui/download_tag_field.dart';
 import 'package:tela/core/ui/purity_alert_tint.dart';
@@ -10,6 +13,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tag_folder.dart';
+import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
 
 /// Asks where this one download should land; null when dismissed.
 ///
@@ -45,6 +49,7 @@ Future<DownloadDestinationChoice?> chooseDownloadDestination(
   StorageTier? pinnedTier,
   TagFolder? suggestedTag,
   List<TagFolder> knownTags = const <TagFolder>[],
+  Future<List<TagCandidate>>? tagSuggestions,
 }) {
   return _show(
     context,
@@ -55,6 +60,9 @@ Future<DownloadDestinationChoice?> chooseDownloadDestination(
     pinnedTier: pinnedTier,
     suggestedTag: suggestedTag,
     knownTags: knownTags,
+    tagSuggestions: tagSuggestions,
+    // One wallpaper needs no share counts: "1/1" on every chip says nothing.
+    selectionSize: 0,
   );
 }
 
@@ -77,6 +85,7 @@ Future<DownloadDestinationChoice?> chooseBatchDownloadDestination(
   StorageTier? pinnedTier,
   TagFolder? suggestedTag,
   List<TagFolder> knownTags = const <TagFolder>[],
+  Future<List<TagCandidate>>? tagSuggestions,
 }) {
   return _show(
     context,
@@ -87,6 +96,8 @@ Future<DownloadDestinationChoice?> chooseBatchDownloadDestination(
     pinnedTier: pinnedTier,
     suggestedTag: suggestedTag,
     knownTags: knownTags,
+    tagSuggestions: tagSuggestions,
+    selectionSize: count,
     batchCount: count,
   );
 }
@@ -109,6 +120,8 @@ Future<DownloadDestinationChoice?> _show(
   required StorageTier? pinnedTier,
   required TagFolder? suggestedTag,
   required List<TagFolder> knownTags,
+  required Future<List<TagCandidate>>? tagSuggestions,
+  required int selectionSize,
   int? batchCount,
 }) {
   if (!context.mounted) {
@@ -124,6 +137,8 @@ Future<DownloadDestinationChoice?> _show(
       pinnedTier: pinnedTier,
       suggestedTag: suggestedTag,
       knownTags: knownTags,
+      tagSuggestions: tagSuggestions,
+      selectionSize: selectionSize,
       batchCount: batchCount,
     ),
   );
@@ -141,6 +156,8 @@ class _DestinationDialog extends StatefulWidget {
     required this.pinnedTier,
     required this.suggestedTag,
     required this.knownTags,
+    required this.tagSuggestions,
+    required this.selectionSize,
     this.batchCount,
   });
 
@@ -170,6 +187,16 @@ class _DestinationDialog extends StatefulWidget {
   /// Tags that already exist as folders in the shared tiers, offered as chips.
   final List<TagFolder> knownTags;
 
+  /// The wallpapers' own tags, ranked — in flight when the dialog opens.
+  ///
+  /// A future rather than a value, because reading them can cost requests and
+  /// the dialog must not wait: it opens on what is free (the search's tag, the
+  /// folders that exist) and fills the rest in when they land.
+  final Future<List<TagCandidate>>? tagSuggestions;
+
+  /// How many wallpapers the suggestions are counted over.
+  final int selectionSize;
+
   /// How many wallpapers this answer governs, or null for a single download —
   /// which needs no count, since the thing being placed is the one on screen.
   final int? batchCount;
@@ -191,6 +218,43 @@ class _DestinationDialogState extends State<_DestinationDialog> {
   /// already holding a tag, so the switch reads the state that is really in
   /// force rather than proposing to undo it.
   late bool _keepTag = widget.suggestedTag != null;
+
+  /// The ranked suggestions once they arrive, empty until then.
+  List<TagCandidate> _suggestions = const <TagCandidate>[];
+
+  /// Whether the lookup is still running, for the quiet line under the chips.
+  late bool _readingTags = widget.tagSuggestions != null;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_awaitSuggestions());
+  }
+
+  /// Takes the suggestions when they land, and starts on the best one unless
+  /// the user has already answered.
+  ///
+  /// **Only when nothing is selected yet.** A remembered tag, or one the user
+  /// tapped while the lookup was in flight, is an answer — and a dialog that
+  /// changed its own selection out from under someone mid-tap would be worse
+  /// than one that suggested nothing at all.
+  Future<void> _awaitSuggestions() async {
+    final Future<List<TagCandidate>>? pending = widget.tagSuggestions;
+    if (pending == null) return;
+    final List<TagCandidate> ranked = await pending;
+    if (!mounted) return;
+    setState(() {
+      _suggestions = ranked;
+      _readingTags = false;
+      if (_tag == null && _untouched && ranked.isNotEmpty) {
+        _tag = ranked.first.tag;
+        _keepTag = false;
+      }
+    });
+  }
+
+  /// Whether the user has left the tag row alone since the dialog opened.
+  bool _untouched = true;
 
   /// A destination has to be reached this many times in a row before the
   /// chooser offers to make it the default. The owner's number.
@@ -235,13 +299,17 @@ class _DestinationDialogState extends State<_DestinationDialog> {
             ?_purityLine(context, l10n),
             ?_pinLine(context, l10n),
             for (final StorageTier tier in widget.options)
-              _destination(context, l10n, tier),
+              _destination(context, tier),
             ?_alwaysAction(context, l10n),
             const Divider(height: 8),
             DownloadTagField(
               selected: _tag,
               known: widget.knownTags,
+              suggestions: _suggestions,
+              selectionSize: widget.selectionSize,
+              loadingSuggestions: _readingTags,
               onChanged: (TagFolder? tag) => setState(() {
+                _untouched = false;
                 _tag = tag;
                 // Remembering nothing is not a state worth offering: the switch
                 // means "offer this next time", and there is no this.
@@ -318,101 +386,25 @@ class _DestinationDialogState extends State<_DestinationDialog> {
     );
   }
 
-  /// One destination as a tappable card, marked when the run has been landing
-  /// there. Tapping answers the tier and whether it becomes the pin.
-  Widget _destination(
-    BuildContext context,
-    AppLocalizations l10n,
-    StorageTier tier,
-  ) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => Navigator.pop(
-          context,
-          DownloadDestinationChoice(
-            tier: tier,
-            pin: _keepSending,
-            tag: _tag,
-            rememberTag: _keepTag,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: _destinationRow(context, l10n, tier),
+  /// One destination as a tappable card. Tapping answers everything the dialog
+  /// has collected: the tier, the tag, and whether either should stick.
+  Widget _destination(BuildContext context, StorageTier tier) {
+    return DownloadDestinationCard(
+      tier: tier,
+      streak: widget.streak,
+      suggestedTier: _suggestedTier,
+      onTap: () => Navigator.pop(
+        context,
+        DownloadDestinationChoice(
+          tier: tier,
+          pin: _keepSending,
+          tag: _tag,
+          rememberTag: _keepTag,
         ),
       ),
     );
   }
 
-  Widget _destinationRow(
-    BuildContext context,
-    AppLocalizations l10n,
-    StorageTier tier,
-  ) {
-    final ThemeData theme = Theme.of(context);
-    return Row(
-      spacing: 14,
-      children: <Widget>[
-        Icon(storageTierIcon(tier), color: theme.colorScheme.onSurfaceVariant),
-        Expanded(child: _destinationText(theme, l10n, tier)),
-      ],
-    );
-  }
-
-  /// The name over its consequence — the detail line is the whole reason this
-  /// is a card and not a menu row — with the streak note when this is the tier
-  /// the run has been going to.
-  Widget _destinationText(
-    ThemeData theme,
-    AppLocalizations l10n,
-    StorageTier tier,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      spacing: 2,
-      children: <Widget>[
-        Text(storageTierLabel(l10n, tier), style: theme.textTheme.titleMedium),
-        Text(
-          storageTierDetail(l10n, tier),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        ?_streakNote(theme, l10n, tier),
-      ],
-    );
-  }
-
-  /// "Last N saved here", but only on the tier the suggestion points at.
-  Widget? _streakNote(
-    ThemeData theme,
-    AppLocalizations l10n,
-    StorageTier tier,
-  ) {
-    if (tier != _suggestedTier) return null;
-    return Text(
-      l10n.detailDownloadStreak(widget.streak!.length),
-      style: theme.textTheme.labelSmall?.copyWith(
-        color: theme.colorScheme.primary,
-      ),
-    );
-  }
-
-  /// The "Make this the default for …" button, present only when there is a
-  /// suggestion and no pin is in force.
-  ///
-  /// Because the chooser is only ever reached by a deliberate long press, this
-  /// is never an unsolicited nag: it waits in the sheet the user chose to open,
-  /// and disappears the moment they take it or route elsewhere.
-  ///
-  /// It deliberately wears neither the pin icon nor the pin's words. Two
-  /// different promises were reading as one: this sets the *per-purity default*
-  /// (I3, the same value Settings writes), while the switch below sets the
-  /// purity-flat *pin* (K2). A pin also outranks the default — so while one is
-  /// in force this stands down entirely rather than offer a change the user
-  /// would not see until they Stop.
   Widget? _alwaysAction(BuildContext context, AppLocalizations l10n) {
     final StorageTier? tier = _suggestedTier;
     if (tier == null || widget.pinnedTier != null) return null;

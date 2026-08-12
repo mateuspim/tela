@@ -72,6 +72,22 @@ abstract final class KonachanMapper {
     );
   }
 
+  /// Every post's tags in a listing payload, keyed by id.
+  ///
+  /// The tags are **already here** — a booru's listing carries them and
+  /// [toPage] simply drops them, because the domain `Wallpaper` has no place
+  /// for a tag list and putting one there would mean new columns in three
+  /// tables for data only the tag chooser wants. Reading them off the same
+  /// response the grid was built from is what lets a Konachan selection be
+  /// answered with no request at all.
+  static Map<String, List<WallpaperTag>> tagsIn(Object? body) {
+    return <String, List<WallpaperTag>>{
+      for (final Object? raw in _asPostList(body))
+        if (_asPost(raw) case final Map<String, dynamic> post)
+          '${_readInt(post, 'id')}': _tagsOf(post),
+    };
+  }
+
   static Wallpaper _toWallpaper(Object? raw) {
     final Map<String, dynamic> post = _asPost(raw);
     final Purity purity = _purityOf(post);

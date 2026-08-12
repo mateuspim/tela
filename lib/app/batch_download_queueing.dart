@@ -7,6 +7,7 @@ import 'package:tela/app/pinned_download_tier.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/remembered_download_tag.dart';
 import 'package:tela/app/routes.dart';
+import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_destination_choice.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
@@ -18,6 +19,8 @@ import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
+import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
+import 'package:tela/features/browse/browse_query_controller.dart';
 
 /// Puts the whole selection in the download queue and says so.
 ///
@@ -201,6 +204,15 @@ _resolveBatchDestination(
   final List<TagFolder> known = await ref.read(
     knownDownloadTagsProvider.future,
   );
+  // Started but not awaited: the chooser opens on what is free and fills these
+  // in when they land. On Wallhaven this is one request per wallpaper, and the
+  // destination decision must not wait on a round trip per tile.
+  final Future<List<TagCandidate>> suggestions = suggestedTagsFor(
+    source: ref.read(activeWallpaperSourceProvider),
+    query: ref.read(browseQueryProvider),
+    known: known,
+    selection: wallpapers,
+  );
   if (!context.mounted) return (proceed: false, tier: null, tag: null);
   final DownloadDestinationChoice? choice =
       await chooseBatchDownloadDestination(
@@ -210,6 +222,7 @@ _resolveBatchDestination(
         pinnedTier: pin,
         suggestedTag: suggested,
         knownTags: known,
+        tagSuggestions: suggestions,
       );
   if (choice == null) return (proceed: false, tier: null, tag: null);
   // Stop clears the pin and downloads nothing — the deliberate way out, and the

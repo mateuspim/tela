@@ -6,6 +6,7 @@ import 'package:tela/app/pinned_download_tier.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/remembered_download_tag.dart';
 import 'package:tela/app/storage_settings_controller.dart';
+import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_destination_choice.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
@@ -24,6 +25,8 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
+import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
+import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 
 /// What a long press on a wall tile offers, without opening the wallpaper.
@@ -200,6 +203,12 @@ Future<({bool proceed, StorageTier? tier, TagFolder? tag})> _resolveDestination(
   final List<TagFolder> knownTags = await ref.read(
     knownDownloadTagsProvider.future,
   );
+  final Future<List<TagCandidate>> suggestions = suggestedTagsFor(
+    source: ref.read(activeWallpaperSourceProvider),
+    query: ref.read(browseQueryProvider),
+    known: knownTags,
+    selection: <Wallpaper>[wallpaper],
+  );
   if (!context.mounted) return (proceed: false, tier: null, tag: null);
   final DownloadDestinationChoice? choice = await chooseDownloadDestination(
     context,
@@ -208,6 +217,7 @@ Future<({bool proceed, StorageTier? tier, TagFolder? tag})> _resolveDestination(
     streak: streak,
     suggestedTag: remembered,
     knownTags: knownTags,
+    tagSuggestions: suggestions,
   );
   if (choice == null || choice.stopsPin) {
     return (proceed: false, tier: null, tag: null);

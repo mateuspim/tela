@@ -102,10 +102,20 @@ void main() {
     /// A source tag that reduces to nothing is an ordinary thing to find in a
     /// list of candidates, not an error to raise.
     test('answers null when nothing legal survives', () {
-      expect(TagFolder.sanitize('>_<'.replaceAll('_', '')), isNull);
       expect(TagFolder.sanitize('...'), isNull);
       expect(TagFolder.sanitize('   '), isNull);
       expect(TagFolder.sanitize(''), isNull);
+    });
+
+    /// Konachan really carries these. `_` and `-` are legal folder characters,
+    /// so without a rule `>_<` becomes a folder called `_` — and several
+    /// different emoticon tags collapse onto that same one, adding up their
+    /// counts until the residue outranks the tag that describes the selection.
+    test('drops a name left with no letter or digit', () {
+      expect(TagFolder.sanitize('>_<'), isNull);
+      expect(TagFolder.sanitize('^_^'), isNull);
+      expect(TagFolder.sanitize('---'), isNull);
+      expect(TagFolder.sanitize(':d')?.name, 'd');
     });
 
     test('what it produces is always legal', () {

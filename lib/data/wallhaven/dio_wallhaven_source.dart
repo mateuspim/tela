@@ -76,6 +76,39 @@ class DioWallhavenSource implements WallpaperSource {
     }
   }
 
+  /// One `/w/{id}` per wallpaper, stopped at [budget].
+  ///
+  /// Wallhaven's `/search` carries no tags whatsoever — they exist only on the
+  /// per-wallpaper endpoint — so unlike a booru there is nothing already paid
+  /// for to read from. Every answer here is a request against the 45/minute
+  /// ceiling, which is why the budget is small and the caller shows whatever
+  /// arrives: a hundred-wallpaper batch must not spend two minutes and the
+  /// whole rate allowance on *suggestions* before the downloads that need it.
+  ///
+  /// Sequential rather than concurrent on purpose. `RateLimitInterceptor`
+  /// paces the whole app from one window, so firing twenty at once only queues
+  /// them behind each other while making a 429 likelier — and this runs while
+  /// the user is looking at a dialog that already opened.
+  @override
+  Future<Map<String, List<WallpaperTag>>> tagsFor(
+    List<String> ids, {
+    required int budget,
+  }) async {
+    final Map<String, List<WallpaperTag>> found =
+        <String, List<WallpaperTag>>{};
+    for (final String id in ids.take(budget)) {
+      try {
+        found[id] = (await wallpaperDetails(id)).tags;
+      } on SourceFailure {
+        // A wallpaper that will not load costs its own suggestions only. A
+        // rate-limited or offline source ends up answering an empty map, and
+        // the chooser simply has nothing extra to offer.
+        continue;
+      }
+    }
+    return found;
+  }
+
   @override
   Future<WallpaperDetails> wallpaperDetails(String id) async {
     try {

@@ -3,11 +3,15 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/image_store.dart';
+import 'package:tela/domain/ports/wallpaper_source.dart';
+import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 
 /// The two listings of what tela has already put on this device.
@@ -120,6 +124,53 @@ List<TagFolder> _sorted(Set<TagFolder> tags) {
   return tags.toList()..sort(
     (TagFolder a, TagFolder b) =>
         a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+  );
+}
+
+/// How many requests a tag lookup may spend on one selection.
+///
+/// Konachan answers a visible selection for nothing — its listing already
+/// carried the tags — so this only ever bites on Wallhaven, where each id is a
+/// `/w/{id}` against a 45/minute ceiling. Twenty-five covers the selections a
+/// person actually makes by hand and stops a two-hundred-wallpaper batch from
+/// spending two minutes and the whole rate allowance on *suggestions* before
+/// the downloads that need it have started.
+const int tagSuggestionBudget = 25;
+
+/// The tags a selection's own wallpapers carry, ranked best first.
+///
+/// Awaited by the chooser *after* it has opened, never before: the destination
+/// decision is the one the user came for, and on Wallhaven this can take
+/// seconds. Failures come back as an empty list rather than throwing — a
+/// suggestion is a convenience, and losing it must not cost the download.
+///
+/// Takes values rather than a `Ref`, unlike its neighbours here. Its callers
+/// hold a `WidgetRef` and a `Ref` between them and the two have no common
+/// supertype — the same wall [refreshDownloads] and [refreshDownloadsFrom]
+/// split over — and every one of them has already read [known] for the chooser
+/// anyway. It also leaves the whole thing testable without a container.
+Future<List<TagCandidate>> suggestedTagsFor({
+  required WallpaperSource source,
+  required SearchQuery query,
+  required List<TagFolder> known,
+  required List<Wallpaper> selection,
+}) async {
+  if (selection.isEmpty) return const <TagCandidate>[];
+  // Only this source's wallpapers: a mixed selection would otherwise ask
+  // Wallhaven about a Konachan id, spending a request to be told nothing.
+  final List<String> ids = <String>[
+    for (final Wallpaper w in selection)
+      if (w.source == source.id) w.id,
+  ];
+  final Map<String, List<WallpaperTag>> tags = await source.tagsFor(
+    ids,
+    budget: tagSuggestionBudget,
+  );
+  return const SuggestTagFolders()(
+    tags: tags,
+    selectionSize: selection.length,
+    query: query,
+    existing: known.toSet(),
   );
 }
 

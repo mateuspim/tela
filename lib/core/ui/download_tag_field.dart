@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/tag_folder.dart';
+import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
 
 /// The tag row inside the download chooser: which folder this download is
 /// filed under.
@@ -31,6 +32,9 @@ class DownloadTagField extends StatelessWidget {
     required this.selected,
     required this.known,
     required this.onChanged,
+    this.suggestions = const <TagCandidate>[],
+    this.selectionSize = 0,
+    this.loadingSuggestions = false,
     super.key,
   });
 
@@ -43,6 +47,20 @@ class DownloadTagField extends StatelessWidget {
 
   /// Called with the new tag, or null when *None* is chosen.
   final ValueChanged<TagFolder?> onChanged;
+
+  /// Tags the selected wallpapers themselves carry, best first. Empty until
+  /// the lookup lands — the row renders without them rather than waiting.
+  final List<TagCandidate> suggestions;
+
+  /// How many wallpapers the suggestions were counted over — the `10` in
+  /// `8/10`. Zero hides the counts, which is right for a single download,
+  /// where "1 of 1" says nothing.
+  final int selectionSize;
+
+  /// Whether more suggestions are still being read. Shown as a quiet line, not
+  /// a spinner over the dialog: the destination decision is the one the user
+  /// came for, and it must never be blocked on the network.
+  final bool loadingSuggestions;
 
   @override
   Widget build(BuildContext context) {
@@ -58,24 +76,54 @@ class DownloadTagField extends StatelessWidget {
           runSpacing: 8,
           children: <Widget>[
             _noneChip(l10n),
-            for (final TagFolder tag in _offered) _tagChip(tag),
+            for (final TagCandidate candidate in _candidates)
+              _tagChip(candidate.tag, _shareLabel(l10n, candidate)),
+            for (final TagFolder tag in _extras) _tagChip(tag, null),
             _newChip(context, l10n),
           ],
         ),
+        if (loadingSuggestions)
+          Text(
+            l10n.downloadTagReading,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
       ],
     );
   }
 
-  /// The chips to show: every known tag, plus the selected one when it is not
-  /// among them.
+  /// The ranked suggestions, or the plain folder list before any arrive.
+  ///
+  /// Before the lookup lands there is still something worth offering — the
+  /// folders that already exist — so the row is never empty and never waits.
+  List<TagCandidate> get _candidates {
+    if (suggestions.isNotEmpty) return suggestions;
+    return <TagCandidate>[
+      for (final TagFolder tag in known)
+        TagCandidate(tag: tag, origin: TagCandidateOrigin.existingFolder),
+    ];
+  }
+
+  /// Anything selected that no chip above covers.
   ///
   /// A tag typed a moment ago has no folder yet — nothing has been downloaded
   /// into it — so it would vanish from its own row the instant it was chosen
   /// without this.
-  List<TagFolder> get _offered {
+  List<TagFolder> get _extras {
     final TagFolder? current = selected;
-    if (current == null || known.contains(current)) return known;
-    return <TagFolder>[current, ...known];
+    if (current == null) return const <TagFolder>[];
+    final bool shown = _candidates.any((TagCandidate c) => c.tag == current);
+    return shown ? const <TagFolder>[] : <TagFolder>[current];
+  }
+
+  /// `8/10` for a tag the selection carries, and nothing for one that came
+  /// from the search or from an existing folder — where a count would be a
+  /// number about nothing.
+  String? _shareLabel(AppLocalizations l10n, TagCandidate candidate) {
+    if (candidate.origin != TagCandidateOrigin.selection) return null;
+    if (candidate.share <= 0 || selectionSize <= 0) return null;
+    return l10n.downloadTagShare(candidate.share, selectionSize);
   }
 
   Widget _noneChip(AppLocalizations l10n) {
@@ -86,9 +134,9 @@ class DownloadTagField extends StatelessWidget {
     );
   }
 
-  Widget _tagChip(TagFolder tag) {
+  Widget _tagChip(TagFolder tag, String? share) {
     return ChoiceChip(
-      label: Text(tag.name),
+      label: Text(share == null ? tag.name : '${tag.name}  $share'),
       selected: selected == tag,
       onSelected: (bool _) => onChanged(tag),
     );

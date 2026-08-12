@@ -126,6 +126,25 @@ class FakeWallpaperSource implements WallpaperSource {
         );
   }
 
+  /// Tags this fake will report, keyed by id, and how many ids each call was
+  /// asked for — so a test can prove a budget was honoured.
+  Map<String, List<WallpaperTag>> tagsById = <String, List<WallpaperTag>>{};
+
+  /// Every `tagsFor` call's budget, in order.
+  final List<int> tagBudgets = <int>[];
+
+  @override
+  Future<Map<String, List<WallpaperTag>>> tagsFor(
+    List<String> ids, {
+    required int budget,
+  }) async {
+    tagBudgets.add(budget);
+    return <String, List<WallpaperTag>>{
+      for (final String id in ids.take(budget))
+        if (tagsById[id] case final List<WallpaperTag> tags) id: tags,
+    };
+  }
+
   @override
   Future<WallpaperDetails> wallpaperDetails(String id) async {
     receivedDetailIds.add(id);

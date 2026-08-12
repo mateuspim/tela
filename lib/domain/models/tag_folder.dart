@@ -61,6 +61,14 @@ class TagFolder {
   /// like one the user already has. Losing a character the filesystem could not
   /// have held is honest; adding one is not.
   ///
+  /// **A result with no letter or digit in it is dropped**, which is a rule
+  /// about real booru tags rather than a tidiness preference. Konachan carries
+  /// emoticon tags — `>_<`, `^_^`, `:d` — and `_` and `-` survive sanitizing,
+  /// so those reduce to `_`, `_`, and `d`. A folder called `_` is meaningless
+  /// on its own, and worse, *several different* emoticon tags collapse onto the
+  /// same one: their counts add up and the residue can outrank the tag that
+  /// actually describes the selection.
+  ///
   /// Answers null, never a throw: a source tag that reduces to nothing is an
   /// ordinary thing to find in a list of candidates, not an error.
   static TagFolder? sanitize(String raw) {
@@ -71,7 +79,8 @@ class TagFolder {
         ? collapsed
         // Trimmed again: the cut can land immediately after a space.
         : collapsed.substring(0, maxLength).trimRight();
-    return capped.isEmpty ? null : TagFolder._(capped);
+    if (!_meaningful.hasMatch(capped)) return null;
+    return TagFolder._(capped);
   }
 
   /// Whether [name] may be used as a folder exactly as it stands.
@@ -120,4 +129,8 @@ class TagFolder {
   static final RegExp _illegal = RegExp('[^A-Za-z0-9 _-]');
 
   static final RegExp _runOfSpaces = RegExp(' {2,}');
+
+  /// At least one letter or digit. What separates a tag from the punctuation
+  /// left over when an emoticon tag is stripped of what a folder cannot hold.
+  static final RegExp _meaningful = RegExp('[A-Za-z0-9]');
 }

@@ -30,6 +30,8 @@ import 'package:tela/domain/models/wallpaper_adjust_failure.dart';
 import 'package:tela/domain/models/wallpaper_share_failure.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/use_cases/share_wallpaper.dart';
+import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
+import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/detail/crop_wallpaper_screen.dart';
 import 'package:tela/features/favorites/favorite_button.dart';
 
@@ -156,6 +158,15 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
     final List<TagFolder> knownTags = await ref.read(
       knownDownloadTagsProvider.future,
     );
+    // One wallpaper, and the detail screen has usually loaded its tags already
+    // — but this goes through the same seam so the ranking is the same one the
+    // batch chooser applies, rather than a second spelling of it.
+    final Future<List<TagCandidate>> suggestions = suggestedTagsFor(
+      source: ref.read(activeWallpaperSourceProvider),
+      query: ref.read(browseQueryProvider),
+      known: knownTags,
+      selection: <Wallpaper>[_wallpaper],
+    );
     if (!mounted) return;
     final DownloadDestinationChoice? choice = await chooseDownloadDestination(
       context,
@@ -165,6 +176,7 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
       pinnedTier: pin,
       suggestedTag: suggestedTag,
       knownTags: knownTags,
+      tagSuggestions: suggestions,
     );
     if (choice == null) return;
     // Stop clears the pin and downloads nothing — the deliberate way out.

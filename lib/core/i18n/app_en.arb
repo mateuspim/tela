@@ -564,6 +564,22 @@
     "description": "Heading above the one-download storage destination choices."
   },
 
+  "downloadTagShare": "{carrying}/{total}",
+  "@downloadTagShare": {
+    "description": "How much of the selection carries a suggested tag, shown on its chip. Bare numbers rather than words: it sits inside a chip beside the tag name, where a sentence would not fit.",
+    "placeholders": {
+      "carrying": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "downloadTagReading": "Reading tags\u2026",
+  "@downloadTagReading": {
+    "description": "Quiet line under the tag chips while the wallpapers' own tags are still being fetched. Not a spinner over the dialog: the destination decision must never be blocked on the network."
+  },
   "downloadTagLabel": "Tag",
   "@downloadTagLabel": {
     "description": "Label above the tag chips in the download chooser. A tag is a real folder on disk, so this names what the download is filed under, not a keyword attached to it."
