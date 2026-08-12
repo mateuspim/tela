@@ -32,10 +32,31 @@ set -euo pipefail
 IMAGE="tela-toolchain"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# A root host is its own case, and it has to be handled in both directions.
+#
+# The image builds a `dev` user owning the invoking uid, so that files written
+# into the bind mount come back out owned by you. That cannot be done for uid 0:
+# the step evicts whoever already holds the uid first, which as root is
+# `userdel -r root`, and the build dies at `useradd` with a bare `exit code: 4`.
+#
+# So build `dev` at the default uid and then don't use it — run the container as
+# root instead, which can write a root-owned repo and a dev-owned volume alike.
+# HOME still has to point at /home/dev, or the named caches (pub, gradle, and
+# the debug keystore below) mount at a path nothing reads.
+HOST_IS_ROOT=false
+[[ "$(id -u)" == 0 ]] && HOST_IS_ROOT=true
+
 build_image() {
+  local uid gid
+  uid="$(id -u)"
+  gid="$(id -g)"
+  if [[ "$HOST_IS_ROOT" == true ]]; then
+    uid=1000
+    gid=1000
+  fi
   docker build \
-    --build-arg "UID=$(id -u)" \
-    --build-arg "GID=$(id -g)" \
+    --build-arg "UID=$uid" \
+    --build-arg "GID=$gid" \
     -t "$IMAGE" \
     -f "$REPO_ROOT/tool/docker/Dockerfile" \
     "$REPO_ROOT/tool/docker"
@@ -65,6 +86,11 @@ DOCKER_ARGS=(
   -v "tela-android:/home/dev/.android"
   -w /app
 )
+
+# See HOST_IS_ROOT above: as root the image's `dev` user is the wrong one to be,
+# because everything in the bind mount belongs to root and dev cannot write it —
+# which surfaces as `Flutter failed to write to a file at "/app/.dart_tool"`.
+[[ "$HOST_IS_ROOT" == true ]] && DOCKER_ARGS+=(--user 0:0 -e HOME=/home/dev)
 
 [[ -d /dev/bus/usb ]] && DOCKER_ARGS+=(-v /dev/bus/usb:/dev/bus/usb --device-cgroup-rule='c 189:* rmw')
 [[ -t 0 ]] && DOCKER_ARGS+=(-it)
