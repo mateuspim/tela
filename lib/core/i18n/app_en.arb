@@ -564,6 +564,27 @@
     "description": "Heading above the one-download storage destination choices."
   },
 
+  "tagFilterAll": "All",
+  "@tagFilterAll": {
+    "description": "The chip that clears a tag filter on a library shelf, showing tagged and untagged downloads together."
+  },
+  "tagFilterUntagged": "Untagged",
+  "@tagFilterUntagged": {
+    "description": "The chip that shows only downloads filed under no tag \u2014 the ones sitting in the storage tier's root. Its own filter rather than part of All, because 'show me what I never filed' is what someone tidying up is asking."
+  },
+  "libraryTags": "Tags",
+  "@libraryTags": {
+    "description": "Heading of the Library tab's section listing the tag folders in use."
+  },
+  "libraryTagCount": "{count, plural, =1{1 wallpaper} other{{count} wallpapers}}",
+  "@libraryTagCount": {
+    "description": "How many downloads are filed under one tag, shown on its row in the Library tab.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "downloadTagShare": "{carrying}/{total}",
   "@downloadTagShare": {
     "description": "How much of the selection carries a suggested tag, shown on its chip. Bare numbers rather than words: it sits inside a chip beside the tag name, where a sentence would not fit.",

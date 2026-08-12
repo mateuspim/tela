@@ -9,12 +9,14 @@ import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/selection_shelf.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
+import 'package:tela/core/ui/tag_filter_bar.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
 import 'package:tela/core/ui/wallpaper_marks_scope.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/queued_download.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/downloads/download_queue_tab.dart';
@@ -38,8 +40,15 @@ import 'package:tela/features/downloads/missing_downloads_cleanup_button.dart';
 /// from either end — a queue entry becomes a history row — and because a
 /// download that failed is one tap from the shelf it was headed for.
 class DownloadHistoryScreen extends ConsumerWidget {
-  /// Creates the download-history screen.
-  const DownloadHistoryScreen({super.key});
+  /// Creates the download-history screen, optionally opening on one [tag].
+  const DownloadHistoryScreen({this.tag, super.key});
+
+  /// The tag to narrow to on open, or null to show everything.
+  ///
+  /// Set when the Library hub's tag row is tapped, which promises a shelf that
+  /// is already filtered. The chips stay live afterwards — this is where the
+  /// screen starts, not where it is stuck.
+  final TagFolder? tag;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -104,7 +113,12 @@ class DownloadHistoryScreen extends ConsumerWidget {
       recentDownloadsProvider,
     );
     return downloads.when(
-      data: (List<DownloadRecord> recent) => _grid(context, ref, l10n, recent),
+      data: (List<DownloadRecord> recent) => _TaggedHistory(
+        openOn: tag,
+        recent: recent,
+        buildGrid: (List<DownloadRecord> shown) =>
+            _grid(context, ref, l10n, shown),
+      ),
       loading: () => const WallpaperGridSkeleton(),
       error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
         icon: Icons.error_outline,
@@ -246,6 +260,70 @@ class DownloadHistoryScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The history grid with its tag filter above it.
+///
+/// Stateful only for the chip that is selected — the rows themselves stay in
+/// `recentDownloadsProvider`, so a download landing while a filter is on still
+/// re-renders through the same path it always did.
+class _TaggedHistory extends StatefulWidget {
+  const _TaggedHistory({
+    required this.recent,
+    required this.buildGrid,
+    this.openOn,
+  });
+
+  /// The tag to start narrowed to, or null for everything.
+  final TagFolder? openOn;
+
+  /// Every recorded download, unfiltered.
+  final List<DownloadRecord> recent;
+
+  /// Renders the grid over whatever survives the filter.
+  final Widget Function(List<DownloadRecord>) buildGrid;
+
+  @override
+  State<_TaggedHistory> createState() => _TaggedHistoryState();
+}
+
+class _TaggedHistoryState extends State<_TaggedHistory> {
+  late TagFilter _filter = widget.openOn == null
+      ? const TagFilter.all()
+      : TagFilter.of(widget.openOn!);
+
+  @override
+  Widget build(BuildContext context) {
+    final List<DownloadRecord> shown = widget.recent
+        .where((DownloadRecord d) => _filter.matches(d.tag))
+        .toList();
+    return Column(
+      children: <Widget>[
+        TagFilterBar(
+          tags: _tagsInUse,
+          selected: _filter,
+          hasUntagged: widget.recent.any((DownloadRecord d) => d.tag == null),
+          onChanged: (TagFilter filter) => setState(() => _filter = filter),
+        ),
+        Expanded(child: widget.buildGrid(shown)),
+      ],
+    );
+  }
+
+  /// The tags this shelf actually holds, alphabetically.
+  ///
+  /// Off the rows on screen rather than from `knownDownloadTagsProvider`: they
+  /// are the same set today, and reading the list being filtered is what keeps
+  /// a chip from offering a tag that would show nothing.
+  List<TagFolder> get _tagsInUse {
+    final Set<TagFolder> tags = <TagFolder>{
+      for (final DownloadRecord d in widget.recent) ?d.tag,
+    };
+    return tags.toList()..sort(
+      (TagFolder a, TagFolder b) =>
+          a.name.toLowerCase().compareTo(b.name.toLowerCase()),
     );
   }
 }

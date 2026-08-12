@@ -13,6 +13,7 @@ import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/selection_shelf.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
+import 'package:tela/core/ui/tag_filter_bar.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
@@ -23,6 +24,7 @@ import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/features/private_library/private_secure_access.dart';
 
 /// The app-private tier, which nothing but tela can open.
@@ -57,6 +59,10 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     super.dispose();
   }
 
+  /// Which tag the grid is narrowed to. Local state: it is a view of what is
+  /// on screen, not something another screen has any business reading.
+  TagFilter _tagFilter = const TagFilter.all();
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -81,13 +87,52 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     return ref
         .watch(privateImagesProvider)
         .when(
-          data: (List<PrivateImage> stored) => _grid(context, l10n, stored),
+          data: (List<PrivateImage> stored) => _filtered(context, l10n, stored),
           loading: () => const WallpaperGridSkeleton(),
           error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
             icon: Icons.error_outline,
             message: l10n.privateLibraryUnavailable,
           ),
         );
+  }
+
+  /// The grid with its tag filter above it.
+  ///
+  /// Only reachable past [isUnlocked], which is the whole point: these chips
+  /// are the private library's folder names, and they are as disclosing as its
+  /// file paths. Nothing outside this screen is ever handed them — the download
+  /// chooser deliberately offers the shared tiers' tags only.
+  Widget _filtered(
+    BuildContext context,
+    AppLocalizations l10n,
+    List<PrivateImage> stored,
+  ) {
+    final List<PrivateImage> shown = stored
+        .where((PrivateImage i) => _tagFilter.matches(i.tag))
+        .toList();
+    return Column(
+      children: <Widget>[
+        TagFilterBar(
+          tags: _tagsIn(stored),
+          selected: _tagFilter,
+          hasUntagged: stored.any((PrivateImage i) => i.tag == null),
+          onChanged: (TagFilter filter) => setState(() => _tagFilter = filter),
+        ),
+        Expanded(child: _grid(context, l10n, shown)),
+      ],
+    );
+  }
+
+  /// The tags this library holds, alphabetically — read off the files, since
+  /// this tier keeps no rows to read them from.
+  List<TagFolder> _tagsIn(List<PrivateImage> stored) {
+    final Set<TagFolder> tags = <TagFolder>{
+      for (final PrivateImage image in stored) ?image.tag,
+    };
+    return tags.toList()..sort(
+      (TagFolder a, TagFolder b) =>
+          a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
   }
 
   /// What a failed or dismissed prompt leaves behind: a way to try again, and

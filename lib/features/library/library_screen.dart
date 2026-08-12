@@ -11,6 +11,7 @@ import 'package:tela/features/downloads/recent_downloads_strip.dart';
 import 'package:tela/features/favorites/favorites_grid.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 import 'package:tela/features/library/library_destination_tile.dart';
+import 'package:tela/features/library/library_tag_shelf.dart';
 
 /// Everything kept on this device, in one place: downloads, favorites, and the
 /// private library.
@@ -90,6 +91,7 @@ class LibraryScreen extends ConsumerWidget {
             subtitle: l10n.privateLibraryOpenDetail,
             routeName: TelaRoutes.privateLibraryName,
           ),
+          const LibraryTagShelf(),
           Expanded(
             child: SelectionShelfScope(
               child: Column(
