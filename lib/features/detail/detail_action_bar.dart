@@ -7,6 +7,7 @@ import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/move_to_private_action.dart';
 import 'package:tela/app/pinned_download_tier.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/remembered_download_tag.dart';
 import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
@@ -23,6 +24,7 @@ import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/share_option.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_adjust_failure.dart';
 import 'package:tela/domain/models/wallpaper_share_failure.dart';
@@ -145,6 +147,15 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
     final StorageTier? pin = await ref.read(
       pinnedDownloadTierProvider.future,
     );
+    // Against the shared tiers, which is what this chooser may offer: the
+    // private library's folder names do not belong on a screen with no lock in
+    // front of it. See `DownloadTagField`.
+    final TagFolder? suggestedTag = ref
+        .read(rememberedDownloadTagProvider.notifier)
+        .offeredFor(StorageTier.sharedGallery);
+    final List<TagFolder> knownTags = await ref.read(
+      knownDownloadTagsProvider.future,
+    );
     if (!mounted) return;
     final DownloadDestinationChoice? choice = await chooseDownloadDestination(
       context,
@@ -152,6 +163,8 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
       configuredTier: storage.tierFor(_wallpaper.purity),
       streak: streak,
       pinnedTier: pin,
+      suggestedTag: suggestedTag,
+      knownTags: knownTags,
     );
     if (choice == null) return;
     // Stop clears the pin and downloads nothing — the deliberate way out.
@@ -167,8 +180,15 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
     if (choice.pin) {
       await ref.read(pinnedDownloadTierProvider.notifier).pin(choice.tier!);
     }
+    // Remembered against the tier actually chosen, so a tag picked for the
+    // private library never reaches the backed-up settings table.
+    if (choice.rememberTag) {
+      await ref
+          .read(rememberedDownloadTagProvider.notifier)
+          .remember(choice.tag, tier: choice.tier!);
+    }
     if (!mounted) return;
-    await _download(choice.tier);
+    await _download(choice.tier, choice.tag);
   }
 
   /// Downloads to [tier], or to the configured destination when it is null.
@@ -176,13 +196,14 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
   /// [refreshDownloads] is what makes the new file visible to the screens that
   /// exist to show it; see its docstring for why skipping it looked like the
   /// download never saved.
-  Future<void> _download([StorageTier? tier]) async {
+  Future<void> _download([StorageTier? tier, TagFolder? tag]) async {
     setState(() => _isDownloading = true);
     try {
       final DownloadOutcome outcome =
           await ref.read(configuredDownloadProvider)(
             _wallpaper,
             tier: tier,
+            tag: tag,
             chooseVolume: ({required bool offerSdCard}) =>
                 chooseDownloadVolume(context, offerSdCard: offerSdCard),
           );

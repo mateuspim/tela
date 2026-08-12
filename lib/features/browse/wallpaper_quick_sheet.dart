@@ -4,6 +4,7 @@ import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/pinned_download_tier.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/remembered_download_tag.dart';
 import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_destination_choice.dart';
@@ -18,6 +19,7 @@ import 'package:tela/domain/models/download_destination_streak.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
@@ -130,7 +132,7 @@ Future<void> _download(
   // destination — and a sketchy download silently entering the gallery is the
   // exact surprise the tint on this row warns about. A safe one still routes
   // silently, as a plain tap does everywhere.
-  final ({bool proceed, StorageTier? tier}) destination =
+  final ({bool proceed, StorageTier? tier, TagFolder? tag}) destination =
       await _resolveDestination(context, ref, wallpaper);
   if (!destination.proceed || !context.mounted) return;
 
@@ -143,6 +145,7 @@ Future<void> _download(
     chooseVolume: ({required bool offerSdCard}) =>
         chooseDownloadVolume(context, offerSdCard: offerSdCard),
     tier: destination.tier,
+    tag: destination.tag,
   );
   switch (outcome) {
     case DownloadOutcome.saved:
@@ -169,7 +172,7 @@ Future<void> _download(
 /// for the destination it cannot otherwise pick — and a dismissed chooser
 /// answers `proceed: false` so nothing downloads. A remembered choice is
 /// persisted through the same controller Settings writes.
-Future<({bool proceed, StorageTier? tier})> _resolveDestination(
+Future<({bool proceed, StorageTier? tier, TagFolder? tag})> _resolveDestination(
   BuildContext context,
   WidgetRef ref,
   Wallpaper wallpaper,
@@ -179,22 +182,36 @@ Future<({bool proceed, StorageTier? tier})> _resolveDestination(
   // download use case applies the pin (invariant permitting), so a null tier
   // routes to it silently — even for a not-safe wallpaper the user pinned.
   final StorageTier? pin = await ref.read(pinnedDownloadTierProvider.future);
+  // The tag the user is filing things under still applies to a download that
+  // skips the chooser. "Keep using this tag" is a standing answer to a question
+  // this path does not ask, and dropping it silently would file a quick
+  // download outside the folder every other one is going to.
+  final TagFolder? remembered = ref
+      .read(rememberedDownloadTagProvider.notifier)
+      .offeredFor(StorageTier.sharedGallery);
   if (pin != null || wallpaper.purity == Purity.sfw) {
-    return (proceed: true, tier: null);
+    return (proceed: true, tier: null, tag: remembered);
   }
   final StorageSettings storage = await ref.read(
     storageSettingsProvider.future,
   );
   final DownloadDestinationStreak? streak = await settings
       .loadDestinationStreak(wallpaper.purity);
-  if (!context.mounted) return (proceed: false, tier: null);
+  final List<TagFolder> knownTags = await ref.read(
+    knownDownloadTagsProvider.future,
+  );
+  if (!context.mounted) return (proceed: false, tier: null, tag: null);
   final DownloadDestinationChoice? choice = await chooseDownloadDestination(
     context,
     purity: wallpaper.purity,
     configuredTier: storage.tierFor(wallpaper.purity),
     streak: streak,
+    suggestedTag: remembered,
+    knownTags: knownTags,
   );
-  if (choice == null || choice.stopsPin) return (proceed: false, tier: null);
+  if (choice == null || choice.stopsPin) {
+    return (proceed: false, tier: null, tag: null);
+  }
   if (choice.remember) {
     await ref
         .read(storageSettingsProvider.notifier)
@@ -203,7 +220,12 @@ Future<({bool proceed, StorageTier? tier})> _resolveDestination(
   if (choice.pin) {
     await ref.read(pinnedDownloadTierProvider.notifier).pin(choice.tier!);
   }
-  return (proceed: true, tier: choice.tier);
+  if (choice.rememberTag) {
+    await ref
+        .read(rememberedDownloadTagProvider.notifier)
+        .remember(choice.tag, tier: choice.tier!);
+  }
+  return (proceed: true, tier: choice.tier, tag: choice.tag);
 }
 
 /// Asks Home/Lock/Both first, through the same chooser the detail screen and
