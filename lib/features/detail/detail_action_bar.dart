@@ -152,9 +152,11 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
     // Against the shared tiers, which is what this chooser may offer: the
     // private library's folder names do not belong on a screen with no lock in
     // front of it. See `DownloadTagField`.
-    final TagFolder? suggestedTag = ref
+    final TagFolder? remembered = ref
         .read(rememberedDownloadTagProvider.notifier)
         .offeredFor(StorageTier.sharedGallery);
+    final TagFolder? searched = searchTagIn(ref.read(browseQueryProvider));
+    final TagFolder? suggestedTag = searched ?? remembered;
     final List<TagFolder> knownTags = await ref.read(
       knownDownloadTagsProvider.future,
     );
@@ -175,6 +177,7 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
       streak: streak,
       pinnedTier: pin,
       suggestedTag: suggestedTag,
+      tagIsRemembered: searched == null && remembered != null,
       knownTags: knownTags,
       tagSuggestions: suggestions,
     );

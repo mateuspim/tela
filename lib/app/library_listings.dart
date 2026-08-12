@@ -156,6 +156,19 @@ Future<List<TagCandidate>> suggestedTagsFor({
   required List<Wallpaper> selection,
 }) async {
   if (selection.isEmpty) return const <TagCandidate>[];
+  // **The listing already answered it.** Browsing a tag and downloading what is
+  // on screen means these wallpapers *are* that tag — there is nothing a lookup
+  // could add worth a request per wallpaper, and on Wallhaven a hundred-item
+  // selection would spend the whole budget rediscovering the word already in
+  // the search box. The free candidate wins and nothing is fetched.
+  if (searchTagIn(query) != null) {
+    return const SuggestTagFolders()(
+      tags: const <String, List<WallpaperTag>>{},
+      selectionSize: 0,
+      query: query,
+      existing: known.toSet(),
+    );
+  }
   // Only this source's wallpapers: a mixed selection would otherwise ask
   // Wallhaven about a Konachan id, spending a request to be told nothing.
   final List<String> ids = <String>[
@@ -168,7 +181,11 @@ Future<List<TagCandidate>> suggestedTagsFor({
   );
   return const SuggestTagFolders()(
     tags: tags,
-    selectionSize: selection.length,
+    // What was actually **examined**, not what was selected. The budget stops
+    // at `tagSuggestionBudget`, so a 30-wallpaper selection is read 25 deep —
+    // and reporting "25/30" would claim five of them lack a tag nobody looked
+    // for. The denominator has to be the sample, or the number is a lie.
+    selectionSize: tags.length,
     query: query,
     existing: known.toSet(),
   );

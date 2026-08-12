@@ -192,8 +192,15 @@ Future<({bool proceed, StorageTier? tier, TagFolder? tag})> _resolveDestination(
   final TagFolder? remembered = ref
       .read(rememberedDownloadTagProvider.notifier)
       .offeredFor(StorageTier.sharedGallery);
+  final TagFolder? searched = searchTagIn(ref.read(browseQueryProvider));
   if (pin != null || wallpaper.purity == Purity.sfw) {
-    return (proceed: true, tier: null, tag: remembered);
+    return (
+      proceed: true,
+      tier: null,
+      // The listing's own tag first here too, so a quick download taken while
+      // browsing one lands in it rather than in whatever was last used.
+      tag: searchTagIn(ref.read(browseQueryProvider)) ?? remembered,
+    );
   }
   final StorageSettings storage = await ref.read(
     storageSettingsProvider.future,
@@ -215,7 +222,8 @@ Future<({bool proceed, StorageTier? tier, TagFolder? tag})> _resolveDestination(
     purity: wallpaper.purity,
     configuredTier: storage.tierFor(wallpaper.purity),
     streak: streak,
-    suggestedTag: remembered,
+    suggestedTag: searched ?? remembered,
+    tagIsRemembered: searched == null && remembered != null,
     knownTags: knownTags,
     tagSuggestions: suggestions,
   );

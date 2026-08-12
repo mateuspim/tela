@@ -4,6 +4,28 @@ import 'package:tela/domain/models/search_tag.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 
+/// The tag a listing is searching for, or null when it is not a tag search.
+///
+/// **Free, and deliberately reachable without the ranking.** Every other
+/// candidate needs `WallpaperSource.tagsFor`, which on Wallhaven is a request
+/// per wallpaper — but this one is already on screen. It is what makes
+/// "I am looking at Leo (artist) and I want these filed under it" cost nothing
+/// and appear the instant the chooser opens, rather than after a lookup it does
+/// not need.
+///
+/// An **included** tag only: `-"anime"` says these wallpapers are *not* that,
+/// and filing them under it would be exactly backwards. A bare search term
+/// counts when it survives sanitizing as one — typing `cyberpunk` into the box
+/// and downloading the results means the same thing the chip does.
+TagFolder? searchTagIn(SearchQuery query) {
+  for (final SearchTag tag in query.tags) {
+    if (tag.sense != TagSense.include) continue;
+    final TagFolder? folder = TagFolder.sanitize(tag.name);
+    if (folder != null) return folder;
+  }
+  return TagFolder.sanitize(query.term);
+}
+
 /// Where a suggested tag came from, which is also why it is ranked where it is.
 enum TagCandidateOrigin {
   /// The listing being downloaded from is a search for this tag. Downloading a
@@ -78,6 +100,11 @@ class SuggestTagFolders {
   /// Creates the ranking. Stateless — it is a function with a name.
   const SuggestTagFolders();
 
+  /// How many counted tags the chooser offers. The search's own tag and the
+  /// existing folders are on top of this — neither is a guess about the
+  /// selection, so neither competes for the same space.
+  static const int maxSuggestions = 10;
+
   /// Ranks the tags [tags] reports for a selection of [selectionSize].
   ///
   /// The order, and the reasoning for each step:
@@ -96,13 +123,19 @@ class SuggestTagFolders {
   /// [existing] folders that nothing in the selection mentions are appended
   /// last: still reachable in one tap, never in front of a tag that actually
   /// describes what is being downloaded.
+  ///
+  /// The list is capped at [maxSuggestions] of the counted ones. A booru
+  /// selection carries *hundreds* of distinct tags between it — artist, series,
+  /// character, colour, every visual attribute — and a chooser that offered all
+  /// of them would be a wall of chips to read instead of an answer. The ones
+  /// dropped are, by construction, the ones fewest of the selection share.
   List<TagCandidate> call({
     required Map<String, List<WallpaperTag>> tags,
     required int selectionSize,
     required SearchQuery query,
     required Set<TagFolder> existing,
   }) {
-    final TagFolder? searched = _searchTag(query);
+    final TagFolder? searched = searchTagIn(query);
     // The search's tag is offered from the front, so it must not also appear
     // among the counted ones — the same tag twice reads as two folders.
     final Map<TagFolder, int> shares = _shares(tags)..remove(searched);
@@ -117,28 +150,13 @@ class SuggestTagFolders {
     return <TagCandidate>[
       if (searched != null)
         TagCandidate(tag: searched, origin: TagCandidateOrigin.search),
-      ...fromSelection,
+      ...fromSelection.take(maxSuggestions),
       for (final TagFolder folder in _unmentioned(existing, shares, searched))
         TagCandidate(
           tag: folder,
           origin: TagCandidateOrigin.existingFolder,
         ),
     ];
-  }
-
-  /// The tag this listing searches for, or null when it is not a tag search.
-  ///
-  /// An **included** tag only: `-"anime"` says these wallpapers are *not* that,
-  /// and filing them under it would be exactly backwards. A bare search term
-  /// counts when it survives sanitizing as one — typing `cyberpunk` into the
-  /// box and downloading the results means the same thing as the chip does.
-  TagFolder? _searchTag(SearchQuery query) {
-    for (final SearchTag tag in query.tags) {
-      if (tag.sense != TagSense.include) continue;
-      final TagFolder? folder = TagFolder.sanitize(tag.name);
-      if (folder != null) return folder;
-    }
-    return TagFolder.sanitize(query.term);
   }
 
   /// How many wallpapers carry each tag, once names are folder-legal.

@@ -198,9 +198,16 @@ _resolveBatchDestination(
   // exist there. A batch has no single tier until the user taps one, so the
   // private library's remembered tag and its folder names are deliberately not
   // reachable from here — this chooser opens over the ungated browse wall.
-  final TagFolder? suggested = ref
+  // The tag the listing is already searching for beats the remembered one:
+  // "I am looking at Leo (artist) and I want these filed under it" is a
+  // statement about *this* selection, while a remembered tag is only an ambient
+  // default. It is also free, so it is offered the instant the chooser opens
+  // rather than after a lookup.
+  final TagFolder? remembered = ref
       .read(rememberedDownloadTagProvider.notifier)
       .offeredFor(StorageTier.sharedGallery);
+  final TagFolder? searched = searchTagIn(ref.read(browseQueryProvider));
+  final TagFolder? suggested = searched ?? remembered;
   final List<TagFolder> known = await ref.read(
     knownDownloadTagsProvider.future,
   );
@@ -221,6 +228,7 @@ _resolveBatchDestination(
         count: wallpapers.length,
         pinnedTier: pin,
         suggestedTag: suggested,
+        tagIsRemembered: searched == null && remembered != null,
         knownTags: known,
         tagSuggestions: suggestions,
       );

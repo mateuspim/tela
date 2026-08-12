@@ -48,6 +48,7 @@ Future<DownloadDestinationChoice?> chooseDownloadDestination(
   DownloadDestinationStreak? streak,
   StorageTier? pinnedTier,
   TagFolder? suggestedTag,
+  bool tagIsRemembered = false,
   List<TagFolder> knownTags = const <TagFolder>[],
   Future<List<TagCandidate>>? tagSuggestions,
 }) {
@@ -59,6 +60,7 @@ Future<DownloadDestinationChoice?> chooseDownloadDestination(
     streak: streak,
     pinnedTier: pinnedTier,
     suggestedTag: suggestedTag,
+    tagIsRemembered: tagIsRemembered,
     knownTags: knownTags,
     tagSuggestions: tagSuggestions,
     // One wallpaper needs no share counts: "1/1" on every chip says nothing.
@@ -84,6 +86,7 @@ Future<DownloadDestinationChoice?> chooseBatchDownloadDestination(
   required int count,
   StorageTier? pinnedTier,
   TagFolder? suggestedTag,
+  bool tagIsRemembered = false,
   List<TagFolder> knownTags = const <TagFolder>[],
   Future<List<TagCandidate>>? tagSuggestions,
 }) {
@@ -95,6 +98,7 @@ Future<DownloadDestinationChoice?> chooseBatchDownloadDestination(
     streak: null,
     pinnedTier: pinnedTier,
     suggestedTag: suggestedTag,
+    tagIsRemembered: tagIsRemembered,
     knownTags: knownTags,
     tagSuggestions: tagSuggestions,
     selectionSize: count,
@@ -119,6 +123,7 @@ Future<DownloadDestinationChoice?> _show(
   required DownloadDestinationStreak? streak,
   required StorageTier? pinnedTier,
   required TagFolder? suggestedTag,
+  required bool tagIsRemembered,
   required List<TagFolder> knownTags,
   required Future<List<TagCandidate>>? tagSuggestions,
   required int selectionSize,
@@ -136,6 +141,7 @@ Future<DownloadDestinationChoice?> _show(
       streak: streak,
       pinnedTier: pinnedTier,
       suggestedTag: suggestedTag,
+      tagIsRemembered: tagIsRemembered,
       knownTags: knownTags,
       tagSuggestions: tagSuggestions,
       selectionSize: selectionSize,
@@ -155,6 +161,7 @@ class _DestinationDialog extends StatefulWidget {
     required this.streak,
     required this.pinnedTier,
     required this.suggestedTag,
+    required this.tagIsRemembered,
     required this.knownTags,
     required this.tagSuggestions,
     required this.selectionSize,
@@ -183,6 +190,13 @@ class _DestinationDialog extends StatefulWidget {
   /// or null. Selected rather than merely listed, so the common case of filing
   /// a run of wallpapers under one tag is the same single tap it was before.
   final TagFolder? suggestedTag;
+
+  /// Whether [suggestedTag] is the tag already persisted, rather than one
+  /// derived from the search. Only the persisted one starts the switch on: a
+  /// tag borrowed from the listing is about *this* download, and turning it
+  /// into a standing default nobody asked for is the invisible-standing-order
+  /// problem the pin already caused once.
+  final bool tagIsRemembered;
 
   /// Tags that already exist as folders in the shared tiers, offered as chips.
   final List<TagFolder> knownTags;
@@ -217,7 +231,7 @@ class _DestinationDialogState extends State<_DestinationDialog> {
   /// Whether to keep offering [_tag] next time. On when the chooser opened
   /// already holding a tag, so the switch reads the state that is really in
   /// force rather than proposing to undo it.
-  late bool _keepTag = widget.suggestedTag != null;
+  late bool _keepTag = widget.suggestedTag != null && widget.tagIsRemembered;
 
   /// The ranked suggestions once they arrive, empty until then.
   List<TagCandidate> _suggestions = const <TagCandidate>[];

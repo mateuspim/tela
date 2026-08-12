@@ -236,4 +236,39 @@ void main() {
   test('nothing at all is an empty list, not a crash', () {
     expect(ranked(carried: const <String, List<WallpaperTag>>{}), isEmpty);
   });
+
+  group('how many are offered', () {
+    /// A booru selection carries hundreds of distinct tags between it — artist,
+    /// series, character, colour, every visual attribute. Offering all of them
+    /// is a wall of chips to read instead of an answer (owner, 2026-08-12:
+    /// "that brought a lot of tags, i only want to show fewer").
+    test('caps the counted tags at ten, keeping the most shared', () {
+      final List<TagFolder> offers = ranked(
+        carried: <String, List<WallpaperTag>>{
+          for (int i = 0; i < 30; i++) 'w$i': tags(<String>['tag$i', 'shared']),
+        },
+      );
+
+      // `shared` is itself one of the counted ten, not an extra on top.
+      expect(offers.length, SuggestTagFolders.maxSuggestions);
+      expect(offers.first, TagFolder('shared'));
+    });
+
+    /// The search's tag and the folders that exist are not guesses about the
+    /// selection, so they do not compete with the counted ones for that space.
+    test('the search tag and existing folders sit outside the cap', () {
+      final List<TagCandidate> offers = suggest(
+        tags: <String, List<WallpaperTag>>{
+          for (int i = 0; i < 30; i++) 'w$i': tags(<String>['tag$i']),
+        },
+        selectionSize: 30,
+        query: const SearchQuery(tags: <SearchTag>[SearchTag('cyberpunk')]),
+        existing: <TagFolder>{TagFolder('archive')},
+      );
+
+      expect(offers.first.tag, TagFolder('cyberpunk'));
+      expect(offers.last.tag, TagFolder('archive'));
+      expect(offers.length, SuggestTagFolders.maxSuggestions + 2);
+    });
+  });
 }
