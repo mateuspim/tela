@@ -3,10 +3,15 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/image_store.dart';
+import 'package:tela/domain/ports/wallpaper_source.dart';
+import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 
 /// The two listings of what tela has already put on this device.
@@ -78,6 +83,113 @@ final FutureProvider<Set<String>> downloadedKeysProvider =
         for (final DownloadRecord d in recent) d.wallpaper.ref.key,
       };
     });
+
+/// The tags that already exist as folders in the **shared** tiers.
+///
+/// Derived from the download history rather than kept in a table of its own,
+/// which is the same instinct that keeps the queue and the history from being
+/// two indexes of one fact: a tag is a directory, so the rows describing where
+/// files went are already the record of which directories there are. A tag with
+/// nothing in it simply stops being offered, and re-typing it re-creates it.
+///
+/// **The private library's tags are deliberately not in here.** This list is
+/// read by the download chooser, which opens over the ungated browse wall, and
+/// the private tier's folder names say roughly what its file paths say. The
+/// private library reads [privateTagsProvider] instead, behind its own lock.
+final FutureProvider<List<TagFolder>> knownDownloadTagsProvider =
+    FutureProvider<List<TagFolder>>((Ref ref) async {
+      final List<DownloadRecord> recent = await ref.watch(
+        recentDownloadsProvider.future,
+      );
+      return _sorted(<TagFolder>{
+        for (final DownloadRecord d in recent) ?d.tag,
+      });
+    });
+
+/// The tags inside the app-private tier, read off its directories.
+///
+/// Separate from [knownDownloadTagsProvider] on purpose — see its docstring.
+/// Only screens already behind the private library's lock may show these.
+final FutureProvider<List<TagFolder>> privateTagsProvider =
+    FutureProvider<List<TagFolder>>((Ref ref) async {
+      final List<PrivateImage> images = await ref.watch(
+        privateImagesProvider.future,
+      );
+      return _sorted(<TagFolder>{for (final PrivateImage i in images) ?i.tag});
+    });
+
+/// Tag folders in a stable, readable order — the order a chip row needs, and
+/// the one a test can assert without depending on how rows came back.
+List<TagFolder> _sorted(Set<TagFolder> tags) {
+  return tags.toList()..sort(
+    (TagFolder a, TagFolder b) =>
+        a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+  );
+}
+
+/// How many requests a tag lookup may spend on one selection.
+///
+/// Konachan answers a visible selection for nothing — its listing already
+/// carried the tags — so this only ever bites on Wallhaven, where each id is a
+/// `/w/{id}` against a 45/minute ceiling. Twenty-five covers the selections a
+/// person actually makes by hand and stops a two-hundred-wallpaper batch from
+/// spending two minutes and the whole rate allowance on *suggestions* before
+/// the downloads that need it have started.
+const int tagSuggestionBudget = 25;
+
+/// The tags a selection's own wallpapers carry, ranked best first.
+///
+/// Awaited by the chooser *after* it has opened, never before: the destination
+/// decision is the one the user came for, and on Wallhaven this can take
+/// seconds. Failures come back as an empty list rather than throwing — a
+/// suggestion is a convenience, and losing it must not cost the download.
+///
+/// Takes values rather than a `Ref`, unlike its neighbours here. Its callers
+/// hold a `WidgetRef` and a `Ref` between them and the two have no common
+/// supertype — the same wall [refreshDownloads] and [refreshDownloadsFrom]
+/// split over — and every one of them has already read [known] for the chooser
+/// anyway. It also leaves the whole thing testable without a container.
+Future<List<TagCandidate>> suggestedTagsFor({
+  required WallpaperSource source,
+  required SearchQuery query,
+  required List<TagFolder> known,
+  required List<Wallpaper> selection,
+}) async {
+  if (selection.isEmpty) return const <TagCandidate>[];
+  // **The listing already answered it.** Browsing a tag and downloading what is
+  // on screen means these wallpapers *are* that tag — there is nothing a lookup
+  // could add worth a request per wallpaper, and on Wallhaven a hundred-item
+  // selection would spend the whole budget rediscovering the word already in
+  // the search box. The free candidate wins and nothing is fetched.
+  if (searchTagIn(query) != null) {
+    return const SuggestTagFolders()(
+      tags: const <String, List<WallpaperTag>>{},
+      selectionSize: 0,
+      query: query,
+      existing: known.toSet(),
+    );
+  }
+  // Only this source's wallpapers: a mixed selection would otherwise ask
+  // Wallhaven about a Konachan id, spending a request to be told nothing.
+  final List<String> ids = <String>[
+    for (final Wallpaper w in selection)
+      if (w.source == source.id) w.id,
+  ];
+  final Map<String, List<WallpaperTag>> tags = await source.tagsFor(
+    ids,
+    budget: tagSuggestionBudget,
+  );
+  return const SuggestTagFolders()(
+    tags: tags,
+    // What was actually **examined**, not what was selected. The budget stops
+    // at `tagSuggestionBudget`, so a 30-wallpaper selection is read 25 deep —
+    // and reporting "25/30" would claim five of them lack a tag nobody looked
+    // for. The denominator has to be the sample, or the number is a lie.
+    selectionSize: tags.length,
+    query: query,
+    existing: known.toSet(),
+  );
+}
 
 /// Re-reads every listing a finished download may have changed.
 ///

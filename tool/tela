@@ -74,8 +74,19 @@ fi
 # --network host: lets the container's adb reach Waydroid, which listens on the
 # host's waydroid0 bridge rather than on anything Docker can see from a bridge net.
 # /dev/bus/usb: the physical-device path for adb.
+#
+# --memory: a ceiling the *kernel* enforces, because the JVM's own is advisory.
+# The toolchain runs on a 6 GB host with 2 GB of swap, and an unbounded Gradle
+# daemon expanding into that made the machine unresponsive rather than making
+# the build fail (owner, 2026-08-12) — a hung host reports nothing, so the
+# failure has to be contained where it can still be read. 4 GB leaves the host
+# its own working set; `android/gradle.properties` sizes the JVMs to fit inside
+# it, and if one ever escapes that, the OOM killer takes the container and the
+# build says so.
 DOCKER_ARGS=(
   --rm
+  --memory 4g
+  --memory-swap 5g
   --network host
   -v "$REPO_ROOT:/app"
   -v "tela-pub-cache:/home/dev/.pub-cache"
@@ -85,6 +96,16 @@ DOCKER_ARGS=(
   # of it — taking the stored API key and the database with it.
   -v "tela-android:/home/dev/.android"
   -w /app
+  # Pointed at the volumes explicitly, because `HOME` is not enough to get them
+  # used. The JVM takes `user.home` from the **passwd entry**, not from `$HOME`,
+  # so Gradle running as uid 0 (see HOST_IS_ROOT below) resolved its cache to
+  # `/root/.gradle` — outside every mount — and re-downloaded the whole 100 MB
+  # Gradle distribution on each run, unzipping it again for good measure. These
+  # two env vars are read ahead of any home directory by Gradle and pub
+  # respectively, so they hold for both users. Same paths under the `dev` user,
+  # so this changes nothing there.
+  -e GRADLE_USER_HOME=/home/dev/.gradle
+  -e PUB_CACHE=/home/dev/.pub-cache
 )
 
 # See HOST_IS_ROOT above: as root the image's `dev` user is the wrong one to be,

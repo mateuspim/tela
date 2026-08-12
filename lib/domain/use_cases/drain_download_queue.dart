@@ -86,7 +86,7 @@ class DrainDownloadQueue {
   /// honest thing left to do with it.
   Future<void> _settle(QueuedDownload item, DownloadSettled onSettled) async {
     try {
-      await _perform(item.wallpaper, tier: item.tier);
+      await _perform(item.wallpaper, tier: item.tier, tag: item.tag);
       await _queue.remove(item.ref);
     } on ImageStoreFailure catch (failure) {
       await _queue.markFailed(item.ref, failure.problem);

@@ -1,6 +1,8 @@
 package cc.pym.tela
 
+import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -96,5 +98,61 @@ class PrivateTierListingTest : ImageStorageTestCase() {
         val images = imagesFrom(storage.listPrivate())
 
         assertEquals("wallhaven-abc123", images.single()["ref"])
+    }
+
+    // --- tags, which are folders -------------------------------------------
+
+    /** A tag is a directory here, so a listing that did not descend would show a
+     *  fully tagged library as empty. */
+    @Test
+    fun `listPrivate finds tagged images and names their tag`() {
+        writePrivateImage("wallhaven-abc123.jpg", tag = "anime")
+
+        val image = imagesFrom(storage.listPrivate()).single()
+
+        assertEquals("wallhaven-abc123", image["ref"])
+        assertEquals("anime", image["tag"])
+    }
+
+    /** Absent, not null: a row that never mentions a tag reads back the same as
+     *  every row written before tags existed. */
+    @Test
+    fun `an untagged image carries no tag at all`() {
+        writePrivateImage("wallhaven-abc123.jpg")
+
+        assertFalse(imagesFrom(storage.listPrivate()).single().containsKey("tag"))
+    }
+
+    @Test
+    fun `tagged and untagged images list together, newest first`() {
+        writePrivateImage("wallhaven-older.jpg").setLastModified(1_000L)
+        writePrivateImage("wallhaven-newer.png", tag = "anime").setLastModified(9_000L)
+
+        val images = imagesFrom(storage.listPrivate())
+
+        assertEquals(listOf("wallhaven-newer", "wallhaven-older"), images.map { it["ref"] })
+    }
+
+    /**
+     * One level, because one level is all tela writes. Anything deeper is
+     * something a user put there, and flattening it into a tag would attribute
+     * their file to a folder it is not in.
+     */
+    @Test
+    fun `listPrivate does not descend past a tag folder`() {
+        val nested = File(privateDirectory("anime"), "deeper").apply { mkdirs() }
+        File(nested, "wallhaven-abc123.jpg").writeText("pixels")
+
+        assertTrue(imagesFrom(storage.listPrivate()).isEmpty())
+    }
+
+    /** A directory whose name could not be a tag is skipped whole — the same
+     *  judgement made about a file whose name tela did not write. */
+    @Test
+    fun `a folder that is not a valid tag is skipped`() {
+        val hidden = File(privateDirectory(), ".cache").apply { mkdirs() }
+        File(hidden, "wallhaven-abc123.jpg").writeText("pixels")
+
+        assertTrue(imagesFrom(storage.listPrivate()).isEmpty())
     }
 }

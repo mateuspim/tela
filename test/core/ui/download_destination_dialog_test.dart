@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/download_destination_choice.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -216,8 +217,13 @@ void main() {
         purity: Purity.sfw,
       );
 
+      // Scrolled to first: the tag row made the dialog taller than a phone's
+      // dialog area, so its content genuinely scrolls now. The destinations are
+      // still above the fold — it is the switches below them that move.
+      await tester.ensureVisible(find.text('Keep sending here'));
       await tester.tap(find.text('Keep sending here'));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Private library'));
       await tester.tap(find.text('Private library'));
       await tester.pumpAndSettle();
 

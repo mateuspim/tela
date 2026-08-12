@@ -6,6 +6,7 @@ import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/features/browse/browse_screen.dart';
@@ -137,7 +138,13 @@ abstract final class TelaRouter {
         GoRoute(
           path: TelaRoutes.downloadHistoryPath,
           name: TelaRoutes.downloadHistoryName,
-          builder: (_, _) => const DownloadHistoryScreen(),
+          // `?tag=` opens the shelf already narrowed, which is what a tag row
+          // in the Library hub promises. Read through `TagFolder.isLegal`
+          // rather than trusted: this arrives as a URL, and a name that could
+          // not be a folder cannot be one anything is filed under either.
+          builder: (_, GoRouterState state) => DownloadHistoryScreen(
+            tag: _tagFrom(state.uri.queryParameters['tag']),
+          ),
         ),
         GoRoute(
           path: TelaRoutes.blockedTagsPath,
@@ -163,4 +170,14 @@ abstract final class TelaRouter {
       ],
     );
   }
+}
+
+/// A tag named in a URL, or null when it is absent or not a legal folder name.
+///
+/// Read rather than trusted: this arrives as a query parameter, and a name that
+/// could not be a folder is not one anything is filed under either. Null simply
+/// opens the shelf unfiltered, which is where it opens anyway.
+TagFolder? _tagFrom(String? raw) {
+  if (raw == null || !TagFolder.isLegal(raw)) return null;
+  return TagFolder(raw);
 }

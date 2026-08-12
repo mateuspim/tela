@@ -94,6 +94,31 @@ class BackupExclusionTest {
         )
     }
 
+    /**
+     * Tag folders inherit the exclusion, and that is why tags needed no rule of
+     * their own.
+     *
+     * The `exclude` names a **directory**, so everything under it is excluded
+     * whatever it is called — which is the whole reason a tag could be a real
+     * folder in this tier without reopening the exposure closed on 2026-08-12.
+     * Asserted rather than assumed, because "the private library is organized
+     * now" and "the private library is still excluded" are two claims and only
+     * one of them is obvious from the XML.
+     */
+    @Test
+    fun `a tag folder inside the private tier is inside the excluded path`() {
+        val excluded = File(context.filesDir, exclusionsOf(R.xml.backup_rules)
+            .single { it.domain == "file" }
+            .path)
+
+        val tagged = TagFolders.privateDirectory(context, "anime")
+
+        assertTrue(
+            "a tagged private folder must sit under the excluded directory",
+            tagged!!.canonicalPath.startsWith(excluded.canonicalPath + File.separator),
+        )
+    }
+
     private fun privateLibraryExclusion(section: String): BackupExclusion =
         BackupExclusion(section, "file", "wallpapers")
 

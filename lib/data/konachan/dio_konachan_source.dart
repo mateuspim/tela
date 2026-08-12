@@ -71,6 +71,7 @@ class DioKonachanSource implements WallpaperSource {
         'https://$host/post.json',
         queryParameters: konachanQueryParameters(query),
       );
+      _rememberTags(response.data);
       return KonachanMapper.toPage(response.data, currentPage: query.page);
     } on DioException catch (error) {
       throw _toFailure(error);
@@ -110,6 +111,57 @@ class DioKonachanSource implements WallpaperSource {
       DioExceptionType.connectionError => true,
       _ => false,
     };
+  }
+
+  /// Tags read off the listings this adapter has already fetched.
+  ///
+  /// A booru's search response carries every post's tags, so the grid the user
+  /// is selecting from has *already* paid for them. Keeping them here is what
+  /// makes [tagsFor] free for a visible selection — the alternative is one
+  /// `id:{n}` search per wallpaper, since Konachan has no per-post endpoint at
+  /// all (PLAN §18.1).
+  ///
+  /// Bounded and oldest-first-evicted: an infinite scroll would otherwise grow
+  /// this without limit, and a tag map for a wallpaper the user scrolled past
+  /// twenty pages ago is not worth the memory. Dart's map preserves insertion
+  /// order, which is what makes the eviction a one-liner.
+  final Map<String, List<WallpaperTag>> _listingTags =
+      <String, List<WallpaperTag>>{};
+
+  /// Roughly ten pages of a booru listing. Comfortably more than any selection
+  /// the user can make on screen, and small enough to be uninteresting.
+  static const int _maxRememberedTags = 500;
+
+  void _rememberTags(Object? body) {
+    _listingTags.addAll(KonachanMapper.tagsIn(body));
+    while (_listingTags.length > _maxRememberedTags) {
+      _listingTags.remove(_listingTags.keys.first);
+    }
+  }
+
+  /// Answers from the listings already fetched, spending requests only on ids
+  /// never seen. See [WallpaperSource.tagsFor].
+  @override
+  Future<Map<String, List<WallpaperTag>>> tagsFor(
+    List<String> ids, {
+    required int budget,
+  }) async {
+    final Map<String, List<WallpaperTag>> found = <String, List<WallpaperTag>>{
+      for (final String id in ids)
+        if (_listingTags[id] case final List<WallpaperTag> tags) id: tags,
+    };
+    int spent = 0;
+    for (final String id in ids) {
+      if (found.containsKey(id) || spent >= budget) continue;
+      spent++;
+      try {
+        found[id] = (await wallpaperDetails(id)).tags;
+      } on SourceFailure {
+        // One unreachable wallpaper costs its own suggestions and no others.
+        continue;
+      }
+    }
+    return found;
   }
 
   @override

@@ -33,7 +33,7 @@ class TelaDatabase extends _$TelaDatabase {
   }
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   /// Adds tables to an existing database instead of recreating it.
   ///
@@ -44,7 +44,10 @@ class TelaDatabase extends _$TelaDatabase {
   /// *removes* rows, because those rows should never have been written. v6 is
   /// the other exception: it rewrites two tables, and every row they hold is
   /// kept. v7 is back to the ordinary shape — one new table, the download
-  /// queue, and nothing existing touched.
+  /// queue, and nothing existing touched. v8 is the same shape again, one step
+  /// smaller: a nullable `tag` column on the two download tables. Every
+  /// existing row reads back untagged, which is what it is — the files were
+  /// written before tags existed and sit in their tier's root.
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
@@ -56,6 +59,26 @@ class TelaDatabase extends _$TelaDatabase {
         if (from < 5) await purgePrivateDownloads();
         if (from < 6) await _qualifyWallpapersBySource(m);
         if (from < 7) await m.createTable(downloadQueueEntries);
+        // Only for a table this upgrade did not already build from today's
+        // definition — and "build" includes **rewriting**. Both `createTable`
+        // and v6's `alterTable` emit the current schema, tag column included,
+        // so a database coming through either of those steps arrives at v8
+        // already holding the column, and `ADD COLUMN` would fail the whole
+        // migration with "duplicate column name".
+        //
+        // The cutoffs are therefore the last version that *touched* each table,
+        // not the version that introduced it: downloads were rewritten at v6
+        // (not merely created at v3), and the queue was created at v7. Any
+        // later column-add owes the same reasoning, against whatever the
+        // migrations do by then.
+        if (from < 8) {
+          if (from >= 6) {
+            await m.addColumn(downloadedWallpapers, downloadedWallpapers.tag);
+          }
+          if (from >= 7) {
+            await m.addColumn(downloadQueueEntries, downloadQueueEntries.tag);
+          }
+        }
       },
     );
   }
@@ -141,6 +164,24 @@ class TelaDatabase extends _$TelaDatabase {
   /// Writes one download, replacing any earlier row for the same wallpaper.
   Future<void> putDownload(DownloadedWallpapersCompanion row) {
     return into(downloadedWallpapers).insertOnConflictUpdate(row);
+  }
+
+  /// Re-points [ref]'s row at a file that has moved into another tag folder.
+  ///
+  /// Location and tag are written **together**, in one statement, because they
+  /// are one fact: a tag is a directory, so a row holding the new tag beside
+  /// the old path describes a file that is not there. Nothing else on the row
+  /// changes — the wallpaper did not change, only where it is filed.
+  Future<void> retagDownload(WallpaperRef ref, String location, String? tag) {
+    final UpdateStatement<$DownloadedWallpapersTable, DownloadRow> statement =
+        update(downloadedWallpapers)
+          ..where(($DownloadedWallpapersTable row) => _matches(row, ref));
+    return statement.write(
+      DownloadedWallpapersCompanion(
+        location: Value<String>(location),
+        tag: Value<String?>(tag),
+      ),
+    );
   }
 
   /// Drops the download row for [ref]. The file it points at is not touched.

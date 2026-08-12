@@ -8,6 +8,7 @@ import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
 
@@ -219,7 +220,11 @@ class _ScriptedDownload {
   final List<Object?> _responses;
   int calls = 0;
 
-  Future<void> call(Wallpaper wallpaper, {StorageTier? tier}) async {
+  Future<void> call(
+    Wallpaper wallpaper, {
+    StorageTier? tier,
+    TagFolder? tag,
+  }) async {
     final Object? response = _responses[calls];
     calls++;
     if (response is ImageStoreFailure) throw response;

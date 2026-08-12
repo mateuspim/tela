@@ -1233,6 +1233,15 @@ class $DownloadedWallpapersTable extends DownloadedWallpapers
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _tagMeta = const VerificationMeta('tag');
+  @override
+  late final GeneratedColumn<String> tag = GeneratedColumn<String>(
+    'tag',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     source,
@@ -1251,6 +1260,7 @@ class $DownloadedWallpapersTable extends DownloadedWallpapers
     tier,
     location,
     downloadedAt,
+    tag,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1407,6 +1417,12 @@ class $DownloadedWallpapersTable extends DownloadedWallpapers
     } else if (isInserting) {
       context.missing(_downloadedAtMeta);
     }
+    if (data.containsKey('tag')) {
+      context.handle(
+        _tagMeta,
+        tag.isAcceptableOrUnknown(data['tag']!, _tagMeta),
+      );
+    }
     return context;
   }
 
@@ -1480,6 +1496,10 @@ class $DownloadedWallpapersTable extends DownloadedWallpapers
         DriftSqlType.dateTime,
         data['${effectivePrefix}downloaded_at'],
       )!,
+      tag: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tag'],
+      ),
     );
   }
 
@@ -1546,6 +1566,13 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
 
   /// When it was downloaded. Orders the history, newest first.
   final DateTime downloadedAt;
+
+  /// The tag folder the file is filed under, or null for the tier's root.
+  ///
+  /// A tag in tela is a real directory, so this is a record of *where the file
+  /// is*, not a label attached to the wallpaper — which is why a retag has to
+  /// write this and [location] together.
+  final String? tag;
   const DownloadRow({
     required this.source,
     required this.id,
@@ -1563,6 +1590,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
     required this.tier,
     required this.location,
     required this.downloadedAt,
+    this.tag,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1583,6 +1611,9 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
     map['tier'] = Variable<String>(tier);
     map['location'] = Variable<String>(location);
     map['downloaded_at'] = Variable<DateTime>(downloadedAt);
+    if (!nullToAbsent || tag != null) {
+      map['tag'] = Variable<String>(tag);
+    }
     return map;
   }
 
@@ -1604,6 +1635,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
       tier: Value(tier),
       location: Value(location),
       downloadedAt: Value(downloadedAt),
+      tag: tag == null && nullToAbsent ? const Value.absent() : Value(tag),
     );
   }
 
@@ -1629,6 +1661,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
       tier: serializer.fromJson<String>(json['tier']),
       location: serializer.fromJson<String>(json['location']),
       downloadedAt: serializer.fromJson<DateTime>(json['downloadedAt']),
+      tag: serializer.fromJson<String?>(json['tag']),
     );
   }
   @override
@@ -1651,6 +1684,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
       'tier': serializer.toJson<String>(tier),
       'location': serializer.toJson<String>(location),
       'downloadedAt': serializer.toJson<DateTime>(downloadedAt),
+      'tag': serializer.toJson<String?>(tag),
     };
   }
 
@@ -1671,6 +1705,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
     String? tier,
     String? location,
     DateTime? downloadedAt,
+    Value<String?> tag = const Value.absent(),
   }) => DownloadRow(
     source: source ?? this.source,
     id: id ?? this.id,
@@ -1688,6 +1723,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
     tier: tier ?? this.tier,
     location: location ?? this.location,
     downloadedAt: downloadedAt ?? this.downloadedAt,
+    tag: tag.present ? tag.value : this.tag,
   );
   DownloadRow copyWithCompanion(DownloadedWallpapersCompanion data) {
     return DownloadRow(
@@ -1719,6 +1755,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
       downloadedAt: data.downloadedAt.present
           ? data.downloadedAt.value
           : this.downloadedAt,
+      tag: data.tag.present ? data.tag.value : this.tag,
     );
   }
 
@@ -1740,7 +1777,8 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
           ..write('colors: $colors, ')
           ..write('tier: $tier, ')
           ..write('location: $location, ')
-          ..write('downloadedAt: $downloadedAt')
+          ..write('downloadedAt: $downloadedAt, ')
+          ..write('tag: $tag')
           ..write(')'))
         .toString();
   }
@@ -1763,6 +1801,7 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
     tier,
     location,
     downloadedAt,
+    tag,
   );
   @override
   bool operator ==(Object other) =>
@@ -1783,7 +1822,8 @@ class DownloadRow extends DataClass implements Insertable<DownloadRow> {
           other.colors == this.colors &&
           other.tier == this.tier &&
           other.location == this.location &&
-          other.downloadedAt == this.downloadedAt);
+          other.downloadedAt == this.downloadedAt &&
+          other.tag == this.tag);
 }
 
 class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
@@ -1803,6 +1843,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
   final Value<String> tier;
   final Value<String> location;
   final Value<DateTime> downloadedAt;
+  final Value<String?> tag;
   final Value<int> rowid;
   const DownloadedWallpapersCompanion({
     this.source = const Value.absent(),
@@ -1821,6 +1862,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
     this.tier = const Value.absent(),
     this.location = const Value.absent(),
     this.downloadedAt = const Value.absent(),
+    this.tag = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   DownloadedWallpapersCompanion.insert({
@@ -1840,6 +1882,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
     required String tier,
     required String location,
     required DateTime downloadedAt,
+    this.tag = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : source = Value(source),
        id = Value(id),
@@ -1874,6 +1917,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
     Expression<String>? tier,
     Expression<String>? location,
     Expression<DateTime>? downloadedAt,
+    Expression<String>? tag,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1893,6 +1937,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
       if (tier != null) 'tier': tier,
       if (location != null) 'location': location,
       if (downloadedAt != null) 'downloaded_at': downloadedAt,
+      if (tag != null) 'tag': tag,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1914,6 +1959,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
     Value<String>? tier,
     Value<String>? location,
     Value<DateTime>? downloadedAt,
+    Value<String?>? tag,
     Value<int>? rowid,
   }) {
     return DownloadedWallpapersCompanion(
@@ -1933,6 +1979,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
       tier: tier ?? this.tier,
       location: location ?? this.location,
       downloadedAt: downloadedAt ?? this.downloadedAt,
+      tag: tag ?? this.tag,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1988,6 +2035,9 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
     if (downloadedAt.present) {
       map['downloaded_at'] = Variable<DateTime>(downloadedAt.value);
     }
+    if (tag.present) {
+      map['tag'] = Variable<String>(tag.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2013,6 +2063,7 @@ class DownloadedWallpapersCompanion extends UpdateCompanion<DownloadRow> {
           ..write('tier: $tier, ')
           ..write('location: $location, ')
           ..write('downloadedAt: $downloadedAt, ')
+          ..write('tag: $tag, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2197,6 +2248,15 @@ class $DownloadQueueEntriesTable extends DownloadQueueEntries
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _tagMeta = const VerificationMeta('tag');
+  @override
+  late final GeneratedColumn<String> tag = GeneratedColumn<String>(
+    'tag',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _queuedAtMeta = const VerificationMeta(
     'queuedAt',
   );
@@ -2227,6 +2287,7 @@ class $DownloadQueueEntriesTable extends DownloadQueueEntries
     state,
     attempts,
     failure,
+    tag,
     queuedAt,
   ];
   @override
@@ -2383,6 +2444,12 @@ class $DownloadQueueEntriesTable extends DownloadQueueEntries
         failure.isAcceptableOrUnknown(data['failure']!, _failureMeta),
       );
     }
+    if (data.containsKey('tag')) {
+      context.handle(
+        _tagMeta,
+        tag.isAcceptableOrUnknown(data['tag']!, _tagMeta),
+      );
+    }
     if (data.containsKey('queued_at')) {
       context.handle(
         _queuedAtMeta,
@@ -2468,6 +2535,10 @@ class $DownloadQueueEntriesTable extends DownloadQueueEntries
         DriftSqlType.string,
         data['${effectivePrefix}failure'],
       ),
+      tag: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tag'],
+      ),
       queuedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}queued_at'],
@@ -2548,6 +2619,23 @@ class QueueRow extends DataClass implements Insertable<QueueRow> {
   /// failed. Never a URL or a path — the same rule `ImageStoreFailure` follows.
   final String? failure;
 
+  /// The tag folder this download will land in, or null for none.
+  ///
+  /// **This one is worth reading twice.** Unlike [DownloadedWallpapers], this
+  /// table holds app-private entries, so a tag the user chose for a *private*
+  /// folder sits here — in a database Android's Auto Backup carries off the
+  /// device — for as long as the entry is queued. That is a real, if small,
+  /// widening of what this table's docstring already records: it holds a queued
+  /// private wallpaper's URL and purity, never its file, and only until it
+  /// lands. A tag name is one more user-chosen string in the same window.
+  ///
+  /// It is written down rather than solved because the alternatives are worse:
+  /// resolving the tag at drain time would file the download under whatever was
+  /// last chosen rather than what was chosen for it, and dropping the tag for
+  /// private entries would silently ignore the user's answer for exactly the
+  /// tier where organising matters most.
+  final String? tag;
+
   /// When it was queued. Orders the queue, oldest first — a queue is a line.
   final DateTime queuedAt;
   const QueueRow({
@@ -2568,6 +2656,7 @@ class QueueRow extends DataClass implements Insertable<QueueRow> {
     required this.state,
     required this.attempts,
     this.failure,
+    this.tag,
     required this.queuedAt,
   });
   @override
@@ -2594,6 +2683,9 @@ class QueueRow extends DataClass implements Insertable<QueueRow> {
     if (!nullToAbsent || failure != null) {
       map['failure'] = Variable<String>(failure);
     }
+    if (!nullToAbsent || tag != null) {
+      map['tag'] = Variable<String>(tag);
+    }
     map['queued_at'] = Variable<DateTime>(queuedAt);
     return map;
   }
@@ -2619,6 +2711,7 @@ class QueueRow extends DataClass implements Insertable<QueueRow> {
       failure: failure == null && nullToAbsent
           ? const Value.absent()
           : Value(failure),
+      tag: tag == null && nullToAbsent ? const Value.absent() : Value(tag),
       queuedAt: Value(queuedAt),
     );
   }
@@ -2646,6 +2739,7 @@ class QueueRow extends DataClass implements Insertable<QueueRow> {
       state: serializer.fromJson<String>(json['state']),
       attempts: serializer.fromJson<int>(json['attempts']),
       failure: serializer.fromJson<String?>(json['failure']),
+      tag: serializer.fromJson<String?>(json['tag']),
       queuedAt: serializer.fromJson<DateTime>(json['queuedAt']),
     );
   }
@@ -2670,6 +2764,7 @@ class QueueRow extends DataClass implements Insertable<QueueRow> {
       'state': serializer.toJson<String>(state),
       'attempts': serializer.toJson<int>(attempts),
       'failure': serializer.toJson<String?>(failure),
+      'tag': serializer.toJson<String?>(tag),
       'queuedAt': serializer.toJson<DateTime>(queuedAt),
     };
   }
@@ -2692,6 +2787,7 @@ class QueueRow extends DataClass implements Insertable<QueueRow> {
     String? state,
     int? attempts,
     Value<String?> failure = const Value.absent(),
+    Value<String?> tag = const Value.absent(),
     DateTime? queuedAt,
   }) => QueueRow(
     source: source ?? this.source,
@@ -2711,6 +2807,7 @@ class QueueRow extends DataClass implements Insertable<QueueRow> {
     state: state ?? this.state,
     attempts: attempts ?? this.attempts,
     failure: failure.present ? failure.value : this.failure,
+    tag: tag.present ? tag.value : this.tag,
     queuedAt: queuedAt ?? this.queuedAt,
   );
   QueueRow copyWithCompanion(DownloadQueueEntriesCompanion data) {
@@ -2742,6 +2839,7 @@ class QueueRow extends DataClass implements Insertable<QueueRow> {
       state: data.state.present ? data.state.value : this.state,
       attempts: data.attempts.present ? data.attempts.value : this.attempts,
       failure: data.failure.present ? data.failure.value : this.failure,
+      tag: data.tag.present ? data.tag.value : this.tag,
       queuedAt: data.queuedAt.present ? data.queuedAt.value : this.queuedAt,
     );
   }
@@ -2766,6 +2864,7 @@ class QueueRow extends DataClass implements Insertable<QueueRow> {
           ..write('state: $state, ')
           ..write('attempts: $attempts, ')
           ..write('failure: $failure, ')
+          ..write('tag: $tag, ')
           ..write('queuedAt: $queuedAt')
           ..write(')'))
         .toString();
@@ -2790,6 +2889,7 @@ class QueueRow extends DataClass implements Insertable<QueueRow> {
     state,
     attempts,
     failure,
+    tag,
     queuedAt,
   );
   @override
@@ -2813,6 +2913,7 @@ class QueueRow extends DataClass implements Insertable<QueueRow> {
           other.state == this.state &&
           other.attempts == this.attempts &&
           other.failure == this.failure &&
+          other.tag == this.tag &&
           other.queuedAt == this.queuedAt);
 }
 
@@ -2834,6 +2935,7 @@ class DownloadQueueEntriesCompanion extends UpdateCompanion<QueueRow> {
   final Value<String> state;
   final Value<int> attempts;
   final Value<String?> failure;
+  final Value<String?> tag;
   final Value<DateTime> queuedAt;
   final Value<int> rowid;
   const DownloadQueueEntriesCompanion({
@@ -2854,6 +2956,7 @@ class DownloadQueueEntriesCompanion extends UpdateCompanion<QueueRow> {
     this.state = const Value.absent(),
     this.attempts = const Value.absent(),
     this.failure = const Value.absent(),
+    this.tag = const Value.absent(),
     this.queuedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -2875,6 +2978,7 @@ class DownloadQueueEntriesCompanion extends UpdateCompanion<QueueRow> {
     required String state,
     this.attempts = const Value.absent(),
     this.failure = const Value.absent(),
+    this.tag = const Value.absent(),
     required DateTime queuedAt,
     this.rowid = const Value.absent(),
   }) : source = Value(source),
@@ -2910,6 +3014,7 @@ class DownloadQueueEntriesCompanion extends UpdateCompanion<QueueRow> {
     Expression<String>? state,
     Expression<int>? attempts,
     Expression<String>? failure,
+    Expression<String>? tag,
     Expression<DateTime>? queuedAt,
     Expression<int>? rowid,
   }) {
@@ -2931,6 +3036,7 @@ class DownloadQueueEntriesCompanion extends UpdateCompanion<QueueRow> {
       if (state != null) 'state': state,
       if (attempts != null) 'attempts': attempts,
       if (failure != null) 'failure': failure,
+      if (tag != null) 'tag': tag,
       if (queuedAt != null) 'queued_at': queuedAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -2954,6 +3060,7 @@ class DownloadQueueEntriesCompanion extends UpdateCompanion<QueueRow> {
     Value<String>? state,
     Value<int>? attempts,
     Value<String?>? failure,
+    Value<String?>? tag,
     Value<DateTime>? queuedAt,
     Value<int>? rowid,
   }) {
@@ -2975,6 +3082,7 @@ class DownloadQueueEntriesCompanion extends UpdateCompanion<QueueRow> {
       state: state ?? this.state,
       attempts: attempts ?? this.attempts,
       failure: failure ?? this.failure,
+      tag: tag ?? this.tag,
       queuedAt: queuedAt ?? this.queuedAt,
       rowid: rowid ?? this.rowid,
     );
@@ -3034,6 +3142,9 @@ class DownloadQueueEntriesCompanion extends UpdateCompanion<QueueRow> {
     if (failure.present) {
       map['failure'] = Variable<String>(failure.value);
     }
+    if (tag.present) {
+      map['tag'] = Variable<String>(tag.value);
+    }
     if (queuedAt.present) {
       map['queued_at'] = Variable<DateTime>(queuedAt.value);
     }
@@ -3063,6 +3174,7 @@ class DownloadQueueEntriesCompanion extends UpdateCompanion<QueueRow> {
           ..write('state: $state, ')
           ..write('attempts: $attempts, ')
           ..write('failure: $failure, ')
+          ..write('tag: $tag, ')
           ..write('queuedAt: $queuedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -3896,6 +4008,7 @@ typedef $$DownloadedWallpapersTableCreateCompanionBuilder =
       required String tier,
       required String location,
       required DateTime downloadedAt,
+      Value<String?> tag,
       Value<int> rowid,
     });
 typedef $$DownloadedWallpapersTableUpdateCompanionBuilder =
@@ -3916,6 +4029,7 @@ typedef $$DownloadedWallpapersTableUpdateCompanionBuilder =
       Value<String> tier,
       Value<String> location,
       Value<DateTime> downloadedAt,
+      Value<String?> tag,
       Value<int> rowid,
     });
 
@@ -4005,6 +4119,11 @@ class $$DownloadedWallpapersTableFilterComposer
 
   ColumnFilters<DateTime> get downloadedAt => $composableBuilder(
     column: $table.downloadedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tag => $composableBuilder(
+    column: $table.tag,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -4097,6 +4216,11 @@ class $$DownloadedWallpapersTableOrderingComposer
     column: $table.downloadedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get tag => $composableBuilder(
+    column: $table.tag,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$DownloadedWallpapersTableAnnotationComposer
@@ -4167,6 +4291,9 @@ class $$DownloadedWallpapersTableAnnotationComposer
     column: $table.downloadedAt,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get tag =>
+      $composableBuilder(column: $table.tag, builder: (column) => column);
 }
 
 class $$DownloadedWallpapersTableTableManager
@@ -4228,6 +4355,7 @@ class $$DownloadedWallpapersTableTableManager
                 Value<String> tier = const Value.absent(),
                 Value<String> location = const Value.absent(),
                 Value<DateTime> downloadedAt = const Value.absent(),
+                Value<String?> tag = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DownloadedWallpapersCompanion(
                 source: source,
@@ -4246,6 +4374,7 @@ class $$DownloadedWallpapersTableTableManager
                 tier: tier,
                 location: location,
                 downloadedAt: downloadedAt,
+                tag: tag,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -4266,6 +4395,7 @@ class $$DownloadedWallpapersTableTableManager
                 required String tier,
                 required String location,
                 required DateTime downloadedAt,
+                Value<String?> tag = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DownloadedWallpapersCompanion.insert(
                 source: source,
@@ -4284,6 +4414,7 @@ class $$DownloadedWallpapersTableTableManager
                 tier: tier,
                 location: location,
                 downloadedAt: downloadedAt,
+                tag: tag,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -4330,6 +4461,7 @@ typedef $$DownloadQueueEntriesTableCreateCompanionBuilder =
       required String state,
       Value<int> attempts,
       Value<String?> failure,
+      Value<String?> tag,
       required DateTime queuedAt,
       Value<int> rowid,
     });
@@ -4352,6 +4484,7 @@ typedef $$DownloadQueueEntriesTableUpdateCompanionBuilder =
       Value<String> state,
       Value<int> attempts,
       Value<String?> failure,
+      Value<String?> tag,
       Value<DateTime> queuedAt,
       Value<int> rowid,
     });
@@ -4447,6 +4580,11 @@ class $$DownloadQueueEntriesTableFilterComposer
 
   ColumnFilters<String> get failure => $composableBuilder(
     column: $table.failure,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tag => $composableBuilder(
+    column: $table.tag,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4550,6 +4688,11 @@ class $$DownloadQueueEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get tag => $composableBuilder(
+    column: $table.tag,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get queuedAt => $composableBuilder(
     column: $table.queuedAt,
     builder: (column) => ColumnOrderings(column),
@@ -4626,6 +4769,9 @@ class $$DownloadQueueEntriesTableAnnotationComposer
   GeneratedColumn<String> get failure =>
       $composableBuilder(column: $table.failure, builder: (column) => column);
 
+  GeneratedColumn<String> get tag =>
+      $composableBuilder(column: $table.tag, builder: (column) => column);
+
   GeneratedColumn<DateTime> get queuedAt =>
       $composableBuilder(column: $table.queuedAt, builder: (column) => column);
 }
@@ -4690,6 +4836,7 @@ class $$DownloadQueueEntriesTableTableManager
                 Value<String> state = const Value.absent(),
                 Value<int> attempts = const Value.absent(),
                 Value<String?> failure = const Value.absent(),
+                Value<String?> tag = const Value.absent(),
                 Value<DateTime> queuedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => DownloadQueueEntriesCompanion(
@@ -4710,6 +4857,7 @@ class $$DownloadQueueEntriesTableTableManager
                 state: state,
                 attempts: attempts,
                 failure: failure,
+                tag: tag,
                 queuedAt: queuedAt,
                 rowid: rowid,
               ),
@@ -4732,6 +4880,7 @@ class $$DownloadQueueEntriesTableTableManager
                 required String state,
                 Value<int> attempts = const Value.absent(),
                 Value<String?> failure = const Value.absent(),
+                Value<String?> tag = const Value.absent(),
                 required DateTime queuedAt,
                 Value<int> rowid = const Value.absent(),
               }) => DownloadQueueEntriesCompanion.insert(
@@ -4752,6 +4901,7 @@ class $$DownloadQueueEntriesTableTableManager
                 state: state,
                 attempts: attempts,
                 failure: failure,
+                tag: tag,
                 queuedAt: queuedAt,
                 rowid: rowid,
               ),

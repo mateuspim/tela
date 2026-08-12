@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/move_to_private_action.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/retag_downloads_action.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
@@ -13,6 +14,7 @@ import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/selection_shelf.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
+import 'package:tela/core/ui/tag_filter_bar.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/core/ui/wallpaper_grid_skeleton.dart';
@@ -23,6 +25,7 @@ import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/features/private_library/private_secure_access.dart';
 
 /// The app-private tier, which nothing but tela can open.
@@ -57,6 +60,10 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     super.dispose();
   }
 
+  /// Which tag the grid is narrowed to. Local state: it is a view of what is
+  /// on screen, not something another screen has any business reading.
+  TagFilter _tagFilter = const TagFilter.all();
+
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -81,13 +88,52 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     return ref
         .watch(privateImagesProvider)
         .when(
-          data: (List<PrivateImage> stored) => _grid(context, l10n, stored),
+          data: (List<PrivateImage> stored) => _filtered(context, l10n, stored),
           loading: () => const WallpaperGridSkeleton(),
           error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
             icon: Icons.error_outline,
             message: l10n.privateLibraryUnavailable,
           ),
         );
+  }
+
+  /// The grid with its tag filter above it.
+  ///
+  /// Only reachable past [isUnlocked], which is the whole point: these chips
+  /// are the private library's folder names, and they are as disclosing as its
+  /// file paths. Nothing outside this screen is ever handed them — the download
+  /// chooser deliberately offers the shared tiers' tags only.
+  Widget _filtered(
+    BuildContext context,
+    AppLocalizations l10n,
+    List<PrivateImage> stored,
+  ) {
+    final List<PrivateImage> shown = stored
+        .where((PrivateImage i) => _tagFilter.matches(i.tag))
+        .toList();
+    return Column(
+      children: <Widget>[
+        TagFilterBar(
+          tags: _tagsIn(stored),
+          selected: _tagFilter,
+          hasUntagged: stored.any((PrivateImage i) => i.tag == null),
+          onChanged: (TagFilter filter) => setState(() => _tagFilter = filter),
+        ),
+        Expanded(child: _grid(context, l10n, shown)),
+      ],
+    );
+  }
+
+  /// The tags this library holds, alphabetically — read off the files, since
+  /// this tier keeps no rows to read them from.
+  List<TagFolder> _tagsIn(List<PrivateImage> stored) {
+    final Set<TagFolder> tags = <TagFolder>{
+      for (final PrivateImage image in stored) ?image.tag,
+    };
+    return tags.toList()..sort(
+      (TagFolder a, TagFolder b) =>
+          a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
   }
 
   /// What a failed or dismissed prompt leaves behind: a way to try again, and
@@ -121,6 +167,14 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
       // is a Wallhaven-wallpaper idea the private tier deliberately has no part
       // in — a favorite would be a second, unlocked index of what is in here.
       actions: <SelectionAction>[
+        // Refiling never leaves the tier, so unlike the two below it discloses
+        // nothing and takes nothing away — it is the safe one, and it goes
+        // first.
+        SelectionAction(
+          icon: Icons.folder_outlined,
+          label: l10n.retagAction,
+          run: _retagSelected,
+        ),
         SelectionAction(
           icon: Icons.lock_open_outlined,
           label: l10n.moveOutOfPrivateAction,
@@ -206,6 +260,17 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   /// The one batch besides deleting that means anything here, and the only way
   /// back out of this tier: a private image can never be re-downloaded from the
   /// grid, because the grid holds no wallpaper to re-download — just a ref and
+  /// Refiles the ticked images under a tag the user names.
+  ///
+  /// Stays inside the private tier, so there is nothing to confirm and nothing
+  /// disclosed — the naming dialog is the whole interaction.
+  Future<bool> _retagSelected(List<String> keys) async {
+    if (keys.isEmpty) return false;
+    final List<PrivateImage> selected = _imagesFor(keys);
+    if (selected.isEmpty || !mounted) return false;
+    return retagPrivateImages(context: context, ref: ref, images: selected);
+  }
+
   /// a file. `confirmAndMoveOutOfPrivate` owns the confirmation, which has to
   /// say two surprising things (never to Photos, and tela stops tracking it),
   /// and the folder grant that tier needs.

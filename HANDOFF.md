@@ -2,7 +2,76 @@
 
 Updated: 2026-08-12
 
-> **START HERE — the private library is out of the cloud backup** (2026-08-12).
+> **START HERE — a tag is a folder, and the wallpapers suggest it** (2026-08-12,
+> `feat/download-tag-folders`, five slices). A download can now be filed under a
+> tag, and that tag is a **real directory** in whichever tier it lands in:
+> `Pictures/tela/anime`, the files tier's `tela/anime`, `wallpapers/anime` in
+> the private library. Photos shows it as an album; a file manager and the
+> desktop-sync path see real folders. Select ten wallpapers and the chooser
+> already offers the tags they share, best first; download a whole `+"cyberpunk"`
+> listing and `cyberpunk` is pre-selected. Both suites green: analyze clean,
+> Dart **1283** (from 1220), Kotlin **130** (from 95).
+>
+> **A folder rather than a table is what lets the private library be organised
+> at all.** That tier writes no history row on purpose, so a tag table for it
+> would rebuild the ungated, backed-up index the tier exists to prevent — the
+> thing the v5 purge and the 08-12 backup exclusion are both about. Tag
+> subfolders inherit that exclusion because it names a *directory*, asserted in
+> `BackupExclusionTest` rather than assumed. The same rule shows up twice more:
+> the remembered tag is **two memories**, and a private-library one is held for
+> the session and never written to `SettingEntries`; and no screen outside the
+> private library is ever handed its folder names.
+>
+> **Three defects the tests caught before a device could.**
+> 1. **The v8 migration would have failed on older databases.** `createTable`
+>    and v6's `alterTable` both emit *today's* schema, so a database old enough
+>    to be built or rewritten on the way through arrives already holding the tag
+>    column — and a second `ADD COLUMN` fails the whole migration, taking the
+>    user's library with it. Guarded by the last version that *touched* each
+>    table, with a test walking every shipped version v1 → v8.
+> 2. **The private delete would have failed silently.** `deletePrivate` treats
+>    "no matching file" as success, so a delete searching shallower than the
+>    listing reads would report every tagged image deleted and remove none — no
+>    error, no log. One shared walk now (`TelaDirectories.privateFiles`);
+>    verified by mutation, where a shallow walk turns four tests red.
+> 3. **A same-tier retag would have erased history rows.** `MoveStoredImages`
+>    forgets the row on a successful move — right for a move *into* the private
+>    library, disastrous for a retag, where the download is still an ordinary
+>    one sitting in the gallery. The history consequence now branches on whether
+>    the tier actually changed.
+>
+> **Nothing here is device-verified.** Robolectric emulates neither MediaStore
+> nor a SAF tree (see `ImageStorageTestCase`), so the untested surface is: a
+> nested `RELATIVE_PATH`, the `.nomedia` in a tag subfolder, both "one
+> wallpaper, one tag" sweeps, and two of `retagStoredImage`'s three paths. That
+> is the foundation the later slices stand on, so it is what a device pass
+> should look at first.
+>
+> **`make deploy` is blocked, and not by this work.** This clone has no
+> `android/tela-release.jks`, so the release build falls back to the debug key
+> and the tablet refuses it — `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, confirmed on
+> the device 2026-08-12. Nothing was damaged: `adb install -r` only updates in
+> place. The signing *config* (`2e4135d`) is on master and worked exactly as
+> designed; the keystore is gitignored and cannot travel through a clone. This
+> clone was made 08-11 21:16 UTC, five hours after that commit was authored, so
+> the key lives wherever that work was done. Copy it and a `key.properties` with
+> a **relative** `storeFile=../tela-release.jks` into `android/`. Verify before
+> deploying: `keytool -list -v -keystore tela-release.jks -alias tela` must
+> print SHA-256 `33:B8:59:CC:…:40:CB:64`.
+>
+> **The toolchain was also making this machine unusable, and that is fixed.**
+> `gradle.properties` asked for `-Xmx8G -XX:MaxMetaspaceSize=4G` on a 6 GB host
+> with 2 GB of swap, so a Kotlin compile expanded into swap and wedged the box —
+> it looked like a hang because a thrashing host reports nothing. Now 2 GB, with
+> the Kotlin daemon capped separately (it is a second JVM and was uncapped) and
+> a 4 GB cgroup on the container so an escape is an OOM kill that *says so*.
+> Measured: peak 3.1 GB of 4, host never below 2.7 GB free. Separately, the JVM
+> reads `user.home` from the **passwd entry** rather than `$HOME`, so Gradle as
+> uid 0 resolved its cache to `/root/.gradle` — outside every mount — and
+> re-downloaded its 100 MB distribution every single run. `GRADLE_USER_HOME` and
+> `PUB_CACHE` now name the volumes outright. Warm `kotlin-test`: **3m47s → 37s**.
+>
+> **The older START HERE — the private library is out of the cloud backup** (2026-08-12).
 > The privacy defect the device reinstall turned up is fixed: `filesDir/wallpapers`
 > is now excluded from Auto Backup, from cloud backup and from device transfer,
 > so the app-private tier stops being copied into the owner's Google account by a
@@ -316,6 +385,111 @@ Updated: 2026-08-12
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## DONE — a tag is a folder, in all three tiers (2026-08-12)
+
+Five slices on `feat/download-tag-folders`, each through the merge gate's two
+suites. What follows is the reasoning worth not re-deriving.
+
+### Why a folder and not a table
+
+A tag could have been a row keyed on `(source, id)`. It is a directory instead,
+and the private library is the reason. That tier writes **no history row** by
+design — an explicit or app-private download is never recorded — so a tag table
+covering it would be exactly the ungated, backed-up index the tier exists to
+prevent, which is what the v5 purge removed and what the 2026-08-12 backup
+exclusion closed for the images themselves. A directory is an index that lives
+where the files do, is visible to Photos and to a file manager, and is carried
+off the device by nothing.
+
+That single decision produces the rest: known tags are **derived** (from
+history rows for the shared tiers, from the listing for the private one), so
+there is no second index to disagree; and a tag has to survive being a path
+segment, so `TagFolder` / `TagFolders.kt` hold one allowlist each, spelled the
+same on both sides. No `.` at all — which makes `..`, `.nomedia` and hidden
+directories unreachable without a rule per case. A space is legal inside a tag
+and refused at either end, because `" anime"` renders identically to `"anime"`
+everywhere the user looks while being a different directory on disk.
+
+### The privacy rule, in three places
+
+A private-library tag name says roughly what a private file path says. So:
+
+- **The remembered tag is two memories.** Shared-tier tags persist through
+  `SettingsRepository`; the private tier's is held in `RememberedDownloadTag`
+  for the session and never written, because `SettingEntries` is in the
+  backed-up database. Re-typing it once per session is the price, and it is a
+  decision rather than a gap.
+- **The chooser offers shared-tier folders only.** It opens over the ungated
+  browse wall.
+- **The Library hub's tag row counts download history only**, for the same
+  reason. The private library's chips exist only behind its own lock.
+
+The one place this is *not* enforced is `DownloadQueueEntries`, which holds a
+queued private download's tag until the entry lands. That widens what that
+table's docstring already records (URL and purity, transient, never a file) by
+one user-chosen string. Written down as a decision: resolving the tag at drain
+time would file the download under whatever was last chosen, and dropping it
+for private entries would ignore the user's answer for the tier where
+organising matters most.
+
+### One wallpaper, one tag
+
+Downloading something already stored, under a different tag, **moves** it —
+the generalisation of the anti-duplicate rule that already made a re-download
+overwrite rather than produce `wallhaven-abc123 (1).jpg` (owner, 2026-07-19).
+The sweep runs *after* the write, so a download that fails cannot have
+relocated a file the user already had. A gallery copy this install no longer
+owns is left alone rather than failing the download, because removing it needs
+a prompt no background drain can raise.
+
+### What the suggestions cost, per source
+
+`WallpaperSource.tagsFor(ids, budget:)` is one seam over two very different
+prices, and the budget exists because of the difference:
+
+- **Konachan**: the search response already carries every post's tags and
+  `KonachanMapper` was discarding them. A visible selection is answered with
+  **zero** requests, pinned by a test that counts what crosses the wire.
+- **Wallhaven**: `/search` carries none at all — they exist only on `/w/{id}` —
+  so every id is a request against the 45/minute ceiling. Capped at **25**; the
+  chooser shows what arrived. A 200-wallpaper batch must not spend two minutes
+  and the whole rate allowance on suggestions before the downloads that need it.
+
+The chooser opens on what is free (the search's tag, existing folders) and
+fills the rest in when it lands. It starts on the best suggestion **only** if
+nothing is selected and the row has not been touched — changing a selection out
+from under someone mid-tap is worse than suggesting nothing.
+
+`SuggestTagFolders` ranks: the search's own included tag first, then by share of
+the selection, ties to an existing folder, then alphabetically for stability.
+`-"anime"` is never suggested — it says the results are *not* that.
+
+### A real defect the ranking turned up
+
+`>_<` sanitised to a folder called `_`. Konachan genuinely carries emoticon
+tags (`>_<`, `^_^`, `:d`), `_` and `-` survive sanitising, and **several of them
+collapse onto the same residue** — their shares adding up until it outranks the
+tag that actually describes the selection. A sanitised tag now needs at least
+one letter or digit.
+
+### Owed on the device — and this is the part to do first
+
+None of the storage layer is device-verified, and Robolectric reaches none of
+it (`ImageStorageTestCase` says so): no MediaStore, no SAF tree. Specifically
+unproven:
+
+1. A nested `RELATIVE_PATH` (`Pictures/tela/anime`) accepted at all.
+2. `.nomedia` landing in the tag subfolder on the files tier.
+3. Both "one wallpaper, one tag" sweeps (gallery and SAF).
+4. `retagStoredImage`'s gallery (`RELATIVE_PATH` update) and SAF
+   (`moveDocument`) paths — Slice E stands on these.
+5. An NSFW wallpaper with a tag: the gallery must remain unreachable.
+6. A Wallhaven tag lookup, which needs the API key re-pasted.
+
+Slices A and B are the foundation the other three sit on, so a device pass that
+only exercises tagging a download and looking at Photos already retires most of
+the risk.
 
 ## DONE — the private library no longer leaves the device (2026-08-12)
 

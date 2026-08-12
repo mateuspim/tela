@@ -6,6 +6,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/tile_density.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 
@@ -182,6 +183,18 @@ class FakeSettingsRepository implements SettingsRepository {
 
   @override
   Future<StorageTier?> loadPinnedDownloadTier() async => _pinnedDownloadTier;
+
+  @override
+  Future<TagFolder?> loadDownloadTag() async => _downloadTag;
+
+  @override
+  Future<void> setDownloadTag(TagFolder? tag) async {
+    _downloadTag = tag;
+  }
+
+  /// The remembered tag, which only ever holds a shared-tier one — the private
+  /// library's is deliberately never persisted. See `RememberedDownloadTag`.
+  TagFolder? _downloadTag;
 
   @override
   Future<void> setPinnedDownloadTier(StorageTier? tier) async {

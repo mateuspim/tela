@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 
 /// One image sitting in the app-private tier, as the private library sees it.
@@ -18,6 +19,7 @@ class PrivateImage {
     required this.location,
     required this.savedAt,
     required this.sizeBytes,
+    this.tag,
     this.width,
     this.height,
   });
@@ -38,6 +40,15 @@ class PrivateImage {
 
   /// Size of the file on disk.
   final int sizeBytes;
+
+  /// The tag folder holding this image, or null for the tier root.
+  ///
+  /// Read off the **directory**, exactly as [ref] is read off the file name and
+  /// for the same reason: this tier keeps no rows, deliberately, so the layout
+  /// on disk is the only record there is. That is also what makes tagging the
+  /// private library safe — a table of what is in it would be the ungated,
+  /// backed-up index the tier exists to prevent.
+  final TagFolder? tag;
 
   /// Pixel width from a bounds-only decode, or null when it could not decode.
   final int? width;
@@ -63,7 +74,13 @@ class PrivateImage {
   @override
   int get hashCode => ref.hashCode;
 
-  /// Names the image without naming where it lives.
+  /// Names the image without naming where it lives — [location] and [tag] are
+  /// both left out.
+  ///
+  /// The tag for the same reason as the path: it is a name the user chose for a
+  /// folder of private images, so "waifus" discloses roughly what a path
+  /// discloses. Printing one of these must not be the thing that leaks it into
+  /// a crash report.
   @override
   String toString() => 'PrivateImage($ref, $sizeBytes bytes)';
 }

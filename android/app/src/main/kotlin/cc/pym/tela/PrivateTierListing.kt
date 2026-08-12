@@ -17,13 +17,15 @@ import java.io.File
  * ```
  */
 internal class PrivateTierListing(private val context: Context) {
-    /** Every private image, newest first, with the bounds the grid shapes tiles to. */
+    /**
+     * Every private image, newest first, with the bounds the grid shapes tiles to.
+     *
+     * Tagged images live one directory down, and the walk that finds them is
+     * [TelaDirectories.privateFiles] rather than a listing of its own — it is
+     * shared with the delete, which must never search shallower than this reads.
+     */
     fun listPrivate(): Map<String, Any> {
-        val files = TelaDirectories.privateImages(context)
-            .listFiles()
-            ?.filter { it.isFile }
-            ?: emptyList()
-        val images = files
+        val images = TelaDirectories.privateFiles(context)
             .sortedByDescending { it.lastModified() }
             .mapNotNull { file -> describe(file) }
         return mapOf("success" to true, "images" to images)
@@ -39,7 +41,7 @@ internal class PrivateTierListing(private val context: Context) {
     private fun describe(file: File): Map<String, Any>? {
         val key = ImageFileNaming.keyOf(file.name) ?: return null
         val (width, height) = pixelBounds(file)
-        return mapOf(
+        val row = mutableMapOf<String, Any>(
             "ref" to key,
             "location" to Uri.fromFile(file).toString(),
             "savedAt" to file.lastModified(),
@@ -47,6 +49,11 @@ internal class PrivateTierListing(private val context: Context) {
             "width" to width,
             "height" to height,
         )
+        // Absent rather than null for an untagged image: the tier root is where
+        // every private file lived before tags, and a row that never mentions a
+        // tag reads back the same on both sides of that change.
+        TagFolders.tagOf(context, file)?.let { tag -> row["tag"] = tag }
+        return row
     }
 
     /**

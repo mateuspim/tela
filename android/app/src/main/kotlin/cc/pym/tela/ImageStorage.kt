@@ -3,12 +3,21 @@ package cc.pym.tela
 import android.content.Context
 import android.net.Uri
 
+/**
+ * One image to fetch from the network and file into a tier.
+ *
+ * [tag] is the folder inside that tier, or null for the tier's own root — the
+ * shape every download had before tags existed, and still the ordinary one. It
+ * is validated by [TagFolders.isValid] before any path is built from it; see
+ * [TierWriting.write].
+ */
 data class ImageStoreRequest(
     val source: String,
     val id: String,
     val imageUrl: String,
     val purity: String,
     val tier: String,
+    val tag: String? = null,
 )
 
 /**
@@ -25,6 +34,7 @@ data class ImageCopyRequest(
     val from: String,
     val purity: String,
     val tier: String,
+    val tag: String? = null,
 )
 
 /**
@@ -54,6 +64,15 @@ class ImageStorage(private val context: Context) {
     /** Copies an image already on this device into [request]'s tier. */
     fun copy(request: ImageCopyRequest, outsideGalleryTree: String?): Map<String, Any> =
         TierWriting(context).copy(request, outsideGalleryTree)
+
+    /** Moves a stored image into another tag folder within its own tier. */
+    fun retag(
+        tier: String,
+        location: Uri,
+        tag: String?,
+        outsideGalleryTree: String?,
+    ): Map<String, Any> =
+        StoredImageRetagging(context).retag(tier, location, tag, outsideGalleryTree)
 
     /** Lists the app-private tier, newest first. */
     fun listPrivate(): Map<String, Any> = PrivateTierListing(context).listPrivate()

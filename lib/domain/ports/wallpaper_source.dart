@@ -46,6 +46,37 @@ abstract interface class WallpaperSource {
   /// source answers clearly that it has no such wallpaper.
   Future<WallpaperDetails> wallpaperDetails(String id);
 
+  /// The tags each of [ids] carries, for as many as [budget] allows.
+  ///
+  /// Feeds the tag chooser, which offers the tags a *selection* has in common —
+  /// so this is asked about ten or twenty wallpapers at once, not one.
+  ///
+  /// **The cost is wildly different per source, and that is why there is a
+  /// budget rather than a loop over [wallpaperDetails].** A booru returns every
+  /// post's tags in the listing that drew the grid, so it can answer a visible
+  /// selection for free. Wallhaven's `/search` carries no tags at all — they
+  /// exist only on `/w/{id}` — so every id there is a request against a
+  /// 45/minute ceiling that the downloads themselves are about to need.
+  ///
+  /// [budget] caps how many **requests** this may spend, not how many ids it
+  /// may answer: ids the source already knows cost nothing and are always
+  /// included. Ids beyond the budget are simply absent from the result — a
+  /// partial answer is the expected outcome for a large selection, not a
+  /// failure, and the chooser shows what arrived.
+  ///
+  /// Answers an empty map rather than throwing when the source cannot be
+  /// reached: a tag suggestion is a convenience, and losing it must never cost
+  /// the download the user actually asked for.
+  ///
+  /// ```dart
+  /// final Map<String, List<WallpaperTag>> tags =
+  ///     await source.tagsFor(<String>['e7jvjd'], budget: 25);
+  /// ```
+  Future<Map<String, List<WallpaperTag>>> tagsFor(
+    List<String> ids, {
+    required int budget,
+  });
+
   /// The source-native wallpaper id inside [text], or null if it isn't one.
   ///
   /// Id shape is site-specific — Wallhaven's is six characters of its own

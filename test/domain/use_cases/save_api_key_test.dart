@@ -177,6 +177,13 @@ class KeyCheckingWallpaperSource implements WallpaperSource {
   @override
   SourceId get id => SourceId.wallhaven;
 
+  /// Nothing here is about tags; this source exists to police the key.
+  @override
+  Future<Map<String, List<WallpaperTag>>> tagsFor(
+    List<String> ids, {
+    required int budget,
+  }) async => <String, List<WallpaperTag>>{};
+
   @override
   String get displayName => 'Wallhaven';
 

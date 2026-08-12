@@ -93,6 +93,7 @@ class MoveStoredImages {
         from: move.location,
         purity: move.purity,
         tier: move.to,
+        tag: move.tag,
       );
     } on ImageStoreFailure {
       return null;
@@ -111,14 +112,31 @@ class MoveStoredImages {
         continue;
       }
       moved.add(entry.key.ref);
-      // A move *into* the private library must leave no history row behind: a
-      // private download is never recorded, and a row that outlived its file's
-      // move would be an ungated index of exactly what went private. Moving
-      // *out* has no row to begin with, and `forget` is a documented no-op for
-      // a wallpaper that was never recorded — so this needs no direction check.
-      await _history.forget(entry.key.ref);
+      await _settleHistory(entry.key, entry.value);
     }
     return moved;
+  }
+
+  /// What the move means for the history row, which depends on whether the
+  /// tier changed.
+  ///
+  /// **Across tiers, the row is forgotten.** A move *into* the private library
+  /// must leave none behind: a private download is never recorded, and a row
+  /// outliving its file's move would be an ungated index of exactly what went
+  /// private. Moving *out* has no row to begin with, and `forget` is a
+  /// documented no-op for a wallpaper that was never recorded.
+  ///
+  /// **Within one tier, the row is re-pointed instead.** That case is a retag
+  /// falling back to copy-and-delete, and the download is still an ordinary
+  /// one — forgetting it would delete the history for a file that is still
+  /// sitting in the gallery, which is the opposite of what the user asked for.
+  Future<void> _settleHistory(StoredImageMove move, StoredImage made) async {
+    if (move.from != move.to) return _history.forget(move.ref);
+    return _history.retag(
+      ref: move.ref,
+      location: made.location,
+      tag: made.tag,
+    );
   }
 
   /// Deletes a copy whose original survived. Swallows its own failure: the

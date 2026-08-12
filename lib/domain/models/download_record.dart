@@ -1,5 +1,6 @@
 import 'package:meta/meta.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 
 /// One wallpaper this device has already downloaded, and where it landed.
@@ -19,6 +20,7 @@ class DownloadRecord {
     required this.tier,
     required this.location,
     required this.downloadedAt,
+    this.tag,
   });
 
   /// What was downloaded, whole — the grid renders from this offline.
@@ -32,6 +34,12 @@ class DownloadRecord {
 
   /// When it was downloaded. Orders the history, newest first.
   final DateTime downloadedAt;
+
+  /// The tag folder the file sits in, or null when it sits in the tier root.
+  ///
+  /// A property of *this download*, not of the wallpaper: the same wallpaper
+  /// downloaded again under another tag moves, and this row moves with it.
+  final TagFolder? tag;
 
   @override
   bool operator ==(Object other) =>

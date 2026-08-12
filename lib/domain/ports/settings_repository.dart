@@ -6,6 +6,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/tile_density.dart';
 
 /// Reads and writes the user's persisted preferences.
@@ -155,4 +156,22 @@ abstract interface class SettingsRepository {
   /// Pins [tier] as the destination every download goes to until changed, or
   /// clears the pin when [tier] is null.
   Future<void> setPinnedDownloadTier(StorageTier? tier);
+
+  /// The tag the chooser offers first, remembered from the last download that
+  /// used one — or null when the last download was untagged.
+  ///
+  /// **Shared tiers only.** A tag chosen for the private library is never
+  /// persisted here: this table is in the database Android's Auto Backup
+  /// carries off the device, and "waifus" leaving in a Google backup is the
+  /// disclosure the app-private tier exists to prevent. The private tier's last
+  /// tag is remembered in memory for the session instead, by the controller —
+  /// a tag re-typed once per session is a small price, and it is not a gap to
+  /// be closed later.
+  ///
+  /// Never throws: an unreadable or no-longer-legal name answers null, which is
+  /// simply "no tag offered first".
+  Future<TagFolder?> loadDownloadTag();
+
+  /// Remembers [tag] as the one to offer first, or forgets it when null.
+  Future<void> setDownloadTag(TagFolder? tag);
 }

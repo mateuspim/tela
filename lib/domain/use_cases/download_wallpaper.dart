@@ -1,6 +1,7 @@
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/image_store.dart';
@@ -13,7 +14,11 @@ import 'package:tela/domain/ports/settings_repository.dart';
 /// download without caring what it returns. Declared beside the use case it
 /// abstracts, not beside either caller, so the two cannot drift apart.
 typedef PerformDownload =
-    Future<void> Function(Wallpaper wallpaper, {StorageTier? tier});
+    Future<void> Function(
+      Wallpaper wallpaper, {
+      StorageTier? tier,
+      TagFolder? tag,
+    });
 
 /// Downloads a wallpaper to the destination its purity is configured for.
 class DownloadWallpaper {
@@ -48,11 +53,21 @@ class DownloadWallpaper {
   /// for its purity when no pin is set. The precedence is: the per-download
   /// [tier] > the pin > the configured tier.
   ///
+  /// [tag] is the folder inside that destination the file is filed under. It
+  /// has no pin and no configured default behind it: unlike the tier, a tag is
+  /// answered once in the chooser, so null means untagged rather than
+  /// "resolve it later".
+  ///
   /// ```dart
   /// await download(wallpaper); // the pin, or the configured destination
   /// await download(wallpaper, tier: StorageTier.appPrivate); // just this once
+  /// await download(wallpaper, tag: TagFolder('anime'));
   /// ```
-  Future<StoredImage> call(Wallpaper wallpaper, {StorageTier? tier}) async {
+  Future<StoredImage> call(
+    Wallpaper wallpaper, {
+    StorageTier? tier,
+    TagFolder? tag,
+  }) async {
     final StorageTier destination = tier ?? await _defaultTier(wallpaper);
     final StoredImage stored = await _imageStore.store(
       source: wallpaper.ref.source,
@@ -60,6 +75,7 @@ class DownloadWallpaper {
       imageUrl: wallpaper.fullImageUrl,
       purity: wallpaper.purity,
       tier: destination,
+      tag: tag,
     );
     await _remember(wallpaper, stored);
     await _settings.recordDestination(wallpaper.purity, stored.tier);
@@ -74,7 +90,9 @@ class DownloadWallpaper {
   ///
   /// The destination check is the one purity cannot stand in for. It reads
   /// [StoredImage.tier] — where the file actually *landed* — rather than the
-  /// requested tier, so the adapter has the last word on it. A safe wallpaper
+  /// requested tier, so the adapter has the last word on it. The tag is read
+  /// the same way and for the same reason: a row naming a folder the file is
+  /// not in sends every later lookup somewhere it is not. A safe wallpaper
   /// sent to the private tier is still a private download, and it was the
   /// per-download override that made that ordinary rather than exotic.
   Future<void> _remember(Wallpaper wallpaper, StoredImage stored) async {
@@ -84,6 +102,7 @@ class DownloadWallpaper {
       wallpaper: wallpaper,
       tier: stored.tier,
       location: stored.location,
+      tag: stored.tag,
     );
   }
 

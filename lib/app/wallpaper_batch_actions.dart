@@ -4,6 +4,7 @@ import 'package:tela/app/batch_download_queueing.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/move_to_private_action.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/retag_downloads_action.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/bulk_progress_dialog.dart';
 import 'package:tela/core/ui/tela_toast.dart';
@@ -43,6 +44,13 @@ enum WallpaperBatchAction {
   /// Move every ticked download into the private library. Confirms first: the
   /// file leaves Photos, and tela cannot put it back there afterwards.
   moveToPrivate,
+
+  /// Refile every ticked download under another tag folder.
+  ///
+  /// No confirmation: the tag naming dialog *is* the confirmation, it is one
+  /// tap from being undone by retagging back, and the file stays in the same
+  /// tier throughout — nothing leaves Photos and nothing is deleted.
+  retag,
 }
 
 /// Whether [action] asks before it acts.
@@ -131,6 +139,8 @@ Future<bool> _perform(
       return _deleteAll(context, ref, wallpapers, messenger, l10n);
     case WallpaperBatchAction.moveToPrivate:
       return _moveAllToPrivate(context, ref, wallpapers);
+    case WallpaperBatchAction.retag:
+      return _retagAll(context, ref, wallpapers);
   }
 }
 
@@ -151,6 +161,20 @@ Future<bool> _moveAllToPrivate(
   if (!context.mounted) return true;
   await moveToPrivate(context: context, ref: ref, records: records);
   return true;
+}
+
+/// Refiles every ticked download under a tag the user names.
+///
+/// Reads the records for the same reason [_moveAllToPrivate] does: a retag
+/// needs each file's tier and location, not just its id.
+Future<bool> _retagAll(
+  BuildContext context,
+  WidgetRef ref,
+  List<Wallpaper> wallpapers,
+) async {
+  final List<DownloadRecord> records = await _recordsFor(ref, wallpapers);
+  if (!context.mounted) return false;
+  return retagDownloads(context: context, ref: ref, records: records);
 }
 
 /// Hard-deletes every ticked download — files and rows — through the one bulk

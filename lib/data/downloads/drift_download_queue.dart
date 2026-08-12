@@ -99,6 +99,7 @@ class DriftDownloadQueue implements DownloadQueue {
       category: storableCategory(wallpaper.category),
       colors: joinedColors(wallpaper.colors),
       tier: Value<String?>(download.tier?.name),
+      tag: Value<String?>(download.tag?.name),
       state: download.state.name,
       attempts: Value<int>(download.attempts),
       failure: Value<String?>(download.failure?.name),
@@ -110,6 +111,7 @@ class DriftDownloadQueue implements DownloadQueue {
     return QueuedDownload(
       wallpaper: _toWallpaper(row),
       tier: row.tier == null ? null : storedTier(row.tier!),
+      tag: storedTag(row.tag),
       state: _storedState(row.state),
       attempts: row.attempts,
       failure: row.failure == null ? null : _storedProblem(row.failure!),

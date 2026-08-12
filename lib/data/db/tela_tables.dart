@@ -119,6 +119,13 @@ class DownloadedWallpapers extends Table with WallpaperColumns {
 
   /// When it was downloaded. Orders the history, newest first.
   DateTimeColumn get downloadedAt => dateTime()();
+
+  /// The tag folder the file is filed under, or null for the tier's root.
+  ///
+  /// A tag in tela is a real directory, so this is a record of *where the file
+  /// is*, not a label attached to the wallpaper — which is why a retag has to
+  /// write this and [location] together.
+  TextColumn get tag => text().nullable()();
 }
 
 /// One wallpaper this device still owes a download for.
@@ -153,6 +160,23 @@ class DownloadQueueEntries extends Table with WallpaperColumns {
   /// `ImageStoreProblem` name of the last failure, or null if it has not
   /// failed. Never a URL or a path — the same rule `ImageStoreFailure` follows.
   TextColumn get failure => text().nullable()();
+
+  /// The tag folder this download will land in, or null for none.
+  ///
+  /// **This one is worth reading twice.** Unlike [DownloadedWallpapers], this
+  /// table holds app-private entries, so a tag the user chose for a *private*
+  /// folder sits here — in a database Android's Auto Backup carries off the
+  /// device — for as long as the entry is queued. That is a real, if small,
+  /// widening of what this table's docstring already records: it holds a queued
+  /// private wallpaper's URL and purity, never its file, and only until it
+  /// lands. A tag name is one more user-chosen string in the same window.
+  ///
+  /// It is written down rather than solved because the alternatives are worse:
+  /// resolving the tag at drain time would file the download under whatever was
+  /// last chosen rather than what was chosen for it, and dropping the tag for
+  /// private entries would silently ignore the user's answer for exactly the
+  /// tier where organising matters most.
+  TextColumn get tag => text().nullable()();
 
   /// When it was queued. Orders the queue, oldest first — a queue is a line.
   DateTimeColumn get queuedAt => dateTime()();
