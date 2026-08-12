@@ -150,6 +150,10 @@ class DownloadHistoryScreen extends ConsumerWidget {
       // confirms, in its own words, through `runWallpaperBatchAction`.
       actions: const <WallpaperBatchAction>[
         WallpaperBatchAction.favorite,
+        // Before the three that take something away: refiling is the
+        // non-destructive answer to "this is in the wrong place", and it is the
+        // one a user reaches for most while tidying.
+        WallpaperBatchAction.retag,
         // Moving sits between the two destructive ones on purpose: it is the
         // middle answer to "I do not want this here" — the file stays, it just
         // stops being in Photos and in this list.

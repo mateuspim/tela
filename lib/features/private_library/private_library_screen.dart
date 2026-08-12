@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/move_to_private_action.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/retag_downloads_action.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
@@ -166,6 +167,14 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
       // is a Wallhaven-wallpaper idea the private tier deliberately has no part
       // in — a favorite would be a second, unlocked index of what is in here.
       actions: <SelectionAction>[
+        // Refiling never leaves the tier, so unlike the two below it discloses
+        // nothing and takes nothing away — it is the safe one, and it goes
+        // first.
+        SelectionAction(
+          icon: Icons.folder_outlined,
+          label: l10n.retagAction,
+          run: _retagSelected,
+        ),
         SelectionAction(
           icon: Icons.lock_open_outlined,
           label: l10n.moveOutOfPrivateAction,
@@ -251,6 +260,17 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   /// The one batch besides deleting that means anything here, and the only way
   /// back out of this tier: a private image can never be re-downloaded from the
   /// grid, because the grid holds no wallpaper to re-download — just a ref and
+  /// Refiles the ticked images under a tag the user names.
+  ///
+  /// Stays inside the private tier, so there is nothing to confirm and nothing
+  /// disclosed — the naming dialog is the whole interaction.
+  Future<bool> _retagSelected(List<String> keys) async {
+    if (keys.isEmpty) return false;
+    final List<PrivateImage> selected = _imagesFor(keys);
+    if (selected.isEmpty || !mounted) return false;
+    return retagPrivateImages(context: context, ref: ref, images: selected);
+  }
+
   /// a file. `confirmAndMoveOutOfPrivate` owns the confirmation, which has to
   /// say two surprising things (never to Photos, and tela stops tracking it),
   /// and the folder grant that tier needs.

@@ -57,6 +57,7 @@ import 'package:tela/domain/use_cases/forget_api_key.dart';
 import 'package:tela/domain/use_cases/load_account_defaults.dart';
 import 'package:tela/domain/use_cases/move_stored_images.dart';
 import 'package:tela/domain/use_cases/resolve_browse_defaults.dart';
+import 'package:tela/domain/use_cases/retag_stored_images.dart';
 import 'package:tela/domain/use_cases/save_api_key.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
 import 'package:tela/domain/use_cases/share_wallpaper.dart';
@@ -277,6 +278,16 @@ final Provider<MoveStoredImages> moveStoredImagesProvider =
       (Ref ref) => MoveStoredImages(
         imageStore: ref.watch(imageStoreProvider),
         history: ref.watch(downloadHistoryProvider),
+      ),
+    );
+
+/// Refiles already-downloaded images under another tag, without the network.
+final Provider<RetagStoredImages> retagStoredImagesProvider =
+    Provider<RetagStoredImages>(
+      (Ref ref) => RetagStoredImages(
+        imageStore: ref.watch(imageStoreProvider),
+        history: ref.watch(downloadHistoryProvider),
+        moveStoredImages: ref.watch(moveStoredImagesProvider),
       ),
     );
 

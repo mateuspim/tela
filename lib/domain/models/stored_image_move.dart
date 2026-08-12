@@ -1,6 +1,7 @@
 import 'package:meta/meta.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 
 /// One already-downloaded image asking to change tier, without the network.
@@ -36,6 +37,7 @@ class StoredImageMove {
     required this.from,
     required this.location,
     required this.to,
+    this.tag,
   });
 
   /// Which source issued the image and under what id — how the moved file is
@@ -55,6 +57,14 @@ class StoredImageMove {
 
   /// Where it should end up.
   final StorageTier to;
+
+  /// The tag folder to file it under on arrival, or null for the tier root.
+  ///
+  /// Independent of [to]: a move can change the tier, the tag, or both. A
+  /// same-tier move carrying a new tag is a **retag** that fell back to
+  /// copy-and-delete because the file could not be moved in place — see
+  /// `RetagStoredImages`.
+  final TagFolder? tag;
 
   @override
   bool operator ==(Object other) =>

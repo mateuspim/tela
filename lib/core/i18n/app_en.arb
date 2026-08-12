@@ -564,6 +564,31 @@
     "description": "Heading above the one-download storage destination choices."
   },
 
+  "retagAction": "Move to tag\u2026",
+  "@retagAction": {
+    "description": "Selection-bar action that refiles the chosen downloads under another tag folder."
+  },
+  "retagDone": "{count, plural, =1{Moved 1 wallpaper} other{Moved {count} wallpapers}}",
+  "@retagDone": {
+    "description": "Confirms a retag where every selected download moved.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "retagPartial": "Moved {moved} of {total}",
+  "@retagPartial": {
+    "description": "Reports a retag where some downloads did not move \u2014 a file this install no longer owns falls back to copy-and-delete, and that delete can be declined at the system prompt. The honest subset, never the count that was asked for.",
+    "placeholders": {
+      "moved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "tagFilterAll": "All",
   "@tagFilterAll": {
     "description": "The chip that clears a tag filter on a library shelf, showing tagged and untagged downloads together."
