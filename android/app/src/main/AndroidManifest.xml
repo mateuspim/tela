@@ -23,9 +23,13 @@
          has already allowed tela's notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
-    <!-- The API key is excluded from both backup paths: it is encrypted with a
-         Keystore key that no backup carries, so a restored copy would be
-         undecryptable. See res/xml/backup_rules.xml. -->
+    <!-- Two things are excluded from both backup paths: the API key, which is
+         encrypted with a Keystore key that no backup carries, so a restored
+         copy would be undecryptable; and the app-private storage tier
+         (filesDir/wallpapers), because a private library in the user's cloud
+         account is not private. Backup stays enabled for everything else — the
+         database and the destination settings restore normally.
+         See res/xml/backup_rules.xml, and BackupExclusionTest. -->
     <application
         android:label="tela"
         android:name="${applicationName}"

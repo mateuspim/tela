@@ -8,8 +8,21 @@
      behind instead: an absent key is a state the app already handles (it asks
      for one), and re-pasting it is a five-second job.
 
-     Everything else — the Drift database, the download destinations — backs up
-     normally. -->
+     The second exclusion is the private library itself: `filesDir/wallpapers`
+     is the app-private storage tier (TelaDirectories.privateImages), whose
+     whole promise in PLAN.md is that only tela can see those images and that
+     they go with an uninstall. Auto Backup is on by default, so without this
+     line every private image is copied into the user's Google account — the
+     exact exposure the tier exists to prevent, and the one the v5 migration
+     already acted on for the *rows* pointing at these files while the files
+     themselves stayed eligible.
+
+     Nothing else needs a line. The decoded previews live under `cacheDir`
+     (TelaDirectories.previews), and Auto Backup never carries the cache
+     directory. Everything that remains — the Drift database, the download
+     destinations — backs up normally, and holds no private-tier entry by
+     construction: see DownloadedWallpapers' docstring. -->
 <full-backup-content>
     <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+    <exclude domain="file" path="wallpapers"/>
 </full-backup-content>
