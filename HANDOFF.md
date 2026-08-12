@@ -1,8 +1,30 @@
 # tela handoff
 
-Updated: 2026-08-11
+Updated: 2026-08-12
 
-> **START HERE — every file is under the 500-line limit again, and the merge
+> **START HERE — the private library is out of the cloud backup** (2026-08-12).
+> The privacy defect the device reinstall turned up is fixed: `filesDir/wallpapers`
+> is now excluded from Auto Backup, from cloud backup and from device transfer,
+> so the app-private tier stops being copied into the owner's Google account by a
+> setting that is on by default. Backup stays **enabled** for the database and the
+> destination settings — `allowBackup="false"` was considered and refused. New
+> `BackupExclusionTest` (4, Robolectric) reads the compiled resources and pins the
+> excluded path against `TelaDirectories.privateImages`, and it was checked by
+> deleting the line and watching it go red. Both suites green: analyze clean, Dart
+> **1220** (no Dart touched), Kotlin **95** (from 91). Nothing is owed on the
+> device — the rules are read by the OS, not by tela. Its block is the first one
+> below; the older *SECURITY* block that called this "deliberately not applied
+> yet" has been corrected. With it goes the last item that was blocking a Play
+> launch on privacy grounds; the *Play Store* list's other entries still stand.
+>
+> **It also came with a toolchain fix, without which this clone could run
+> neither suite** — `./tool/tela` could neither build its Docker image nor write
+> the repo when the host user is root, which is the user here. Both halves are
+> handled in the wrapper now, the Dockerfile is untouched, and the merge gate ran
+> on this box for the first time because of it. See *Three things a fresh clone
+> needs*.
+>
+> **The older START HERE — every file is under the 500-line limit again, and the merge
 > gate proved each split on its way in** (2026-08-11, six branches merged to
 > `master`). `make ci` green from a clean checkout: analyze clean, Dart **1198**
 > (from 1190), Kotlin **91** (from 83). No behaviour changed anywhere in this
@@ -295,6 +317,68 @@ Updated: 2026-08-11
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
+## DONE — the private library no longer leaves the device (2026-08-12)
+
+The privacy defect the reinstall block found, closed. Both suites green from the
+restored tree: analyze clean, `dart format` clean, Dart **1220** (unchanged — no
+Dart was touched), Kotlin **95** (from 91).
+
+**What was wrong.** `backup_rules.xml` and `data_extraction_rules.xml` excluded
+exactly one thing, `FlutterSecureStorage.xml`. `filesDir/wallpapers` — the
+app-private storage tier, the private library itself — was eligible for Auto
+Backup and for device transfer, and Android's backup is **on by default**. The
+tier's promise in `PLAN.md` is that only tela can see those images; a copy in
+the owner's Google account is not that.
+
+**What was done.** `<exclude domain="file" path="wallpapers"/>` added to
+`full-backup-content`, to `cloud-backup`, and to `device-transfer`. The
+alternative the earlier block offered — `android:allowBackup="false"` — was
+**not** taken: it would also throw away the database and the destination
+settings, which restore harmlessly and are the part of a backup a user actually
+wants. The manifest comment above `<application>` described only the API key
+exclusion and now describes both.
+
+**Three things this rests on, checked rather than assumed:**
+
+- **The previews need no line.** `TelaDirectories.previews` is under `cacheDir`,
+  and Auto Backup never carries the cache directory.
+- **The database needs no line.** `DownloadedWallpapers` holds no explicit and no
+  app-private row by construction — that is what the v5 migration was for, and
+  its docstring says so at the table.
+- **`device-transfer` is excluded on purpose, and it costs something.** Moving
+  to a new phone leaves the private library behind. That is the tier's contract
+  (`appPrivate` means gone on uninstall) rather than an oversight; a copy that
+  silently survives onto another device is the one thing the tier promises never
+  happens. Evacuate from inside the app before switching devices. Both XML files
+  say this where someone changing them will read it.
+
+**The test is `BackupExclusionTest` (4, Robolectric SDK 35).** It reads the
+*compiled* resources through `R.xml.*` rather than the files on disk, so it also
+proves they are packaged and reachable. Three of the four pin the exclusions
+themselves; the fourth is the one worth having — it compares the path string in
+the XML against `TelaDirectories.privateImages(context)`, because an `exclude`
+naming a directory the app has stopped using reads as protection and provides
+none, and renaming that folder is a one-line change nothing else would notice.
+
+**It was verified by mutation, not just by running green.** Deleting the
+`file`-domain line from `backup_rules.xml` turns two of the four red (the cloud
+exclusion and the directory comparison); the line was restored and the full
+suite re-run afterwards. Worth doing here specifically because this defect has
+no other symptom: backup runs with no user action and no log anyone reads, and a
+missing line fails no build, no suite and no device pass.
+
+**Still open on the device:** nothing, for this fix. It changes no runtime code
+path — the rules are read by the OS's backup agent, not by tela — so there is
+nothing to look at on the tablet, whose Backup Manager is disabled anyway. It
+does ship in the next `make deploy` like anything else.
+
+**What it does not cover.** `DownloadQueueEntries` *does* hold explicit and
+app-private rows, deliberately (see its docstring), and lives in the backed-up
+database. A backup taken mid-drain would carry that metadata — URLs and purity
+for a queued wallpaper, never a file, and only until the entry lands. That is a
+much smaller exposure than the one closed here and nobody has decided what to do
+about it; it is written down so the next person does not have to re-find it.
+
 ## FIXED — Detail's preview pager was losing the pinch to the PageView (2026-08-11, `f0686d7`)
 
 **Merged through the gate, both suites green: analyze clean, Dart 1211 (from
@@ -547,7 +631,15 @@ cc.pym.tela` → install the release-signed APK → re-paste the API key → and
 that point on **every** update is an ordinary in-place `make deploy`, because
 the key is stable and committed to (well, gitignored beside) the repo.
 
-### SECURITY — the private library is in the user's cloud backup today
+### SECURITY — the private library was in the user's cloud backup — FIXED 2026-08-12
+
+**Read the block *DONE — the private library no longer leaves the device* at
+the top of this file first: the defect described below is fixed.** What stands
+here is the diagnosis, which is worth keeping; what does not is the closing
+paragraph's "deliberately not applied yet", which was true only until the
+tablet was back on its feet. It is.
+
+
 
 Found while reading the rules for the above, and it should block a Play launch.
 
@@ -573,9 +665,11 @@ tela can see them, and an ungated copy in a cloud account is not that.
 
 The fix is a few lines in both XML files (exclude the `file` domain path
 `wallpapers`, or opt the whole app out with `android:allowBackup="false"`), plus
-a test. It is deliberately **not** applied yet, because doing so before the
-restore above would strand the tablet's private library. Do it as the first
-update after the device is back on its feet.
+a test. It was deliberately **not** applied while the restore above was pending,
+because excluding the path before it would have stranded the tablet's private
+library. The device was reinstalled on 2026-08-11, so that reason expired, and
+the fix landed on 2026-08-12 — the targeted exclusion, not `allowBackup=false`.
+See the block at the top.
 
 ### Play Store — what is settled and what is not
 
@@ -590,8 +684,9 @@ update after the device is back on its feet.
   `flutter.versionCode`). Play refuses a re-upload at the same code, so the
   release process needs a bump discipline. The deploy path's universal
   versionCode-1 APK is fine for the tablet and not for Play.
-- The backup exposure above is a genuine privacy defect in a wallpaper app whose
-  headline feature is a private library. Fix it before, not after.
+- ~~The backup exposure above is a genuine privacy defect in a wallpaper app whose
+  headline feature is a private library. Fix it before, not after.~~ **Done,
+  2026-08-12.** Nothing else on this list is.
 
 ### Device state after the reinstall (SM-X730, 2026-08-11)
 
@@ -733,9 +828,9 @@ own, only the `@DriftDatabase` that lists them does. The proof is that
 `build_runner` returned `tela_database.g.dart` **byte-identical** — worth knowing
 before anyone fears a schema file split.
 
-### Two things a fresh clone needs, and neither is in the commands list
+### Three things a fresh clone needs, and none is in the commands list
 
-Both cost a confusing failure here before they were understood:
+Each cost a confusing failure here before it was understood:
 
 - **`flutter gen-l10n` before `flutter analyze` means anything.** The generated
   l10n is gitignored, so a fresh clone's analyze reports **628 errors** that are
@@ -745,6 +840,19 @@ Both cost a confusing failure here before they were understood:
   Gradle wrapper is gitignored (Flutter's own `android/.gitignore`) and only an
   Android build writes it, so the target fails with `./gradlew: No such file or
   directory` and nothing about that message says why.
+- **A root host used to break `./tool/tela` in both directions — fixed
+  2026-08-12**, and the fix is worth knowing about because it is the reason
+  `make ci` works on the box this clone lives on. The wrapper passed
+  `UID=$(id -u)`, and the Dockerfile's user step evicts whoever already holds
+  that uid before creating `dev` — as root that is `userdel -r root`, and the
+  build died at `useradd` with a bare `exit code: 4`. Building `dev` at uid 1000
+  instead is only half of it: the container then *runs* as a user who cannot
+  write a root-owned bind mount, which surfaces as `Flutter failed to write to a
+  file at "/app/.dart_tool/version"` — a message that reads like a broken SDK.
+  The wrapper now detects uid 0, builds `dev` at 1000, and runs the container as
+  root with `HOME=/home/dev` so the named caches still resolve. The Dockerfile
+  was deliberately **not** touched, so CI's `toolchain-pin` job has nothing new
+  to drift against.
 
 `make hooks` had also never been run in this clone — `core.hooksPath` was unset,
 so the merge gate was not installed at all. It is now.

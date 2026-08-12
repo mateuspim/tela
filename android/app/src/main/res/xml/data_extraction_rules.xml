@@ -5,12 +5,23 @@
      this: the encrypted API key is worthless without the Keystore key, and the
      Keystore crosses neither a cloud backup nor a device transfer. Excluded
      from both, so a restored tela asks for the key rather than holding one it
-     cannot read. -->
+     cannot read.
+
+     The private library (`filesDir/wallpapers`) is excluded from both for the
+     same reason it is excluded there — an app-private image in a cloud account
+     is not private. It is excluded from `device-transfer` as well, which costs
+     something real: moving to a new phone leaves the private library behind.
+     That is the tier's contract, not a bug — `appPrivate` means gone on
+     uninstall, and a copy that survives onto another device silently is the
+     one thing the private library promises never happens. Evacuate it from
+     inside the app before switching devices; that path exists. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+        <exclude domain="file" path="wallpapers"/>
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="FlutterSecureStorage.xml"/>
+        <exclude domain="file" path="wallpapers"/>
     </device-transfer>
 </data-extraction-rules>
