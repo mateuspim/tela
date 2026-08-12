@@ -36,12 +36,25 @@ abstract class ImageStorageTestCase {
         storage = ImageStorage(context)
     }
 
-    /** The app-private tier on disk — the one tier these tests can really write. */
-    protected fun privateDirectory(): File = File(context.filesDir, "wallpapers")
+    /**
+     * The app-private tier on disk — the one tier these tests can really write.
+     *
+     * [tag] names a tag folder inside it, which is what a tagged download writes
+     * to: a tag in tela is a real directory, not a label in a table, because the
+     * private tier keeps no table by design.
+     */
+    protected fun privateDirectory(tag: String? = null): File {
+        val root = File(context.filesDir, "wallpapers")
+        return if (tag == null) root else File(root, tag)
+    }
 
     /** Puts a file in the private tier as if tela had downloaded it there. */
-    protected fun writePrivateImage(name: String, contents: String = "pixels"): File {
-        val directory = privateDirectory()
+    protected fun writePrivateImage(
+        name: String,
+        contents: String = "pixels",
+        tag: String? = null,
+    ): File {
+        val directory = privateDirectory(tag)
         directory.mkdirs()
         return File(directory, name).apply { writeText(contents) }
     }

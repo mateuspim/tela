@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.MediaStore
+import java.io.File
 import java.io.FileNotFoundException
 
 /**
@@ -35,13 +36,22 @@ internal class TierDeleting(private val context: Context) {
      * `unavailable` for one is the bug this used to have. See
      * [deleteDocumentAt] for the whole argument; it is the same rule, and the
      * empty match list here is exactly the "already gone" case.
+     *
+     * **Searches the tag folders too**, through the walk the listing reads by —
+     * and that pairing is load-bearing. This function's own "already gone means
+     * success" rule turns a shallow search into a silent one: every tagged image
+     * would report deleted and none would go, failing no test and raising no
+     * error. [TelaDirectories.privateFiles] is why there is one depth rather
+     * than two.
+     *
+     * Deletes **every** file carrying [key], across tags, because that is what
+     * this door means: it names a wallpaper, not a file, and the caller that
+     * holds a location wants [deleteDownload] instead.
      */
     fun deletePrivate(key: String): Map<String, Any> {
         if (!ImageFileNaming.isValidKey(key)) return imageStoreFailure("unavailable")
-        val matches = TelaDirectories.privateImages(context)
-            .listFiles()
-            ?.filter { it.isFile && ImageFileNaming.keyOf(it.name) == key }
-            ?: emptyList()
+        val matches = TelaDirectories.privateFiles(context)
+            .filter { ImageFileNaming.keyOf(it.name) == key }
         if (matches.isEmpty()) return mapOf("success" to true)
         if (!matches.all { it.delete() }) return imageStoreFailure("unavailable")
         return mapOf("success" to true)
@@ -78,13 +88,36 @@ internal class TierDeleting(private val context: Context) {
         return rowExists(location, projection)
     }
 
-    /** Recovers the key from the private file's name so [deletePrivate]'s listing
-     *  guard still stands — a location is a `file:` URI tela itself wrote. */
+    /**
+     * Deletes the one private file at [location], and only that one.
+     *
+     * **Not `deletePrivate(key)` over the name, which is what this used to be.**
+     * That was exact while the tier was flat — one wallpaper, one file — and
+     * became wrong the moment a tag became a folder: the same wallpaper can sit
+     * in `anime/` and in `minimal/`, and deleting one tile must not take the
+     * other with it. The key-wide door still exists for the caller that means
+     * "this wallpaper, wherever it is".
+     *
+     * The path is confined to the private tier by canonical path before anything
+     * is deleted — the guard [StoredImageReading.releasePreview] uses, for the
+     * same reason: this argument crosses a method channel, and `file:///data/…`
+     * pointing anywhere else must not become an arbitrary-file delete. The name
+     * must still parse as one tela wrote, so a location cannot name the database
+     * beside it either.
+     *
+     * A file that is already gone counts as deleted, exactly as everywhere else
+     * here.
+     */
     private fun deletePrivateAt(location: Uri): Map<String, Any> {
-        val key = location.lastPathSegment?.let(ImageFileNaming::keyOf)
-            ?: return imageStoreFailure("unavailable")
-        val result = deletePrivate(key)
-        return if (result["success"] == true) deletionOutcome(listOf(location.toString())) else result
+        if (location.scheme != "file") return imageStoreFailure("unavailable")
+        val path = location.path ?: return imageStoreFailure("unavailable")
+        val file = File(path)
+        if (ImageFileNaming.keyOf(file.name) == null) return imageStoreFailure("unavailable")
+        if (!TelaDirectories.holdsPrivateFile(context, file)) {
+            return imageStoreFailure("unavailable")
+        }
+        if (file.exists() && !file.delete()) return imageStoreFailure("unavailable")
+        return deletionOutcome(listOf(location.toString()))
     }
 
     /**

@@ -114,6 +114,7 @@ class ImageStoreChannel(context: Context) {
         when (call.method) {
             "storeImage" -> handleStoreImage(call, result)
             "copyStoredImage" -> handleCopyStoredImage(call, result)
+            "retagStoredImage" -> handleRetagStoredImage(call, result)
             "listPrivateImages" -> onStorageThread(result) { ImageStorage(context).listPrivate() }
             "deleteDownload" -> deleting.deleteOne(call, result)
             "deleteDownloads" -> deleting.deleteBatch(call, result)
@@ -189,6 +190,32 @@ class ImageStoreChannel(context: Context) {
         val folder = outsideGalleryTree()
         Downloads.executor.execute {
             val response = storage.copy(request, folder)
+            onMainThread { result.success(response) }
+        }
+    }
+
+    /**
+     * Moves a stored image between tag folders inside its own tier.
+     *
+     * On [Downloads.executor] like the copy it exists to avoid: a retag of a
+     * whole selection is bulk work, and the serial [storageExecutor] is where
+     * the listing and the delete the user is waiting on already queue.
+     *
+     * `tag` is optional here in a way `tier` and `location` are not — its
+     * absence means the tier root, which is a real destination.
+     */
+    private fun handleRetagStoredImage(call: MethodCall, result: MethodChannel.Result) {
+        val tier = call.argument<String>("tier")
+        val location = call.argument<String>("location")
+        if (tier == null || location == null) {
+            result.success(imageStoreFailure("unavailable"))
+            return
+        }
+        val tag = call.argument<String>("tag")
+        val storage = ImageStorage(context)
+        val folder = outsideGalleryTree()
+        Downloads.executor.execute {
+            val response = storage.retag(tier, Uri.parse(location), tag, folder)
             onMainThread { result.success(response) }
         }
     }
@@ -344,7 +371,7 @@ class ImageStoreChannel(context: Context) {
         val from = call.argument<String>("from") ?: return null
         val purity = call.argument<String>("purity") ?: return null
         val tier = call.argument<String>("tier") ?: return null
-        return ImageCopyRequest(source, id, from, purity, tier)
+        return ImageCopyRequest(source, id, from, purity, tier, call.argument<String>("tag"))
     }
 
     private fun imageStoreRequest(call: MethodCall): ImageStoreRequest? {
@@ -353,7 +380,7 @@ class ImageStoreChannel(context: Context) {
         val imageUrl = call.argument<String>("imageUrl") ?: return null
         val purity = call.argument<String>("purity") ?: return null
         val tier = call.argument<String>("tier") ?: return null
-        return ImageStoreRequest(source, id, imageUrl, purity, tier)
+        return ImageStoreRequest(source, id, imageUrl, purity, tier, call.argument<String>("tag"))
     }
 
     /** Runs filesystem work off the UI thread, answering on it. */

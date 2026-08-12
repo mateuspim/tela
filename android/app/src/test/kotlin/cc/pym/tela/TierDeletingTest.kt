@@ -120,15 +120,23 @@ class TierDeletingTest : ImageStorageTestCase() {
         assertTrue("the file outside the tier survived", outside.exists())
     }
 
-    /** The same reversal as `deletePrivate counts a key it holds no file for`. */
+    /**
+     * The same reversal as `deletePrivate counts a key it holds no file for`.
+     *
+     * The location is built from the real tier directory rather than written out
+     * as `/data/user/0/…`. It used to be a literal, and that passed only because
+     * this path read the *file name* and threw the directory away — once the
+     * delete became location-exact (tags mean one wallpaper can be in two
+     * folders) the literal named somewhere outside Robolectric's `filesDir` and
+     * was correctly refused as out-of-tier. A fixture that has to lie about
+     * where a file is was pinning the old shortcut, not the rule.
+     */
     @Test
     fun `deleteDownload counts an app-private id it holds no file for as deleted`() {
         writePrivateImage("wallhaven-abc123.jpg")
+        val absent = File(privateDirectory(), "wallhaven-zzz999.jpg")
 
-        val result = storage.deleteDownload(
-            "appPrivate",
-            Uri.parse("file:///data/user/0/cc.pym.tela/files/wallpapers/wallhaven-zzz999.jpg"),
-        )
+        val result = storage.deleteDownload("appPrivate", Uri.fromFile(absent))
 
         assertEquals(true, result["success"])
     }
@@ -139,5 +147,56 @@ class TierDeletingTest : ImageStorageTestCase() {
 
         assertEquals(false, result["success"])
         assertEquals("unavailable", errorCodeOf(result))
+    }
+
+    // --- tags, which are folders -------------------------------------------
+
+    /**
+     * **The silent one.** This path treats "no matching file" as success, on the
+     * sound rule that a file already gone counts as deleted. A search that did
+     * not descend into tag folders would therefore report every tagged image
+     * deleted and remove none of them — no exception, no error code, nothing in
+     * a log. Verified by mutation: dropping the tag folders from
+     * [TelaDirectories.privateFiles] turns this red and nothing else.
+     */
+    @Test
+    fun `deletePrivate reaches a file inside a tag folder`() {
+        val file = writePrivateImage("wallhaven-abc123.jpg", tag = "anime")
+
+        val result = storage.deletePrivate("wallhaven-abc123")
+
+        assertEquals(true, result["success"])
+        assertFalse("the tagged file survived a delete that reported success", file.exists())
+    }
+
+    /** By key means the wallpaper, wherever it is: this door names an image, not
+     *  a file, and a copy left behind in another tag is a delete that lied. */
+    @Test
+    fun `deletePrivate removes every tag's copy of one wallpaper`() {
+        val anime = writePrivateImage("wallhaven-abc123.jpg", tag = "anime")
+        val minimal = writePrivateImage("wallhaven-abc123.jpg", tag = "minimal")
+
+        storage.deletePrivate("wallhaven-abc123")
+
+        assertFalse(anime.exists())
+        assertFalse(minimal.exists())
+    }
+
+    /**
+     * By location means **that** file. Deleting one tile must not empty the
+     * other tag — which is exactly what this path used to do, because it read
+     * the file name and threw the directory away. Harmless while the tier was
+     * flat; wrong the moment a tag became a folder.
+     */
+    @Test
+    fun `deleteDownload takes only the copy at the location it was given`() {
+        val anime = writePrivateImage("wallhaven-abc123.jpg", tag = "anime")
+        val minimal = writePrivateImage("wallhaven-abc123.jpg", tag = "minimal")
+
+        val result = storage.deleteDownload("appPrivate", Uri.fromFile(anime))
+
+        assertEquals(true, result["success"])
+        assertFalse(anime.exists())
+        assertTrue("the other tag's copy was taken too", minimal.exists())
     }
 }

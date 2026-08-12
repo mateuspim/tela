@@ -28,6 +28,7 @@ private class ImageWrite(
     val extension: String,
     val purity: String,
     val tier: String,
+    val tag: String?,
     val writeBytes: (OutputStream) -> Unit,
 ) {
     val fileName: String get() = ImageFileNaming.fileName(source, id, extension)
@@ -55,6 +56,7 @@ internal class TierWriting(private val context: Context) {
                 extension = ImageFileNaming.urlExtension(request.imageUrl),
                 purity = request.purity,
                 tier = request.tier,
+                tag = request.tag,
                 writeBytes = { output -> copyRemote(request.imageUrl, output) },
             ),
             outsideGalleryTree,
@@ -82,6 +84,7 @@ internal class TierWriting(private val context: Context) {
                 extension = ImageFileNaming.extensionOf(context, from),
                 purity = request.purity,
                 tier = request.tier,
+                tag = request.tag,
                 writeBytes = { output -> copyLocal(from, output) },
             ),
             outsideGalleryTree,
@@ -95,6 +98,13 @@ internal class TierWriting(private val context: Context) {
      * caller that cannot prove an image is safe can hand it over as `nsfw` and
      * rely on the gallery becoming impossible rather than on remembering an
      * `if` of its own.
+     *
+     * The tag is checked **after** the purity rule and before any routing. After,
+     * so a request that is both explicit-into-the-gallery and badly tagged still
+     * reports `restricted` — the invariant's own answer must not be masked by an
+     * argument complaint. Before routing, because from here on the tag is a path
+     * segment, and the three writers must never be the ones deciding whether it
+     * was safe to be one.
      */
     private fun write(request: ImageWrite, outsideGalleryTree: String?): Map<String, Any> {
         if (request.purity !in SUPPORTED_PURITIES || request.tier !in SUPPORTED_TIERS) {
@@ -103,6 +113,8 @@ internal class TierWriting(private val context: Context) {
         if (request.purity == "nsfw" && request.tier == "sharedGallery") {
             return imageStoreFailure("restricted")
         }
+        val tag = request.tag
+        if (tag != null && !TagFolders.isValid(tag)) return imageStoreFailure("unavailable")
         return try {
             when (request.tier) {
                 "sharedGallery" -> storeInGallery(request)
@@ -127,12 +139,13 @@ internal class TierWriting(private val context: Context) {
      * idempotent.
      */
     private fun storeInGallery(request: ImageWrite): Map<String, Any> {
-        val existing = findGalleryImage(request.fileName)
+        val folder = TagFolders.galleryPath(request.tag)
+        val existing = findGalleryImage(request.fileName, folder)
         if (existing != null) return rewriteGalleryImage(existing, request)
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, request.fileName)
             put(MediaStore.MediaColumns.MIME_TYPE, request.mimeType)
-            put(MediaStore.MediaColumns.RELATIVE_PATH, TreeLocation.GALLERY_FOLDER_PATH)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, folder)
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         val resolver = context.contentResolver
@@ -188,18 +201,23 @@ internal class TierWriting(private val context: Context) {
     }
 
     /**
-     * The row tela already wrote for [name] under `Pictures/tela`, if any.
+     * The row tela already wrote for [name] under [folder], if any.
      *
      * Scoped to that directory as well as the name: another app's
      * `wallhaven-abc123.jpg` elsewhere on the device is not ours to overwrite.
      * MediaStore stores `RELATIVE_PATH` with a trailing separator, so the
      * comparison carries one.
+     *
+     * [folder] is a parameter rather than the constant it used to be because a
+     * tag *is* a directory: `Pictures/tela/anime` and `Pictures/tela/minimal`
+     * hold different files, and a lookup that ignored the tag would rewrite one
+     * tag's copy while the caller believed it was writing another's.
      */
-    private fun findGalleryImage(name: String): Uri? {
+    private fun findGalleryImage(name: String, folder: String): Uri? {
         val projection = arrayOf(MediaStore.MediaColumns._ID)
         val selection = "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND " +
             "${MediaStore.MediaColumns.DISPLAY_NAME}=?"
-        val arguments = arrayOf("${TreeLocation.GALLERY_FOLDER_PATH}/", name)
+        val arguments = arrayOf("$folder/", name)
         context.contentResolver.query(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             projection,
@@ -230,9 +248,20 @@ internal class TierWriting(private val context: Context) {
         if (TreeLocation.of(tree)?.overlapsGallery != false) {
             return imageStoreFailure("folderUnavailable")
         }
-        val directory = SafDocuments.telaFolderIn(context, tree)
+        val telaFolder = SafDocuments.telaFolderIn(context, tree)
             ?: return imageStoreFailure("unavailable")
-        if (!SafDocuments.ensureNoMediaMarker(context, directory)) {
+        if (!SafDocuments.ensureNoMediaMarker(context, telaFolder)) {
+            return imageStoreFailure("unavailable")
+        }
+        // The tag's own folder is marked too. A `.nomedia` in the parent already
+        // covers the subtree for Android's scanner, so this is belt and braces —
+        // but this tier's entire contract is "not in the gallery index", the
+        // marker costs one document, and a subtree exclusion is a scanner
+        // behaviour rather than a documented guarantee. See `TreeLocation`, which
+        // records what a mis-marked directory cost the owner once already.
+        val directory = SafDocuments.tagFolderIn(context, telaFolder, request.tag)
+            ?: return imageStoreFailure("unavailable")
+        if (directory != telaFolder && !SafDocuments.ensureNoMediaMarker(context, directory)) {
             return imageStoreFailure("unavailable")
         }
         val resolver = context.contentResolver
@@ -273,7 +302,8 @@ internal class TierWriting(private val context: Context) {
     }
 
     private fun storePrivately(request: ImageWrite): Map<String, Any> {
-        val directory = TelaDirectories.privateImages(context)
+        val directory = TagFolders.privateDirectory(context, request.tag)
+            ?: return imageStoreFailure("unavailable")
         if (!TelaDirectories.ensure(directory)) return imageStoreFailure("unavailable")
         val file = File(directory, request.fileName)
         file.outputStream().use { output -> request.writeBytes(output) }

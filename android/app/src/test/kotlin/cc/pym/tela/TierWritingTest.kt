@@ -242,11 +242,84 @@ class TierWritingTest : ImageStorageTestCase() {
         id: String = "abc123",
         purity: String = "sfw",
         tier: String = "appPrivate",
+        tag: String? = null,
     ) = ImageCopyRequest(
         source = "wallhaven",
         id = id,
         from = from.toString(),
         purity = purity,
         tier = tier,
+        tag = tag,
     )
+
+    // --- tags, which are folders -------------------------------------------
+
+    /**
+     * The one tier this suite can really write, so it is where the tag folder is
+     * pinned. The gallery and SAF equivalents are device-only for the reason
+     * [ImageStorageTestCase] gives, and their paths are pinned instead where
+     * they are composed, in [TagFolderTest].
+     */
+    @Test
+    fun `a tagged copy lands in the tag's folder, not the tier root`() {
+        val origin = File(context.cacheDir, "origin.jpg").apply { writeText("pixels") }
+
+        val result = storage.copy(copyRequest(Uri.fromFile(origin), tag = "anime"), null)
+
+        assertEquals(true, result["success"])
+        assertTrue(File(privateDirectory("anime"), "wallhaven-abc123.jpg").exists())
+        assertFalse(File(privateDirectory(), "wallhaven-abc123.jpg").exists())
+    }
+
+    /** The untagged write is the one every caller made before tags existed, and
+     *  it must still land exactly where it did. */
+    @Test
+    fun `an untagged copy still lands in the tier root`() {
+        val origin = File(context.cacheDir, "origin.jpg").apply { writeText("pixels") }
+
+        val result = storage.copy(copyRequest(Uri.fromFile(origin)), null)
+
+        assertEquals(true, result["success"])
+        assertTrue(File(privateDirectory(), "wallhaven-abc123.jpg").exists())
+    }
+
+    /** The tag is the other string this side builds a path from, so it earns the
+     *  same test the id has: refused, and nothing written outside the tier. */
+    @Test
+    fun `a traversing tag is refused and writes nothing`() {
+        val origin = File(context.cacheDir, "origin.jpg").apply { writeText("pixels") }
+        val escaped = File(context.filesDir, "wallhaven-abc123.jpg")
+
+        val result = storage.copy(
+            copyRequest(Uri.fromFile(origin), tag = "../.."),
+            null,
+        )
+
+        assertEquals(false, result["success"])
+        assertEquals("unavailable", errorCodeOf(result))
+        assertFalse("a file was written outside the tier", escaped.exists())
+    }
+
+    /**
+     * A request that breaks the purity rule *and* carries a bad tag reports the
+     * purity rule. The invariant's own answer must not be masked by an argument
+     * complaint — someone reading `unavailable` would go looking for a typo
+     * rather than learning the gallery had refused an explicit image.
+     */
+    @Test
+    fun `the nsfw refusal outranks a bad tag`() {
+        val result = storage.store(
+            ImageStoreRequest(
+                source = "wallhaven",
+                id = "abc123",
+                imageUrl = unreachableImage,
+                purity = "nsfw",
+                tier = "sharedGallery",
+                tag = "../..",
+            ),
+            null,
+        )
+
+        assertEquals("restricted", errorCodeOf(result))
+    }
 }
