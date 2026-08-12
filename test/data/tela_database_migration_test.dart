@@ -142,10 +142,50 @@ Future<void> _createV6(File file) async {
   // Any read forces the migration to run; the row count is incidental.
   await db.favoriteRows();
   await db.close();
+  // Everything the versions *after* v6 added has to come back off, because
+  // opening the database above ran the whole chain, not just v5 → v6. The queue
+  // table goes whole; v8's `tag` columns are dropped individually, and the
+  // queue's goes with its table. Each later migration adds one line here — the
+  // price of building this state by running the real thing rather than by
+  // hand-copying a schema that would then be free to disagree with it.
   sqlite3.open(file.path)
     ..execute('DROP TABLE IF EXISTS download_queue_entries;')
+    ..execute('ALTER TABLE downloaded_wallpapers DROP COLUMN tag;')
     ..execute('PRAGMA user_version = 6;')
     ..dispose();
+}
+
+/// The v7 schema: v6 plus the download queue, and no tag columns.
+///
+/// Built the way [_createV6] is and for the same reason — by running the real
+/// migrations and then unwinding what came after — rather than by hand-copying
+/// a schema that would be free to disagree with the one the app ships.
+Future<void> _createV7(File file) async {
+  await _createV6(file);
+  final TelaDatabase db = TelaDatabase(NativeDatabase(file));
+  // A real queued entry, so the v8 upgrade has something to keep: a column
+  // added to an empty table proves only that the statement ran.
+  await DriftDownloadQueue(db).enqueue(<QueuedDownload>[
+    QueuedDownload(
+      wallpaper: _wallpaperFrom(SourceId.konachan, '12345'),
+      queuedAt: DateTime(2026, 8, 12),
+    ),
+  ]);
+  await db.close();
+  sqlite3.open(file.path)
+    ..execute('ALTER TABLE downloaded_wallpapers DROP COLUMN tag;')
+    ..execute('ALTER TABLE download_queue_entries DROP COLUMN tag;')
+    ..execute('PRAGMA user_version = 7;')
+    ..dispose();
+}
+
+/// Whether [table] has a column called [column].
+bool _hasColumn(File file, String table, String column) {
+  final Database db = sqlite3.open(file.path);
+  final ResultSet rows = db.select('PRAGMA table_info($table);');
+  final bool found = rows.any((Row row) => row['name'] == column);
+  db.dispose();
+  return found;
 }
 
 /// Whether [table] exists in the file at all.
@@ -381,6 +421,69 @@ void main() {
       await db.close();
 
       expect(_hasTable(file, 'download_queue_entries'), isTrue);
+    });
+
+    test('v7 → v8 tags the download tables and keeps every row', () async {
+      // v8 is the ordinary shape again: one nullable column on two tables.
+      // Every row that existed reads back untagged, which is the truth about
+      // it — those files were written before tags and sit in their tier's root.
+      await _createV7(file);
+      expect(_hasColumn(file, 'downloaded_wallpapers', 'tag'), isFalse);
+
+      final TelaDatabase db = TelaDatabase(NativeDatabase(file));
+
+      final DownloadRecord kept = (await DriftDownloadHistory(
+        db,
+      ).downloads()).single;
+      expect(kept.wallpaper.ref, _wallhaven('e7jvjd'));
+      expect(kept.tag, isNull);
+      expect((await DriftDownloadQueue(db).entries()).single.tag, isNull);
+
+      await db.close();
+
+      expect(_hasColumn(file, 'downloaded_wallpapers', 'tag'), isTrue);
+      expect(_hasColumn(file, 'download_queue_entries', 'tag'), isTrue);
+    });
+
+    /// The upgrade that nearly shipped broken, and the reason the v8 step is
+    /// guarded by version rather than run unconditionally.
+    ///
+    /// `createTable` and v6's `alterTable` both emit **today's** definition, so
+    /// a database old enough to have the downloads table rebuilt on the way
+    /// through arrives at v8 already carrying the column — and a second
+    /// `ADD COLUMN` fails the entire migration, taking the user's library with
+    /// it. Every starting version has to reach v8 once and land in the same
+    /// place.
+    test('every version from v1 upward reaches v8 exactly once', () async {
+      for (final (int version, Future<void> Function(File) build)
+          in <(int, Future<void> Function(File))>[
+            (1, (File f) async => _createV1(f)),
+            (2, (File f) async => _createV2(f)),
+            (3, (File f) async => _createV3(f)),
+            (5, (File f) async => _createV5(f)),
+            (6, _createV6),
+            (7, _createV7),
+          ]) {
+        final File each = File('${file.path}.v$version');
+        if (each.existsSync()) each.deleteSync();
+        await build(each);
+
+        final TelaDatabase db = TelaDatabase(NativeDatabase(each));
+        await db.favoriteRows(); // any read forces the upgrade
+        await db.close();
+
+        expect(
+          _hasColumn(each, 'downloaded_wallpapers', 'tag'),
+          isTrue,
+          reason: 'v$version did not reach v8',
+        );
+        expect(
+          _hasColumn(each, 'download_queue_entries', 'tag'),
+          isTrue,
+          reason: 'v$version did not reach v8',
+        );
+        each.deleteSync();
+      }
     });
 
     test('a queue written at v7 survives being reopened', () async {

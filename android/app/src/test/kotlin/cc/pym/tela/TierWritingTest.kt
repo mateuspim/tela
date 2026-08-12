@@ -301,6 +301,52 @@ class TierWritingTest : ImageStorageTestCase() {
     }
 
     /**
+     * **One wallpaper, one tag.** Downloading something already stored, under a
+     * different tag, means "file it there" — not "keep two". The same judgement
+     * the gallery and SAF writers already make about re-downloading at all,
+     * arriving by a new door: a tag folder is a fresh way to end up with the
+     * pile that `wallhaven-abc123 (1).jpg` used to be (owner, 2026-07-19).
+     */
+    @Test
+    fun `a re-download under another tag moves the wallpaper rather than copying it`() {
+        val origin = File(context.cacheDir, "origin.jpg").apply { writeText("pixels") }
+        storage.copy(copyRequest(Uri.fromFile(origin), tag = "anime"), null)
+
+        storage.copy(copyRequest(Uri.fromFile(origin), tag = "minimal"), null)
+
+        assertTrue(File(privateDirectory("minimal"), "wallhaven-abc123.jpg").exists())
+        assertFalse(
+            "the copy under the old tag survived",
+            File(privateDirectory("anime"), "wallhaven-abc123.jpg").exists(),
+        )
+    }
+
+    /** The sweep runs **after** the write, so a download that fails cannot have
+     *  relocated a file the user already had. */
+    @Test
+    fun `a failed re-download leaves the existing tagged copy alone`() {
+        val kept = writePrivateImage("wallhaven-abc123.jpg", tag = "anime")
+
+        val result = storage.store(request("sfw", "appPrivate", id = "abc123"), null)
+
+        assertEquals(false, result["success"])
+        assertTrue("the earlier copy was swept by a write that never landed", kept.exists())
+    }
+
+    /** The tag that was really used is reported back, so a caller never records
+     *  one the adapter did not honour. */
+    @Test
+    fun `a successful write answers with the tag it used`() {
+        val origin = File(context.cacheDir, "origin.jpg").apply { writeText("pixels") }
+
+        val tagged = storage.copy(copyRequest(Uri.fromFile(origin), tag = "anime"), null)
+        val untagged = storage.copy(copyRequest(Uri.fromFile(origin), id = "def456"), null)
+
+        assertEquals("anime", tagged["tag"])
+        assertFalse("an untagged write must not mention a tag", untagged.containsKey("tag"))
+    }
+
+    /**
      * A request that breaks the purity rule *and* carries a bad tag reports the
      * purity rule. The invariant's own answer must not be masked by an argument
      * complaint — someone reading `unavailable` would go looking for a typo

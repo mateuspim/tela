@@ -3,6 +3,7 @@ import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/image_store.dart';
 import 'package:tela/domain/use_cases/download_wallpaper.dart';
@@ -64,16 +65,19 @@ class ConfiguredDownload {
 
   /// Downloads [wallpaper], setting up a folder first when the tier needs one.
   ///
-  /// [tier] is the per-download override, forwarded untouched. [chooseVolume]
+  /// [tier] and [tag] are the per-download destination and folder, forwarded
+  /// untouched — the retry after a folder grant uses the same pair, so a
+  /// download does not lose its tag on the way through setup. [chooseVolume]
   /// shows the device/card sheet; a dismissed sheet yields
   /// [DownloadOutcome.cancelled] with nothing written.
   Future<DownloadOutcome> call(
     Wallpaper wallpaper, {
     required ChooseDownloadVolume chooseVolume,
     StorageTier? tier,
+    TagFolder? tag,
   }) async {
     try {
-      await _perform(wallpaper, tier: tier);
+      await _perform(wallpaper, tier: tier, tag: tag);
       return DownloadOutcome.saved;
     } on ImageStoreFailure catch (failure) {
       return switch (failure.problem) {
@@ -85,6 +89,7 @@ class ConfiguredDownload {
         ImageStoreProblem.notConfigured => await _setUpAndRetry(
           wallpaper,
           tier,
+          tag,
           chooseVolume,
         ),
         _ => DownloadOutcome.failed,
@@ -114,10 +119,11 @@ class ConfiguredDownload {
   Future<DownloadOutcome> _setUpAndRetry(
     Wallpaper wallpaper,
     StorageTier? tier,
+    TagFolder? tag,
     ChooseDownloadVolume chooseVolume,
   ) async {
     if (!await _grantFolder(chooseVolume)) return DownloadOutcome.cancelled;
-    return _retry(wallpaper, tier);
+    return _retry(wallpaper, tier, tag);
   }
 
   /// Opens the chooser — aimed by whether a card is on offer — and grants the
@@ -143,9 +149,13 @@ class ConfiguredDownload {
 
   /// One retry only: a second `notConfigured` means the grant did not take, and
   /// looping would reopen the picker forever.
-  Future<DownloadOutcome> _retry(Wallpaper wallpaper, StorageTier? tier) async {
+  Future<DownloadOutcome> _retry(
+    Wallpaper wallpaper,
+    StorageTier? tier,
+    TagFolder? tag,
+  ) async {
     try {
-      await _perform(wallpaper, tier: tier);
+      await _perform(wallpaper, tier: tier, tag: tag);
       return DownloadOutcome.saved;
     } on ImageStoreFailure {
       return DownloadOutcome.failed;

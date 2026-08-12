@@ -2,6 +2,7 @@ import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 
 /// How the enum and list fields of a stored wallpaper are read back.
 ///
@@ -70,3 +71,16 @@ List<String> storedColors(String stored) {
 
 /// Joins colours for storage, in Wallhaven's order.
 String joinedColors(List<String> colors) => colors.join(',');
+
+/// Reads a stored tag, answering null for anything that is not a legal folder.
+///
+/// Null covers three cases that are all genuinely "untagged": a row written
+/// before schema v8, a download that was never tagged, and a stored name that
+/// this build would no longer accept as a directory. The last is the reason
+/// this is not a bare `TagFolder(stored)` — the column holds whatever some
+/// version once wrote, and a name that cannot be a folder must not be handed
+/// back as one to a caller that will go looking for it on disk.
+TagFolder? storedTag(String? stored) {
+  if (stored == null) return null;
+  return TagFolder.isLegal(stored) ? TagFolder(stored) : null;
+}

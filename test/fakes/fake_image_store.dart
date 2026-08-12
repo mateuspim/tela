@@ -8,6 +8,7 @@ import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/image_store.dart';
 
@@ -87,6 +88,9 @@ class FakeImageStore implements ImageStore {
   /// Latest requested destination.
   StorageTier? receivedTier;
 
+  /// Latest requested tag folder, null when the write was untagged.
+  TagFolder? receivedTag;
+
   @override
   Future<StoredImage> store({
     required SourceId source,
@@ -94,25 +98,35 @@ class FakeImageStore implements ImageStore {
     required String imageUrl,
     required Purity purity,
     required StorageTier tier,
+    TagFolder? tag,
   }) async {
     receivedSource = source;
     receivedId = id;
     receivedImageUrl = imageUrl;
     receivedPurity = purity;
     receivedTier = tier;
+    receivedTag = tag;
     final ImageStoreFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
     if (_failingIds.contains(id)) {
       throw const ImageStoreFailure(ImageStoreProblem.source);
     }
     return storedImage ??
-        StoredImage(location: Uri.parse('memory://$id'), tier: tier);
+        StoredImage(location: Uri.parse('memory://$id'), tier: tier, tag: tag);
   }
 
   /// Every local copy made, in call order — the moves that got as far as
   /// writing a destination file.
-  final List<({Uri from, StorageTier tier, WallpaperRef ref})> copies =
-      <({Uri from, StorageTier tier, WallpaperRef ref})>[];
+  final List<({Uri from, StorageTier tier, TagFolder? tag, WallpaperRef ref})>
+  copies = <({Uri from, StorageTier tier, TagFolder? tag, WallpaperRef ref})>[];
+
+  /// Every retag asked for, in call order.
+  final List<({StorageTier tier, Uri location, TagFolder? tag})> retags =
+      <({StorageTier tier, Uri location, TagFolder? tag})>[];
+
+  /// Locations whose [retagStoredImage] throws, standing in for the file this
+  /// install no longer owns — the case that must fall back to copy-and-delete.
+  Set<Uri> unretaggable = <Uri>{};
 
   /// Applies the real NSFW gate, unlike [store].
   ///
@@ -129,6 +143,7 @@ class FakeImageStore implements ImageStore {
     required Uri from,
     required Purity purity,
     required StorageTier tier,
+    TagFolder? tag,
   }) async {
     if (purity == Purity.nsfw && tier == StorageTier.sharedGallery) {
       throw const ImageStoreFailure(ImageStoreProblem.restricted);
@@ -138,8 +153,40 @@ class FakeImageStore implements ImageStore {
     if (_failingIds.contains(id)) {
       throw const ImageStoreFailure(ImageStoreProblem.source);
     }
-    copies.add((from: from, tier: tier, ref: WallpaperRef(source, id)));
-    return StoredImage(location: Uri.parse('memory://$id-copy'), tier: tier);
+    copies.add((
+      from: from,
+      tier: tier,
+      tag: tag,
+      ref: WallpaperRef(source, id),
+    ));
+    return StoredImage(
+      location: Uri.parse('memory://$id-copy'),
+      tier: tier,
+      tag: tag,
+    );
+  }
+
+  /// Moves an image between tag folders without copying it.
+  ///
+  /// Answers a location derived from the tag, so a caller that forgets to store
+  /// the new one is visible in a test rather than merely wrong on a device.
+  @override
+  Future<StoredImage> retagStoredImage({
+    required StorageTier tier,
+    required Uri location,
+    required TagFolder? tag,
+  }) async {
+    final ImageStoreFailure? toThrow = failure;
+    if (toThrow != null) throw toThrow;
+    if (unretaggable.contains(location)) {
+      throw const ImageStoreFailure(ImageStoreProblem.unavailable);
+    }
+    retags.add((tier: tier, location: location, tag: tag));
+    return StoredImage(
+      location: Uri.parse('memory://${tag?.name ?? 'untagged'}/$location'),
+      tier: tier,
+      tag: tag,
+    );
   }
 
   @override

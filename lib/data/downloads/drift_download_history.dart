@@ -1,9 +1,11 @@
+import 'package:drift/drift.dart';
 import 'package:tela/data/db/stored_wallpaper_fields.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_history.dart';
@@ -57,11 +59,21 @@ class DriftDownloadHistory implements DownloadHistory {
     required Wallpaper wallpaper,
     required StorageTier tier,
     required Uri location,
+    TagFolder? tag,
   }) async {
     if (wallpaper.isNsfw) return;
     if (tier == StorageTier.appPrivate) return;
-    await _db.putDownload(_toRow(wallpaper, tier, location));
+    await _db.putDownload(_toRow(wallpaper, tier, location, tag));
   }
+
+  /// Re-points the row at a file that has moved tag. See
+  /// [DownloadHistory.retag].
+  @override
+  Future<void> retag({
+    required WallpaperRef ref,
+    required Uri location,
+    required TagFolder? tag,
+  }) => _db.retagDownload(ref, location.toString(), tag?.name);
 
   /// Drops the row and nothing else — the downloaded file is not tela's to
   /// delete from here. See [DownloadHistory.forget].
@@ -77,6 +89,7 @@ class DriftDownloadHistory implements DownloadHistory {
     Wallpaper wallpaper,
     StorageTier tier,
     Uri location,
+    TagFolder? tag,
   ) {
     return DownloadedWallpapersCompanion.insert(
       source: wallpaper.source.value,
@@ -95,6 +108,7 @@ class DriftDownloadHistory implements DownloadHistory {
       tier: tier.name,
       location: location.toString(),
       downloadedAt: _now(),
+      tag: Value<String?>(tag?.name),
     );
   }
 
@@ -104,6 +118,11 @@ class DriftDownloadHistory implements DownloadHistory {
       tier: storedTier(row.tier),
       location: Uri.parse(row.location),
       downloadedAt: row.downloadedAt,
+      // Unreadable rather than trusted: the column holds whatever was written,
+      // and a name that is no longer a legal folder must not become one again
+      // on the way out. `tryParse`'s null is the same "untagged" every
+      // pre-v8 row reads back as.
+      tag: storedTag(row.tag),
     );
   }
 

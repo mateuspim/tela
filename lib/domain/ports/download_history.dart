@@ -1,5 +1,6 @@
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 
@@ -42,6 +43,20 @@ abstract interface class DownloadHistory {
     required Wallpaper wallpaper,
     required StorageTier tier,
     required Uri location,
+    TagFolder? tag,
+  });
+
+  /// Re-points [ref]'s row at a file that has moved to [tag].
+  ///
+  /// A retag changes both where the file is and what it is filed under, and the
+  /// two must land together: a row naming the new tag beside the old location
+  /// describes a file that is not there, which is the same broken state a
+  /// half-applied tier move would leave. A no-op for a wallpaper that is not
+  /// recorded — the private tier keeps no rows and retags there just as much.
+  Future<void> retag({
+    required WallpaperRef ref,
+    required Uri location,
+    required TagFolder? tag,
   });
 
   /// Forgets the row for [ref]. **Does not touch the downloaded file.**

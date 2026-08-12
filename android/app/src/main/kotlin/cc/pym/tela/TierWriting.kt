@@ -141,7 +141,14 @@ internal class TierWriting(private val context: Context) {
     private fun storeInGallery(request: ImageWrite): Map<String, Any> {
         val folder = TagFolders.galleryPath(request.tag)
         val existing = findGalleryImage(request.fileName, folder)
-        if (existing != null) return rewriteGalleryImage(existing, request)
+        val result = existing
+            ?.let { uri -> rewriteGalleryImage(uri, request) }
+            ?: insertGalleryImage(request, folder)
+        if (result["success"] == true) dropOtherGalleryTags(request)
+        return result
+    }
+
+    private fun insertGalleryImage(request: ImageWrite, folder: String): Map<String, Any> {
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, request.fileName)
             put(MediaStore.MediaColumns.MIME_TYPE, request.mimeType)
@@ -155,10 +162,43 @@ internal class TierWriting(private val context: Context) {
             resolver.openOutputStream(uri)?.use { output -> request.writeBytes(output) }
                 ?: throw IllegalStateException("MediaStore output stream was null")
             markReady(uri)
-            stored(uri)
+            stored(uri, request.tag)
         } catch (error: Exception) {
             resolver.delete(uri, null, null)
             throw error
+        }
+    }
+
+    /**
+     * Deletes this wallpaper's rows under other tag folders — one wallpaper, one
+     * tag, as [dropOtherPrivateTags] argues in full.
+     *
+     * **A copy that will not delete is left alone rather than retried.** Media
+     * ownership is per install, so a file written before the 2026-08-11
+     * reinstall belongs to nobody as far as this package is concerned and needs
+     * the user's confirmation to remove — a prompt that cannot be raised here,
+     * because a queued download drains with no screen attached. One visible
+     * duplicate the user can delete beats a download that fails, or a prompt
+     * that never appears.
+     */
+    private fun dropOtherGalleryTags(request: ImageWrite) {
+        val selection = "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND " +
+            "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? AND " +
+            "${MediaStore.MediaColumns.RELATIVE_PATH}!=?"
+        val arguments = arrayOf(
+            request.fileName,
+            "${TreeLocation.GALLERY_FOLDER_PATH}/%",
+            "${TagFolders.galleryPath(request.tag)}/",
+        )
+        try {
+            context.contentResolver.delete(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                selection,
+                arguments,
+            )
+        } catch (_: Exception) {
+            // See the docstring: an undeletable older copy is not this
+            // download's problem to fail over.
         }
     }
 
@@ -187,7 +227,7 @@ internal class TierWriting(private val context: Context) {
                 request.writeBytes(output)
             } ?: throw IllegalStateException("MediaStore output stream was null")
             markReady(uri)
-            stored(uri)
+            stored(uri, request.tag)
         } catch (error: Exception) {
             markReady(uri)
             throw error
@@ -271,7 +311,13 @@ internal class TierWriting(private val context: Context) {
         // the desktop-sync path, where a directory quietly accumulating near
         // copies of every wallpaper is worse still.
         val existing = SafDocuments.findChild(context, directory, request.fileName)
-        if (existing != null) return rewriteDocument(existing, request)
+        if (existing != null) {
+            val rewritten = rewriteDocument(existing, request)
+            if (rewritten["success"] == true) {
+                SafDocuments.dropFromOtherFolders(context, telaFolder, directory, request.fileName)
+            }
+            return rewritten
+        }
         val file = DocumentsContract.createDocument(
             resolver,
             directory,
@@ -281,7 +327,8 @@ internal class TierWriting(private val context: Context) {
         return try {
             resolver.openOutputStream(file)?.use { output -> request.writeBytes(output) }
                 ?: throw IllegalStateException("document output stream was null")
-            stored(file)
+            SafDocuments.dropFromOtherFolders(context, telaFolder, directory, request.fileName)
+            stored(file, request.tag)
         } catch (error: Exception) {
             resolver.delete(file, null, null)
             throw error
@@ -298,7 +345,7 @@ internal class TierWriting(private val context: Context) {
         context.contentResolver.openOutputStream(file, "wt")?.use { output ->
             request.writeBytes(output)
         } ?: throw IllegalStateException("document output stream was null")
-        return stored(file)
+        return stored(file, request.tag)
     }
 
     private fun storePrivately(request: ImageWrite): Map<String, Any> {
@@ -307,7 +354,31 @@ internal class TierWriting(private val context: Context) {
         if (!TelaDirectories.ensure(directory)) return imageStoreFailure("unavailable")
         val file = File(directory, request.fileName)
         file.outputStream().use { output -> request.writeBytes(output) }
-        return stored(Uri.fromFile(file))
+        dropOtherPrivateTags(request, file)
+        return stored(Uri.fromFile(file), request.tag)
+    }
+
+    /**
+     * Removes this wallpaper's copies under *other* tags, once the new one has
+     * landed.
+     *
+     * **One wallpaper, one tag.** Downloading something you already have, under
+     * a different tag, means "file it there" — not "keep two". That is the same
+     * judgement the gallery and SAF writers already make about re-downloading at
+     * all: both look the file up and rewrite it in place, because `insert` and
+     * `createDocument` de-duplicate rather than overwrite and left the user with
+     * `wallhaven-abc123 (1).jpg` (owner, 2026-07-19). A tag folder is a new way
+     * to end up with the same pile.
+     *
+     * **After the write, never before.** Moving the old copy first would leave a
+     * failed download having relocated a file the user already had, and a
+     * truncated one where it used to be. Written-then-swept costs a moment of
+     * two copies existing and cannot lose anything.
+     */
+    private fun dropOtherPrivateTags(request: ImageWrite, written: File) {
+        TelaDirectories.privateFiles(context)
+            .filter { it.name == request.fileName && it.absolutePath != written.absolutePath }
+            .forEach { it.delete() }
     }
 
     /**
@@ -338,10 +409,24 @@ internal class TierWriting(private val context: Context) {
         }
     }
 
-    private fun stored(location: Uri): Map<String, Any> = mapOf(
-        "success" to true,
-        "location" to location.toString(),
-    )
+    /**
+     * The answer a successful write gives, naming the tag it **actually** used.
+     *
+     * Reported rather than assumed by the caller, for the reason the tier
+     * already is: the adapter has the last word. A sweep that could not remove
+     * an older copy, or a tier that ignored the tag, must not be described to
+     * the user — or written into a history row — as the tag they asked for.
+     */
+    private fun stored(location: Uri, tag: String? = null): Map<String, Any> {
+        val answer = mutableMapOf<String, Any>(
+            "success" to true,
+            "location" to location.toString(),
+        )
+        // Absent rather than null for an untagged write, so the response reads
+        // back the same as it did before tags existed.
+        if (tag != null) answer["tag"] = tag
+        return answer
+    }
 
     private companion object {
         const val NETWORK_TIMEOUT_MS = 30_000

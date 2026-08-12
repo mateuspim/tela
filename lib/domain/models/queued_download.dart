@@ -1,6 +1,7 @@
 import 'package:meta/meta.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 
@@ -46,6 +47,7 @@ class QueuedDownload {
     required this.wallpaper,
     required this.queuedAt,
     this.tier,
+    this.tag,
     this.state = DownloadQueueState.pending,
     this.attempts = 0,
     this.failure,
@@ -63,6 +65,14 @@ class QueuedDownload {
   /// queue that outlives a settings change lands where the user last said,
   /// not where they said when they tapped.
   final StorageTier? tier;
+
+  /// The tag folder this download will be filed under, or null for none.
+  ///
+  /// Unlike [tier], null here means null: a tag is answered once, in the
+  /// chooser, and there is nothing to resolve later — no pin and no per-purity
+  /// default stands behind it. An entry queued without one lands untagged
+  /// however the settings change in the meantime.
+  final TagFolder? tag;
 
   /// Where this entry has got to.
   final DownloadQueueState state;

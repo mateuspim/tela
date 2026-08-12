@@ -24,6 +24,7 @@ import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_sharer.dart';
 import 'package:tela/data/wallpaper/url_launcher_external_link.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/app_lock.dart';
 import 'package:tela/domain/ports/download_history.dart';
@@ -260,8 +261,12 @@ final Provider<DownloadWallpaper> downloadWallpaperProvider =
 final Provider<ConfiguredDownload> configuredDownloadProvider =
     Provider<ConfiguredDownload>(
       (Ref ref) => ConfiguredDownload(
-        perform: (Wallpaper wallpaper, {StorageTier? tier}) =>
-            ref.read(downloadWallpaperProvider)(wallpaper, tier: tier),
+        perform: (Wallpaper wallpaper, {StorageTier? tier, TagFolder? tag}) =>
+            ref.read(downloadWallpaperProvider)(
+              wallpaper,
+              tier: tier,
+              tag: tag,
+            ),
         imageStore: ref.watch(imageStoreProvider),
       ),
     );
@@ -286,8 +291,12 @@ final Provider<DrainDownloadQueue> drainDownloadQueueProvider =
     Provider<DrainDownloadQueue>(
       (Ref ref) => DrainDownloadQueue(
         queue: ref.watch(downloadQueueProvider),
-        perform: (Wallpaper wallpaper, {StorageTier? tier}) =>
-            ref.read(downloadWallpaperProvider)(wallpaper, tier: tier),
+        perform: (Wallpaper wallpaper, {StorageTier? tier, TagFolder? tag}) =>
+            ref.read(downloadWallpaperProvider)(
+              wallpaper,
+              tier: tier,
+              tag: tag,
+            ),
       ),
     );
 

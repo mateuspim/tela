@@ -1,5 +1,6 @@
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_history.dart';
@@ -47,6 +48,7 @@ class FakeDownloadHistory implements DownloadHistory {
     required Wallpaper wallpaper,
     required StorageTier tier,
     required Uri location,
+    TagFolder? tag,
   }) async {
     _recorded
       ..removeWhere((DownloadRecord d) => d.wallpaper.id == wallpaper.id)
@@ -56,7 +58,31 @@ class FakeDownloadHistory implements DownloadHistory {
           tier: tier,
           location: location,
           downloadedAt: DateTime(2026, 7, 14),
+          tag: tag,
         ),
       );
+  }
+
+  /// Re-points a row at a moved file, replacing location and tag together — a
+  /// fake that let them diverge could not catch a caller that writes one
+  /// without the other.
+  @override
+  Future<void> retag({
+    required WallpaperRef ref,
+    required Uri location,
+    required TagFolder? tag,
+  }) async {
+    final int at = _recorded.indexWhere(
+      (DownloadRecord d) => d.wallpaper.ref == ref,
+    );
+    if (at < 0) return;
+    final DownloadRecord old = _recorded[at];
+    _recorded[at] = DownloadRecord(
+      wallpaper: old.wallpaper,
+      tier: old.tier,
+      location: location,
+      downloadedAt: old.downloadedAt,
+      tag: tag,
+    );
   }
 }

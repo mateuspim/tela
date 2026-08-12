@@ -7,6 +7,7 @@ import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 
 /// Stores a remote wallpaper using a user-selected storage tier.
 ///
@@ -21,6 +22,17 @@ abstract interface class ImageStore {
   /// without its source is a file whose origin is gone. Take them from
   /// `Wallpaper.ref` rather than composing the pair by hand.
   ///
+  /// [tag] is the folder **inside** that tier the image is filed under, or null
+  /// for the tier's own root. It never influences which tier is used: the
+  /// purity rules above have already decided that, and a tag choosing a
+  /// destination would be a way around them.
+  ///
+  /// Storing a wallpaper this tier already holds under a *different* tag moves
+  /// it rather than duplicating it — one wallpaper, one tag — which is the same
+  /// rule that makes re-downloading one overwrite it instead of leaving a
+  /// second copy beside it. Read [StoredImage.tag] for where it actually ended
+  /// up.
+  ///
   /// Throws a safe `ImageStoreFailure`, never one containing [imageUrl] or a
   /// private local path.
   Future<StoredImage> store({
@@ -29,6 +41,7 @@ abstract interface class ImageStore {
     required String imageUrl,
     required Purity purity,
     required StorageTier tier,
+    TagFolder? tag,
   });
 
   /// Copies an image **already on this device** into [tier], under the same
@@ -59,6 +72,37 @@ abstract interface class ImageStore {
     required Uri from,
     required Purity purity,
     required StorageTier tier,
+    TagFolder? tag,
+  });
+
+  /// Moves an image already in [tier] into [tag]'s folder, **without copying**.
+  ///
+  /// The cheap way to change a download's tag, and the reason it exists beside
+  /// `MoveStoredImages`: nothing here moves a byte, and nothing raises the
+  /// system delete confirmation that a copy-then-delete must on Android 30+.
+  /// Retagging a selection of thirty is thirty metadata updates rather than
+  /// thirty megabytes and a prompt.
+  ///
+  /// **Within one tier only, which is a safety property rather than a
+  /// limitation.** A tag picks a directory inside a destination the purity
+  /// rules have already approved; changing tiers is [store] and
+  /// [copyStoredImage]'s business, where that gate lives. Nothing here can put
+  /// an explicit image in the gallery, because nothing here changes tiers.
+  ///
+  /// A null [tag] moves the image back to the tier root — "no tag" is a
+  /// destination, not a refusal to act.
+  ///
+  /// Answers the image's **new** location, which the caller must store: two of
+  /// the three tiers change their URI, and a history row still naming the old
+  /// one describes a file that is not there.
+  ///
+  /// Throws a safe `ImageStoreFailure` when the move could not happen at all —
+  /// a file this install no longer owns, a provider that refuses — so the
+  /// caller can fall back to copy-then-delete.
+  Future<StoredImage> retagStoredImage({
+    required StorageTier tier,
+    required Uri location,
+    required TagFolder? tag,
   });
 
   /// Everything in the app-private tier, most recently saved first.

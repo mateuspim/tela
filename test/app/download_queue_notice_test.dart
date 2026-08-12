@@ -14,6 +14,7 @@ import 'package:tela/domain/models/queued_download.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/use_cases/drain_download_queue.dart';
 
@@ -163,7 +164,7 @@ Future<ProviderContainer> _start(
       drainDownloadQueueProvider.overrideWithValue(
         DrainDownloadQueue(
           queue: queue,
-          perform: (Wallpaper wallpaper, {StorageTier? tier}) =>
+          perform: (Wallpaper wallpaper, {StorageTier? tier, TagFolder? tag}) =>
               Completer<void>().future,
         ),
       ),

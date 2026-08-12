@@ -93,6 +93,31 @@ internal object SafDocuments {
         return DocumentsContract.buildDocumentUriUsingTree(parent, match.id)
     }
 
+    /**
+     * Deletes [name] from every tag folder under [telaFolder] except [keep].
+     *
+     * One wallpaper, one tag — the SAF half of the rule
+     * [TierWriting.dropOtherPrivateTags] states in full: re-downloading
+     * something you already have, under a different tag, means "file it there",
+     * not "keep two of it". This tier is the desktop-sync path, where a folder
+     * quietly accumulating near-copies is worse than anywhere else.
+     *
+     * Failures are ignored one document at a time. A copy on a card that has
+     * been unmounted, or under a grant that has been narrowed, is not a reason
+     * to fail a download that has already landed.
+     */
+    fun dropFromOtherFolders(context: Context, telaFolder: Uri, keep: Uri, name: String) {
+        val folders = listOf(telaFolder) + directoriesIn(context, telaFolder)
+        for (folder in folders.filter { it != keep }) {
+            val stale = findChild(context, folder, name) ?: continue
+            try {
+                DocumentsContract.deleteDocument(context.contentResolver, stale)
+            } catch (_: Exception) {
+                continue
+            }
+        }
+    }
+
     /** The document ids directly inside [parent]. */
     private fun childIds(context: Context, parent: Uri): Set<String> =
         childrenOf(context, parent).mapTo(mutableSetOf()) { it.id }

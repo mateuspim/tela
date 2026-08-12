@@ -6,6 +6,7 @@ import 'package:tela/domain/models/queued_download.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/use_cases/drain_download_queue.dart';
 
@@ -60,12 +61,17 @@ void main() {
       final DrainDownloadQueue drain = DrainDownloadQueue(
         queue: queue,
         maxConcurrent: 2,
-        perform: (Wallpaper wallpaper, {StorageTier? tier}) async {
-          inFlight++;
-          peak = peak > inFlight ? peak : inFlight;
-          await Future<void>.delayed(const Duration(milliseconds: 5));
-          inFlight--;
-        },
+        perform:
+            (
+              Wallpaper wallpaper, {
+              StorageTier? tier,
+              TagFolder? tag,
+            }) async {
+              inFlight++;
+              peak = peak > inFlight ? peak : inFlight;
+              await Future<void>.delayed(const Duration(milliseconds: 5));
+              inFlight--;
+            },
       );
 
       await drain(paused: () => false, onSettled: () async {});
@@ -156,9 +162,14 @@ void main() {
       final DrainDownloadQueue drain = DrainDownloadQueue(
         queue: queue,
         maxConcurrent: 1,
-        perform: (Wallpaper wallpaper, {StorageTier? tier}) async {
-          paused = true;
-        },
+        perform:
+            (
+              Wallpaper wallpaper, {
+              StorageTier? tier,
+              TagFolder? tag,
+            }) async {
+              paused = true;
+            },
       );
 
       await drain(paused: () => paused, onSettled: () async {});
@@ -188,10 +199,15 @@ Future<void> _drain(
   final DrainDownloadQueue drain = DrainDownloadQueue(
     queue: queue,
     maxConcurrent: 1,
-    perform: (Wallpaper wallpaper, {StorageTier? tier}) async {
-      onDownload?.call(wallpaper);
-      onDownloadWithTier?.call(wallpaper, tier);
-    },
+    perform:
+        (
+          Wallpaper wallpaper, {
+          StorageTier? tier,
+          TagFolder? tag,
+        }) async {
+          onDownload?.call(wallpaper);
+          onDownloadWithTier?.call(wallpaper, tier);
+        },
   );
   return drain(
     paused: () => false,

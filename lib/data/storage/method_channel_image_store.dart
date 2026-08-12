@@ -9,6 +9,7 @@ import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/image_store.dart';
 
@@ -40,16 +41,18 @@ class MethodChannelImageStore implements ImageStore {
     required String imageUrl,
     required Purity purity,
     required StorageTier tier,
+    TagFolder? tag,
   }) async {
     try {
       final Object? raw = await _invokeMethod(
         'storeImage',
-        <String, String>{
+        <String, Object?>{
           'source': source.value,
           'id': id,
           'imageUrl': imageUrl,
           'purity': purity.name,
           'tier': tier.name,
+          ..._tagArgument(tag),
         },
       );
       return _storedImageFrom(raw, tier);
@@ -65,16 +68,39 @@ class MethodChannelImageStore implements ImageStore {
     required Uri from,
     required Purity purity,
     required StorageTier tier,
+    TagFolder? tag,
   }) async {
     try {
       final Object? raw = await _invokeMethod(
         'copyStoredImage',
-        <String, String>{
+        <String, Object?>{
           'source': source.value,
           'id': id,
           'from': from.toString(),
           'purity': purity.name,
           'tier': tier.name,
+          ..._tagArgument(tag),
+        },
+      );
+      return _storedImageFrom(raw, tier);
+    } on PlatformException catch (error) {
+      throw ImageStoreFailure(_problemFor(error.code));
+    }
+  }
+
+  @override
+  Future<StoredImage> retagStoredImage({
+    required StorageTier tier,
+    required Uri location,
+    required TagFolder? tag,
+  }) async {
+    try {
+      final Object? raw = await _invokeMethod(
+        'retagStoredImage',
+        <String, Object?>{
+          'tier': tier.name,
+          'location': location.toString(),
+          ..._tagArgument(tag),
         },
       );
       return _storedImageFrom(raw, tier);
@@ -323,6 +349,9 @@ class MethodChannelImageStore implements ImageStore {
       location: Uri.parse(location),
       savedAt: DateTime.fromMillisecondsSinceEpoch(savedAt),
       sizeBytes: sizeBytes,
+      // Off the directory holding the file. This tier keeps no rows, so the
+      // layout on disk is the only record of what an image is filed under.
+      tag: _tagFrom(raw['tag']),
       width: _positiveOrNull(raw['width']),
       height: _positiveOrNull(raw['height']),
     );
@@ -342,11 +371,36 @@ class MethodChannelImageStore implements ImageStore {
     if (raw is Map<Object?, Object?> && raw['success'] == true) {
       final Object? location = raw['location'];
       if (location is String) {
-        return StoredImage(location: Uri.parse(location), tier: tier);
+        return StoredImage(
+          location: Uri.parse(location),
+          tier: tier,
+          // The tag the native side reports having used, not the one that was
+          // asked for. An absent key is an untagged write, which is how every
+          // response read before tags existed.
+          tag: _tagFrom(raw['tag']),
+        );
       }
     }
     final Object? code = raw is Map<Object?, Object?> ? raw['errorCode'] : null;
     throw ImageStoreFailure(_problemFor(code));
+  }
+
+  /// The `tag` argument, or nothing at all when the write is untagged.
+  ///
+  /// Omitted rather than sent as null so an untagged call puts exactly the
+  /// payload on the wire that it did before tags existed. The native side reads
+  /// an absent key and an explicit null identically, so this costs nothing
+  /// there and keeps "untagged behaves as it always did" true of the crossing
+  /// itself, not just of its effect.
+  static Map<String, Object?> _tagArgument(TagFolder? tag) => tag == null
+      ? const <String, Object?>{}
+      : <String, Object?>{'tag': tag.name};
+
+  /// Reads a tag off a native response, refusing one that is not a legal
+  /// folder name rather than constructing an impossible [TagFolder].
+  static TagFolder? _tagFrom(Object? raw) {
+    if (raw is! String || !TagFolder.isLegal(raw)) return null;
+    return TagFolder(raw);
   }
 
   ImageStoreProblem _problemFor(Object? code) {
