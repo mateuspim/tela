@@ -564,6 +564,34 @@
     "description": "Heading above the one-download storage destination choices."
   },
 
+  "downloadTagLabel": "Tag",
+  "@downloadTagLabel": {
+    "description": "Label above the tag chips in the download chooser. A tag is a real folder on disk, so this names what the download is filed under, not a keyword attached to it."
+  },
+  "downloadTagNone": "None",
+  "@downloadTagNone": {
+    "description": "The chip that files a download in its tier's root rather than in any tag folder. A destination like any other, not a refusal."
+  },
+  "downloadTagNew": "New tag",
+  "@downloadTagNew": {
+    "description": "The chip that opens the dialog for naming a tag that does not exist yet."
+  },
+  "downloadTagNewTitle": "Name the tag",
+  "@downloadTagNewTitle": {
+    "description": "Title of the dialog that asks for a new tag name."
+  },
+  "downloadTagRule": "Letters, digits, spaces, _ and -",
+  "@downloadTagRule": {
+    "description": "Helper and error text under the tag name field. A tag becomes a directory, so it cannot contain a dot or a slash, and cannot start or end with a space."
+  },
+  "downloadTagUse": "Use tag",
+  "@downloadTagUse": {
+    "description": "Confirms the typed tag name."
+  },
+  "downloadTagKeep": "Keep using this tag",
+  "@downloadTagKeep": {
+    "description": "Switch that remembers the chosen tag so the next download offers it first. Mirrors the 'Keep sending here' pin for destinations."
+  },
   "batchDownloadChooseTier": "{count, plural, =1{Download 1 wallpaper to} other{Download {count} wallpapers to}}",
   "@batchDownloadChooseTier": {
     "description": "Heading above the storage destination choices when a whole selection is being downloaded. Carries the count so a nine-item batch does not read like a single download.",

@@ -1,3 +1,4 @@
+import 'package:tela/data/db/stored_wallpaper_fields.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
@@ -7,6 +8,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/tile_density.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
@@ -96,6 +98,11 @@ class DriftSettingsRepository implements SettingsRepository {
   /// The "Keep sending here" pin. A [StorageTier] name, or absent when no pin
   /// is set. Purity-flat — one row for all purities.
   static const String _pinnedTierKey = 'downloads.pinned';
+
+  /// The tag offered first in the chooser. **Shared tiers only** — a
+  /// private-library tag never reaches this table; see
+  /// `SettingsRepository.loadDownloadTag`.
+  static const String _downloadTagKey = 'downloads.tag';
 
   final TelaDatabase _db;
 
@@ -321,6 +328,20 @@ class DriftSettingsRepository implements SettingsRepository {
   Future<void> setPinnedDownloadTier(StorageTier? tier) {
     if (tier == null) return _db.deleteSettings(<String>[_pinnedTierKey]);
     return _db.putSetting(_pinnedTierKey, tier.name);
+  }
+
+  @override
+  Future<TagFolder?> loadDownloadTag() async {
+    // Distrusted on the way out, like the pin above: the row holds whatever
+    // some version once wrote, and a name that is no longer a legal folder must
+    // not be offered as one. `storedTag` answers null for it.
+    return storedTag(await _db.settingValue(_downloadTagKey));
+  }
+
+  @override
+  Future<void> setDownloadTag(TagFolder? tag) {
+    if (tag == null) return _db.deleteSettings(<String>[_downloadTagKey]);
+    return _db.putSetting(_downloadTagKey, tag.name);
   }
 
   /// The row a [purity]'s streak lives in, bucketed exactly as its tier is.

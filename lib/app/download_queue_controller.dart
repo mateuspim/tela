@@ -5,6 +5,7 @@ import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/queued_download.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_queue.dart';
@@ -78,6 +79,7 @@ class DownloadQueueController extends AsyncNotifier<List<QueuedDownload>> {
   Future<int> enqueue(
     List<Wallpaper> wallpapers, {
     StorageTier? tier,
+    TagFolder? tag,
   }) async {
     final DownloadQueue queue = ref.read(downloadQueueProvider);
     final Set<WallpaperRef> before = await _queuedRefs(queue);
@@ -91,6 +93,7 @@ class DownloadQueueController extends AsyncNotifier<List<QueuedDownload>> {
         QueuedDownload(
           wallpaper: wallpaper,
           tier: tier,
+          tag: tag,
           queuedAt: start.add(Duration(microseconds: index)),
         ),
     ]);

@@ -2,16 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/download_queue_controller.dart';
+import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/pinned_download_tier.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/remembered_download_tag.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/download_destination_choice.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 
@@ -55,7 +59,7 @@ Future<bool> queueBatchDownload({
   // shelf can be gone by the time the *View* action is tapped, and a GoRouter
   // outlives the widget that was asked for it.
   final GoRouter router = GoRouter.of(context);
-  final ({bool proceed, StorageTier? tier}) destination =
+  final ({bool proceed, StorageTier? tier, TagFolder? tag}) destination =
       await _resolveBatchDestination(context, ref, wallpapers);
   if (!destination.proceed || !context.mounted) return false;
   final bool ready = await _ensureDownloadFolder(
@@ -68,7 +72,7 @@ Future<bool> queueBatchDownload({
 
   final int queued = await ref
       .read(downloadQueueControllerProvider.notifier)
-      .enqueue(wallpapers, tier: destination.tier);
+      .enqueue(wallpapers, tier: destination.tier, tag: destination.tag);
   _sayQueued(router, messenger, l10n, queued, wallpapers.length);
   return true;
 }
@@ -177,7 +181,8 @@ void _sayQueued(
 /// starts its switch on, and offers **Stop**. One tap on the pinned destination
 /// is the same download it would have made silently — the difference is that
 /// the user can see what it is about to do, and change it.
-Future<({bool proceed, StorageTier? tier})> _resolveBatchDestination(
+Future<({bool proceed, StorageTier? tier, TagFolder? tag})>
+_resolveBatchDestination(
   BuildContext context,
   WidgetRef ref,
   List<Wallpaper> wallpapers,
@@ -186,24 +191,44 @@ Future<({bool proceed, StorageTier? tier})> _resolveBatchDestination(
   final Set<Purity> purities = wallpapers
       .map((Wallpaper wallpaper) => wallpaper.purity)
       .toSet();
-  if (!context.mounted) return (proceed: false, tier: null);
+  // The tag remembered for a *shared* destination, and the folders that already
+  // exist there. A batch has no single tier until the user taps one, so the
+  // private library's remembered tag and its folder names are deliberately not
+  // reachable from here — this chooser opens over the ungated browse wall.
+  final TagFolder? suggested = ref
+      .read(rememberedDownloadTagProvider.notifier)
+      .offeredFor(StorageTier.sharedGallery);
+  final List<TagFolder> known = await ref.read(
+    knownDownloadTagsProvider.future,
+  );
+  if (!context.mounted) return (proceed: false, tier: null, tag: null);
   final DownloadDestinationChoice? choice =
       await chooseBatchDownloadDestination(
         context,
         purities: purities,
         count: wallpapers.length,
         pinnedTier: pin,
+        suggestedTag: suggested,
+        knownTags: known,
       );
-  if (choice == null) return (proceed: false, tier: null);
+  if (choice == null) return (proceed: false, tier: null, tag: null);
   // Stop clears the pin and downloads nothing — the deliberate way out, and the
   // same contract the single chooser honours. Answering `proceed: false`
   // without clearing would leave the button doing nothing at all.
   if (choice.stopsPin) {
     await ref.read(pinnedDownloadTierProvider.notifier).clear();
-    return (proceed: false, tier: null);
+    return (proceed: false, tier: null, tag: null);
   }
   if (choice.pin) {
     await ref.read(pinnedDownloadTierProvider.notifier).pin(choice.tier!);
   }
-  return (proceed: true, tier: choice.tier);
+  // Remembered against the tier that was actually chosen, so a tag typed for
+  // the private library stays out of the backed-up settings table — see
+  // `RememberedDownloadTag`.
+  if (choice.rememberTag) {
+    await ref
+        .read(rememberedDownloadTagProvider.notifier)
+        .remember(choice.tag, tier: choice.tier!);
+  }
+  return (proceed: true, tier: choice.tier, tag: choice.tag);
 }

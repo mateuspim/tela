@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/download_destination_choice.dart';
+import 'package:tela/core/ui/download_tag_field.dart';
 import 'package:tela/core/ui/purity_alert_tint.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
@@ -7,47 +9,7 @@ import 'package:tela/domain/models/download_destination_streak.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
-
-/// One download's answer: where it lands, and whether that answer sticks.
-///
-/// [remember] is only ever true for the streak destination — the "Always
-/// save … here" affordance, which both sends this download there *and* asks the
-/// caller to persist it as the bucket's per-purity default (I3). [pin] is the
-/// "Keep sending here" toggle: it asks the caller to make [tier] the
-/// purity-flat pin every later download follows (K2). A plain destination tap
-/// leaves both false: this one download moves, nothing else does.
-///
-/// A choice that only [stopsPin] carries a null [tier] and downloads nothing —
-/// it is the chooser's Stop affordance, clearing an active pin and no more.
-@immutable
-class DownloadDestinationChoice {
-  /// Creates a choice of [tier], optionally asking to [remember] or [pin] it.
-  const DownloadDestinationChoice({
-    required this.tier,
-    this.remember = false,
-    this.pin = false,
-  });
-
-  /// A choice that only clears the "Keep sending here" pin — nothing downloads.
-  const DownloadDestinationChoice.stopPin()
-    : tier = null,
-      remember = false,
-      pin = false;
-
-  /// Where this download should land, or null when the choice only [stopsPin].
-  final StorageTier? tier;
-
-  /// Whether to also make [tier] the per-purity configured default (I3's
-  /// "Always"). Independent of [pin].
-  final bool remember;
-
-  /// Whether to make [tier] the purity-flat "Keep sending here" pin (K2).
-  final bool pin;
-
-  /// Whether this choice only clears the pin and downloads nothing — true
-  /// exactly when [tier] is null.
-  bool get stopsPin => tier == null;
-}
+import 'package:tela/domain/models/tag_folder.dart';
 
 /// Asks where this one download should land; null when dismissed.
 ///
@@ -81,6 +43,8 @@ Future<DownloadDestinationChoice?> chooseDownloadDestination(
   required StorageTier configuredTier,
   DownloadDestinationStreak? streak,
   StorageTier? pinnedTier,
+  TagFolder? suggestedTag,
+  List<TagFolder> knownTags = const <TagFolder>[],
 }) {
   return _show(
     context,
@@ -89,6 +53,8 @@ Future<DownloadDestinationChoice?> chooseDownloadDestination(
     configuredTier: configuredTier,
     streak: streak,
     pinnedTier: pinnedTier,
+    suggestedTag: suggestedTag,
+    knownTags: knownTags,
   );
 }
 
@@ -109,6 +75,8 @@ Future<DownloadDestinationChoice?> chooseBatchDownloadDestination(
   required Set<Purity> purities,
   required int count,
   StorageTier? pinnedTier,
+  TagFolder? suggestedTag,
+  List<TagFolder> knownTags = const <TagFolder>[],
 }) {
   return _show(
     context,
@@ -117,6 +85,8 @@ Future<DownloadDestinationChoice?> chooseBatchDownloadDestination(
     configuredTier: null,
     streak: null,
     pinnedTier: pinnedTier,
+    suggestedTag: suggestedTag,
+    knownTags: knownTags,
     batchCount: count,
   );
 }
@@ -137,6 +107,8 @@ Future<DownloadDestinationChoice?> _show(
   required StorageTier? configuredTier,
   required DownloadDestinationStreak? streak,
   required StorageTier? pinnedTier,
+  required TagFolder? suggestedTag,
+  required List<TagFolder> knownTags,
   int? batchCount,
 }) {
   if (!context.mounted) {
@@ -150,6 +122,8 @@ Future<DownloadDestinationChoice?> _show(
       configuredTier: configuredTier,
       streak: streak,
       pinnedTier: pinnedTier,
+      suggestedTag: suggestedTag,
+      knownTags: knownTags,
       batchCount: batchCount,
     ),
   );
@@ -165,6 +139,8 @@ class _DestinationDialog extends StatefulWidget {
     required this.configuredTier,
     required this.streak,
     required this.pinnedTier,
+    required this.suggestedTag,
+    required this.knownTags,
     this.batchCount,
   });
 
@@ -186,6 +162,14 @@ class _DestinationDialog extends StatefulWidget {
   /// The "Keep sending here" pin already in force, or null when none is set.
   final StorageTier? pinnedTier;
 
+  /// The tag to start on — the one remembered from the last tagged download,
+  /// or null. Selected rather than merely listed, so the common case of filing
+  /// a run of wallpapers under one tag is the same single tap it was before.
+  final TagFolder? suggestedTag;
+
+  /// Tags that already exist as folders in the shared tiers, offered as chips.
+  final List<TagFolder> knownTags;
+
   /// How many wallpapers this answer governs, or null for a single download —
   /// which needs no count, since the thing being placed is the one on screen.
   final int? batchCount;
@@ -199,6 +183,14 @@ class _DestinationDialogState extends State<_DestinationDialog> {
   /// starts off — except when a pin is already in force, where it mirrors that
   /// state so the switch reads the truth.
   late bool _keepSending = widget.pinnedTier != null;
+
+  /// The tag this download will carry, starting from the remembered one.
+  late TagFolder? _tag = widget.suggestedTag;
+
+  /// Whether to keep offering [_tag] next time. On when the chooser opened
+  /// already holding a tag, so the switch reads the state that is really in
+  /// force rather than proposing to undo it.
+  late bool _keepTag = widget.suggestedTag != null;
 
   /// A destination has to be reached this many times in a row before the
   /// chooser offers to make it the default. The owner's number.
@@ -245,6 +237,18 @@ class _DestinationDialogState extends State<_DestinationDialog> {
             for (final StorageTier tier in widget.options)
               _destination(context, l10n, tier),
             ?_alwaysAction(context, l10n),
+            const Divider(height: 8),
+            DownloadTagField(
+              selected: _tag,
+              known: widget.knownTags,
+              onChanged: (TagFolder? tag) => setState(() {
+                _tag = tag;
+                // Remembering nothing is not a state worth offering: the switch
+                // means "offer this next time", and there is no this.
+                if (tag == null) _keepTag = false;
+              }),
+            ),
+            ?_keepTagSwitch(context, l10n),
             _keepSendingSwitch(context, l10n),
           ],
         ),
@@ -326,7 +330,12 @@ class _DestinationDialogState extends State<_DestinationDialog> {
       child: InkWell(
         onTap: () => Navigator.pop(
           context,
-          DownloadDestinationChoice(tier: tier, pin: _keepSending),
+          DownloadDestinationChoice(
+            tier: tier,
+            pin: _keepSending,
+            tag: _tag,
+            rememberTag: _keepTag,
+          ),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -427,6 +436,21 @@ class _DestinationDialogState extends State<_DestinationDialog> {
   /// The "Keep sending here" toggle. When on, tapping a destination pins it for
   /// every later download; when off, the tap is a one-off and leaves any pin as
   /// it is (Stop clears an existing one).
+  /// The tag's "keep offering this" switch, or nothing when no tag is chosen.
+  ///
+  /// Absent rather than disabled: a switch for remembering nothing has no state
+  /// worth reading, and the row it would sit in is the one place the dialog is
+  /// already asking two questions at once.
+  Widget? _keepTagSwitch(BuildContext context, AppLocalizations l10n) {
+    if (_tag == null) return null;
+    return SwitchListTile.adaptive(
+      value: _keepTag,
+      onChanged: (bool on) => setState(() => _keepTag = on),
+      contentPadding: EdgeInsets.zero,
+      title: Text(l10n.downloadTagKeep),
+    );
+  }
+
   Widget _keepSendingSwitch(BuildContext context, AppLocalizations l10n) {
     return SwitchListTile.adaptive(
       value: _keepSending,

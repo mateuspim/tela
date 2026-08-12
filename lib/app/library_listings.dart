@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/private_image.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_history.dart';
@@ -78,6 +79,49 @@ final FutureProvider<Set<String>> downloadedKeysProvider =
         for (final DownloadRecord d in recent) d.wallpaper.ref.key,
       };
     });
+
+/// The tags that already exist as folders in the **shared** tiers.
+///
+/// Derived from the download history rather than kept in a table of its own,
+/// which is the same instinct that keeps the queue and the history from being
+/// two indexes of one fact: a tag is a directory, so the rows describing where
+/// files went are already the record of which directories there are. A tag with
+/// nothing in it simply stops being offered, and re-typing it re-creates it.
+///
+/// **The private library's tags are deliberately not in here.** This list is
+/// read by the download chooser, which opens over the ungated browse wall, and
+/// the private tier's folder names say roughly what its file paths say. The
+/// private library reads [privateTagsProvider] instead, behind its own lock.
+final FutureProvider<List<TagFolder>> knownDownloadTagsProvider =
+    FutureProvider<List<TagFolder>>((Ref ref) async {
+      final List<DownloadRecord> recent = await ref.watch(
+        recentDownloadsProvider.future,
+      );
+      return _sorted(<TagFolder>{
+        for (final DownloadRecord d in recent) ?d.tag,
+      });
+    });
+
+/// The tags inside the app-private tier, read off its directories.
+///
+/// Separate from [knownDownloadTagsProvider] on purpose — see its docstring.
+/// Only screens already behind the private library's lock may show these.
+final FutureProvider<List<TagFolder>> privateTagsProvider =
+    FutureProvider<List<TagFolder>>((Ref ref) async {
+      final List<PrivateImage> images = await ref.watch(
+        privateImagesProvider.future,
+      );
+      return _sorted(<TagFolder>{for (final PrivateImage i in images) ?i.tag});
+    });
+
+/// Tag folders in a stable, readable order — the order a chip row needs, and
+/// the one a test can assert without depending on how rows came back.
+List<TagFolder> _sorted(Set<TagFolder> tags) {
+  return tags.toList()..sort(
+    (TagFolder a, TagFolder b) =>
+        a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+  );
+}
 
 /// Re-reads every listing a finished download may have changed.
 ///
