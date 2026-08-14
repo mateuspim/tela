@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:tela/app/theme.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/wallpaper_swatch.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
@@ -86,10 +87,10 @@ class WallpaperMetadata extends StatelessWidget {
   /// They are all tiles now; the only things left outside the grid are the ones
   /// that are not facts at all — see [_attribution].
   Widget _factGrid(AppLocalizations l10n, WallpaperDetails item, double width) {
-    final double tileWidth = (width - 12) / 2;
+    final double tileWidth = (width - 20) / 2;
     return Wrap(
-      spacing: 12,
-      runSpacing: 12,
+      spacing: 20,
+      runSpacing: 14,
       children: <Widget>[
         for (final (String, String) fact in _facts(l10n, item))
           _MetadataTile(
@@ -198,29 +199,49 @@ class _MetadataTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    return Container(
+    return SizedBox(
       width: width,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+          Text(label.toUpperCase(), style: _labelStyle(theme)),
+          const SizedBox(height: 2),
+          SelectableText(value, style: _valueStyle(theme)),
+          const SizedBox(height: 10),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: theme.colorScheme.outlineVariant.withValues(alpha: .5),
           ),
-          const SizedBox(height: 4),
-          SelectableText(value, style: theme.textTheme.titleSmall),
         ],
       ),
     );
   }
+
+  /// Small, tracked and quiet — a caption naming the number, not competing
+  /// with it.
+  TextStyle? _labelStyle(ThemeData theme) =>
+      theme.textTheme.labelSmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+        letterSpacing: 1.1,
+        fontWeight: FontWeight.w500,
+      );
+
+  /// The fact itself, in the brand display face.
+  ///
+  /// One of the few places `TelaTheme.brandFontFamily` earns its keep outside a
+  /// heading: these are the numbers the screen exists to report, and setting
+  /// them in the display face is what turns eight boxed rows into a plate of
+  /// specifications. `tabular` figures so the two columns line up down the
+  /// page instead of shimmering against each other.
+  TextStyle? _valueStyle(ThemeData theme) =>
+      theme.textTheme.titleMedium?.copyWith(
+        fontFamily: TelaTheme.brandFontFamily,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.2,
+        fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+      );
 }
 
 /// One place this wallpaper leads, styled as the link it is.

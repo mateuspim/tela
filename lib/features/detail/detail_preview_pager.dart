@@ -129,7 +129,15 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager>
       children: <Widget>[
         _pinchablePager(),
         Positioned(
-          top: 12,
+          // Cleared of whatever sits above the preview, because on the phone
+          // layout that is a *floating* app bar and this button would land
+          // underneath its actions — a tap on fullscreen opening the share
+          // sheet instead. `Scaffold` folds the bar's height into the body's
+          // own `MediaQuery.padding.top` when it extends behind it (see the
+          // A2 aside in HANDOFF), so reading that padding is correct in both
+          // layouts and double-counts in neither: the wide pane, whose bar
+          // reserves its own space, reports zero here.
+          top: 12 + MediaQuery.paddingOf(context).top,
           right: 12,
           child: IconButton.filledTonal(
             onPressed: _enterFullscreen,

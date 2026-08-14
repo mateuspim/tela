@@ -26,6 +26,7 @@ import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/features/browse/linked_listing_args.dart';
 import 'package:tela/features/detail/detail_action_bar.dart';
 import 'package:tela/features/detail/detail_apply_button.dart';
+import 'package:tela/features/detail/detail_editorial_body.dart';
 import 'package:tela/features/detail/detail_preview_pager.dart';
 import 'package:tela/features/detail/wallpaper_metadata.dart';
 import 'package:tela/features/settings/blocked_tags_providers.dart';
@@ -248,42 +249,55 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   ) {
     final bool expanded = MediaQuery.sizeOf(context).width >= _expandedWidth;
     return Scaffold(
+      // The narrow layout runs the wallpaper to every edge, so the bar stops
+      // reserving space and floats over it instead. The wide one still has a
+      // pane of its own and keeps an ordinary bar above it.
+      extendBodyBehindAppBar: !expanded,
       // No title: the resolution that used to sit here is a spec, not a name,
       // and it already has a tile in the Details grid — a title bar reading
       // "2880x1800" labelled the screen with a number. The image is the
       // subject, so the bar carries only the back affordance and the actions.
-      appBar: AppBar(
-        actions: expanded
-            ? null
-            : <Widget>[DetailActionBar(wallpaper: _wallpaper)],
-      ),
+      appBar: expanded ? AppBar() : _floatingBar(),
       body: expanded
           ? _expandedBody(context, details, l10n, sourceName)
           : _compactBody(details, l10n, sourceName),
     );
   }
 
+  /// The bar that sits *on* the wallpaper rather than above it.
+  ///
+  /// Transparent, with its controls forced white and read against the scrim
+  /// `DetailEditorialBody` paints behind them. **This is not A2's frosted
+  /// bar**: nothing here is blurred, and what shows through is the single
+  /// photograph the screen is about, not a wall of sixty competing with the
+  /// chrome. That was the whole objection, and it does not apply.
+  PreferredSizeWidget _floatingBar() {
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      scrolledUnderElevation: 0,
+      foregroundColor: Colors.white,
+      actions: <Widget>[DetailActionBar(wallpaper: _wallpaper)],
+    );
+  }
+
   static const double _expandedWidth = 840;
 
+  /// The phone layout: the wallpaper is the page, the facts ride over it.
+  ///
+  /// Replaced a fixed-height preview stacked above a scrolling panel, where the
+  /// image was a picture in a box on the one screen whose subject *is* the
+  /// image. See [DetailEditorialBody] — including why the wide layout
+  /// deliberately did not follow.
   Widget _compactBody(
     AsyncValue<WallpaperDetails> details,
     AppLocalizations l10n,
     String sourceName,
   ) {
-    final double previewHeight = (MediaQuery.sizeOf(context).height * .58)
-        .clamp(320, 560);
-    return Column(
-      children: <Widget>[
-        Expanded(
-          child: ListView(
-            children: <Widget>[
-              SizedBox(height: previewHeight, child: _preview()),
-              _metadata(details, l10n, sourceName),
-            ],
-          ),
-        ),
-        DetailApplyButton(wallpaper: _wallpaper),
-      ],
+    return DetailEditorialBody(
+      preview: _preview(),
+      metadata: _metadata(details, l10n, sourceName),
+      applyButton: DetailApplyButton(wallpaper: _wallpaper),
     );
   }
 
