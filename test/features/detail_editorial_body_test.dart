@@ -85,9 +85,12 @@ void main() {
     expect(body.bottom - apply.bottom, systemBar);
   });
 
-  testWidgets('rests with most of the wallpaper still showing', (
+  testWidgets('opens with the wallpaper unobstructed', (
     WidgetTester tester,
   ) async {
+    // The owner's finding, in their words: "the image is behind the details and
+    // i cant hide it". The subject of this screen is the picture, so it arrives
+    // whole and the facts are asked for.
     await _pump(tester);
 
     // Measured against the image's own area rather than the whole body: the
@@ -100,8 +103,32 @@ void main() {
 
     expect(
       (sheetTop - image.top) / image.height,
-      closeTo(1 - DetailEditorialBody.restingSheetFraction, 0.02),
-      reason: 'most of the screen must still be wallpaper',
+      closeTo(1 - DetailEditorialBody.peekSheetFraction, 0.02),
+      reason: 'the wallpaper must arrive whole, not two fifths behind a panel',
+    );
+  });
+
+  testWidgets('bumps the wallpaper up instead of covering it', (
+    WidgetTester tester,
+  ) async {
+    // The other half of the owner's ask: raising the facts must move the
+    // picture out of their way. Half the sheet's own travel, so the preview's
+    // bottom edge stays under the sheet rather than opening a gap of dead
+    // canvas beneath it.
+    await _pump(tester);
+    final double before = tester.getRect(find.byKey(_preview)).center.dy;
+
+    await _raiseSheet(tester);
+
+    final Rect after = tester.getRect(find.byKey(_preview));
+    final double sheetTop = tester
+        .getTopLeft(find.byKey(DetailEditorialBody.sheetKey))
+        .dy;
+    expect(after.center.dy, lessThan(before));
+    expect(
+      after.bottom,
+      greaterThan(sheetTop),
+      reason: 'a full-rate lift would strand dead canvas above the sheet',
     );
   });
 
@@ -200,11 +227,11 @@ void main() {
     final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
     await tester.dragFrom(
       Offset(tester.getCenter(sheet).dx, tester.getTopLeft(sheet).dy + 24),
-      const Offset(0, 600),
+      const Offset(0, 900),
     );
     await tester.pumpAndSettle();
 
-    expect(_drift(tester), greaterThanOrEqualTo(0));
+    expect(_drift(tester), closeTo(0, 0.001));
   });
 
   testWidgets('gets out of the way when pushed down', (
@@ -216,37 +243,32 @@ void main() {
     // opening minimised on the one screen whose subject is the image.
     await _pump(tester);
     final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
-    final double resting = tester.getTopLeft(sheet).dy;
+    await _raiseSheet(tester);
+    final double raised = tester.getTopLeft(sheet).dy;
 
     await tester.dragFrom(
-      Offset(tester.getCenter(sheet).dx, resting + 24),
-      const Offset(0, 600),
+      Offset(tester.getCenter(sheet).dx, raised + 24),
+      const Offset(0, 900),
     );
     await tester.pumpAndSettle();
 
     final Rect body = tester.getRect(find.byType(DetailEditorialBody));
     final double pushedDown = tester.getTopLeft(sheet).dy;
-    expect(pushedDown, greaterThan(resting));
+    expect(pushedDown, greaterThan(raised));
     // A peek, not a dismissal: the grip stays on screen, or the sheet becomes
     // a feature the user has to rediscover.
     expect(pushedDown, lessThan(body.bottom));
     expect(find.byKey(DetailEditorialBody.sheetKey), findsOneWidget);
   });
 
-  testWidgets('drifts the wallpaper the other way when pushed down', (
+  testWidgets('has not moved anything at the moment the screen opens', (
     WidgetTester tester,
   ) async {
-    // The full travel in both directions, zero where the screen opens.
+    // Both effects are measured from the peek, so a screen the user has not
+    // touched yet is showing the wallpaper exactly as the shelf handed it over.
     await _pump(tester);
-    final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
 
-    await tester.dragFrom(
-      Offset(tester.getCenter(sheet).dx, tester.getTopLeft(sheet).dy + 24),
-      const Offset(0, 600),
-    );
-    await tester.pumpAndSettle();
-
-    expect(_drift(tester), closeTo(1, 0.001));
+    expect(_drift(tester), 0);
   });
 
   testWidgets('comes to rest at a size, never where the finger left it', (

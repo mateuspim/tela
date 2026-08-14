@@ -875,6 +875,7 @@ void main() {
     final FakeExternalLink links = FakeExternalLink();
     final WallpaperDetails details = _details();
     await _pumpDetail(tester, details, externalLink: links);
+    await _reveal(tester, find.text('View on Wallhaven'));
 
     await tester.tap(find.text('View on Wallhaven'));
     await tester.pumpAndSettle();
@@ -919,6 +920,7 @@ void main() {
       failure: const ExternalLinkFailure(ExternalLinkProblem.unavailable),
     );
     await _pumpDetail(tester, _details(), externalLink: links);
+    await _reveal(tester, find.text('View on Wallhaven'));
 
     await tester.tap(find.text('View on Wallhaven'));
     await tester.pumpAndSettle();
@@ -1275,6 +1277,16 @@ FakeWallpaperSource _detailsApi(
 Future<void> _tallSurface(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(800, 1600));
   addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
+/// Brings something on the fact sheet into view, as a user on a phone must.
+///
+/// The compact layout opens at a peek so the wallpaper arrives unobstructed, so
+/// anything past the first heading has to be asked for — in a test exactly as
+/// on the device.
+Future<void> _reveal(WidgetTester tester, Finder target) async {
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
 }
 
 /// Rests a finger on the image long enough for [ShelfSwipe] to call it a hold.

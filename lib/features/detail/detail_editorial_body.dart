@@ -14,9 +14,10 @@ import 'package:tela/core/ui/backdrop_drift_scope.dart';
 /// it is describing; the wide layout keeps its two panes. `_expandedWidth` on
 /// the detail screen is the only place that choice is made.
 ///
-/// The sheet has three sizes — a peek, a resting 42%, and nearly full — and it
-/// snaps between them. It must be able to get *out of the way*: see
-/// [peekSheetFraction], which the device demanded.
+/// The sheet has three sizes — a peek, a middle 42%, and nearly full — and it
+/// snaps between them. It **opens at the peek**, so the wallpaper arrives
+/// unobstructed, and raising it *bumps the picture up* rather than covering it.
+/// See [peekSheetFraction], which the device demanded.
 ///
 /// It also owns the one moving part of the arrangement: dragging the sheet
 /// drifts the wallpaper's blurred scenery behind it, published through a
@@ -54,25 +55,24 @@ class DetailEditorialBody extends StatefulWidget {
   /// wallpaper, and a button you must first scroll to is a fourth.
   final Widget applyButton;
 
-  /// How much of the screen the sheet covers at rest.
+  /// The sheet's middle size — a snap stop between the peek and full.
   ///
-  /// The remaining 58% is exactly what the old fixed-height preview occupied,
-  /// so the wallpaper is no smaller than it was — what changed is that it now
-  /// continues *behind* the sheet instead of stopping at a seam.
+  /// The screen no longer *opens* here: see [peekSheetFraction]. It stays as
+  /// the size a single upward flick lands on, which is the old resting layout —
+  /// enough facts to answer "what is this" without losing the picture.
   static const double restingSheetFraction = 0.42;
 
-  /// How far the sheet can be pushed *down*, out of the wallpaper's way.
+  /// The size the screen opens at, and the sheet's floor.
   ///
-  /// The device found this one (SM-X730, 2026-08-14): with the sheet's floor at
-  /// [restingSheetFraction] there was no gesture that uncovered the picture, so
-  /// a phone showed every wallpaper with its bottom two fifths behind a panel
-  /// and the image read as opening minimised. The whole argument for this
-  /// layout is that a phone shows a wallpaper at the size a wallpaper is judged
-  /// at, which is only true if the facts can be pushed away.
+  /// The device settled this one (SM-X730, 2026-08-14). The screen used to open
+  /// at [restingSheetFraction] with no way down, so a phone showed every
+  /// wallpaper with its bottom two fifths behind a panel — "the image is behind
+  /// the details and i cant hide it", as the owner put it. The wallpaper is the
+  /// subject, so it arrives unobstructed and the facts are asked for.
   ///
   /// A peek and not zero: what is left is the grip and the first heading, so
-  /// the sheet is still visibly *there* and can be pulled back. A sheet that
-  /// can vanish is a feature the user has to rediscover.
+  /// the sheet is still visibly *there* to be pulled up. One that can vanish
+  /// is a feature the user has to rediscover.
   static const double peekSheetFraction = 0.12;
 
   /// How far the sheet rises when dragged up.
@@ -112,35 +112,57 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
   /// sheet's whole list to move a background by a few pixels.
   final ValueNotifier<double> _drift = ValueNotifier<double>(0);
 
+  /// How far the wallpaper itself is bumped up, as a fraction of its height.
+  ///
+  /// The sheet does not cover the picture, it *pushes* it: rising by half of
+  /// what the sheet takes keeps the image centred in the strip left above it,
+  /// so raising the facts moves the wallpaper out of their way instead of
+  /// hiding it. Half, so the preview's own bottom edge always stays under the
+  /// sheet — a full-rate lift would open a gap of dead canvas beneath it.
+  final ValueNotifier<double> _lift = ValueNotifier<double>(0);
+
   @override
   void dispose() {
     _drift.dispose();
+    _lift.dispose();
     super.dispose();
   }
 
-  /// Drifts the scenery with the sheet, in whichever direction it is moved.
+  /// Drifts the scenery, and bumps the wallpaper, as the sheet is moved.
   ///
-  /// With the sheet, and never as far: the whole illusion is that the
-  /// background sits *behind* the picture, which is only legible if the two
-  /// move together at different rates. The sheet's own travel is the driver
-  /// because on a phone it is the only thing the user moves on this screen.
-  ///
-  /// Measured from rest rather than from the floor, so the drift is zero where
-  /// the screen opens and spends its full travel in *both* directions — the two
-  /// halves are different distances, which is why they are scaled separately.
+  /// Three layers at three rates, which is what makes the screen read as having
+  /// depth: the sheet travels fastest, the wallpaper is bumped at half that,
+  /// and the blurred scenery behind it drifts by 6% of its height over the
+  /// whole gesture. Both are measured from the peek, where the screen opens, so
+  /// nothing has moved at the moment the user arrives.
   ///
   /// Returns false: the notification keeps bubbling, so nothing above this body
   /// loses the sheet's extent by our listening for it.
   bool _sheetDragged(DraggableScrollableNotification sheet) {
-    final double fromRest =
-        sheet.extent - DetailEditorialBody.restingSheetFraction;
-    final double travel = fromRest >= 0
-        ? DetailEditorialBody.fullSheetFraction -
-              DetailEditorialBody.restingSheetFraction
-        : DetailEditorialBody.restingSheetFraction -
-              DetailEditorialBody.peekSheetFraction;
-    _drift.value = (-fromRest / travel).clamp(-1.0, 1.0);
+    const double travel =
+        DetailEditorialBody.fullSheetFraction -
+        DetailEditorialBody.peekSheetFraction;
+    final double risen =
+        (sheet.extent - DetailEditorialBody.peekSheetFraction) / travel;
+    _drift.value = -risen.clamp(0.0, 1.0);
+    _lift.value = (sheet.extent - DetailEditorialBody.peekSheetFraction) / 2;
     return false;
+  }
+
+  /// The wallpaper, bumped up by whatever the sheet has taken from it.
+  ///
+  /// Only the translation rebuilds: the preview is the builder's `child`, so a
+  /// drag never rebuilds the pager or re-requests an image.
+  Widget _bumped(Widget preview) {
+    return ValueListenableBuilder<double>(
+      valueListenable: _lift,
+      builder: (BuildContext context, double lift, Widget? child) =>
+          FractionalTranslation(
+            translation: Offset(0, -lift),
+            child: child,
+          ),
+      child: preview,
+    );
   }
 
   @override
@@ -161,10 +183,10 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
               onNotification: _sheetDragged,
               child: Stack(
                 children: <Widget>[
-                  Positioned.fill(child: widget.preview),
+                  Positioned.fill(child: _bumped(widget.preview)),
                   const _TopScrim(),
                   DraggableScrollableSheet(
-                    initialChildSize: DetailEditorialBody.restingSheetFraction,
+                    initialChildSize: DetailEditorialBody.peekSheetFraction,
                     minChildSize: DetailEditorialBody.peekSheetFraction,
                     maxChildSize: DetailEditorialBody.fullSheetFraction,
                     // Snapped, so the sheet always comes to rest at one of its
