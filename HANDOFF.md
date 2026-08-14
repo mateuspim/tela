@@ -12,6 +12,12 @@ Updated: 2026-08-14
 > what a screenshot cannot hold: the 450ms transition, the phone layout, and
 > C2's melt case.
 >
+> **L1b and L3 are built too** (2026-08-14). Konachan tints from its own pixels
+> now, and Detail is split by shape: the phone gets the editorial full-bleed
+> layout, the tablet keeps C3's two panes on purpose — see L3 for why the scope
+> was not followed there. Dart **1363**. L3's phone layout has **never been seen
+> on hardware**, which makes it the first thing a device pass should open.
+>
 > **L2a is also built and device-checked** — the wall assembles rather than
 > appearing, and a real defect went with it: a tile's ink splash was painted
 > *under* an opaque image, so pressing a wallpaper gave no feedback at all, on
@@ -691,6 +697,62 @@ is a blurred copy of the same image, so the tint and the backdrop will agree by
 construction — which risks the pane becoming *one* colour with no separation.
 `wallpaperTileEdge` at `radius: 0` is already drawn over the contained frame for
 the melt case (see C2's device pass); watch whether it is still enough.
+
+### L3 — Detail, split by shape — **BUILT 2026-08-14**; device pass owed
+
+Taken as **option A**, chosen over building the editorial treatment everywhere.
+Dart **1363** (from 1357), analyze and format clean. New
+`features/detail/detail_editorial_body.dart`; touched
+`wallpaper_detail_screen.dart`, `detail_preview_pager.dart`,
+`wallpaper_metadata.dart`.
+
+**Why the tablet did not get it, since the scope said it should.** The editorial
+treatment — full-bleed image, facts on a sheet riding over it — is a *phone*
+pattern, and it is one because a phone has no room to put anything beside a
+wallpaper. The SM-X730 has 440dp of pane free next to the image, so a sheet over
+the picture would cover the very thing it describes. The wide layout keeps C3's
+two panes and got a typographic pass instead. `_expandedWidth` is the only place
+that choice is made.
+
+**The phone layout now runs the wallpaper to every edge.** It was a fixed-height
+preview stacked above a scrolling panel — a picture in a box, on the one screen
+whose subject *is* the picture. The image is the page now, the facts ride a
+`DraggableScrollableSheet` at 42% (the exact fraction the old preview left, so
+the wallpaper is no smaller — it just no longer stops at a seam), and the apply
+button floats over the sheet rather than scrolling inside it, because Wave 1's
+"≤3 taps" makes a button you must scroll to a fourth. The sheet stops at 92%: one
+that covers the screen strands the user with no way back to the image.
+
+**A real defect, and eight existing tests found it before a device could.**
+Extending the body behind the app bar put the preview's *own* fullscreen control
+underneath the bar's actions — a tap on fullscreen would have opened the share
+sheet. The fix reads `MediaQuery.paddingOf(context).top`, which is right in both
+layouts and double-counts in neither, because `Scaffold` folds the bar's height
+into the body's padding when it extends behind it. **That is the A2 aside in this
+file finally being used for something.** Mutation-checked: restoring the fixed
+`top: 12` turns eight tests red.
+
+**The floating bar is not A2's frosted bar, and the distinction is the whole
+reason it is allowed.** Nothing is blurred, and what shows through is the single
+photograph the screen is about rather than a wall of sixty competing with the
+chrome — which was A2's entire objection. Its controls are forced white over a
+gradient scrim, for the same reason `wallpaperTileEdge` exists: a back arrow
+must survive a pale sky. The scrim is `IgnorePointer`, so the image still takes
+the pinch and the hold-to-copy right up to the top edge.
+
+**The fact grid stopped being a form.** C3 made all eight facts one visual
+language and was right to; what it left behind was eight *boxed rows*, which is
+what a form looks like. They are plates now — a small tracked label over the
+value set in the brand display face with tabular figures, on a hairline rule
+instead of a filled card. One language still, and C3's decision that Uploader and
+Source are actions rather than facts is untouched.
+
+**Owed on the device — and the phone layout is the part nobody has ever seen.**
+C3 shipped the compact body unjudged and this rewrites it, so it goes from
+"nothing suspected" to the first thing to look at. Judge: the sheet's resting
+height against a tall wallpaper, whether the white bar controls survive a
+near-white image, whether the drag reads as a sheet rather than a stuck scroll,
+and the fact plates at both widths.
 
 ### L1b — Konachan tints too — **BUILT 2026-08-14**; device pass owed
 

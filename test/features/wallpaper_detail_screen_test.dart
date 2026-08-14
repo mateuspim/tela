@@ -98,6 +98,27 @@ void main() {
     expect(_detailScheme(tester), same(_untintedScheme(tester)));
   });
 
+  testWidgets('keeps the fullscreen button clear of the floating bar', (
+    WidgetTester tester,
+  ) async {
+    // The phone layout runs the wallpaper behind the app bar, which put the
+    // preview's own fullscreen control underneath the bar's actions — a tap on
+    // fullscreen opening the share sheet instead. Found by eight existing
+    // tests going red at once, not by looking.
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpDetail(tester, _details());
+
+    final Rect fullscreen = tester.getRect(
+      find.byTooltip('View wallpaper full screen'),
+    );
+    final Rect bar = tester.getRect(find.byType(AppBar));
+    expect(fullscreen.top, greaterThanOrEqualTo(bar.bottom));
+  });
+
   testWidgets("paints itself in the wallpaper's own colour", (
     WidgetTester tester,
   ) async {
