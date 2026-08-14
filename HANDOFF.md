@@ -748,10 +748,24 @@ subsumes the old one. **Pinned by C1's own test**, which goes red if the narrow
 rule returns — mutation-confirmed. A test added alongside it was deleted for
 being vacuous: it passed under both rules, so it measured nothing.
 
-**Owed on the device:** the band's height (34% of the screen, capped at 340) on
-both the phone and the tablet, whether the resolution caption reads as editorial
-or as clutter, and whether losing the first wallpaper from the grid is noticeable
-in a bad way.
+#### L4's device pass (2026-08-14, SM-X730) — works; one finding
+
+The band renders full-width above the wall with its resolution caption in the
+display face, and the wall continues from the second wallpaper — **confirmed by
+eye that the band and the first tile are different images**, which is the claim
+the offset rests on.
+
+**The band is visibly soft on a tablet, and this is arithmetic rather than a
+guess.** It draws `thumbOriginalUrl` — the *same* source the tiles use — across
+the full 2560px width, so the tiles downscale that thumbnail while the band
+upscales it. Three ways out, none free: accept it (a masthead, judged by opening
+it); fetch the full image for the featured one only (one extra request per
+listing, and an 8K original is several MB for decoration); or stop running the
+band full-bleed on a wide screen, which fights what the band is for. **Not
+decided — this wants the owner's eye before anything is spent on it.**
+
+**Still unjudged:** the band on an actual phone, where the upscale is far
+smaller, and whether losing the first wallpaper from the grid reads badly.
 
 ### L3 — Detail, split by shape — **BUILT 2026-08-14**; device pass owed
 
@@ -802,12 +816,41 @@ value set in the brand display face with tabular figures, on a hairline rule
 instead of a filled card. One language still, and C3's decision that Uploader and
 Source are actions rather than facts is untouched.
 
-**Owed on the device — and the phone layout is the part nobody has ever seen.**
-C3 shipped the compact body unjudged and this rewrites it, so it goes from
-"nothing suspected" to the first thing to look at. Judge: the sheet's resting
-height against a tall wallpaper, whether the white bar controls survive a
-near-white image, whether the drag reads as a sheet rather than a stuck scroll,
-and the fact plates at both widths.
+#### L3's device pass (2026-08-14, SM-X730 in portrait) — one real defect, found and fixed
+
+The tablet is 1205dp wide in landscape and **753dp in portrait**, which is under
+`_expandedWidth`. So the phone layout can be seen on it by rotating — no `wm
+size`, no second device. Worth knowing: it is the only way anyone has ever
+looked at the compact body.
+
+**It reads well.** Full-bleed image behind a floating bar whose white controls
+are legible over a dark wallpaper, the fullscreen button clear of them, the sheet
+resting where it should with a visible grip, and the fact plates a plain
+improvement on the boxed rows — labels tracked and quiet, values in the display
+face on hairlines.
+
+**The defect: the apply button was drawn half under the system bar, with its
+label and icon cut clean off.** `DetailApplyButton` carries a `SafeArea` and it
+was not enough here — under a `Scaffold` with `extendBodyBehindAppBar`, the
+bottom `padding` reaching the button comes through as **zero**, while the very
+same widget in the wide layout renders correctly.
+
+**Two wrong diagnoses, recorded so they are not repeated.** First guess was the
+absolute `Positioned(bottom: 0)`; rewriting it as a `Column` — structurally
+identical to the old layout — **did not fix it**. Second guess was Samsung's
+floating taskbar covering the app. Both were settled by deploying the commit
+*before* this layout and looking: there the button renders in full, above the
+taskbar. So it was this change, and it was the Scaffold flag.
+
+The fix insets from `MediaQuery.viewPaddingOf`, which always reports the real
+system inset and is never consumed by an ancestor, and strips the button's own
+`SafeArea` with `removePadding` so the two cannot both apply. **Verified on the
+device**: "Set wallpaper" renders in full, clear of the taskbar. Pinned by *lifts
+the apply button clear of the system bar*.
+
+**Still unjudged:** whether the white bar controls survive a *near-white*
+wallpaper (every one tried was dark), and the drag's feel — a screenshot cannot
+show whether the sheet reads as a sheet or as a stuck scroll.
 
 ### L1b — Konachan tints too — **BUILT 2026-08-14**; device pass owed
 

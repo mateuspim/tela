@@ -38,7 +38,10 @@ class DetailEditorialBody extends StatelessWidget {
   /// The facts, carried by the draggable sheet.
   final Widget metadata;
 
-  /// The apply action, pinned over the sheet and never scrolled away.
+  /// The apply action, held below the sheet and never scrolled away.
+  ///
+  /// Outside the scrolling content on purpose: the whole app is three taps to a
+  /// wallpaper, and a button you must first scroll to is a fourth.
   final Widget applyButton;
 
   /// How much of the screen the sheet covers at rest.
@@ -54,13 +57,8 @@ class DetailEditorialBody extends StatelessWidget {
   /// the user on a page with no visible way back to the image.
   static const double fullSheetFraction = 0.92;
 
-  /// Room kept clear at the foot of the sheet for [applyButton].
-  ///
-  /// The button floats over the sheet rather than scrolling inside it — the
-  /// whole app is three taps to a wallpaper, and a button you must first scroll
-  /// to is a fourth. This padding is what stops the last row of metadata
-  /// hiding underneath it.
-  static const double applyButtonRoom = 96;
+  /// Breathing room at the foot of the sheet's content.
+  static const double sheetFootRoom = 24;
 
   /// Stable hook for tests asserting where the sheet has come to rest.
   ///
@@ -80,18 +78,57 @@ class DetailEditorialBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    // The button is laid out in normal flow *below* the image, not positioned
+    // over it. Absolutely positioning it looked equivalent and was not: its own
+    // `SafeArea` had nothing to inset against inside a `Positioned`, so on the
+    // device the button ran under the system bar and its label and icon were
+    // clipped clean off (seen on the SM-X730, 2026-08-14). Nothing is lost by
+    // this — the sheet covers the foot of the screen at every size it can take,
+    // so no wallpaper was ever visible behind the button anyway.
+    return Column(
       children: <Widget>[
-        Positioned.fill(child: preview),
-        const _TopScrim(),
-        DraggableScrollableSheet(
-          initialChildSize: restingSheetFraction,
-          minChildSize: restingSheetFraction,
-          maxChildSize: fullSheetFraction,
-          builder: _sheet,
+        Expanded(
+          child: Stack(
+            children: <Widget>[
+              Positioned.fill(child: preview),
+              const _TopScrim(),
+              DraggableScrollableSheet(
+                initialChildSize: restingSheetFraction,
+                minChildSize: restingSheetFraction,
+                maxChildSize: fullSheetFraction,
+                builder: _sheet,
+              ),
+            ],
+          ),
         ),
-        Positioned(left: 0, right: 0, bottom: 0, child: applyButton),
+        _footed(context, applyButton),
       ],
+    );
+  }
+
+  /// Lifts [child] clear of the system bar, from [MediaQuery.viewPaddingOf].
+  ///
+  /// The button carries a `SafeArea` of its own and it is not enough here: this
+  /// body runs under a Scaffold with `extendBodyBehindAppBar`, and the bottom
+  /// `padding` reaching the button comes through as zero — so on the device the
+  /// apply button was drawn half under the system bar with its label cut clean
+  /// off, while the same widget in the wide layout was fine. Verified by
+  /// deploying the build before this layout, where it rendered correctly
+  /// (SM-X730, 2026-08-14).
+  ///
+  /// `viewPadding` rather than `padding` because `viewPadding` always reports
+  /// the real inset and is never consumed by an ancestor; the button's own
+  /// `SafeArea` is stripped here so the two cannot both apply.
+  Widget _footed(BuildContext context, Widget child) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.viewPaddingOf(context).bottom,
+      ),
+      child: MediaQuery.removePadding(
+        context: context,
+        removeBottom: true,
+        child: child,
+      ),
     );
   }
 
@@ -105,7 +142,7 @@ class DetailEditorialBody extends StatelessWidget {
       ),
       child: ListView(
         controller: controller,
-        padding: const EdgeInsets.only(bottom: applyButtonRoom),
+        padding: const EdgeInsets.only(bottom: sheetFootRoom),
         children: <Widget>[const _SheetGrip(), metadata],
       ),
     );

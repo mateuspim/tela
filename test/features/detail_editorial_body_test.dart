@@ -12,18 +12,25 @@ const Key _apply = Key('the-apply');
 /// at a sheet row landed on the navigation bar and the failure said only that
 /// the target was missing. This layout is *about* proportions of a phone
 /// screen, so testing it on a squat landscape box measures nothing.
-Future<void> _pump(WidgetTester tester) async {
+Future<void> _pump(WidgetTester tester, {double systemBar = 0}) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
-    const MaterialApp(
-      home: Scaffold(
-        body: DetailEditorialBody(
-          preview: ColoredBox(key: _preview, color: Colors.black),
-          metadata: SizedBox(key: _metadata, height: 900),
-          applyButton: SizedBox(key: _apply, height: 84),
+    MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(
+          size: const Size(360, 800),
+          viewPadding: EdgeInsets.only(bottom: systemBar),
+          padding: EdgeInsets.only(bottom: systemBar),
+        ),
+        child: const Scaffold(
+          body: DetailEditorialBody(
+            preview: ColoredBox(key: _preview, color: Colors.black),
+            metadata: SizedBox(key: _metadata, height: 900),
+            applyButton: SizedBox(key: _apply, height: 84),
+          ),
         ),
       ),
     ),
@@ -31,16 +38,48 @@ Future<void> _pump(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('runs the wallpaper to every edge', (WidgetTester tester) async {
+  testWidgets('runs the wallpaper to both side edges and the top', (
+    WidgetTester tester,
+  ) async {
     // The point of the layout: the image is the page, not a picture in a box
-    // above a panel. Anything less than the full screen means the old seam is
-    // still there.
+    // above a panel. It stops only where the apply button begins, and the
+    // sheet covers that end of the screen anyway.
     await _pump(tester);
 
-    expect(
-      tester.getRect(find.byKey(_preview)),
-      tester.getRect(find.byType(DetailEditorialBody)),
-    );
+    final Rect image = tester.getRect(find.byKey(_preview));
+    final Rect body = tester.getRect(find.byType(DetailEditorialBody));
+    expect(image.left, body.left);
+    expect(image.right, body.right);
+    expect(image.top, body.top);
+  });
+
+  testWidgets('does not clip the apply button off the bottom', (
+    WidgetTester tester,
+  ) async {
+    // It was absolutely positioned first, which looked equivalent and was not:
+    // its own SafeArea had nothing to inset against inside a Positioned, so on
+    // the device it ran under the system bar with its label and icon cut off.
+    await _pump(tester);
+
+    final Rect apply = tester.getRect(find.byKey(_apply));
+    final Rect body = tester.getRect(find.byType(DetailEditorialBody));
+    expect(apply.bottom, lessThanOrEqualTo(body.bottom));
+    expect(apply.height, 84);
+  });
+
+  testWidgets('lifts the apply button clear of the system bar', (
+    WidgetTester tester,
+  ) async {
+    // The device found this one. The button's own SafeArea reports nothing
+    // under a Scaffold with `extendBodyBehindAppBar`, so it was drawn half
+    // under the system bar with its label cut off — while the same widget in
+    // the wide layout rendered fine.
+    const double systemBar = 48;
+    await _pump(tester, systemBar: systemBar);
+
+    final Rect apply = tester.getRect(find.byKey(_apply));
+    final Rect body = tester.getRect(find.byType(DetailEditorialBody));
+    expect(body.bottom - apply.bottom, systemBar);
   });
 
   testWidgets('rests with most of the wallpaper still showing', (
@@ -48,15 +87,16 @@ void main() {
   ) async {
     await _pump(tester);
 
-    final double screen = tester
-        .getSize(find.byType(DetailEditorialBody))
-        .height;
+    // Measured against the image's own area rather than the whole body: the
+    // sheet's fraction is of the space above the apply button, which is what
+    // it shares with the wallpaper.
+    final Rect image = tester.getRect(find.byKey(_preview));
     final double sheetTop = tester
         .getTopLeft(find.byKey(DetailEditorialBody.sheetKey))
         .dy;
 
     expect(
-      sheetTop / screen,
+      (sheetTop - image.top) / image.height,
       closeTo(1 - DetailEditorialBody.restingSheetFraction, 0.02),
       reason: 'most of the screen must still be wallpaper',
     );
