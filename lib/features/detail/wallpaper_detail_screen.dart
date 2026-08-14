@@ -8,6 +8,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/ambient_wallpaper_theme.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/tela_toast.dart';
@@ -196,6 +197,26 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     final String sourceName = ref
         .watch(wallpaperSourceForProvider(_wallpaper.source))
         .displayName;
+    // The tint sits *above* the Scaffold, and the Builder is what puts the
+    // screen beneath it rather than beside it: the panes below read
+    // `Theme.of` off this State's own context, which is outside the theme
+    // this method returns, so without it only the widgets deep enough to
+    // resolve their own would move and the surfaces would stay behind.
+    return AmbientWallpaperTheme(
+      colors: _wallpaper.colors,
+      child: Builder(
+        builder: (BuildContext context) =>
+            _screen(context, details, l10n, sourceName),
+      ),
+    );
+  }
+
+  Widget _screen(
+    BuildContext context,
+    AsyncValue<WallpaperDetails> details,
+    AppLocalizations l10n,
+    String sourceName,
+  ) {
     final bool expanded = MediaQuery.sizeOf(context).width >= _expandedWidth;
     return Scaffold(
       // No title: the resolution that used to sit here is a spec, not a name,
@@ -208,7 +229,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
             : <Widget>[DetailActionBar(wallpaper: _wallpaper)],
       ),
       body: expanded
-          ? _expandedBody(details, l10n, sourceName)
+          ? _expandedBody(context, details, l10n, sourceName)
           : _compactBody(details, l10n, sourceName),
     );
   }
@@ -237,7 +258,11 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
   }
 
+  /// Takes [context] rather than reading this State's own: the information
+  /// pane paints itself from the scheme, and on this screen that scheme is the
+  /// wallpaper's — which only exists below the ambient theme.
   Widget _expandedBody(
+    BuildContext context,
     AsyncValue<WallpaperDetails> details,
     AppLocalizations l10n,
     String sourceName,
