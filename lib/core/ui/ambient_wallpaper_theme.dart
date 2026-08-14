@@ -33,6 +33,7 @@ class AmbientWallpaperTheme extends StatelessWidget {
   const AmbientWallpaperTheme({
     required this.colors,
     required this.child,
+    this.fallbackSeed,
     super.key,
   });
 
@@ -42,6 +43,15 @@ class AmbientWallpaperTheme extends StatelessWidget {
   /// arrives already tinted instead of shifting under the user a beat later
   /// when its metadata fetch lands.
   final List<String> colors;
+
+  /// A colour to use when [colors] yields none, for a source that reports no
+  /// palette of its own.
+  ///
+  /// Read from the wallpaper's own pixels — see `DominantColor` — and passed in
+  /// rather than fetched here, because that read is asynchronous and `core/ui`
+  /// may not reach up into a feature's providers to await it. Null keeps the
+  /// old behaviour exactly: no palette and no fallback means no tint.
+  final WallpaperColor? fallbackSeed;
 
   /// The screen to paint.
   final Widget child;
@@ -54,7 +64,7 @@ class AmbientWallpaperTheme extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final WallpaperColor? seed = ambientSeed(colors);
+    final WallpaperColor? seed = ambientSeed(colors) ?? fallbackSeed;
     if (seed == null) return child;
     return AnimatedTheme(
       data: TelaTheme.ambient(

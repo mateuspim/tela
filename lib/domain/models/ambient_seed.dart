@@ -17,10 +17,22 @@ import 'package:tela/domain/models/wallpaper_color.dart';
 /// ```
 WallpaperColor? ambientSeed(List<String> colors) {
   for (final WallpaperColor colour in WallpaperColor.readAll(colors)) {
-    if (!_isAchromatic(colour)) return colour;
+    if (canTint(colour)) return colour;
   }
   return null;
 }
+
+/// Whether [colour] has enough hue to grow a palette from at all.
+///
+/// The one rule, with two callers: [ambientSeed] applies it to the colours a
+/// source reported, and `dominantSwatch` to the colours read out of a
+/// photograph for a source that reported none. They must agree, or the same
+/// grey wallpaper would tint on one site and not the other.
+///
+/// ```dart
+/// canTint(WallpaperColor('#999999')); // false
+/// ```
+bool canTint(WallpaperColor colour) => !_isAchromatic(colour);
 
 /// Whether [colour] has no hue to grow a palette from.
 ///
