@@ -4072,6 +4072,16 @@ and C4 found none** — and C3 closed two long-open verification items on its wa
 past; see its section below. What is still owed is small and specific, and
 listed in *What is left after this pass*.
 
+> **CURRENT (2026-08-14): the tablet is reached over Wi-Fi, and no address in
+> this file stays valid.** It answered on `192.168.50.183:39493` during this
+> session and then left the network entirely — `ping` gave 100% loss, so it was
+> the device dropping off Wi-Fi rather than adb. **Do not chase any address
+> written here**, including that one: Android's wireless debugging rotates its
+> port on every reconnect and DHCP can move the IP. The only reliable route is
+> to ask the owner to read *Settings → Developer options → Wireless debugging*
+> and then `adb connect <ip>:<port>`. The USB notes below still describe a real
+> constraint, but USB has not been the working path since.
+
 **One hard-won piece of tooling knowledge, because it cost this session an hour
 of device time: an agent must never run `adb kill-server` here.** The tablet is
 on **USB** (serial `RXGL602SQ0K`), and the stale `192.168.50.191:5555` in this
