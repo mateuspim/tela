@@ -780,13 +780,42 @@ figure, a mountain, an aircraft over forest) — which is the point: a ranked
 listing does not put one uploader's series at positions 0 and 1, so the twin
 that started this cannot arise there.
 
-**The band's softness is worse than the first pass suggested, and it is now the
-open question about L4.** On *Top* it is plainly blocky — a 3840x2160 source
-drawn from a thumbnail across 2560px. It was easy to miss on the near-black orb
-that happened to be featured before; on a bright, detailed image it is the first
-thing you see. The three options are unchanged (accept it; fetch the full image
-for the featured wallpaper only; stop running the band full-bleed on a wide
-screen) but the first is now much harder to defend.
+#### The band is sharp now, and it says why it is there (2026-08-14)
+
+**Two changes, both asked for after seeing it on the tablet.**
+
+**It draws the full-resolution original.** `TileImageQuality.fullResolution` on
+`WallpaperTile` lays the real image over the thumbnail as it arrives —
+progressive, so the band is never empty and a failed fetch simply leaves the
+thumbnail showing, which is the old behaviour. **Opt-in per tile and never what a
+wall does**: exactly one tile per listing pays for it.
+
+Measured on the device by how much detail survives a 4x downscale-upscale round
+trip (higher means more real detail was there):
+
+| | detail |
+|---|---|
+| old band, thumbnail stretched across 2560px | **315** |
+| new band, full-resolution | **3425** |
+| an ordinary grid tile, for scale | 1797 |
+
+About **eleven times** the detail, and now roughly double an ordinary tile —
+which is what it should be, drawn at five times a tile's area. *The before and
+after are different wallpapers, so that is not a controlled comparison; the
+band-versus-tile figures are from the same screenshot and are.*
+
+**It names the listing it leads.** The caption is two lines now — the sorting's
+own label above the resolution (`MOST FAVORITED` / `3840x2160`). Taken from the
+same `sortingLabel` the tabs use, so the band cannot claim one thing while the
+tab above it says another, and **no string was invented** for a sentence the app
+already had. The label is always a real claim because the band only appears where
+the order means better: on *Most favorited* this *is* the most favorited
+wallpaper.
+
+**The cost, stated:** one full-resolution fetch per ranked listing viewed. Four
+ranked tabs means up to four if the user walks all of them. They land in
+`fullImageCache` (10 objects, 3 days), which is the browsing window they belong
+in, and it is an image the user is fairly likely to open anyway.
 
 #### L4's earlier device pass (2026-08-14, SM-X730) — works; one finding
 

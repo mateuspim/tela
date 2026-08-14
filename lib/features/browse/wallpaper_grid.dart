@@ -383,6 +383,7 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
     );
     return FeaturedWallpaper(
       wallpaper: wallpaper,
+      sorting: widget.query.sorting,
       heroTag: shelfHeroTag(identity, wallpaper.ref.key, 0),
       onTap: gestures.onTap,
       onLongPress: gestures.onLongPress,

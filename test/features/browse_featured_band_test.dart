@@ -39,6 +39,50 @@ void main() {
     );
   });
 
+  testWidgets('says which listing it is the top of', (
+    WidgetTester tester,
+  ) async {
+    // "Why is this one big?" deserves an answer, and the listing already gives
+    // it — on Most favorited this *is* the most favorited wallpaper. Taken from
+    // the same `sortingLabel` the tabs use, so the band cannot claim one thing
+    // while the tab above it says another.
+    await _pumpGrid(
+      tester,
+      _sourceOf(6),
+      query: const SearchQuery(sorting: Sorting.favorites),
+    );
+    await _settle(tester);
+
+    expect(find.text('MOST FAVORITED'), findsOneWidget);
+    expect(find.text('1920x1080'), findsOneWidget);
+  });
+
+  testWidgets('loads the full image for the one tile drawn large', (
+    WidgetTester tester,
+  ) async {
+    // A thumbnail is sized for a tile in a row of five; across the width of a
+    // tablet it is visibly blocky, which is what the band looked like on the
+    // device. Every other tile on the wall must stay on the thumbnail.
+    await _pumpGrid(tester, _sourceOf(6));
+    await _settle(tester);
+
+    final WallpaperTile featured = tester.widget<WallpaperTile>(
+      find.byType(WallpaperTile).first,
+    );
+    expect(featured.quality, TileImageQuality.fullResolution);
+
+    for (final WallpaperTile tile
+        in tester
+            .widgetList<WallpaperTile>(find.byType(WallpaperTile))
+            .skip(1)) {
+      expect(
+        tile.quality,
+        TileImageQuality.thumbnail,
+        reason: tile.wallpaper.id,
+      );
+    }
+  });
+
   testWidgets('draws no wallpaper twice', (WidgetTester tester) async {
     // The band takes the first item and the wall continues from the second.
     // Six wallpapers means six tiles in total, one of them inside the band —

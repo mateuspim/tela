@@ -9,6 +9,21 @@ import 'package:tela/core/ui/wallpaper_source_badge.dart';
 import 'package:tela/core/ui/wallpaper_source_labels_scope.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 
+/// How much image a tile is worth loading.
+enum TileImageQuality {
+  /// The shelf thumbnail, and nothing more. Every tile on every wall.
+  thumbnail,
+
+  /// The thumbnail, then the full-resolution original laid over it.
+  ///
+  /// For the one tile a shelf draws *large*. A thumbnail is sized for a tile in
+  /// a row of five; stretched across the whole width of a tablet it is visibly
+  /// blocky, which is what the featured band looked like on the SM-X730
+  /// (2026-08-14) before this existed. Costs one image fetch, so it is opt-in
+  /// per tile and never what a wall of them does.
+  fullResolution,
+}
+
 /// One wallpaper in the browse grid.
 ///
 /// Deliberately does **not** size itself: the justified row it sits in assigns
@@ -27,6 +42,7 @@ class WallpaperTile extends StatelessWidget {
       WallpaperMark.downloaded,
     },
     this.showSourceBadge = false,
+    this.quality = TileImageQuality.thumbnail,
     super.key,
   });
 
@@ -61,6 +77,10 @@ class WallpaperTile extends StatelessWidget {
   /// wallpapers from more than one site at once — turn it on. Same per-shelf
   /// opt-in as [visibleMarks], and for the same "tells you nothing" reason.
   final bool showSourceBadge;
+
+  /// How much image to load. See [TileImageQuality] — the default is the only
+  /// thing a wall of tiles should ever ask for.
+  final TileImageQuality quality;
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +118,38 @@ class WallpaperTile extends StatelessWidget {
     );
   }
 
+  /// Lays the full-resolution original over [thumbnail] as it arrives.
+  ///
+  /// Progressive rather than a swap: the thumbnail is already on disk from the
+  /// wall that led here, so the tile is never empty, and the sharp image fades
+  /// in on top whenever the network delivers it. A failure leaves the thumbnail
+  /// showing, which is exactly the old behaviour — the sharpening can never
+  /// cost the tile its picture.
+  Widget _sharpenedBy(BuildContext context, Widget thumbnail) {
+    final double width =
+        MediaQuery.sizeOf(context).width *
+        MediaQuery.devicePixelRatioOf(context);
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        thumbnail,
+        CachedNetworkImage(
+          imageUrl: wallpaper.fullImageUrl,
+          cacheManager: fullImageCache,
+          fit: BoxFit.cover,
+          memCacheWidth: width.round(),
+          fadeInDuration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 220),
+          placeholder: (BuildContext context, String url) =>
+              const SizedBox.expand(),
+          errorWidget: (BuildContext context, String url, Object error) =>
+              const SizedBox.expand(),
+        ),
+      ],
+    );
+  }
+
   /// Decodes at roughly the on-screen width, not the source width.
   ///
   /// Uses the *original* thumb, not the small one: Wallhaven crops `small` to a
@@ -122,7 +174,9 @@ class WallpaperTile extends StatelessWidget {
       foregroundDecoration: wallpaperTileEdge(
         Theme.of(context).colorScheme,
       ),
-      child: image,
+      child: quality == TileImageQuality.thumbnail
+          ? image
+          : _sharpenedBy(context, image),
     );
     final Object? tag = heroTag;
     final Widget thumb = tag == null ? framed : Hero(tag: tag, child: framed);

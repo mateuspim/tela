@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:tela/app/theme.dart';
+import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/browse_filter_text.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
+import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
@@ -33,6 +36,7 @@ class FeaturedWallpaper extends StatelessWidget {
   /// Creates the featured band for [wallpaper].
   const FeaturedWallpaper({
     required this.wallpaper,
+    required this.sorting,
     this.heroTag,
     this.onTap,
     this.onLongPress,
@@ -41,6 +45,14 @@ class FeaturedWallpaper extends StatelessWidget {
 
   /// The wallpaper to feature.
   final Wallpaper wallpaper;
+
+  /// The listing this wallpaper is at the top of.
+  ///
+  /// Named on the band, because "why is this one big?" deserves an answer and
+  /// the listing already gives it: on *Most favorited* this **is** the most
+  /// favorited wallpaper. The band only ever appears where the order means
+  /// better (`Sorting.ranksByMerit`), so the label is always a real claim.
+  final Sorting sorting;
 
   /// Shared-element tag flying this image into the screen it opens.
   final Object? heroTag;
@@ -74,8 +86,11 @@ class FeaturedWallpaper extends StatelessWidget {
               heroTag: heroTag,
               onTap: onTap,
               onLongPress: onLongPress,
+              // The one tile on the wall drawn large enough that a thumbnail
+              // stretched across it reads as blocky.
+              quality: TileImageQuality.fullResolution,
             ),
-            _Caption(wallpaper: wallpaper),
+            _Caption(wallpaper: wallpaper, sorting: sorting),
           ],
         ),
       ),
@@ -83,7 +98,7 @@ class FeaturedWallpaper extends StatelessWidget {
   }
 }
 
-/// The one fact worth reading before opening a wallpaper, over its own wash.
+/// Why this wallpaper is large, and what it is, over its own wash.
 ///
 /// `IgnorePointer`, so every gesture belongs to the tile underneath and the
 /// band stays tappable, long-pressable and selectable across its whole face.
@@ -91,9 +106,10 @@ class FeaturedWallpaper extends StatelessWidget {
 /// must not collide on a wallpaper that is both featured and already
 /// downloaded.
 class _Caption extends StatelessWidget {
-  const _Caption({required this.wallpaper});
+  const _Caption({required this.wallpaper, required this.sorting});
 
   final Wallpaper wallpaper;
+  final Sorting sorting;
 
   @override
   Widget build(BuildContext context) {
@@ -110,24 +126,46 @@ class _Caption extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(left: 16, bottom: 14, child: _resolution(context)),
+          Positioned(left: 16, bottom: 14, child: _lines(context)),
         ],
       ),
     );
   }
 
+  Widget _lines(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(_listing(context), style: _listingStyle(context)),
+        const SizedBox(height: 2),
+        Text(wallpaper.resolution.toString(), style: _resolutionStyle(context)),
+      ],
+    );
+  }
+
+  /// The listing's own name, from the same `sortingLabel` the tabs use — so the
+  /// band cannot claim one thing while the tab above it says another, and no
+  /// string was invented for a sentence that already exists.
+  String _listing(BuildContext context) =>
+      sortingLabel(AppLocalizations.of(context), sorting).toUpperCase();
+
+  /// Small and tracked: a caption naming the claim, not competing with it.
+  TextStyle? _listingStyle(BuildContext context) =>
+      Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: Colors.white70,
+        letterSpacing: 1.4,
+        fontWeight: FontWeight.w600,
+      );
+
   /// Set in the brand display face rather than a chip: a band this size earns
   /// a line of type, and a pill here would borrow the wall's vocabulary for
   /// something that is not a tile. White, because it sits on a photograph.
-  Widget _resolution(BuildContext context) {
-    return Text(
-      wallpaper.resolution.toString(),
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+  TextStyle? _resolutionStyle(BuildContext context) =>
+      Theme.of(context).textTheme.titleLarge?.copyWith(
         fontFamily: TelaTheme.brandFontFamily,
         fontWeight: FontWeight.w600,
         letterSpacing: -0.4,
         color: Colors.white,
-      ),
-    );
-  }
+      );
 }
