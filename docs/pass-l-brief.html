@@ -89,6 +89,8 @@ section.plain{border-top:none;}
 .chip b{color:var(--ink);font-weight:600;}
 .chip.built{border-color:color-mix(in srgb,var(--ok) 55%,transparent);color:var(--ok);}
 .chip.built b{color:var(--ok);}
+.chip.open{border-color:color-mix(in srgb,var(--warn) 55%,transparent);color:var(--warn);}
+.chip.open b{color:var(--warn);}
 
 /* ---- findings ---- */
 .finds{display:flex;flex-direction:column;gap:1.4rem;margin:1.6rem 0 .4rem;}
@@ -196,7 +198,7 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
   </div>
 
   <div>
-    <p class="eyebrow">Pass L &middot; 14 August 2026 &middot; L1a shipped, L1b&ndash;L4 scoped</p>
+    <p class="eyebrow">Pass L &middot; 14 August 2026 &middot; L1a + L2a shipped &middot; one decision open</p>
     <h1>The chrome has been quiet for <span class="amb">five passes</span>.</h1>
   </div>
 
@@ -328,10 +330,21 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
     <div class="thread-title"><h2>Motion as a system</h2></div>
   </div>
   <div class="meta">
-    <span class="chip">Cost <b>Medium</b></span>
-    <span class="chip">Payoff <b>Whole-app feel</b></span>
-    <span class="chip">Risk <b>Paging regression</b></span>
-    <span class="chip">Visible in a screenshot <b>No</b></span>
+    <span class="chip built">L2a <b>Built</b></span>
+    <span class="chip open">Parallax <b>Blocked &mdash; needs a call</b></span>
+    <span class="chip">Tests <b>1348, from 1337</b></span>
+    <span class="chip">Device pass <b>Blocked, tablet locked</b></span>
+  </div>
+
+  <div class="finds">
+    <div class="find">
+      <span class="tick v">Fixed</span>
+      <div><p><strong>A tile&rsquo;s ink splash was invisible &mdash; on every shelf, always.</strong> A Material paints its ink layer beneath its child, and every tile is an opaque <code>BoxFit.cover</code> image, so the splash was drawn under the wallpaper. Pressing a tile gave no feedback at all. The ink now sits on a transparent Material above the thumbnail. A fix, not a flourish, and older than this pass.</p></div>
+    </div>
+    <div class="find">
+      <span class="tick v">Built</span>
+      <div><p><strong>The wall arrives rather than appearing.</strong> A tile fades and lifts six percent of its own height over 260&thinsp;ms, staggered 45&thinsp;ms along a row. It fires <em>once per wallpaper, not once per build</em> &mdash; a shelf recycles its rows, so a tile scrolled off and back would otherwise re-animate and the wall would flicker under a scroll.</p></div>
+    </div>
   </div>
 
   <p>Today motion is a 220&thinsp;ms fade, a Hero flight, a shimmer and a zoom animator &mdash; each correct, each reduce-motion aware, and none of them a <em>system</em>. Four additions, cheapest first:</p>
@@ -343,6 +356,19 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
       <tr><td class="n">Staggered first paint</td><td>Tiles fade and rise ~20&thinsp;ms apart, capped so page two does not cascade for a second and a half.</td><td class="n">Low</td></tr>
       <tr><td class="n">Shared axis</td><td>Between sorting tabs, instead of the default slide.</td><td class="n">Low</td></tr>
       <tr><td class="n">Settled overscroll</td><td>On the wall.</td><td class="n">Trivial</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Parallax is blocked, and it is your call</h3>
+  <p><strong>It cannot be built without contradicting the layout law.</strong> <code>justified_rows.dart</code> states it three times &mdash; <em>&ldquo;without cropping any of them&rdquo;</em>, <em>&ldquo;every tile keeps its true aspect ratio&rdquo;</em> &mdash; and the tile pours a <code>BoxFit.cover</code> image into a box shaped by exactly that ratio, so nothing is cropped today. Parallax needs the image <em>taller</em> than its box to have room to drift. That means cropping every thumbnail on the wall.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Option</th><th>What it costs</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Drop it</strong></td><td>Nothing. The entrance already gives the wall motion and the law stands.</td></tr>
+      <tr><td><strong>Accept a ~6% crop</strong></td><td>Pass B&rsquo;s &ldquo;nothing cropped&rdquo; becomes false &mdash; and the uncropped thumb is <em>why</em> the tile fetches <code>thumbOriginalUrl</code> rather than Wallhaven&rsquo;s fixed-crop <code>small</code>.</td></tr>
+      <tr><td><strong>Parallax the backdrop</strong> <em>(recommended)</em></td><td>Detail&rsquo;s blurred letterbox is <code>cover</code> by construction, so drifting it as the metadata scrolls costs no law at all. Much smaller effect, zero conflict.</td></tr>
     </tbody>
   </table>
   </div>
