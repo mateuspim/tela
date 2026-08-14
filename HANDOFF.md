@@ -12,6 +12,10 @@ Updated: 2026-08-14
 > what a screenshot cannot hold: the 450ms transition, the phone layout, and
 > C2's melt case.
 >
+> **L4 is built too** — Browse opens on the listing's own first wallpaper.
+> Dart **1368**. The sliver conversion this file previously said L4 would cost
+> is **not needed**: a scrolling header is item 0 of the existing list.
+>
 > **L1b and L3 are built too** (2026-08-14). Konachan tints from its own pixels
 > now, and Detail is split by shape: the phone gets the editorial full-bleed
 > layout, the tablet keeps C3's two panes on purpose — see L3 for why the scope
@@ -697,6 +701,57 @@ is a blurred copy of the same image, so the tint and the backdrop will agree by
 construction — which risks the pane becoming *one* colour with no separation.
 `wallpaperTileEdge` at `radius: 0` is already drawn over the contained frame for
 the melt case (see C2's device pass); watch whether it is still enough.
+
+### L4 — Browse's featured band — **BUILT 2026-08-14**; device pass owed
+
+The wall opens on the listing's own first wallpaper, given the width of the
+screen. Dart **1368** (from 1363), analyze and format clean. New
+`features/browse/featured_wallpaper.dart`; touched `wallpaper_grid.dart` and
+`core/ui/justified_wallpaper_grid.dart`.
+
+**The sliver conversion this pass was scoped around is not needed and was not
+done.** A header that *scrolls with the wall* is item 0 of the existing
+`ListView`. Only a **pinned or collapsing** header would force slivers, and
+nothing asks for one — so all five shelves keep the list they already have and
+the skeleton is untouched. The earlier claim in this file that L4 costs a sliver
+conversion across every shelf was wrong; it costs one optional `header`
+parameter.
+
+**The band is a `WallpaperTile`, and the tests are what forced that.** The first
+cut was a bespoke widget, and it broke **30 existing browse tests** — every one
+of which indexes the wall by `WallpaperTile`. That was not test debt: a bespoke
+band has to re-implement the marks, the source badge, the selection tick and the
+ink-above-the-image, and becomes an exception the user must learn (a featured
+wallpaper that cannot be ticked, or never says "you already have this").
+Composing the tile inherits all of it, cannot drift from the wall, and keeps the
+featured wallpaper the *first* `WallpaperTile` in the tree — which is why the
+final version changed **no existing test at all**. 30 failures to 0, by deleting
+code.
+
+**The offset lives in `WallpaperGrid` and nowhere else.** The band takes item 0
+and the wall packs from item 1, so nothing is drawn twice; the shared grid stays
+a packer that knows only how many tiles it was handed. Reading order is still
+list order — the band *is* the first thing read — so the pager, the session and
+the index-keyed Hero tags need no compensation, exactly as B requires.
+
+**It gets out of the way of a search.** A search is a question, and a masthead
+between someone and their answer is the whole objection to a front page. No term
+means browsing, and browsing gets the band.
+
+**A real regression it caused, and the fix generalises C1.** The band's height
+pushed the underfill fixture from "cannot scroll at all" to "scrolls by a
+little" — and `_topUpIfUnderfilled`'s rule was `maxScrollExtent > 0`, so it
+declined, and page 2 waited for a drag the user had no reason to make. A wall
+with a few hundred pixels of travel is still a dead end. The rule is now the
+*same* threshold `_maybeFetchNext` uses (within one viewport of the end), which
+subsumes the old one. **Pinned by C1's own test**, which goes red if the narrow
+rule returns — mutation-confirmed. A test added alongside it was deleted for
+being vacuous: it passed under both rules, so it measured nothing.
+
+**Owed on the device:** the band's height (34% of the screen, capped at 340) on
+both the phone and the tablet, whether the resolution caption reads as editorial
+or as clutter, and whether losing the first wallpaper from the grid is noticeable
+in a bad way.
 
 ### L3 — Detail, split by shape — **BUILT 2026-08-14**; device pass owed
 

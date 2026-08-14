@@ -38,6 +38,13 @@ void main() {
     WidgetTester tester,
   ) async {
     // Two tiles cannot fill a tall viewport; page 2 says the listing goes on.
+    //
+    // **This test also pins the top-up's threshold, since L4.** Browse's
+    // featured band adds its own height to this wall, which pushed it from
+    // "cannot scroll at all" to "scrolls by a little" — and the original rule
+    // (`maxScrollExtent > 0`) declined it, so page 2 waited for a drag the user
+    // had no reason to make. The rule is the scroll trigger's own threshold
+    // now; restoring the narrow one turns *this* test red.
     final FakeWallpaperSource source = FakeWallpaperSource(
       pagesByNumber: <int, WallpaperPage>{
         1: _page(count: 2, currentPage: 1, lastPage: 3),

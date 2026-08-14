@@ -41,6 +41,7 @@ class JustifiedWallpaperGrid extends StatefulWidget {
     required this.aspectRatioOf,
     required this.itemBuilder,
     this.controller,
+    this.header,
     this.footer,
     super.key,
   });
@@ -56,6 +57,14 @@ class JustifiedWallpaperGrid extends StatefulWidget {
 
   /// Optional scroll controller, so a paged shelf can watch for the end.
   final ScrollController? controller;
+
+  /// Optional widget above the first row, scrolling with the wall.
+  ///
+  /// A plain first item rather than a sliver: what this exists for is Browse's
+  /// featured band, which scrolls away like anything else. Only a *pinned* or
+  /// collapsing header would need this shelf converted to slivers, and nothing
+  /// asks for one — so all five shelves keep the `ListView` they already have.
+  final Widget? header;
 
   /// Optional widget pinned after the last row — a paged shelf's next-page
   /// spinner or its retry, which must scroll with the wall rather than float
@@ -124,13 +133,17 @@ class _JustifiedWallpaperGridState extends State<JustifiedWallpaperGrid> {
       soleRowMaxHeight: height.isFinite ? soleWallpaperRowHeight(height) : null,
     );
     final Widget? trailing = widget.footer;
+    final Widget? leading = widget.header;
+    final int before = leading == null ? 0 : 1;
     return ListView.builder(
       controller: widget.controller,
       padding: padding,
-      itemCount: rows.length + (trailing == null ? 0 : 1),
+      itemCount: before + rows.length + (trailing == null ? 0 : 1),
       itemBuilder: (BuildContext context, int index) {
-        if (index == rows.length) return trailing;
-        return _row(context, rows[index]);
+        if (leading != null && index == 0) return leading;
+        final int row = index - before;
+        if (row == rows.length) return trailing;
+        return _row(context, rows[row]);
       },
     );
   }

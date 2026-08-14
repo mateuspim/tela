@@ -19,6 +19,7 @@ import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/ports/tag_blocklist_repository.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
+import 'package:tela/features/browse/featured_wallpaper.dart';
 import 'package:tela/features/browse/gallery_paging_bridge.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/browse/wallpaper_wall_navigation.dart';
@@ -318,10 +319,22 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
         ],
         child: JustifiedWallpaperGrid(
           controller: _scroll,
-          itemCount: loaded.length,
-          aspectRatioOf: (int index) => loaded[index].resolution.aspectRatio,
+          // The featured band takes the listing's first wallpaper, so the wall
+          // continues from the second and nothing is drawn twice. The offset
+          // lives here and nowhere else: the shared grid stays a packer that
+          // knows only how many tiles it was given, and reading order is still
+          // list order because the band *is* the first thing read.
+          itemCount: loaded.length - _featuredOffset(loaded),
+          aspectRatioOf: (int index) =>
+              loaded[index + _featuredOffset(loaded)].resolution.aspectRatio,
           itemBuilder: (BuildContext context, int index, double _, double _) =>
-              _tile(context, loaded, index, identity),
+              _tile(
+                context,
+                loaded,
+                index + _featuredOffset(loaded),
+                identity,
+              ),
+          header: _featured(context, loaded, identity),
           footer: wallFooter(
             l10n,
             state,
@@ -330,6 +343,45 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Whether this listing gives its first wallpaper to the featured band.
+  ///
+  /// Only when the user is *browsing*. A search is a question, and putting a
+  /// masthead between someone and the answer to their question is the whole
+  /// objection to a front page — so the band appears on an unsearched listing
+  /// and gets out of the way the moment a term is typed. An empty listing has
+  /// no first wallpaper to give.
+  bool _isFeaturing(List<Wallpaper> loaded) =>
+      loaded.isNotEmpty && widget.query.term.isEmpty;
+
+  /// 1 while the band holds the first wallpaper, 0 when it is absent.
+  int _featuredOffset(List<Wallpaper> loaded) => _isFeaturing(loaded) ? 1 : 0;
+
+  /// The band itself, carrying exactly the gestures a tile would.
+  ///
+  /// Same selection gestures and the same quick sheet: it is still one of the
+  /// listing's wallpapers, and a featured one you cannot select or long-press
+  /// would be an exception the user has to learn.
+  Widget? _featured(
+    BuildContext context,
+    List<Wallpaper> loaded,
+    String identity,
+  ) {
+    if (!_isFeaturing(loaded)) return null;
+    final Wallpaper wallpaper = loaded.first;
+    final gestures = selectableTileGestures(
+      context: context,
+      wallpaperKey: wallpaper.ref.key,
+      onOpen: () => _openDetail(context, loaded, 0),
+      onLongPress: () => _openQuickActions(context, loaded, 0),
+    );
+    return FeaturedWallpaper(
+      wallpaper: wallpaper,
+      heroTag: shelfHeroTag(identity, wallpaper.ref.key, 0),
+      onTap: gestures.onTap,
+      onLongPress: gestures.onLongPress,
     );
   }
 
@@ -399,7 +451,17 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
   ) {
     if (!mounted || !_scroll.hasClients) return;
     if (!state.hasNextPage || state.isLoading || state.error != null) return;
-    if (_scroll.position.maxScrollExtent > 0) return;
+    // The same threshold the scroll trigger uses, not "cannot scroll at all".
+    // A wall with a few hundred pixels of travel is still a dead end that
+    // looks broken: nothing on screen says there is more, so no scroll is
+    // attempted and the notification that would fetch page 2 never comes. The
+    // narrower rule survived only because nothing had yet made such a wall —
+    // Browse's featured band did, by adding its own height to a page that used
+    // to underfill outright. Same lesson as C1: ask for the page, do not hope
+    // a side effect notices.
+    if (_scroll.position.maxScrollExtent > _scroll.position.viewportDimension) {
+      return;
+    }
     fetchNextPage();
   }
 
