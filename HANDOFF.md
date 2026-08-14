@@ -2,12 +2,15 @@
 
 Updated: 2026-08-14
 
-> **START HERE — pass L has begun: L1a is built and wants an owner's eye**
+> **START HERE — pass L has begun: L1a is built and device-verified**
 > (2026-08-14). Detail paints itself in the wallpaper's own colour and the tint
-> travels with the pager. Dart **1337** (from 1317), analyze and format clean.
-> The tests caught it repainting the **purity warning** on the way — read L1a's
-> block before touching `TelaTheme.ambient`. L2, L3, L4 and L1b are scoped and
-> not built.
+> travels with the pager. Dart **1337** (from 1317), analyze and format clean,
+> **driven on the SM-X730 with no defects found**. The tests caught it
+> repainting the **purity warning** on the way, and the device pass confirmed
+> the fix in the running app (`rgb(252,180,189)` on a tinted pane) — read L1a's
+> block before touching `TelaTheme.ambient`. What the tablet still owes is only
+> what a screenshot cannot hold: the 450ms transition, the phone layout, and
+> C2's melt case. L2, L3, L4 and L1b are scoped and not built.
 >
 > **The older START HERE — the clipboard work is merged, and the pass was scoped
 > but not built** (2026-08-14). `feat/clipboard-copy` landed as `6ee597e` with both
@@ -522,7 +525,7 @@ Four threads, ordered by cost, each independently shippable. Take them one at a
 time. Every one of them is *observable* — none can be called done on a green
 suite alone, so `make deploy` and a screenshot pass belongs in each.
 
-### L1a — ambient colour on Detail — **BUILT 2026-08-14**; owner's eye owed
+### L1a — ambient colour on Detail — **BUILT AND DEVICE-VERIFIED 2026-08-14**
 
 Detail now paints itself in the wallpaper's own colour, and the tint travels
 with the pager. Dart **1337** (from 1317), analyze and format clean, Kotlin
@@ -575,8 +578,52 @@ way, because `TelaMark` draws in `brandSeed` and never in `ColorScheme.primary`.
 Both themes are built through one `_componentsOn`, so a component styled later
 cannot go missing on the tinted screen.
 
-**Owed on the device, and it is the whole point of the slice** — nobody has
-looked at this. What to judge: whether 450ms (`AmbientWallpaperTheme.transition`)
+#### L1a's device pass (2026-08-14, SM-X730) — no defects; the fix is confirmed in the real app
+
+Deployed and driven live on the tablet, at 2560x1600 in the expanded layout.
+**It works, and it looks right.** Screenshots and sampled pixels, so the claims
+below are measured rather than impressions:
+
+| wallpaper | seeded from | fact-tile surface | Set wallpaper |
+|---|---|---|---|
+| Bumblebee, warm | brown, after skipping black + white | `#221a14` | `#ffb780` |
+| Optimus, sky | teal (first colour, chromatic) | `#161d1d` | `#80d4d4` |
+| app default (Browse) | — | neutral | `#b8c6ee` |
+
+**The neutral-skip rule was seen working on a real Wallhaven response**, not a
+fixture: the warm wallpaper's Colors row reads black, white, brown, tan, grey —
+the first two skipped, the tint taken from the brown. That is the rule doing
+exactly what its unit test says, on live data.
+
+**The purity warning survives the tint, and this is the part that was worth
+checking on hardware.** With Sketchy enabled, a sketchy wallpaper's download
+icon measured `rgb(252,180,189)` — redness 68 against its own pane — while both
+safe wallpapers measured no red at all. So `ColorScheme.error` still reads as a
+warning on a fully tinted surface. The defect the suite caught is fixed in the
+running app, not only in the test.
+
+**Both structural claims held.** The wide layout's information pane is tinted
+(the `Builder`), and the surfaces move rather than just the accent — three
+different fact-tile colours for three wallpapers. **The browse wall and the
+filter sheet stayed neutral**, on tela's own periwinkle: the rule this pass is
+built around was not quietly broken.
+
+**One finding, and it is not a defect — do not "fix" it.** `#424153`, the
+palette's muted slate, seeds a tint of `#c3c0ff`, which sits beside tela's own
+default `#b8c6ee` closely enough that a casual eye reads the screen as
+*untinted*. The surfaces did move (`#1b1b21`, cool violet, against the app's
+neutral), so the feature fired correctly; it is simply that the one low-chroma
+entry in Wallhaven's palette happens to land in tela's own hue family. Recorded
+so nobody reports it as the tint failing to fire, and so nobody "fixes" it by
+rejecting `#424153` — a muted wallpaper earning muted chrome is the honest
+answer, and rejecting it would drop the only tint a greyish photo can have.
+
+**Still unjudged, and none of it is visible in a screenshot:** the 450ms
+transition itself, the compact (phone) layout, and C2's melt case — no wallpaper
+in this pass had edge pixels close enough to its own blurred backdrop to test
+it.
+
+**Owed on the device, and it is the whole point of the slice** — what to judge: whether 450ms (`AmbientWallpaperTheme.transition`)
 is right for a swipe between two strongly different wallpapers; whether the tint
 reads as ambience or as a coloured app; whether the pane and C2's blurred
 backdrop now agree *too* well and the fitted preview loses its boundary (the

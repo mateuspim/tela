@@ -196,7 +196,7 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
   </div>
 
   <div>
-    <p class="eyebrow">Pass L &middot; 14 August 2026 &middot; L1a built, L1b&ndash;L4 scoped</p>
+    <p class="eyebrow">Pass L &middot; 14 August 2026 &middot; L1a shipped, L1b&ndash;L4 scoped</p>
     <h1>The chrome has been quiet for <span class="amb">five passes</span>.</h1>
   </div>
 
@@ -218,10 +218,10 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
     <div class="thread-title"><h2>Ambient colour: the wallpaper paints its own screen</h2></div>
   </div>
   <div class="meta">
-    <span class="chip built">L1a <b>Built</b></span>
+    <span class="chip built">L1a <b>Built &amp; device-verified</b></span>
     <span class="chip">Tests <b>1337, from 1317</b></span>
     <span class="chip">Surface <b>Detail</b></span>
-    <span class="chip">Owed <b>An eye on the tablet</b></span>
+    <span class="chip">Defects on device <b>None</b></span>
   </div>
 
   <p>Detail and the immersive viewer derive a colour scheme from the wallpaper&rsquo;s own dominant colour and animate the whole surface into it as the pager moves. Action bar, apply button, fact tiles, scrim &mdash; all take the image&rsquo;s colour. It extends what C2&rsquo;s blurred backdrop already started rather than contradicting it.</p>
@@ -244,6 +244,37 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
         <div class="fact"><b>Purity</b><span>Safe</span></div>
       </div>
       <button class="apply" type="button" tabindex="-1">Set wallpaper</button>
+    </div>
+  </div>
+
+  <h3>What the tablet showed</h3>
+  <p>Driven live on the SM-X730 at 2560&times;1600. Sampled pixels, not impressions.</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Wallpaper</th><th>Seeded from</th><th>Fact tile</th><th>Set wallpaper</th></tr></thead>
+    <tbody>
+      <tr><td>Warm, Bumblebee</td><td class="n">brown, after skipping black + white</td><td class="n">#221a14</td><td class="n">#ffb780</td></tr>
+      <tr><td>Sky, Optimus</td><td class="n">teal, first colour</td><td class="n">#161d1d</td><td class="n">#80d4d4</td></tr>
+      <tr><td>Browse (untinted)</td><td class="n">&mdash;</td><td class="n">neutral</td><td class="n">#b8c6ee</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="finds">
+    <div class="find">
+      <span class="tick v">Confirmed</span>
+      <div><p><strong>The purity warning survives the tint.</strong> This was the one worth checking on hardware rather than trusting to a test. A sketchy wallpaper&rsquo;s download icon measured <code>rgb(252,180,189)</code> against its own tinted pane; both safe wallpapers measured no red at all. The defect is fixed in the running app, not only in the suite.</p></div>
+    </div>
+    <div class="find">
+      <span class="tick v">Confirmed</span>
+      <div><p><strong>The neutral rule works on live data.</strong> The warm wallpaper&rsquo;s palette came back black, white, brown, tan, grey &mdash; the two neutrals skipped and the tint taken from the brown. That is the unit test&rsquo;s claim, on a real response.</p></div>
+    </div>
+    <div class="find">
+      <span class="tick p">Not a defect</span>
+      <div><p><strong><code>#424153</code> tints to almost exactly tela&rsquo;s own accent.</strong> The palette&rsquo;s one muted slate seeds <code>#c3c0ff</code>, beside the app default <code>#b8c6ee</code> &mdash; close enough that a casual eye reads the screen as untinted, though the surfaces did move. Recorded so nobody reports it as the tint failing, and so nobody &ldquo;fixes&rdquo; it by rejecting that colour: a muted wallpaper earning muted chrome is the honest answer, and rejecting it drops the only tint a greyish photo can have.</p></div>
+    </div>
+    <div class="find">
+      <span class="tick p">Still unjudged</span>
+      <div><p>None of it visible in a screenshot: the 450&thinsp;ms transition itself, the phone layout, and C2&rsquo;s melt case &mdash; no wallpaper in this pass had edge pixels close enough to its own blurred backdrop to test it.</p></div>
     </div>
   </div>
 
