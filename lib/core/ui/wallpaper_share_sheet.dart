@@ -3,10 +3,11 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/sheet_header.dart';
 import 'package:tela/domain/models/share_option.dart';
 
-/// Asks whether to share a wallpaper's link or its image file.
+/// Asks how to hand a wallpaper out — its link, its image file, or a clipboard
+/// copy of the image.
 ///
 /// Only the [options] the wallpaper's purity allows are offered — an explicit
-/// wallpaper is handed `[ShareOption.link]` alone, so the image tile never
+/// wallpaper is handed `[ShareOption.link]` alone, so neither bitmap tile ever
 /// appears for it (see [shareOptionsFor]). Resolves to null when the sheet is
 /// dismissed.
 ///
@@ -78,6 +79,11 @@ _ShareTileCopy _copyFor(
       Icons.image_outlined,
       l10n.detailShareImage,
       l10n.detailShareImageDetail,
+    ),
+    ShareOption.clipboard => _ShareTileCopy(
+      Icons.content_copy_outlined,
+      l10n.detailShareClipboard,
+      l10n.detailShareClipboardDetail,
     ),
   };
 }

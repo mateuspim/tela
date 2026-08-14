@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
+import 'package:tela/core/ui/shelf_swipe.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
@@ -86,6 +87,46 @@ void main() {
     await _swipe(tester, const Offset(-200, 0));
 
     expect(session.selectedIndex, 0);
+  });
+
+  testWidgets('holding the wallpaper hands the one on screen to the copy', (
+    WidgetTester tester,
+  ) async {
+    // The gesture reaches whichever wallpaper is selected, not the one the
+    // pager started on — a hold after a swipe must not copy the last image.
+    final List<String> held = <String>[];
+    final GallerySessionController<Wallpaper> session = _session();
+    await _pumpPager(
+      tester,
+      session,
+      onHoldImage: (Wallpaper wallpaper) => held.add(wallpaper.id),
+    );
+
+    await _hold(tester);
+    expect(held, <String>['one']);
+
+    await _swipe(tester, const Offset(-200, 0));
+    await _hold(tester);
+
+    expect(held, <String>['one', 'two']);
+  });
+
+  testWidgets('an explicit wallpaper is held like any other', (
+    WidgetTester tester,
+  ) async {
+    // The gesture carries no purity rule of its own — the copy is offered at
+    // every purity (`shareOptionsFor`), and a hold that silently did nothing on
+    // some wallpapers would read as a broken gesture rather than as a policy.
+    final List<String> held = <String>[];
+    await _pumpPager(
+      tester,
+      _session(purity: Purity.nsfw),
+      onHoldImage: (Wallpaper wallpaper) => held.add(wallpaper.id),
+    );
+
+    await _hold(tester);
+
+    expect(held, <String>['one']);
   });
 
   testWidgets('turning the page returns the wallpaper to fitted scale', (
@@ -290,18 +331,32 @@ TransformationController _zoom(WidgetTester tester) {
 double _zoomScale(WidgetTester tester) =>
     _zoom(tester).value.getMaxScaleOnAxis();
 
-GallerySessionController<Wallpaper> _session() {
+Future<void> _hold(WidgetTester tester) async {
+  final TestGesture finger = await tester.startGesture(
+    tester.getCenter(find.byType(ProgressiveWallpaperPreview).first),
+  );
+  await tester.pump(ShelfSwipe.holdDuration + const Duration(milliseconds: 8));
+  await finger.up();
+  await tester.pumpAndSettle();
+}
+
+GallerySessionController<Wallpaper> _session({Purity purity = Purity.sfw}) {
   return GallerySessionController<Wallpaper>(
     identity: 'detail-pager-test',
-    items: <Wallpaper>[_wallpaper('one'), _wallpaper('two'), _wallpaper('tre')],
+    items: <Wallpaper>[
+      _wallpaper('one', purity: purity),
+      _wallpaper('two', purity: purity),
+      _wallpaper('tre', purity: purity),
+    ],
     initialIndex: 0,
   );
 }
 
 Future<void> _pumpPager(
   WidgetTester tester,
-  GallerySessionController<Wallpaper> session,
-) async {
+  GallerySessionController<Wallpaper> session, {
+  void Function(Wallpaper wallpaper)? onHoldImage,
+}) async {
   addTearDown(session.dispose);
   await tester.pumpWidget(
     MaterialApp(
@@ -317,6 +372,7 @@ Future<void> _pumpPager(
           child: DetailPreviewPager(
             gallery: session,
             systemUi: FakeImmersiveSystemUi(),
+            onHoldImage: onHoldImage,
           ),
         ),
       ),
@@ -325,7 +381,7 @@ Future<void> _pumpPager(
   await tester.pump();
 }
 
-Wallpaper _wallpaper(String id) => Wallpaper(
+Wallpaper _wallpaper(String id, {Purity purity = Purity.sfw}) => Wallpaper(
   id: id,
   source: SourceId.wallhaven,
   pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
@@ -335,7 +391,7 @@ Wallpaper _wallpaper(String id) => Wallpaper(
   thumbOriginalUrl: 'https://th.wallhaven.cc/orig/$id.jpg',
   resolution: const Resolution(1080, 2400),
   fileSizeBytes: 1024,
-  purity: Purity.sfw,
+  purity: purity,
   category: Category.general,
   colors: const <String>[],
 );

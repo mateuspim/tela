@@ -27,6 +27,7 @@ import 'package:tela/features/detail/wallpaper_immersive_session.dart';
 /// DetailPreviewPager(
 ///   gallery: session,
 ///   systemUi: const FlutterImmersiveSystemUi(),
+///   onHoldImage: (Wallpaper wallpaper) => copy(wallpaper),
 /// )
 /// ```
 class DetailPreviewPager extends StatefulWidget {
@@ -34,6 +35,7 @@ class DetailPreviewPager extends StatefulWidget {
   const DetailPreviewPager({
     required this.gallery,
     required this.systemUi,
+    this.onHoldImage,
     super.key,
   });
 
@@ -42,6 +44,15 @@ class DetailPreviewPager extends StatefulWidget {
 
   /// The Android system-chrome seam the fullscreen viewer hides bars through.
   final ImmersiveSystemUi systemUi;
+
+  /// Called when a finger rests on the wallpaper on screen, conventionally to
+  /// copy it. Null leaves the hold unarmed.
+  ///
+  /// Armed at every purity: a clipboard copy is offered for explicit wallpapers
+  /// too, by the owner's decision — `shareOptionsFor` carries the reasoning and
+  /// what it costs. Withholding it here would have been the third place the
+  /// same rule was spelled out, and the first to disagree with the other two.
+  final void Function(Wallpaper wallpaper)? onHoldImage;
 
   @override
   State<DetailPreviewPager> createState() => _DetailPreviewPagerState();
@@ -167,6 +178,7 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager>
           ? () => _turnTo(_selectedIndex - 1)
           : null,
       onNext: _gallery.canSelectNext ? () => _turnTo(_selectedIndex + 1) : null,
+      onHold: _holdSelected(),
       child: PageView.builder(
         controller: _pages,
         physics: const NeverScrollableScrollPhysics(),
@@ -211,6 +223,15 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager>
       onDoubleTap: _toggleDoubleTapZoom,
       heroTag: shelfHeroTag(_gallery.identity, wallpaper.ref.key, index),
     );
+  }
+
+  /// The hold, bound to the wallpaper on screen rather than to the pager, so a
+  /// hold after a swipe copies what is actually being looked at.
+  VoidCallback? _holdSelected() {
+    final void Function(Wallpaper)? hold = widget.onHoldImage;
+    if (hold == null) return null;
+    final Wallpaper wallpaper = _gallery.items[_selectedIndex];
+    return () => hold(wallpaper);
   }
 
   /// Double tap toggles between fitted and magnified around the tapped point —

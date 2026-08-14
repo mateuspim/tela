@@ -8,16 +8,16 @@ import java.io.File
 /**
  * Stages one image in a cache folder and names it for another app to read.
  *
- * Both ways tela hands real pixels to a stranger — the share sheet and the
- * system wallpaper editor — take the same three steps: empty the folder, fetch
- * the bytes, expose them through the FileProvider. The emptying is why this is
- * one class rather than two copies: it is what stops a past hand-off piling up
- * in cache, so only the image being handed out right now is ever exposed, and a
- * privacy rule like that is worth having exactly one home.
+ * Every way tela hands real pixels to a stranger — the share sheet, the system
+ * wallpaper editor, the clipboard — takes the same three steps: empty the
+ * folder, fetch the bytes, expose them through the FileProvider. The emptying
+ * is why this is one class rather than three copies: it is what stops a past
+ * hand-off piling up in cache, so only the image being handed out right now is
+ * ever exposed, and a privacy rule like that is worth having exactly one home.
  *
- * Each caller passes its own [directory]. Sharing one would make a share and an
- * adjust delete the file out from under each other, since both wipe on the way
- * in. Every directory used here must also appear in res/xml/file_paths.xml, or
+ * Each caller passes its own [directory]. Sharing one would make the callers
+ * delete the file out from under each other, since each wipes on the way in.
+ * Every directory used here must also appear in res/xml/file_paths.xml, or
  * [contentUri] throws.
  */
 class ImageHandoffCache(

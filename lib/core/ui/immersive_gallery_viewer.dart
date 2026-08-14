@@ -23,6 +23,7 @@ class ImmersiveGalleryViewer extends StatefulWidget {
     this.itemCount = 1,
     this.onPrevious,
     this.onNext,
+    this.onHold,
     this.zoomController,
     this.systemUi = const FlutterImmersiveSystemUi(),
     this.barActions = const <Widget>[],
@@ -62,6 +63,12 @@ class ImmersiveGalleryViewer extends StatefulWidget {
 
   /// Selects the next item. Null at a true loaded boundary.
   final VoidCallback? onNext;
+
+  /// Called when a finger rests on the fitted image, conventionally to copy it
+  /// (see [ShelfSwipe.onHold]). Null leaves the gesture unarmed, which is what
+  /// every surface holding images that may not leave the device passes — the
+  /// private library above all.
+  final VoidCallback? onHold;
 
   /// Optional externally owned zoom state, primarily for gallery sessions.
   final GalleryZoomController? zoomController;
@@ -214,6 +221,7 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
       isZoomed: _zoomController.isZoomed,
       onPrevious: widget.onPrevious,
       onNext: widget.onNext,
+      onHold: widget.onHold,
       child: Semantics(
         container: true,
         explicitChildNodes: true,

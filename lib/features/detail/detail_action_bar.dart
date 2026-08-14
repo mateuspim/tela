@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/configured_download.dart';
+import 'package:tela/app/copy_wallpaper_action.dart';
 import 'package:tela/app/delete_download_action.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/move_to_private_action.dart';
@@ -325,6 +326,13 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
       await switch (option) {
         ShareOption.link => share.link(_wallpaper),
         ShareOption.image => share.image(_wallpaper),
+        // Reports its own outcome, including a failure — see the action. The
+        // catch below is for the two options that do not.
+        ShareOption.clipboard => copyWallpaperToClipboard(
+          context: context,
+          ref: ref,
+          wallpaper: _wallpaper,
+        ),
       };
     } on WallpaperShareFailure {
       if (mounted) {

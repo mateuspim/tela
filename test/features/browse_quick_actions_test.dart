@@ -25,13 +25,14 @@ import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
 import '../fakes/fake_wallpaper_applier.dart';
+import '../fakes/fake_wallpaper_sharer.dart';
 import '../fakes/fake_wallpaper_source.dart';
 
 /// D1 — the wall's long-press quick actions: favorite, download or set a
 /// wallpaper without the round trip through the detail screen that collecting
 /// used to cost on every tile.
 void main() {
-  testWidgets('a long press offers the four quick actions', (
+  testWidgets('a long press offers the five quick actions', (
     WidgetTester tester,
   ) async {
     await _pumpWall(tester);
@@ -41,6 +42,7 @@ void main() {
     expect(find.text('Add to favorites'), findsOneWidget);
     expect(find.text('Download'), findsOneWidget);
     expect(find.text('Set wallpaper'), findsOneWidget);
+    expect(find.text('Copy image'), findsOneWidget);
     expect(find.text('Open details'), findsOneWidget);
     // The sheet names the wallpaper: a long press that landed on the wrong tile
     // of a dense wall should be obvious before anything has been done to it.
@@ -197,6 +199,40 @@ void main() {
     expect(find.text('Wallpaper set.'), findsOneWidget);
   });
 
+  testWidgets('copying from the sheet puts the image on the clipboard', (
+    WidgetTester tester,
+  ) async {
+    // The wall's own route to a copy: no detail screen, no share sheet, no
+    // holding the preview — the same long press everything else here uses.
+    final FakeWallpaperSharer sharer = FakeWallpaperSharer();
+    await _pumpWall(tester, sharer: sharer);
+
+    await _longPressTile(tester);
+    await tester.tap(find.text('Copy image'));
+    await _settle(tester);
+
+    expect(sharer.copiedImages, hasLength(1));
+    expect(
+      sharer.copiedImages.single.source,
+      Uri.parse('https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.jpg'),
+    );
+  });
+
+  testWidgets('an explicit wallpaper is offered the copy row too', (
+    WidgetTester tester,
+  ) async {
+    // The row carries no purity condition of its own (`shareOptionsFor`), so
+    // the sheet is the same six rows whatever the tile holds.
+    final FakeWallpaperSharer sharer = FakeWallpaperSharer();
+    await _pumpWall(tester, purity: Purity.nsfw, sharer: sharer);
+
+    await _longPressTile(tester);
+    await tester.tap(find.text('Copy image'));
+    await _settle(tester);
+
+    expect(sharer.copiedImages.single.sensitive, isTrue);
+  });
+
   testWidgets('"Open details" opens the screen the tap would have', (
     WidgetTester tester,
   ) async {
@@ -222,6 +258,7 @@ Future<void> _pumpWall(
   FakeImageStore? images,
   FakeWallpaperApplier? applier,
   FakeSettingsRepository? settings,
+  FakeWallpaperSharer? sharer,
   Purity purity = Purity.sfw,
   Size size = const Size(1080, 2400),
 }) async {
@@ -261,6 +298,10 @@ Future<void> _pumpWall(
         downloadQueueProvider.overrideWithValue(FakeDownloadQueue()),
         wallpaperApplierProvider.overrideWithValue(
           applier ?? FakeWallpaperApplier(),
+        ),
+        // The Copy image row would otherwise reach the real method channel.
+        wallpaperSharerProvider.overrideWithValue(
+          sharer ?? FakeWallpaperSharer(),
         ),
       ],
       child: const TelaApp(),

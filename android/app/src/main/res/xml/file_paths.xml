@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The folders the FileProvider may expose, each a subdirectory of the app's
-     cache. Both are emptied before each use, so each only ever holds the single
+     cache. Each is emptied before each use, so it only ever holds the single
      image being handed out right now.
 
-     They are separate on purpose: WallpaperSharing and SystemWallpaperEditing
-     each wipe their own folder, and sharing one would make a share and an
-     adjust delete the file out from under each other. -->
+     They are separate on purpose: WallpaperSharing, SystemWallpaperEditing and
+     WallpaperClipboard each wipe their own folder, and sharing one would make
+     them delete the file out from under each other — which for the clipboard
+     would strand a clip that outlives the copy, since the paste can come
+     minutes later. -->
 <paths>
     <cache-path name="shared" path="shared/" />
     <cache-path name="adjusted" path="adjusted/" />
+    <cache-path name="clipboard" path="clipboard/" />
 </paths>

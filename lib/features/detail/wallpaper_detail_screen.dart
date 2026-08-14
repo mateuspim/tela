@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tela/app/copy_wallpaper_action.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/wallpaper_sources.dart';
@@ -287,6 +288,21 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     return DetailPreviewPager(
       gallery: _gallery,
       systemUi: widget.immersiveSystemUi,
+      onHoldImage: _copyToClipboard,
+    );
+  }
+
+  /// Holding the wallpaper copies it, the gesture equivalent of the share
+  /// sheet's *Copy image* — the fastest way out of tela and into whatever app
+  /// the user meant to paste it in. The pager withholds it for an explicit
+  /// wallpaper on its own; nothing about that rule is decided here.
+  void _copyToClipboard(Wallpaper wallpaper) {
+    unawaited(
+      copyWallpaperToClipboard(
+        context: context,
+        ref: ref,
+        wallpaper: wallpaper,
+      ),
     );
   }
 
