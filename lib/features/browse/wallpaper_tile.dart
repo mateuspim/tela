@@ -75,10 +75,24 @@ class WallpaperTile extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         borderRadius: BorderRadius.circular(wallpaperTileRadius),
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: InkWell(
-          onTap: onTap,
-          onLongPress: onLongPress,
-          child: _thumbnail(context),
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            _thumbnail(context),
+            // The ink sits *above* the thumbnail, and that is the whole point
+            // of this Stack. A Material paints its ink layer beneath its
+            // child, so an InkWell wrapping an opaque `BoxFit.cover` image —
+            // which is every tile on every shelf — splashed underneath the
+            // wallpaper and was invisible: pressing a tile gave no feedback at
+            // all. A transparent Material above the image is where the splash
+            // can be seen. Do not put it back around `_thumbnail`.
+            Positioned.fill(
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(onTap: onTap, onLongPress: onLongPress),
+              ),
+            ),
+          ],
         ),
       ),
     );

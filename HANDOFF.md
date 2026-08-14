@@ -10,7 +10,15 @@ Updated: 2026-08-14
 > the fix in the running app (`rgb(252,180,189)` on a tinted pane) — read L1a's
 > block before touching `TelaTheme.ambient`. What the tablet still owes is only
 > what a screenshot cannot hold: the 450ms transition, the phone layout, and
-> C2's melt case. L2, L3, L4 and L1b are scoped and not built.
+> C2's melt case.
+>
+> **L2a is also built** — the wall assembles rather than appearing, and a real
+> defect went with it: a tile's ink splash was painted *under* an opaque image,
+> so pressing a wallpaper gave no feedback at all, on every shelf, always. Dart
+> **1348**. **L2b (tile parallax) is blocked** — it cannot be built without
+> contradicting the justified-rows "nothing cropped" law, and needs an owner's
+> decision between three named options. L2's device pass is **blocked on a
+> locked tablet**. L3, L4 and L1b are scoped and not built.
 >
 > **The older START HERE — the clipboard work is merged, and the pass was scoped
 > but not built** (2026-08-14). `feat/clipboard-copy` landed as `6ee597e` with both
@@ -681,6 +689,86 @@ is a blurred copy of the same image, so the tint and the backdrop will agree by
 construction — which risks the pane becoming *one* colour with no separation.
 `wallpaperTileEdge` at `radius: 0` is already drawn over the contained frame for
 the melt case (see C2's device pass); watch whether it is still enough.
+
+### L2a — the wall assembles, and a tap can be seen — **BUILT 2026-08-14**; device pass blocked
+
+Two pieces, both law-safe. Dart **1348** (from 1337), analyze and format clean,
+Kotlin untouched. Files: `core/ui/tile_entrance.dart`, wired in
+`core/ui/justified_wallpaper_grid.dart`; `features/browse/wallpaper_tile.dart`.
+
+**A real defect found on the way in, and it is not cosmetic: pressing a tile
+gave no feedback at all.** A `Material` paints its ink layer *beneath* its
+child, and every tile on every shelf is an opaque `BoxFit.cover` image — so the
+`InkWell`'s splash was drawn under the wallpaper and could never be seen. The
+ink now sits on a transparent `Material` **above** the thumbnail. Mutation-
+checked: putting the `InkWell` back around `_thumbnail` fails two tests by name.
+This had been true on all four shelves since the tile existed.
+
+**The entrance fires once per wallpaper, not once per build, and that is the
+load-bearing half.** A shelf recycles its rows, so a tile scrolled off and back
+is a *new widget* for an image the user has already seen — animating that is the
+wall flickering under a scroll rather than assembling. The `_seen` set lives in
+`JustifiedWallpaperGrid`'s State because that is the only thing outliving the
+rows. Mutation-checked: dropping the set fails *a wallpaper arrives once and
+never again* and nothing else. One shared wiring point, so all four shelves
+behave the same — the same argument as `TileDensityScope` and
+`WallpaperMarksScope`.
+
+**Reduce-motion collapses it to "already seen"**, so a device that wants no
+motion also pays nothing to track it.
+
+**A trap worth not re-deriving, because it cost this session two red runs:
+`pump(duration)` cannot observe this animation.** A single advance fires the
+delay timer *and* starts the ticker within the same frame, so the animation
+reads elapsed-zero and the tile is still invisible at the end of the pump. Every
+settled assertion uses `pumpAndSettle`; the cascade test steps the clock twice
+on purpose, because one large advance starts every tile's ticker together and
+collapses the very stagger it is measuring.
+
+### L2b — tile parallax — **BLOCKED, and it needs an owner's decision**
+
+**It cannot be built without contradicting the layout law.** `justified_rows.dart`
+states it three times — *"without cropping any of them"*, *"every tile keeps its
+true aspect ratio"* — and `WallpaperTile` pours a `BoxFit.cover` image into a box
+shaped by exactly that ratio, so nothing is cropped today. Parallax requires the
+image to be *taller* than its box so it has room to drift, which means cropping
+every thumbnail on the wall. That law came out of pass B and was proven on the
+tablet; it is not something to quietly reverse for an effect.
+
+Three ways out, none of them free — this is the decision:
+
+1. **Drop it.** The entrance already gives the wall motion, and the law stands.
+2. **Accept a small crop** (roughly 6% top and bottom at rest). Honest about
+   what it costs: pass B's "nothing cropped" becomes false, and the uncropped
+   thumb is *why* `thumbOriginalUrl` is used instead of Wallhaven's fixed-crop
+   `small`.
+3. **Parallax something already cropped.** Detail's blurred letterbox backdrop
+   is `BoxFit.cover` by construction, so drifting it as the metadata scrolls
+   costs no law at all. Much smaller effect, zero conflict.
+
+**Recommended: 3, then reconsider 2 only if the wall still feels static.**
+
+### L2c/L2d — shared-axis tabs and overscroll — examined and declined
+
+Written down so they are not re-raised. The sorting tabs already slide
+(`TabBarView`'s default), and a shared-axis substitute wants the `animations`
+package — a new dependency owed a port under CLAUDE.md's wrapping rule, for a
+transition the user cannot currently tell apart. Overscroll on Android is
+already the platform stretch; replacing it with a bounce would make tela the one
+app on the device that scrolls wrong.
+
+#### Device pass — BLOCKED on a locked tablet (2026-08-14)
+
+The release build is installed and running (`make deploy` succeeded), but the
+tablet re-locked and its keyguard is **secure**: `isKeyguardShowing=true` with no
+`topResumedActivity`, and `screencap` returns the ~20KB black frame this file
+already documents. A swipe and `KEYCODE_MENU` do not dismiss it. **Ask the owner
+to unlock the device**; nothing else in this session can.
+
+What to judge once it is unlocked, none of which a screenshot holds: the 45ms
+stagger and 260ms arrival on a real scroll, whether the cascade still reads at
+*Small* density where a row holds nine, and — the cheap one — that pressing a
+tile now visibly splashes.
 
 ### L2 — motion as a system
 
