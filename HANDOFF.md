@@ -1,8 +1,100 @@
 # tela handoff
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
-> **START HERE — a tag is a folder, and the wallpapers suggest it** (2026-08-12,
+> **START HERE — an explicit wallpaper can be copied now, and this reverses a
+> shipped decision** (2026-08-13, `feat/clipboard-copy`, fourth slice). The
+> clipboard is offered at **every** purity, by the owner's call after using the
+> first three slices: refusing the copy made the app's fastest route into
+> another app useless on the images it was most wanted for. Dart **1317**,
+> Kotlin **136**, analyze clean.
+>
+> **What did *not* change, and it is the part CLAUDE.md's hard rules are
+> actually about.** Nothing is MediaStore-indexed, nothing leaves the
+> app-private tier, the private library still has no copy affordance, and the
+> share sheet's image **file** is still withheld for explicit wallpapers
+> (`mayExportBitmap`, which also gates the OEM editor, is untouched). What
+> changed is one route: a transient clipboard hand-off the user performs at the
+> moment of use.
+>
+> **Be honest about the inconsistency rather than dressing it up**: the
+> clipboard is read by whichever app the user pastes into, so it is not a
+> *narrower* hand-off than the file it now sits beside. The mitigation is real
+> but partial — an explicit copy travels marked `EXTRA_IS_SENSITIVE`, so
+> Android 13's clipboard preview draws a placeholder instead of the picture. If
+> the *Image* share should follow, that is one line in `shareOptionsFor` and a
+> deliberate second decision, not an oversight.
+>
+> **The older START HERE — copy is on the wall's long-press sheet too**
+> (2026-08-13, `feat/clipboard-copy`, third slice). *Copy image* is now a row in the quick
+> action sheet, between *Set wallpaper* and *Open details*, so a wallpaper can
+> be copied straight off the grid without opening it. Dart **1316** (from 1314),
+> analyze clean, Kotlin **134** (untouched).
+>
+> **That sheet's own doc used to say sharing was deliberately absent, and it
+> still is** — the share *menu* is a second sheet asking which of three things
+> to send, and a menu that opens a menu is the wrong shortcut. Copy is the one
+> piece that comes over because it is a single act with a single condition. The
+> rule now has **three** readers and no restatements: the sheet drops the row,
+> the share sheet drops the tile, the hold goes unarmed — all of them asking
+> `mayExportBitmap`.
+>
+> **It cost one existing test a scroll, and that is real.** Six rows do not fit
+> a modal sheet's cap on a 360x800 phone, so *Select wallpapers* — the last row
+> — must be scrolled to. `_startSelecting` in `browse_multi_select_test` now
+> does what a user would; the sheet has been scrollable since the five-row
+> overflow. On the tablet everything still fits without scrolling.
+>
+> **The older START HERE — hold the image and it is copied** (2026-08-12,
+> `feat/clipboard-copy`, second slice). Resting a finger on the wallpaper — in
+> Detail's preview and in the fullscreen viewer — copies it, with a haptic tick
+> the moment the hold registers. The share sheet's *Copy image* tile stays: a
+> gesture is invisible to a screen reader, so it is never the only route.
+> Analyze clean, Dart **1314** (from 1300), Kotlin **134** (untouched).
+>
+> **The hold is measured off raw pointers, not by a `GestureDetector`** — it
+> lives in `ShelfSwipe` beside the swipe, sharing one state machine. A long
+> press recognizer declares victory on a *still* finger after 500ms, which is
+> exactly the finger waiting for a second one to land, and it would have taken
+> the pinch back the way the `PageView`'s drag once did on these same two
+> surfaces. See the block below for the two-finger case that pins it.
+>
+> **A hold also has to take the pointer away from the tap under it.** Measured,
+> not assumed: `TapGestureRecognizer` has no upper time limit and fires on the
+> way up however long the finger sat there, so fullscreen would have copied the
+> image *and* toggled its chrome. `GestureBinding.cancelPointer` on the way out
+> of the hold is what stops it; deleting that line turns the test red.
+>
+> **The older START HERE — the image goes on the clipboard** (2026-08-12,
+> `feat/clipboard-copy`, first slice). The share sheet has a third option, *Copy image*:
+> the full-resolution file lands on the system clipboard as a content URI, so
+> the next app you open pastes it — no chooser, no picking tela's download back
+> out of a gallery. Both suites green: analyze clean, Dart **1300** (from 1283),
+> Kotlin **134** (from 130).
+>
+> **The clipboard is the *wider* hand-off, not a narrower one** — every app on
+> the device can read it, with no chooser deciding who — so it goes behind the
+> same `mayExportBitmap` gate as the image share and an explicit wallpaper is
+> never offered it. `ShareWallpaper` now has **one** guard covering both bitmap
+> routes, so a third one cannot be added past it.
+>
+> **Two things it does that the share path did not have to.** The clip outlives
+> the call, so the copy gets its **own** cache folder: `ImageHandoffCache` wipes
+> on the way in, and sharing the share sheet's folder would leave the clipboard
+> pointing at a file the next share deleted — a paste that comes back empty
+> minutes later, with nothing logged. And the confirmation is split by release:
+> Android 13 shows its own clipboard preview, so tela's toast fires only below
+> it. Which of the two happened is the *adapter's* answer (`systemNotice` on the
+> native result), never an SDK read from a widget.
+>
+> **The device still owes it two things**, both out of Robolectric's reach: the
+> fetch itself (no network in the suite) and an actual paste into another app,
+> which is the only way to see the framework's URI grant work. Everything after
+> the fetch — the content URI, its folder, both confirmation branches — is
+> pinned by `WallpaperClipboardTest` (4), and the file_paths and SDK-gate
+> mutations were both watched go red.
+>
+> **The older START HERE — a tag is a folder, and the wallpapers suggest it** (2026-08-12,
 > `feat/download-tag-folders`, five slices). A download can now be filed under a
 > tag, and that tag is a **real directory** in whichever tier it lands in:
 > `Pictures/tela/anime`, the files tier's `tela/anime`, `wallpapers/anime` in
@@ -385,6 +477,221 @@ Updated: 2026-08-12
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## REVERSED — an explicit wallpaper may be copied (2026-08-13, `feat/clipboard-copy`)
+
+The first three slices withheld the clipboard from explicit wallpapers, on the
+reasoning that it is the widest hand-off tela has. The owner used it and asked
+for the opposite: **the copy is now offered at every purity.** Dart **1317**
+(from 1316), Kotlin **136** (from 134), analyze clean.
+
+**Read this before "fixing" it back.** It is a deliberate reversal of something
+that shipped, taken by the person whose device and whose private library it is,
+after two days of using the feature both ways. The block below records the
+argument on both sides so the next person does not re-litigate it from the
+docstrings alone.
+
+**What the decision does not touch, which is most of it:**
+
+- `mayExportBitmap` is **unchanged**, and so is everything gated by it: the
+  share sheet's image **file** and the OEM wallpaper editor both still refuse an
+  explicit wallpaper. That rule was never only about pixels leaving — it is
+  about a *receiving app keeping its own copy*, and the OEM picker keeping a
+  wallpaper history is the case that made it.
+- No storage rule moved. Nothing is MediaStore-indexed, the app-private tier is
+  untouched, the backup exclusion still holds, and the private library screen
+  offers no copy at all — its images are never routed through this path, which
+  fetches from the source URL rather than from local storage.
+
+**What it costs, stated plainly.** The clipboard is readable by whichever app
+the user pastes into, so allowing it while refusing the share-sheet file is not
+defensible on "narrower vs wider" grounds — the earlier docstrings said exactly
+that, and they were right. The honest description is that this is a transient,
+deliberately-invoked hand-off at the moment of use, and that the owner has
+priced it. The mitigation is real but partial:
+
+**Every explicit copy travels marked sensitive.** `ClipDescription.EXTRA_IS_SENSITIVE`
+is set on the clip, so from Android 13 the system's clipboard preview shows a
+placeholder rather than the picture — the thing most likely to expose one of
+these images is a thumbnail appearing on screen with someone else in the room.
+The constant is spelled out in `WallpaperClipboard` because minSdk is 29 and the
+field arrived at 33; below that nothing reads it and an unknown extra is simply
+carried along. The Kotlin default is **fail-closed**: a `copyImage` call whose
+`sensitive` argument is missing or unreadable is treated as sensitive, since a
+copy tela cannot classify is one whose preview is better left unshown.
+
+**Where the purity check went.** All three UI gates were deleted rather than
+inverted — the pager's, the immersive session's and the quick sheet's — so the
+purity question is asked in exactly one place (`shareOptionsFor`) and the
+surfaces simply offer the action. The one remaining guard in `ShareWallpaper`
+takes the option it is guarding, so a future export route joins it rather than
+going around it.
+
+**Tests: 5 changed, 4 added.** Every test that pinned the old rule was inverted
+rather than deleted, so the reversal is visible in the diff of the suite as well
+as in the code. The new ones pin the flag at each layer it crosses: the use case
+sets it from purity, the channel carries it as a string, and Kotlin puts it on
+the clip. That last one was mutation-checked — dropping the `extras` line turns
+`an explicit copy is marked sensitive` red and nothing else.
+
+## DONE — copy on the wall's long-press sheet (2026-08-13, `feat/clipboard-copy`)
+
+Asked for straight after the hold gesture was device-checked: the long-press
+sheet on a grid tile already carried favorite, download, set and open, and copy
+belongs with them. `WallpaperQuickAction.copy`, between *Set wallpaper* and
+*Open details* — something you do *to* the picture, before the two rows that
+navigate. Dart **1316** (from 1314), analyze clean.
+
+**The comment that had to change with it.** That enum's doc said sharing was
+deliberately absent because it "is the one action with a purity rule attached,
+and a menu that has to grow a condition is the wrong place to offer it". Half of
+that still holds and now says so precisely: the share *menu* stays out, being a
+second sheet asking which of three things to send. Copy comes in because it is a
+single act, and its condition costs the sheet one `if` rather than a submenu.
+
+**Three readers of one rule, none of them restating it.** `mayExportBitmap` is
+asked by the quick sheet (drops the row), the share sheet (drops the tile) and
+both hold surfaces (leave the gesture unarmed). Every one of them **withholds**
+rather than refusing — an explicit wallpaper is never offered a copy it would
+then be denied, which is what makes the domain's `ArgumentError` a programming
+error rather than a user-facing one.
+
+**The one cost, and it is not hidden.** Six rows do not fit a modal sheet's cap
+on a 360x800 phone, so *Select wallpapers* now needs a scroll to reach. The
+sheet has been a `SingleChildScrollView` since the five-row overflow of D1, so
+nothing clips — but a tap aimed at an unscrolled last row lands on the bottom
+navigation bar behind the sheet and switches tabs, which is exactly how it
+surfaced: `browse_multi_select_test` went red in eight places with a missed tap
+and an unrelated overflow. `_startSelecting` now scrolls first, the way a user
+would. Worth remembering before a seventh row is added.
+
+## DONE — hold the image and it is copied (2026-08-12, `feat/clipboard-copy`)
+
+The gesture half of the copy, asked for after the paste was confirmed on the
+tablet. Rest a finger on the wallpaper and it is on the clipboard: Detail's
+preview pager and the fullscreen viewer, the two surfaces where the wallpaper is
+actually being looked at. Analyze clean, `dart format` clean, Dart **1314**
+(from 1300), Kotlin **134** (no `android/` file touched).
+
+**It is measured off the raw pointer stream, in `ShelfSwipe`.** Not a
+`GestureDetector`, and this is the whole design decision: a long-press
+recognizer declares victory on a **still** finger after 500ms — precisely the
+finger that is waiting for a second one to land — so it would have swept the
+arena and taken the pinch away, on the two surfaces that already lost it once to
+the pager's drag (`f0686d7`). `ShelfSwipe` never enters the arena, and now both
+one-finger gestures share **one** state machine, so a finger can never both copy
+the image and turn the page.
+
+**Three rules fall out of that, and each has a test:**
+
+- **A travelling finger never holds**, however slowly it travels — the hold is
+  dropped the moment the finger passes `kTouchSlop`. A slow swipe is a swipe.
+- **A second finger cancels it.** The pinch-in-waiting is the case that would
+  have fired a copy under a zoom.
+- **Zoomed, the hold is not armed at all**: a resting finger there is the start
+  of a pan.
+
+**The tap under the hold had to be taken away too, and that was measured rather
+than assumed.** `TapGestureRecognizer` has no upper time limit — a probe
+confirmed it fires `onTap` after an 800ms press — and the fullscreen viewer
+toggles its chrome on exactly that tap. So a hold would have copied the image
+*and* hidden the controls. `_fireHold` calls `GestureBinding.cancelPointer` on
+its own pointer, which ends the sequence for everyone: the tap, the double tap,
+the viewer's zoom. Deleting that one line turns `the tap under the hold never
+fires` red while the rest stay green, and a plain tap still reaches the image.
+
+**The NSFW rule is enforced by *withholding the gesture*, not by refusing it.**
+Both surfaces ask `mayExportBitmap` and pass a null `onHold` for an explicit
+wallpaper, so the affordance is not there at all — the same shape as the share
+sheet dropping the tile. A gesture that fired and then silently did nothing
+would read as a broken app. Removing that check turns the pager test red.
+
+**`copyWallpaperToClipboard` (`lib/app/`) is now the one copy path**, shared by
+the hold on both surfaces and by the share sheet's tile, which was rewired onto
+it. The condition worth having once is the confirmation: Android 13 shows its
+own clipboard preview, tela's toast covers everything below, and a second copy
+of that `if` is a second chance to get it wrong.
+
+**Why there is no "copying…" indicator.** The copy is a real network fetch of
+the full-resolution file, so on a slow link there is a gap between the haptic and
+the confirmation. The haptic is deliberately the only immediate feedback: a
+spinner has nowhere to live on a gesture that has no widget, and a toast would
+collide with the system's own preview a second later. **Two holds in a row are
+safe** — the native `shareExecutor` is single-threaded, so the fetches serialise
+and the clip always ends up pointing at the last file written. That is worth
+knowing before anyone "optimises" that executor into a pool.
+
+**What the device owes.** The gesture itself on a real digitiser: that a thumb
+resting to steady the image does not copy it, that the haptic reads as a
+deliberate tick rather than a buzz, and the fullscreen case specifically —
+chrome must stay put through a hold. Nothing here is device-verified yet.
+
+## DONE — the image goes on the clipboard (2026-08-12, `feat/clipboard-copy`)
+
+The share sheet's third option. Tap *Copy image* and the full-resolution file is
+on the system clipboard as a `content://` URI; the next app pastes it. Both
+suites green: analyze clean, `dart format` clean, Dart **1300** (from 1283),
+Kotlin **134** (from 130).
+
+**Where it lives.** `ShareOption.clipboard` alongside `link` and `image`, so it
+inherits the sheet, the purity list, and the failure toast that were already
+there rather than growing a button of its own. Port: `WallpaperSharer.copyImage`.
+Use case: `ShareWallpaper.clipboard`. Native: **`WallpaperClipboard`**, its own
+class rather than a third method on `WallpaperSharing` — a chooser and a
+clipboard write are two mechanisms, and only the cache staging is shared
+(`ImageHandoffCache`, now used three ways).
+
+**The purity rule needed no new thinking, and that is the point.** The clipboard
+is a *wider* hand-off than the share sheet: every app that reads it takes the
+bytes, and no chooser stands between. So it asks `mayExportBitmap` like the
+other two exports, and `ShareWallpaper` now holds **one** guard
+(`_refuseExplicitExport`) that both bitmap routes go through, rather than a
+second copy of the same `if`. An explicit wallpaper is offered the link and
+nothing else, in the menu and in the domain.
+
+**Three decisions worth keeping:**
+
+- **Its own cache folder** (`cache/clipboard`, declared in `file_paths.xml`).
+  The clip outlives the call — a paste can come minutes later — and
+  `ImageHandoffCache` empties its folder on the way in, so reusing the share
+  sheet's `shared/` would have let the next share delete the file the clipboard
+  points at. The failure is a paste that quietly comes back empty.
+- **The confirmation is split by release, and the adapter decides which.**
+  Android 13 shows its own clipboard preview for every `setPrimaryClip`, so
+  tela's toast on top of it is the same news twice in the same corner; below 13
+  nothing is shown at all, and a silent copy looks like a failed one. The native
+  result carries `systemNotice`, `ClipboardConfirmation` names the two cases,
+  and the detail screen never reads an SDK level. minSdk is 29, so both branches
+  ship.
+- **The URI grant is the framework's, not tela's.** A content URI on the primary
+  clip makes the system grant read access to whoever pastes it, so no permission
+  and no storage access is involved — the same FileProvider the share path uses.
+
+**Tests: 17 Dart, 4 Kotlin.** The Kotlin four (`WallpaperClipboardTest`,
+Robolectric SDK 35, with the 29 case pinned per-method) cover what a device pass
+would not notice going wrong: a clip carrying a *file* path instead of a content
+URI pastes as text in some apps and as nothing in others, and a wrong SDK gate
+means silence or a double notice on releases nobody tests on. Verified by
+mutation both ways — deleting the `clipboard` line from `file_paths.xml` turns
+all four red, and moving the gate from `TIRAMISU` to `Q` turns the SDK-29 one
+red. On the Dart side, dropping the `ClipboardConfirmation.system` early return
+turns the detail-screen test red.
+
+**A Robolectric trap came with it, and the fix is in the test file.**
+`FileProvider` resolves `<cache-path>` to an absolute path **once per authority**
+and keeps it in a private static map, while Robolectric hands every test its own
+temporary data directory inside one sandbox. So the *second* test in a class asks
+about a file under a path the cached roots have never heard of and
+`getUriForFile` throws `Failed to find configured root` — with two of four tests
+failing and two passing, which reads like a real bug and is entirely the
+harness's. `forgetCachedProviderRoots` clears the map reflectively in `@Before`.
+Anything else here that reaches FileProvider from a test will need the same.
+
+**What the device still owes.** Two things, both beyond Robolectric: the fetch
+itself (no network in the suite) and a real paste into another app, which is the
+only way to watch the framework's URI grant actually work. Worth checking in
+Gboard/Keep and in a chat app, and worth checking twice on the second copy in a
+row — that is the one the stale-root/emptied-folder classes of bug would break.
 
 ## DONE — a tag is a folder, in all three tiers (2026-08-12)
 
