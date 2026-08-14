@@ -71,12 +71,42 @@ void main() {
     await _pumpGrid(
       tester,
       _sourceOf(6),
-      query: const SearchQuery(term: 'sunset'),
+      query: const SearchQuery(term: 'sunset', sorting: Sorting.toplist),
     );
     await _settle(tester);
 
     expect(find.byType(FeaturedWallpaper), findsNothing);
     expect(find.byType(WallpaperTile), findsNWidgets(6));
+  });
+
+  testWidgets('stays off a listing ordered by time rather than merit', (
+    WidgetTester tester,
+  ) async {
+    // *Latest* is the case this rule exists for. Uploaders post in series, so
+    // items 0 and 1 are routinely near-identical variations — and the band then
+    // reads as a repeat of the tile beneath it even though the two are
+    // different wallpapers. Reported from the device (`pog7ze` over `6lyp66`).
+    await _pumpGrid(
+      tester,
+      _sourceOf(6),
+      query: const SearchQuery(),
+    );
+    await _settle(tester);
+
+    expect(find.byType(FeaturedWallpaper), findsNothing);
+    expect(find.byType(WallpaperTile), findsNWidgets(6));
+  });
+
+  testWidgets('stays off a shuffled listing too', (WidgetTester tester) async {
+    // Nothing to say about an item that is first by chance.
+    await _pumpGrid(
+      tester,
+      _sourceOf(6),
+      query: const SearchQuery(sorting: Sorting.random),
+    );
+    await _settle(tester);
+
+    expect(find.byType(FeaturedWallpaper), findsNothing);
   });
 
   testWidgets('is absent from an empty listing', (WidgetTester tester) async {
@@ -119,10 +149,11 @@ Wallpaper _wallpaper(int index) => Wallpaper(
   colors: const <String>['#660000'],
 );
 
+/// Defaults to a *ranked* listing, because that is where the band lives.
 Future<void> _pumpGrid(
   WidgetTester tester,
   FakeWallpaperSource source, {
-  SearchQuery query = const SearchQuery(),
+  SearchQuery query = const SearchQuery(sorting: Sorting.toplist),
 }) {
   return tester.pumpWidget(
     ProviderScope(

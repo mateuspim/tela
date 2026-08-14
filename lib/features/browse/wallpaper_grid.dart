@@ -348,13 +348,17 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
 
   /// Whether this listing gives its first wallpaper to the featured band.
   ///
-  /// Only when the user is *browsing*. A search is a question, and putting a
-  /// masthead between someone and the answer to their question is the whole
-  /// objection to a front page — so the band appears on an unsearched listing
-  /// and gets out of the way the moment a term is typed. An empty listing has
-  /// no first wallpaper to give.
+  /// Three conditions, each with its own reason. The user must be *browsing*: a
+  /// search is a question, and a masthead between someone and their answer is
+  /// the whole objection to a front page. The listing must have a wallpaper to
+  /// give. And its order must mean *better* rather than newer — see
+  /// [Sorting.ranksByMerit], which is what keeps the band off *Latest*, where
+  /// an uploader's series puts two near-identical wallpapers at positions 0 and
+  /// 1 and the band reads as a repeat of the tile beneath it.
   bool _isFeaturing(List<Wallpaper> loaded) =>
-      loaded.isNotEmpty && widget.query.term.isEmpty;
+      loaded.isNotEmpty &&
+      widget.query.term.isEmpty &&
+      widget.query.sorting.ranksByMerit;
 
   /// 1 while the band holds the first wallpaper, 0 when it is absent.
   int _featuredOffset(List<Wallpaper> loaded) => _isFeaturing(loaded) ? 1 : 0;

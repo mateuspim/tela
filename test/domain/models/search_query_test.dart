@@ -10,6 +10,43 @@ import 'package:tela/domain/models/search_tag.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 
 void main() {
+  group('Sorting.ranksByMerit', () {
+    test('is true where being first means best', () {
+      for (final Sorting sorting in <Sorting>[
+        Sorting.toplist,
+        Sorting.hot,
+        Sorting.views,
+        Sorting.favorites,
+      ]) {
+        expect(sorting.ranksByMerit, isTrue, reason: sorting.name);
+      }
+    });
+
+    test('is false where being first means newest, luckiest or closest', () {
+      // Latest is the one this exists for: uploaders post in series, so items
+      // 0 and 1 are routinely near-identical and Browse's featured band reads
+      // as a repeat of the tile beneath it. Random has nothing to say about a
+      // first item at all, and relevance answers a search the band stands out
+      // of anyway.
+      for (final Sorting sorting in <Sorting>[
+        Sorting.dateAdded,
+        Sorting.random,
+        Sorting.relevance,
+      ]) {
+        expect(sorting.ranksByMerit, isFalse, reason: sorting.name);
+      }
+    });
+
+    test('answers for every sorting there is', () {
+      // The switch is exhaustive, so a new sorting cannot be added without
+      // deciding this — but only if nothing widens it to a default.
+      expect(
+        Sorting.values.map((Sorting s) => s.ranksByMerit).length,
+        Sorting.values.length,
+      );
+    });
+  });
+
   group('PurityFilter', () {
     test('knows when a key is needed', () {
       expect(PurityFilter.sfwOnly.requiresApiKey, isFalse);

@@ -38,6 +38,31 @@ enum Sorting {
   /// Whether [SearchQuery.topRange] is meaningful — Wallhaven ignores it
   /// for every sorting but this one.
   bool get usesTopRange => this == Sorting.toplist;
+
+  /// Whether this listing's order means *better*, rather than newer or luckier.
+  ///
+  /// Browse's featured band leans on this. Featuring a listing's first item
+  /// only makes a claim worth making when being first means something — and on
+  /// [dateAdded] it does not: it means most recently uploaded, and uploaders
+  /// post in series. Two near-identical variations land at positions 0 and 1,
+  /// so the band ends up looking like it is repeating the tile beneath it. Seen
+  /// on the device, 2026-08-14: `pog7ze` featured above `6lyp66`, two
+  /// genuinely different wallpapers by one uploader that read as a duplicate.
+  ///
+  /// [random] is excluded for the same reason from the other direction: there
+  /// is nothing to say about an item that is first by chance.
+  ///
+  /// ```dart
+  /// Sorting.toplist.ranksByMerit; // true
+  /// Sorting.dateAdded.ranksByMerit; // false
+  /// ```
+  bool get ranksByMerit => switch (this) {
+    Sorting.toplist ||
+    Sorting.hot ||
+    Sorting.views ||
+    Sorting.favorites => true,
+    Sorting.dateAdded || Sorting.random || Sorting.relevance => false,
+  };
 }
 
 /// Ascending or descending, for [Sorting].

@@ -748,7 +748,36 @@ subsumes the old one. **Pinned by C1's own test**, which goes red if the narrow
 rule returns — mutation-confirmed. A test added alongside it was deleted for
 being vacuous: it passed under both rules, so it measured nothing.
 
-#### L4's device pass (2026-08-14, SM-X730) — works; one finding
+#### L4 corrected — the band is off *Latest* (2026-08-14)
+
+**Reported from the device: the band looked like it was showing the wallpaper
+twice.** It was not — the IDs were read off the quick sheet and they differ,
+`pog7ze` featured above `6lyp66`. They are two genuinely different wallpapers by
+one uploader (`PureMathArt`), near-identical variations from a series, sitting at
+positions 0 and 1 of *Latest*.
+
+**So the data was right and the design was wrong.** Featuring a listing's first
+item only makes a claim worth making when being first *means* something. On
+`dateAdded` it means most recently uploaded, and uploaders post in series — so
+the twin case is not a coincidence to shrug at, it is the common case there.
+
+The band now appears only where the order means **better**:
+`Sorting.ranksByMerit` — toplist, hot, views, favorites. Not `dateAdded`, not
+`random` (nothing to say about an item that is first by chance), not `relevance`
+(a search stands the band down anyway). The rule lives on the enum, as an
+exhaustive `switch`, so a new sorting cannot be added without deciding it.
+
+**The consequence, stated plainly: Latest is the default tab, so most sessions
+will not see the band at all.** That is the trade — a front page on the curated
+listings and a pure wall on the firehose. If it turns out to be too rare to be
+worth having, the honest next step is removing L4 rather than putting it back on
+Latest, because the twin problem there does not go away.
+
+**Owed:** the tablet dropped off the network before this could be deployed
+(`adb connect` reports no route — the wireless-debugging port rotates when it
+sleeps). The change is `make ci` green; **it has not been seen on hardware.**
+
+#### L4's earlier device pass (2026-08-14, SM-X730) — works; one finding
 
 The band renders full-width above the wall with its resolution caption in the
 display face, and the wall continues from the second wallpaper — **confirmed by
