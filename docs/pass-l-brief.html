@@ -446,6 +446,7 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
   <div class="meta">
     <span class="chip built">Built <b>&amp; device-checked</b></span>
     <span class="chip">Sliver conversion <b>Not needed</b></span>
+    <span class="chip">Shows on <b>Ranked listings only</b></span>
     <span class="chip open">Band sharpness <b>Needs a call</b></span>
   </div>
 
@@ -457,6 +458,14 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
     <div class="find">
       <span class="tick v">Rebuilt</span>
       <div><p><strong>The band is a <code>WallpaperTile</code>, and thirty failing tests forced that.</strong> The first cut was bespoke and broke every browse test that indexes the wall by tile. That was not test debt: a bespoke band re-implements the marks, the badge, the selection tick and the ink, then becomes an exception the user must learn. Composing the tile inherits all of it and changed <em>no</em> existing test. Thirty failures to zero by deleting code.</p></div>
+    </div>
+    <div class="find">
+      <span class="tick v">Corrected on device</span>
+      <div>
+        <p><strong>It looked like the band was showing a wallpaper twice.</strong> It was not &mdash; the IDs differ, <code>pog7ze</code> featured above <code>6lyp66</code>: two genuinely different wallpapers by one uploader, near-identical variations from a series, at positions 0 and 1 of <em>Latest</em>.</p>
+        <p><strong>The data was right and the design was wrong.</strong> Featuring the first item only makes a claim worth making when being first <em>means</em> something. On Latest it means most recently uploaded, and uploaders post in series &mdash; so the twin is the common case there, not a coincidence. The band now appears only where the order means better: Top, Hot, Most viewed, Most favorited.</p>
+        <p><strong>The trade, stated rather than buried:</strong> Latest is the default tab, so most sessions will not see the band at all. If that makes it too rare to be worth having, the honest next step is dropping L4 &mdash; the twin problem on Latest does not go away.</p>
+      </div>
     </div>
     <div class="find">
       <span class="tick p">Your call</span>
