@@ -2,46 +2,68 @@
 
 Updated: 2026-08-14
 
-> **START HERE — pass L has begun: L1a is built and device-verified**
-> (2026-08-14). Detail paints itself in the wallpaper's own colour and the tint
-> travels with the pager. Dart **1337** (from 1317), analyze and format clean,
-> **driven on the SM-X730 with no defects found**. The tests caught it
-> repainting the **purity warning** on the way, and the device pass confirmed
-> the fix in the running app (`rgb(252,180,189)` on a tinted pane) — read L1a's
-> block before touching `TelaTheme.ambient`. What the tablet still owes is only
-> what a screenshot cannot hold: the 450ms transition, the phone layout, and
-> C2's melt case.
+> **START HERE — pass L is complete: all four threads built, merged and seen on
+> the tablet** (2026-08-14). Dart **1378** (from 1317 at the session's start),
+> Kotlin **136** untouched, analyze and format clean, every merge through the
+> gate. The tree is clean and nothing is half-finished.
 >
-> **L4 is built too** — Browse opens on the listing's own first wallpaper.
-> Dart **1368**. The sliver conversion this file previously said L4 would cost
-> is **not needed**: a scrolling header is item 0 of the existing list.
+> **What L is, in one line, and read its framing block before touching any of
+> it:** five earlier UI passes executed `theme.dart`'s quiet-chrome doctrine
+> well, which is exactly why the app read as *tasteful* rather than *stunning* —
+> L is where that doctrine is deliberately broken, and **the browse wall is the
+> surface it is not broken on**.
 >
-> **L1b and L3 are built too** (2026-08-14). Konachan tints from its own pixels
-> now, and Detail is split by shape: the phone gets the editorial full-bleed
-> layout, the tablet keeps C3's two panes on purpose — see L3 for why the scope
-> was not followed there. Dart **1363**. L3's phone layout has **never been seen
-> on hardware**, which makes it the first thing a device pass should open.
+> | thread | what shipped | state |
+> |---|---|---|
+> | **L1a** | Detail paints itself in the wallpaper's own colour, tint follows the pager | device-verified |
+> | **L1b** | Konachan tints from its own pixels — it reports no palette | built; tint unseen on a Konachan screen |
+> | **L2a** | The wall assembles; **a tile's ink splash was invisible on every shelf, always** | splash measured on device |
+> | **L2b** | Tile parallax | **BLOCKED — needs a decision** |
+> | **L3** | Phone gets the full-bleed editorial layout; **the tablet keeps its two panes on purpose** | device-verified |
+> | **L4** | Browse leads with the listing's own top wallpaper, full-resolution, captioned | device-verified |
 >
-> **L2a is also built and device-checked** — the wall assembles rather than
-> appearing, and a real defect went with it: a tile's ink splash was painted
-> *under* an opaque image, so pressing a wallpaper gave no feedback at all, on
-> every shelf, always. The splash is now measured on the tablet (108k pixels,
-> mean 96 → 129); the entrance animation is **not observable through
-> `screencap`** and still wants a human eye. Dart **1348**. **L2b (tile
-> parallax) is blocked** — it cannot be built without contradicting the
-> justified-rows "nothing cropped" law, and needs an owner's decision between
-> three named options. L3, L4 and L1b are scoped and not built.
+> **Three things a next session must not re-derive, each with a section below:**
+> `TelaTheme.ambient` **holds the error roles back** — a red wallpaper was
+> repainting its own "not safe" warning, caught by an existing test. The phone
+> layout's apply button insets from **`viewPadding`**, because a `SafeArea`
+> under `extendBodyBehindAppBar` reports nothing and the button rendered under
+> the system bar. And `FeaturedWallpaper` **is a `WallpaperTile`** — a bespoke
+> band broke thirty tests and had to re-implement marks, badge, tick and ink.
 >
-> **The older START HERE — the clipboard work is merged, and the pass was scoped
-> but not built** (2026-08-14). `feat/clipboard-copy` landed as `6ee597e` with both
-> suites run fresh by the merge gate; the tree is clean. The owner then asked
-> for **"a UI/UX overhaul to make this app simply stunning"** and chose all four
-> threads of **pass L — the ambient overhaul** (L1 ambient colour, L2 motion as
-> a system, L3 Detail as an editorial page, L4 a front page for Browse). **None
-> of it is built.** Its section is below, and its framing paragraph is the part
-> to read first: L is not a sixth polish pass, it is where the quiet-chrome
-> doctrine gets deliberately broken — and the browse wall is the surface it is
-> *not* broken on.
+> **Two decisions are open and belong to the owner, not the next session:**
+>
+> 1. **L2b — tile parallax.** It cannot be built without cropping every
+>    thumbnail, which contradicts justified rows' *"without cropping any of
+>    them"*. Three options are written up in L2b; the recommendation is to
+>    parallax Detail's blurred backdrop instead, which is `cover` already and
+>    costs no law.
+> 2. **Whether L4 earns its keep at all.** The band is off *Latest* (an
+>    uploader's series puts near-identical wallpapers at positions 0 and 1, and
+>    it read as a duplicate — it was not; `pog7ze` over `6lyp66`). Latest is the
+>    default tab, so **most sessions will not see the band**. If that makes it
+>    too rare to be worth having, the honest move is removing L4, not putting it
+>    back on Latest.
+>
+> **What the device still owes, all of it cheap:**
+> - **A genuinely pale wallpaper.** Two things exist for that case and neither
+>   has met it: the phone bar's white controls, and the featured caption's
+>   outline. Every top-of-listing image tried has been mid-tone or dark.
+> - **The entrance animation on a real scroll** (L2a) — `screencap` runs ~300ms
+>   per frame and cannot resolve a 260ms fade, so this needs an eye, not a tool.
+>   Worth checking at *Small* density, where a row holds nine and the cascade
+>   caps at six.
+> - **A Konachan detail screen**, to see whether the extracted tint is a colour
+>   you would have picked (L1b).
+> - **The phone layout's sheet drag** — whether it reads as a sheet or a stuck
+>   scroll. Reachable on the tablet by rotating: portrait is 753dp, under the
+>   840dp threshold, so no second device and no `wm size` are needed.
+>
+> **Reaching the tablet: no address in this file stays valid.** Wireless
+> debugging rotates its port on every reconnect and DHCP moves the IP. Ask the
+> owner to read *Settings → Developer options → Wireless debugging* and
+> `adb connect <ip>:<port>` — and have them run it **in the session** (`!`), or
+> it may land on a different adb server than the one the session talks to. Never
+> `adb kill-server`.
 >
 > **The older START HERE — an explicit wallpaper can be copied now, and this reverses a
 > shipped decision** (2026-08-13, `feat/clipboard-copy`, fourth slice). The
@@ -519,7 +541,7 @@ Updated: 2026-08-14
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
-## L — the ambient overhaul, scoped 2026-08-14; NOT BUILT
+## L — the ambient overhaul, scoped and BUILT 2026-08-14
 
 The owner asked for "a UI/UX overhaul to make this app simply stunning" and
 chose **all four** threads below. `feat/clipboard-copy` was merged first
@@ -655,7 +677,7 @@ setting.
 for Konachan, and the viewer. Decide L1b on the device — the Konachan wall may
 not look wrong enough to pay for it.
 
-### L1 — ambient colour: the wallpaper paints its own screen
+### L1 — the original scope, kept for the reasoning (built as L1a/L1b above)
 
 Detail and the immersive viewer derive a `ColorScheme` from the wallpaper's own
 dominant colour and animate the whole surface into it as the pager moves. Action
@@ -702,7 +724,7 @@ construction — which risks the pane becoming *one* colour with no separation.
 `wallpaperTileEdge` at `radius: 0` is already drawn over the contained frame for
 the melt case (see C2's device pass); watch whether it is still enough.
 
-### L4 — Browse's featured band — **BUILT 2026-08-14**; device pass owed
+### L4 — Browse's featured band — **BUILT AND DEVICE-VERIFIED 2026-08-14**
 
 The wall opens on the listing's own first wallpaper, given the width of the
 screen. Dart **1368** (from 1363), analyze and format clean. New
@@ -861,7 +883,7 @@ decided — this wants the owner's eye before anything is spent on it.**
 **Still unjudged:** the band on an actual phone, where the upscale is far
 smaller, and whether losing the first wallpaper from the grid reads badly.
 
-### L3 — Detail, split by shape — **BUILT 2026-08-14**; device pass owed
+### L3 — Detail, split by shape — **BUILT AND DEVICE-VERIFIED 2026-08-14**
 
 Taken as **option A**, chosen over building the editorial treatment everywhere.
 Dart **1363** (from 1357), analyze and format clean. New
@@ -1085,7 +1107,7 @@ nothing regressed around it. **A human eye on a real scroll is still owed** —
 particularly at *Small* density, where a row holds nine tiles and the cascade is
 capped at six.
 
-### L2 — motion as a system
+### L2 — the original scope, kept for the reasoning (built as L2a above)
 
 Today motion is a 220ms fade, a Hero flight, a shimmer, and a zoom animator —
 each correct, each reduce-motion aware, and none of them a *system*. Four
@@ -1120,7 +1142,7 @@ pass). If a parallax rewrite swallows or replaces the scroll notifications, the
 wall silently stops paging. Re-run `test/features/browse_underfilled_wall_test.dart`
 and believe it.
 
-### L3 — Detail as an editorial page, not a spec sheet
+### L3 — the original scope, kept for the reasoning (built as option A above)
 
 C3 made the eight scalar facts speak one visual language, which fixed coherence
 and left the panel reading like a form (`wallpaper_metadata.dart` — a title, a
@@ -1147,7 +1169,7 @@ Highest cost, highest payoff. What it must not lose:
 **This thread is the one to build last**, and it is the one most likely to want
 its own branch and a device pass mid-way rather than at the end.
 
-### L4 — a front page for Browse
+### L4 — the original scope, kept for the reasoning (built above)
 
 Browse opens on a search field, seven sorting tabs and a grid: a *tool*, not a
 destination. A featured full-bleed hero above the wall — one wallpaper, editorial
