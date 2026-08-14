@@ -32,6 +32,7 @@ import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/favorites/favorite_button.dart';
 
+import '../fakes/fake_dominant_color.dart';
 import '../fakes/fake_download_history.dart';
 import '../fakes/fake_external_link.dart';
 import '../fakes/fake_favorites_repository.dart';
@@ -46,6 +47,57 @@ import '../fakes/fake_wallpaper_sharer.dart';
 import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
+  testWidgets('tints a palette-less wallpaper from its own pixels', (
+    WidgetTester tester,
+  ) async {
+    // Konachan reports no colours at all, so without this its whole catalogue
+    // would be the one source that never tints. The colour is read from the
+    // thumbnail the shelf already fetched.
+    final FakeDominantColor colours = FakeDominantColor(colour: '#ff6600');
+    await _pumpDetail(
+      tester,
+      _details(sourceId: SourceId.konachan, colors: const <String>[]),
+      dominantColor: colours,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      _detailScheme(tester).primary,
+      TelaTheme.ambient(
+        _untintedScheme(tester),
+        const Color(0xFFFF6600),
+      ).colorScheme.primary,
+    );
+  });
+
+  testWidgets('never reads pixels when the source reported a palette', (
+    WidgetTester tester,
+  ) async {
+    // The cost control. Wallhaven answers this in its own JSON, so a decode
+    // there is work spent re-deriving something already known.
+    final FakeDominantColor colours = FakeDominantColor(colour: '#ff6600');
+    await _pumpDetail(tester, _details(), dominantColor: colours);
+    await tester.pumpAndSettle();
+
+    expect(colours.asked, isEmpty);
+  });
+
+  testWidgets('stays untinted when the pixels have no colour either', (
+    WidgetTester tester,
+  ) async {
+    // A greyscale Konachan wallpaper: no palette, and nothing in the image to
+    // fall back to. Absent, never grey — the same answer the Wallhaven path
+    // gives, which is the point of sharing `canTint`.
+    await _pumpDetail(
+      tester,
+      _details(sourceId: SourceId.konachan, colors: const <String>[]),
+      dominantColor: FakeDominantColor(),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_detailScheme(tester), same(_untintedScheme(tester)));
+  });
+
   testWidgets("paints itself in the wallpaper's own colour", (
     WidgetTester tester,
   ) async {
@@ -1201,6 +1253,7 @@ Future<void> _pumpDetail(
   FakeExternalLink? externalLink,
   FakeFavoritesRepository? favorites,
   FakeDownloadHistory? history,
+  FakeDominantColor? dominantColor,
   bool disableAnimations = false,
 }) async {
   await tester.pumpWidget(
@@ -1247,6 +1300,11 @@ Future<void> _pumpDetail(
           wallpaperApplierProvider.overrideWithValue(applier),
         if (externalLink != null)
           externalLinkProvider.overrideWithValue(externalLink),
+        // Bound always: a source with no palette reaches this port on build,
+        // and the real one decodes a file off the disk cache.
+        dominantColorProvider.overrideWithValue(
+          dominantColor ?? FakeDominantColor(),
+        ),
       ],
       child: MaterialApp(
         builder: disableAnimations

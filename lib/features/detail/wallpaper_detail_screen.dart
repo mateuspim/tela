@@ -13,10 +13,12 @@ import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
+import 'package:tela/domain/models/ambient_seed.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
@@ -44,6 +46,18 @@ wallpaperDetailsProvider = FutureProvider.autoDispose
       );
       return source.wallpaperDetails(wallpaper.id);
     });
+
+/// The colour a wallpaper's own pixels are mostly made of, for tinting.
+///
+/// Keyed by thumbnail URL rather than by wallpaper, so two shelves showing the
+/// same image share one read. Only ever watched for a source that reported no
+/// palette — see `_ambientFallback` — so Wallhaven never spends a decode on a
+/// question its own JSON already answered.
+final FutureProviderFamily<WallpaperColor?, String> ambientFallbackProvider =
+    FutureProvider.autoDispose.family<WallpaperColor?, String>(
+      (Ref ref, String thumbnailUrl) =>
+          ref.watch(dominantColorProvider).of(thumbnailUrl),
+    );
 
 /// Full-screen preview, metadata, and the shortest path to wallpaper apply.
 ///
@@ -204,11 +218,26 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     // resolve their own would move and the surfaces would stay behind.
     return AmbientWallpaperTheme(
       colors: _wallpaper.colors,
+      fallbackSeed: _ambientFallback(),
       child: Builder(
         builder: (BuildContext context) =>
             _screen(context, details, l10n, sourceName),
       ),
     );
+  }
+
+  /// A colour read from the wallpaper itself, for a source that reports none.
+  ///
+  /// Watched only when there is nothing to read from the listing, so Wallhaven
+  /// — which answers this in its own JSON — never decodes a pixel for it. The
+  /// read is asynchronous, so the screen paints untinted for the frames it
+  /// takes and arrives at its colour a beat later; that beat is why this is a
+  /// fallback and not the primary path.
+  WallpaperColor? _ambientFallback() {
+    if (ambientSeed(_wallpaper.colors) != null) return null;
+    return ref
+        .watch(ambientFallbackProvider(_wallpaper.thumbOriginalUrl))
+        .value;
   }
 
   Widget _screen(

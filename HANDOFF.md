@@ -692,6 +692,43 @@ construction — which risks the pane becoming *one* colour with no separation.
 `wallpaperTileEdge` at `radius: 0` is already drawn over the contained frame for
 the melt case (see C2's device pass); watch whether it is still enough.
 
+### L1b — Konachan tints too — **BUILT 2026-08-14**; device pass owed
+
+The source that reports no colours now reads one out of the wallpaper itself, so
+Konachan stops being the one catalogue that never tints. Dart **1357** (from
+1348), analyze and format clean. Files: `domain/models/dominant_swatch.dart`,
+`domain/ports/dominant_color.dart`, `data/images/decoded_dominant_color.dart`,
+`AmbientWallpaperTheme.fallbackSeed`, wired in `wallpaper_detail_screen.dart`.
+
+**It is a bucket count, not an average, and that is the whole algorithm.**
+Averaging a photograph yields the muddy brown-grey halfway between everything in
+it — the one colour the picture does not contain. The pixels are bucketed at 4
+bits per channel and the fullest bucket wins, then averaged *within itself* so
+the answer is a colour from a real region rather than a bucket centre no pixel
+sits on.
+
+**Near-greys are refused a vote, or every photograph is described by its
+background.** Shadow, cloud, concrete and low-light skin are the majority of most
+images; a pixel needs 24/255 of chroma before it counts. That is the same
+judgement `canTint` makes about a *reported* colour — and `canTint` is now shared
+by both paths on purpose, because the alternative is the same grey wallpaper
+tinting on one site and not the other.
+
+**Wallhaven never pays for it.** `_ambientFallback` returns null without watching
+anything when the listing already answered, so no decode happens on the source
+that ships a palette. Mutation-checked: removing that guard fails *never reads
+pixels when the source reported a palette*.
+
+**Every failure ends in null rather than a throw.** A cache miss, an unreadable
+file, an undecodable image — a tint is decoration and must never cost the
+screen. The cost is real but small: a 32px decode, off a thumbnail the shelf
+already fetched, so no request.
+
+**Owed on the device:** nobody has seen a Konachan detail screen tinted. Worth
+checking the colour is one you would have picked by eye, and that the tint
+arriving a beat after the screen (the read is asynchronous) reads as settling
+rather than as a flash.
+
 ### L2a — the wall assembles, and a tap can be seen — **BUILT 2026-08-14**; splash device-verified
 
 Two pieces, both law-safe. Dart **1348** (from 1337), analyze and format clean,

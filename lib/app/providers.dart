@@ -10,6 +10,7 @@ import 'package:tela/data/downloads/drift_download_queue.dart';
 import 'package:tela/data/downloads/method_channel_download_queue_anchor.dart';
 import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/images/cache_manager_fetched_image_cache.dart';
+import 'package:tela/data/images/decoded_dominant_color.dart';
 import 'package:tela/data/konachan/dio_konachan_source.dart';
 import 'package:tela/data/secrets/secure_secret_store.dart';
 import 'package:tela/data/security/local_auth_app_lock.dart';
@@ -27,6 +28,7 @@ import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/app_lock.dart';
+import 'package:tela/domain/ports/dominant_color.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/download_queue.dart';
 import 'package:tela/domain/ports/download_queue_anchor.dart';
@@ -143,6 +145,11 @@ final Provider<FetchedImageCache> fetchedImageCacheProvider =
     Provider<FetchedImageCache>(
       (Ref ref) => CacheManagerFetchedImageCache(),
     );
+
+/// Reads the colour an image is mostly made of, for sources that report none.
+final Provider<DominantColor> dominantColorProvider = Provider<DominantColor>(
+  (Ref ref) => DecodedDominantColor(),
+);
 
 /// The screen-protection port, bound to Android's `FLAG_SECURE`.
 final Provider<ScreenGuard> screenGuardProvider = Provider<ScreenGuard>(
