@@ -1,8 +1,19 @@
 # tela handoff
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
-> **START HERE — an explicit wallpaper can be copied now, and this reverses a
+> **START HERE — the clipboard work is merged, and the next pass is scoped but
+> not built** (2026-08-14). `feat/clipboard-copy` landed as `6ee597e` with both
+> suites run fresh by the merge gate; the tree is clean. The owner then asked
+> for **"a UI/UX overhaul to make this app simply stunning"** and chose all four
+> threads of **pass L — the ambient overhaul** (L1 ambient colour, L2 motion as
+> a system, L3 Detail as an editorial page, L4 a front page for Browse). **None
+> of it is built.** Its section is below, and its framing paragraph is the part
+> to read first: L is not a sixth polish pass, it is where the quiet-chrome
+> doctrine gets deliberately broken — and the browse wall is the surface it is
+> *not* broken on.
+>
+> **The older START HERE — an explicit wallpaper can be copied now, and this reverses a
 > shipped decision** (2026-08-13, `feat/clipboard-copy`, fourth slice). The
 > clipboard is offered at **every** purity, by the owner's call after using the
 > first three slices: refusing the copy made the app's fastest route into
@@ -477,6 +488,188 @@ Updated: 2026-08-13
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## L — the ambient overhaul, scoped 2026-08-14; NOT BUILT
+
+The owner asked for "a UI/UX overhaul to make this app simply stunning" and
+chose **all four** threads below. `feat/clipboard-copy` was merged first
+(`6ee597e`) so this pass starts from a clean tree.
+
+**Read this framing before touching anything.** Five UI passes — A, B, C, D, H —
+executed *one* doctrine, the one `theme.dart` states outright: *"a wallpaper
+browser is a wall of other people's colour, so the chrome around it stays
+deliberately quiet."* They executed it well. That is precisely why the app reads
+as **tasteful** and not as **stunning**: restraint done well is taste, and
+nothing more. L is therefore **not pass six of the same thing**. It is where the
+quiet doctrine gets deliberately broken, on the surfaces where breaking it is
+safe.
+
+**The rule L keeps, and it is not negotiable: the browse wall stays neutral.**
+Every hard-won argument in this file is about not competing with the wall — A2's
+frosted bar rejected on device, C2's scrim held at .45, C4's pill alpha left
+alone. L spends its **colour** only where a single photo *is* the subject
+(Detail, the immersive viewer) and its **motion** everywhere. A slice that tints
+the browse grid has misread this pass.
+
+Four threads, ordered by cost, each independently shippable. Take them one at a
+time. Every one of them is *observable* — none can be called done on a green
+suite alone, so `make deploy` and a screenshot pass belongs in each.
+
+### L1 — ambient colour: the wallpaper paints its own screen
+
+Detail and the immersive viewer derive a `ColorScheme` from the wallpaper's own
+dominant colour and animate the whole surface into it as the pager moves. Action
+bar, apply button, fact tiles, sheet, scrim — all take the image's colour. This
+is the largest perceived-quality jump available per unit of work, and it extends
+what C2's blurred backdrop already started rather than contradicting it.
+
+**The data is already there and costs nothing.** `Wallpaper.colors` is on the
+**listing** model (`wallpaper.dart:90`), not just `WallpaperDetails` — so the
+colour is known before the detail fetch resolves and the screen can arrive
+already tinted instead of shifting under the user.
+
+**Three traps, checked in the code rather than assumed:**
+
+1. **Wallhaven's palette is quantized to 29 buckets** (`wallpaper_color.dart`),
+   and four of them are neutral — `#000000`, `#999999`, `#cccccc`, `#ffffff`.
+   A photo whose dominant bucket is one of those seeds a dead scheme. Skip the
+   neutral entries when choosing a seed and fall back to the ordinary theme when
+   *all* of them are neutral. A greyscale wallpaper getting no tint is correct;
+   a greyscale wallpaper getting a muddy brown one is the bug.
+2. **Konachan supplies no colours at all** — `konachan_mapper.dart:110` returns
+   `colors: const <String>[]`. So L1 works on one source of two. Either accept
+   that (the fallback above already handles it silently) or add L1b: extract a
+   dominant colour from the 64px thumbnail decode `BlurredImageBackdrop` already
+   performs, behind a project-owned `DominantColor` port per CLAUDE.md's wrap
+   rule. **Recommend shipping L1a first** and deciding L1b on the device — the
+   Konachan wall may not look wrong enough to pay for it.
+3. **Seed the scheme, never paint the raw hex.** `_withAccent` in `theme.dart`
+   is the pattern that already exists: grow a tonal palette with
+   `ColorScheme.fromSeed` at the *current* brightness and splice only the brand
+   roles. Painting `#cc0000` onto a surface directly is how you get unreadable
+   text, and the theme's own docstring already refuses a brightness mismatch for
+   exactly this reason.
+
+**Where the animation lives.** The pager (`detail_preview_pager.dart`) already
+tracks the page; the tint should be an implicit `TweenAnimationBuilder` over the
+scheme so a swipe cross-fades colour rather than cutting. It must honour
+`MediaQuery.disableAnimationsOf` — the precedent is everywhere in this codebase
+(`gallery_route_transitions.dart:14`, the skeleton, the zoom animator).
+
+**Interaction with C2 that must be checked on device, not argued:** the backdrop
+is a blurred copy of the same image, so the tint and the backdrop will agree by
+construction — which risks the pane becoming *one* colour with no separation.
+`wallpaperTileEdge` at `radius: 0` is already drawn over the contained frame for
+the melt case (see C2's device pass); watch whether it is still enough.
+
+### L2 — motion as a system
+
+Today motion is a 220ms fade, a Hero flight, a shimmer, and a zoom animator —
+each correct, each reduce-motion aware, and none of them a *system*. Four
+additions, cheapest first:
+
+- **Scroll-linked parallax inside each tile.** The image drifts slower than the
+  tile that clips it. This is the single cheapest thing that makes a photo wall
+  feel expensive, and it is invisible in a screenshot — it only exists on the
+  device.
+- **Staggered first paint.** Tiles fade and rise ~20ms apart, capped at a
+  handful so page two does not cascade for a second and a half.
+- **Shared-axis between sorting tabs** instead of `TabBarView`'s default slide.
+- **A settled overscroll** on the wall.
+
+**The structural warning, and it is the whole risk of this thread.**
+`JustifiedWallpaperGrid` is a `ListView.builder` over *rows*, and each tile is a
+`SizedBox` inside a `Row` (`justified_wallpaper_grid.dart:110–133`). Parallax
+needs every tile to know the scroll offset, and doing that with `setState` or a
+per-tile scroll listener is a rebuild storm across a wall that can hold hundreds
+of tiles. Drive it from **one** `ScrollController` through a
+`ValueListenableBuilder` per tile — or better, a `Flow`/custom paint that
+repositions without rebuilding.
+
+**And `WallpaperTile` deliberately does not size itself** (its docstring says so
+and C1 depends on it): the row assigns the height. Parallax must move the
+*image inside the clip*, never the tile.
+
+**Two live wires in that file, both documented above and both easy to cut by
+accident:** `_maybeFetchNext` only runs off a `ScrollNotification`, and
+`_topUpIfUnderfilled` exists because a short shelf emits none (C1's device
+pass). If a parallax rewrite swallows or replaces the scroll notifications, the
+wall silently stops paging. Re-run `test/features/browse_underfilled_wall_test.dart`
+and believe it.
+
+### L3 — Detail as an editorial page, not a spec sheet
+
+C3 made the eight scalar facts speak one visual language, which fixed coherence
+and left the panel reading like a form (`wallpaper_metadata.dart` — a title, a
+`Wrap` of half-width fact tiles, colours, attribution, tags). The stunning
+version is different in kind: **full-bleed image behind everything**, the
+metadata riding a draggable sheet that rises over it, and apply as a persistent
+action on the glass.
+
+Highest cost, highest payoff. What it must not lose:
+
+- **C3's decision that Uploader and Source are not facts.** They are places you
+  can *go*, and they group with *View on Wallhaven* as actions. A redesign that
+  quietly folds them back into a grid has undone the thread.
+- **The `Key('metadata-fact-<label>')` hooks**, which exist only so a test can
+  prove a fact is a tile rather than a row.
+- **Two layouts, and one of them has never been looked at.** C3 shipped an
+  expanded 440dp pane and a compact `ListView`; only the expanded one has been
+  seen on hardware. A draggable sheet changes both, so the compact layout stops
+  being "nothing suspected" and becomes the thing to check first.
+- The screen carries the gallery session, the immersive hand-off, the copy hold
+  and the apply button. `wallpaper_detail_screen_test.dart` and
+  `detail_preview_pager_test.dart` both point straight at it.
+
+**This thread is the one to build last**, and it is the one most likely to want
+its own branch and a device pass mid-way rather than at the end.
+
+### L4 — a front page for Browse
+
+Browse opens on a search field, seven sorting tabs and a grid: a *tool*, not a
+destination. A featured full-bleed hero above the wall — one wallpaper, editorial
+type over it, tapping opens it — plus the tag shelves the library already knows
+how to draw, gives the app a front door.
+
+**The honest cost, stated because it is the reason this thread is last in
+appeal:** it puts a scroll between the user and the wall, on the app's home
+screen, in an app whose entire promise is "browse → preview → set". It is the
+most debatable change in this pass and the one most likely to be reverted after
+a week of living with it. Consider it **on the Latest tab only**, so six of
+seven listings stay a pure wall.
+
+**The structural cost.** The grid is a `ListView.builder`, not slivers, so a
+header that scrolls with the wall means converting `JustifiedWallpaperGrid` to a
+sliver — which is also what would let a collapsing app bar work. That conversion
+touches every shelf (Browse, Favorites, History, Private Library, LinkedListing)
+and the skeleton, which is packed through the same `justifiedRows`. **Do not
+give the skeleton a scroll view of its own** — A3 already recorded why (the
+pager's `SliverFillRemaining(hasScrollBody: false)` content-sizes its child and
+a nested `ScrollView` throws on intrinsic dimensions).
+
+### What L must not re-litigate
+
+Carried forward from the passes that settled them on hardware, so nobody spends
+a slice re-deriving:
+
+- **Masonry is gone.** Justified rows are the layout law (B).
+- **No frosted glass on the app bar.** Built, rejected on device, replaced with
+  the opaque `GradientAppBar`; `gradient_app_bar_test.dart` asserts every stop
+  is opaque, and dropping one below 1 is the exact bug that killed it (A2).
+- **C2's scrim stays .45** and **C4's pill alpha stays where it is.** Both were
+  argued from a real device and both fixes-by-alpha would dull a case that is
+  already right.
+- **The brand mark is not `ColorScheme.primary`.** The accent belongs to the
+  user; identity must not move with it (`theme.dart`, `docs/BRAND.md`).
+
+### Process, unchanged
+
+`./tool/tela` Docker toolchain, not host flutter. `make deploy` to the tablet —
+**never** `flutter install`/`run`. A change under `android/` owes both suites.
+`flutter analyze` and `dart format .` clean before every commit. The merge gate
+wants a real merge commit (`merge.ff false`). And **never run `adb kill-server`
+here** — the session's `/dev` is a tmpfs, so only a terminal started outside
+Claude Code can start a working daemon; if `adb devices` is empty, ask the owner.
 
 ## REVERSED — an explicit wallpaper may be copied (2026-08-13, `feat/clipboard-copy`)
 
