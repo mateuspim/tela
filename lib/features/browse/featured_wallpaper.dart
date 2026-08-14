@@ -137,12 +137,55 @@ class _Caption extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Text(_listing(context), style: _listingStyle(context)),
+        _inked(_listing(context), _listingStyle(context), Colors.white),
         const SizedBox(height: 2),
-        Text(wallpaper.resolution.toString(), style: _resolutionStyle(context)),
+        _inked(
+          wallpaper.resolution.toString(),
+          _resolutionStyle(context),
+          Colors.white,
+        ),
       ],
     );
   }
+
+  /// Draws [text] with a thin dark outline under its [fill].
+  ///
+  /// The gradient wash below is not enough on its own: it is a fixed darkening,
+  /// and whether white type survives depends on the *wallpaper's* own pixels
+  /// behind these particular glyphs — a pale sky or a snowfield reads through a
+  /// scrim that a dark one would have hidden. This is the same argument
+  /// `wallpaperTileEdge` makes for a tile's border, and the same one that kept
+  /// C2's scrim at .45 instead of chasing legibility with opacity.
+  ///
+  /// Two `Text`s rather than one: `TextStyle` asserts that `color` and
+  /// `foreground` are never both set, so the outline and the fill cannot be the
+  /// same style. [style] is deliberately colourless for that reason — give it a
+  /// colour and this throws.
+  Widget _inked(String text, TextStyle? style, Color fill) {
+    return Stack(
+      children: <Widget>[
+        Text(
+          text,
+          style: style?.copyWith(foreground: _outline(style.fontSize)),
+        ),
+        Text(text, style: style?.copyWith(color: fill)),
+      ],
+    );
+  }
+
+  /// A hairline rather than a cartoon outline, scaled to the type it edges.
+  ///
+  /// **Proportional, because a fixed width is wrong at one of the two sizes.**
+  /// 1.6dp reads as a crisp edge on the resolution's display face and as a
+  /// smear on the label beneath it — the stroke eats into a small glyph from
+  /// both sides at once, and the caption came back grey rather than white on
+  /// the device. A ninth of the font size holds the same *visual* weight at
+  /// either size.
+  Paint _outline(double? fontSize) => Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = (fontSize ?? 14) / 9
+    ..strokeJoin = StrokeJoin.round
+    ..color = Colors.black.withValues(alpha: .6);
 
   /// The listing's own name, from the same `sortingLabel` the tabs use — so the
   /// band cannot claim one thing while the tab above it says another, and no
@@ -151,21 +194,27 @@ class _Caption extends StatelessWidget {
       sortingLabel(AppLocalizations.of(context), sorting).toUpperCase();
 
   /// Small and tracked: a caption naming the claim, not competing with it.
+  ///
+  /// The hierarchy against the resolution is carried by size and weight rather
+  /// than by opacity. It used to be a 70% white, which the outline then dulled
+  /// into grey — dimming type *and* edging it fights itself.
+  ///
+  /// Colourless — see [_inked].
   TextStyle? _listingStyle(BuildContext context) =>
       Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: Colors.white70,
         letterSpacing: 1.4,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w700,
       );
 
   /// Set in the brand display face rather than a chip: a band this size earns
   /// a line of type, and a pill here would borrow the wall's vocabulary for
-  /// something that is not a tile. White, because it sits on a photograph.
+  /// something that is not a tile.
+  ///
+  /// Colourless — see [_inked].
   TextStyle? _resolutionStyle(BuildContext context) =>
       Theme.of(context).textTheme.titleLarge?.copyWith(
         fontFamily: TelaTheme.brandFontFamily,
         fontWeight: FontWeight.w600,
         letterSpacing: -0.4,
-        color: Colors.white,
       );
 }

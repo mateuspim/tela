@@ -53,8 +53,37 @@ void main() {
     );
     await _settle(tester);
 
-    expect(find.text('MOST FAVORITED'), findsOneWidget);
-    expect(find.text('1920x1080'), findsOneWidget);
+    // Two of each: the caption is drawn as an outline with its fill over it,
+    // so both lines exist twice by construction.
+    expect(find.text('MOST FAVORITED'), findsNWidgets(2));
+    expect(find.text('1920x1080'), findsNWidgets(2));
+  });
+
+  testWidgets('outlines the caption so it survives a pale wallpaper', (
+    WidgetTester tester,
+  ) async {
+    // The wash below the caption is a fixed darkening; whether white type
+    // survives depends on the wallpaper's own pixels behind those glyphs. Same
+    // argument as `wallpaperTileEdge`, and the same reason C2's scrim was left
+    // alone rather than raised.
+    await _pumpGrid(tester, _sourceOf(6));
+    await _settle(tester);
+
+    final Iterable<Text> lines = tester.widgetList<Text>(
+      find.text('1920x1080'),
+    );
+    expect(
+      lines.where(
+        (Text t) => t.style?.foreground?.style == PaintingStyle.stroke,
+      ),
+      hasLength(1),
+      reason: 'exactly one layer is the outline',
+    );
+    expect(
+      lines.where((Text t) => t.style?.color != null),
+      hasLength(1),
+      reason: 'exactly one layer is the fill',
+    );
   });
 
   testWidgets('loads the full image for the one tile drawn large', (

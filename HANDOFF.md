@@ -817,6 +817,31 @@ ranked tabs means up to four if the user walks all of them. They land in
 `fullImageCache` (10 objects, 3 days), which is the browsing window they belong
 in, and it is an image the user is fairly likely to open anyway.
 
+**The caption is outlined, and the first attempt at it was wrong.** White type
+on a photograph needs more than the gradient wash, which is a *fixed* darkening:
+whether it survives depends on the wallpaper's own pixels behind those glyphs.
+Each line is now drawn twice — a thin dark stroke with the fill over it. Two
+`Text`s and not one because `TextStyle` asserts `color` and `foreground` are
+never both set, which is why the shared style is deliberately colourless.
+
+**The stroke is proportional to the font size, and a fixed width was the bug.**
+1.6dp reads as a crisp edge on the resolution's display face and as a *smear* on
+the small label under it — a stroke eats into a small glyph from both sides at
+once. On the device the label came back grey rather than white. It is
+`fontSize / 9` now, and the label's fill went from 70% white to full: dimming
+type *and* edging it fights itself, and the hierarchy against the resolution is
+carried by size and weight instead.
+
+Measured on the same wallpaper and the same crop, local contrast across the
+label: **29.1** with no outline, **29.2** with the fixed stroke — i.e. the first
+attempt bought nothing, exactly as it looked — and **32.1** with the scaled one.
+
+**Still untested, and it is the case the outline exists for: a genuinely pale
+wallpaper.** Every top-of-listing image tried has been mid-tone or dark. Same
+gap as the phone layout's white bar controls, and the two want the same
+five-minute check whenever a near-white wallpaper turns up at the top of a
+ranked listing.
+
 #### L4's earlier device pass (2026-08-14, SM-X730) — works; one finding
 
 The band renders full-width above the wall with its resolution caption in the
