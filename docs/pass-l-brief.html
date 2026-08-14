@@ -333,13 +333,17 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
     <span class="chip built">L2a <b>Built</b></span>
     <span class="chip open">Parallax <b>Blocked &mdash; needs a call</b></span>
     <span class="chip">Tests <b>1348, from 1337</b></span>
-    <span class="chip">Device pass <b>Blocked, tablet locked</b></span>
+    <span class="chip built">Splash <b>Measured on device</b></span>
   </div>
 
   <div class="finds">
     <div class="find">
       <span class="tick v">Fixed</span>
       <div><p><strong>A tile&rsquo;s ink splash was invisible &mdash; on every shelf, always.</strong> A Material paints its ink layer beneath its child, and every tile is an opaque <code>BoxFit.cover</code> image, so the splash was drawn under the wallpaper. Pressing a tile gave no feedback at all. The ink now sits on a transparent Material above the thumbnail. A fix, not a flourish, and older than this pass.</p></div>
+    </div>
+    <div class="find">
+      <span class="tick v">Measured</span>
+      <div><p><strong>On the tablet: 108,107 pixels differ</strong> between a pressed and unpressed tile, and the tile&rsquo;s mean brightness lifts 96.4 &rarr; 129.4. By eye, a soft even highlight across the pressed tile with its neighbour untouched. The ink genuinely was invisible before, and genuinely is not now.</p></div>
     </div>
     <div class="find">
       <span class="tick v">Built</span>
@@ -358,6 +362,13 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
       <tr><td class="n">Settled overscroll</td><td>On the wall.</td><td class="n">Trivial</td></tr>
     </tbody>
   </table>
+  </div>
+
+  <div class="finds">
+    <div class="find">
+      <span class="tick p">Not observable</span>
+      <div><p><strong>The entrance animation cannot be checked over adb</strong>, and that is a tooling limit, not a result. <code>screencap</code> runs about 300&thinsp;ms per frame &mdash; coarser than the 260&thinsp;ms arrival it would need to resolve. A cold-launch burst does show the wall brightening, but the frame before it is the <em>empty</em> wall still waiting on page one, so that step is the page arriving, not the fade. Four unit tests pin the behaviour; a human eye on a real scroll is still owed, especially at <em>Small</em> density where a row holds nine and the cascade caps at six.</p></div>
+    </div>
   </div>
 
   <h3>Parallax is blocked, and it is your call</h3>
