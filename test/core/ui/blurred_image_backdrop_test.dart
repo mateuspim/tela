@@ -276,7 +276,6 @@ BoxDecoration? _frameEdge(WidgetTester tester) {
   return null;
 }
 
-
 /// The fractional offset the scenery is drifted by, or null where it is still.
 Offset? _driftOf(WidgetTester tester) {
   final Iterable<FractionalTranslation> slid = tester

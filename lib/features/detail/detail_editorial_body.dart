@@ -14,6 +14,10 @@ import 'package:tela/core/ui/backdrop_drift_scope.dart';
 /// it is describing; the wide layout keeps its two panes. `_expandedWidth` on
 /// the detail screen is the only place that choice is made.
 ///
+/// The sheet has three sizes — a peek, a resting 42%, and nearly full — and it
+/// snaps between them. It must be able to get *out of the way*: see
+/// [peekSheetFraction], which the device demanded.
+///
 /// It also owns the one moving part of the arrangement: dragging the sheet
 /// drifts the wallpaper's blurred scenery behind it, published through a
 /// `BackdropDriftScope`. That is the parallax the browse wall could not have —
@@ -56,6 +60,20 @@ class DetailEditorialBody extends StatefulWidget {
   /// so the wallpaper is no smaller than it was — what changed is that it now
   /// continues *behind* the sheet instead of stopping at a seam.
   static const double restingSheetFraction = 0.42;
+
+  /// How far the sheet can be pushed *down*, out of the wallpaper's way.
+  ///
+  /// The device found this one (SM-X730, 2026-08-14): with the sheet's floor at
+  /// [restingSheetFraction] there was no gesture that uncovered the picture, so
+  /// a phone showed every wallpaper with its bottom two fifths behind a panel
+  /// and the image read as opening minimised. The whole argument for this
+  /// layout is that a phone shows a wallpaper at the size a wallpaper is judged
+  /// at, which is only true if the facts can be pushed away.
+  ///
+  /// A peek and not zero: what is left is the grip and the first heading, so
+  /// the sheet is still visibly *there* and can be pulled back. A sheet that
+  /// can vanish is a feature the user has to rediscover.
+  static const double peekSheetFraction = 0.12;
 
   /// How far the sheet rises when dragged up.
   ///
@@ -100,22 +118,28 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
     super.dispose();
   }
 
-  /// Drifts the scenery up as the sheet rises over it.
+  /// Drifts the scenery with the sheet, in whichever direction it is moved.
   ///
-  /// Up, with the sheet, and never as far: the whole illusion is that the
+  /// With the sheet, and never as far: the whole illusion is that the
   /// background sits *behind* the picture, which is only legible if the two
   /// move together at different rates. The sheet's own travel is the driver
   /// because on a phone it is the only thing the user moves on this screen.
   ///
+  /// Measured from rest rather than from the floor, so the drift is zero where
+  /// the screen opens and spends its full travel in *both* directions — the two
+  /// halves are different distances, which is why they are scaled separately.
+  ///
   /// Returns false: the notification keeps bubbling, so nothing above this body
   /// loses the sheet's extent by our listening for it.
   bool _sheetDragged(DraggableScrollableNotification sheet) {
-    const double travel =
-        DetailEditorialBody.fullSheetFraction -
-        DetailEditorialBody.restingSheetFraction;
-    final double risen =
-        (sheet.extent - DetailEditorialBody.restingSheetFraction) / travel;
-    _drift.value = -risen.clamp(0.0, 1.0);
+    final double fromRest =
+        sheet.extent - DetailEditorialBody.restingSheetFraction;
+    final double travel = fromRest >= 0
+        ? DetailEditorialBody.fullSheetFraction -
+              DetailEditorialBody.restingSheetFraction
+        : DetailEditorialBody.restingSheetFraction -
+              DetailEditorialBody.peekSheetFraction;
+    _drift.value = (-fromRest / travel).clamp(-1.0, 1.0);
     return false;
   }
 
@@ -141,8 +165,15 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
                   const _TopScrim(),
                   DraggableScrollableSheet(
                     initialChildSize: DetailEditorialBody.restingSheetFraction,
-                    minChildSize: DetailEditorialBody.restingSheetFraction,
+                    minChildSize: DetailEditorialBody.peekSheetFraction,
                     maxChildSize: DetailEditorialBody.fullSheetFraction,
+                    // Snapped, so the sheet always comes to rest at one of its
+                    // three sizes instead of wherever the finger left it. A
+                    // sheet abandoned at 31% is what reads as a stuck scroll.
+                    snap: true,
+                    snapSizes: const <double>[
+                      DetailEditorialBody.restingSheetFraction,
+                    ],
                     builder: _sheet,
                   ),
                 ],

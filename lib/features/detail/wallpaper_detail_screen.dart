@@ -377,7 +377,13 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   /// moves at the same *rate* whatever the wallpaper's metadata happens to
   /// weigh — a picture with forty tags would otherwise drift a tenth as fast as
   /// one with two, for the same finger travel.
-  static const double _paneDriftSpan = 600;
+  ///
+  /// Measured on the device (SM-X730, 2026-08-14): an ordinary wallpaper's pane
+  /// has only about 180dp of scroll in it, so at the 600 this started on the
+  /// effect could never spend more than a third of its travel — 22 device
+  /// pixels of drift, which is nothing. 250 lets a typical pane spend most of
+  /// it and simply comes to rest early on a long one.
+  static const double _paneDriftSpan = 250;
 
   /// Drifts the scenery up as the facts beside it are scrolled up.
   ///

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/core/ui/backdrop_drift_scope.dart';
@@ -188,8 +190,12 @@ void main() {
   testWidgets('brings the wallpaper back as the sheet is put down', (
     WidgetTester tester,
   ) async {
+    // The round trip. Raised, the scenery has drifted up; put back down it
+    // must not stay there — a drift that only ever accumulates would leave the
+    // backdrop permanently off-centre after a few drags.
     await _pump(tester);
     await _raiseSheet(tester);
+    expect(_drift(tester), lessThan(0));
 
     final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
     await tester.dragFrom(
@@ -198,7 +204,79 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(_drift(tester), closeTo(0, 0.001));
+    expect(_drift(tester), greaterThanOrEqualTo(0));
+  });
+
+  testWidgets('gets out of the way when pushed down', (
+    WidgetTester tester,
+  ) async {
+    // The device found this: with the sheet's floor at its resting size there
+    // was no gesture that uncovered the picture, so a phone showed every
+    // wallpaper with its bottom two fifths behind a panel — the image read as
+    // opening minimised on the one screen whose subject is the image.
+    await _pump(tester);
+    final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
+    final double resting = tester.getTopLeft(sheet).dy;
+
+    await tester.dragFrom(
+      Offset(tester.getCenter(sheet).dx, resting + 24),
+      const Offset(0, 600),
+    );
+    await tester.pumpAndSettle();
+
+    final Rect body = tester.getRect(find.byType(DetailEditorialBody));
+    final double pushedDown = tester.getTopLeft(sheet).dy;
+    expect(pushedDown, greaterThan(resting));
+    // A peek, not a dismissal: the grip stays on screen, or the sheet becomes
+    // a feature the user has to rediscover.
+    expect(pushedDown, lessThan(body.bottom));
+    expect(find.byKey(DetailEditorialBody.sheetKey), findsOneWidget);
+  });
+
+  testWidgets('drifts the wallpaper the other way when pushed down', (
+    WidgetTester tester,
+  ) async {
+    // The full travel in both directions, zero where the screen opens.
+    await _pump(tester);
+    final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
+
+    await tester.dragFrom(
+      Offset(tester.getCenter(sheet).dx, tester.getTopLeft(sheet).dy + 24),
+      const Offset(0, 600),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_drift(tester), closeTo(1, 0.001));
+  });
+
+  testWidgets('comes to rest at a size, never where the finger left it', (
+    WidgetTester tester,
+  ) async {
+    // Snapped. A sheet abandoned at 31% is what reads as a stuck scroll rather
+    // than as a sheet — the question the device pass was owed.
+    await _pump(tester);
+    final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
+    final double resting = tester.getTopLeft(sheet).dy;
+
+    await tester.dragFrom(
+      Offset(tester.getCenter(sheet).dx, resting + 24),
+      const Offset(0, -120),
+    );
+    await tester.pumpAndSettle();
+
+    // Measured against the sheet's own scrollable area, not the body: the
+    // apply button sits below it, so the fractions are of a shorter box.
+    final Rect area = tester.getRect(find.byType(DraggableScrollableSheet));
+    final double settled =
+        (area.bottom - tester.getTopLeft(sheet).dy) / area.height;
+    expect(
+      <double>[
+        DetailEditorialBody.peekSheetFraction,
+        DetailEditorialBody.restingSheetFraction,
+        DetailEditorialBody.fullSheetFraction,
+      ].map((double size) => (settled - size).abs()).reduce(min),
+      lessThan(0.03),
+    );
   });
 }
 
