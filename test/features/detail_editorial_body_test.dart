@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tela/core/ui/backdrop_drift_scope.dart';
 import 'package:tela/features/detail/detail_editorial_body.dart';
 
 const Key _preview = Key('the-preview');
@@ -155,4 +156,69 @@ void main() {
 
     expect(scrim, findsWidgets);
   });
+
+  testWidgets('drifts the wallpaper behind the sheet as it rises', (
+    WidgetTester tester,
+  ) async {
+    // The parallax the browse wall could not have: a shelf may crop nothing,
+    // and the letterbox scenery behind this preview is cropped already.
+    await _pump(tester);
+    expect(_drift(tester), 0);
+
+    await _raiseSheet(tester);
+
+    // Up, with the sheet — the backdrop must travel the same way as the thing
+    // in front of it, only less, or it reads as sliding rather than as depth.
+    expect(_drift(tester), lessThan(0));
+    expect(_drift(tester), greaterThanOrEqualTo(-1));
+  });
+
+  testWidgets('spends the whole drift by the time the sheet is up', (
+    WidgetTester tester,
+  ) async {
+    // Mapped across the sheet's own travel, not an arbitrary distance, so the
+    // scenery arrives exactly as the sheet does.
+    await _pump(tester);
+
+    await _raiseSheet(tester);
+
+    expect(_drift(tester), closeTo(-1, 0.001));
+  });
+
+  testWidgets('brings the wallpaper back as the sheet is put down', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester);
+    await _raiseSheet(tester);
+
+    final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
+    await tester.dragFrom(
+      Offset(tester.getCenter(sheet).dx, tester.getTopLeft(sheet).dy + 24),
+      const Offset(0, 600),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_drift(tester), closeTo(0, 0.001));
+  });
+}
+
+/// How far the scenery has been told to drift, from the scope over the body.
+double _drift(WidgetTester tester) {
+  return tester
+      .widget<BackdropDriftScope>(find.byType(BackdropDriftScope))
+      .drift
+      .value;
+}
+
+/// Drags the sheet to the top of its travel.
+///
+/// From the sheet's own surface: the metadata inside it is taller than the
+/// screen, so its centre — where `drag` aims — is off-screen.
+Future<void> _raiseSheet(WidgetTester tester) async {
+  final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
+  await tester.dragFrom(
+    Offset(tester.getCenter(sheet).dx, tester.getTopLeft(sheet).dy + 24),
+    const Offset(0, -600),
+  );
+  await tester.pumpAndSettle();
 }

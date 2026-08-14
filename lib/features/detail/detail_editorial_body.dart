@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tela/core/ui/backdrop_drift_scope.dart';
 
 /// Detail on a phone: the wallpaper full-bleed, its facts on a sheet over it.
 ///
@@ -13,6 +14,11 @@ import 'package:flutter/material.dart';
 /// it is describing; the wide layout keeps its two panes. `_expandedWidth` on
 /// the detail screen is the only place that choice is made.
 ///
+/// It also owns the one moving part of the arrangement: dragging the sheet
+/// drifts the wallpaper's blurred scenery behind it, published through a
+/// `BackdropDriftScope`. That is the parallax the browse wall could not have —
+/// nothing on a shelf may be cropped, and the letterbox backdrop already is.
+///
 /// Pure layout: it takes the three pieces already built and arranges them, so
 /// it can be tested without a wallpaper, a source, or a network.
 ///
@@ -23,7 +29,7 @@ import 'package:flutter/material.dart';
 ///   applyButton: DetailApplyButton(wallpaper: wallpaper),
 /// );
 /// ```
-class DetailEditorialBody extends StatelessWidget {
+class DetailEditorialBody extends StatefulWidget {
   /// Arranges [preview], [metadata] and [applyButton] as one page.
   const DetailEditorialBody({
     required this.preview,
@@ -77,6 +83,43 @@ class DetailEditorialBody extends StatelessWidget {
   static const double topScrimHeight = 148;
 
   @override
+  State<DetailEditorialBody> createState() => _DetailEditorialBodyState();
+}
+
+class _DetailEditorialBodyState extends State<DetailEditorialBody> {
+  /// How far the wallpaper's own blurred scenery has drifted, -1..1.
+  ///
+  /// A notifier rather than `setState` because the sheet reports every frame of
+  /// a drag: rebuilding this body would rebuild the preview, the pager and the
+  /// sheet's whole list to move a background by a few pixels.
+  final ValueNotifier<double> _drift = ValueNotifier<double>(0);
+
+  @override
+  void dispose() {
+    _drift.dispose();
+    super.dispose();
+  }
+
+  /// Drifts the scenery up as the sheet rises over it.
+  ///
+  /// Up, with the sheet, and never as far: the whole illusion is that the
+  /// background sits *behind* the picture, which is only legible if the two
+  /// move together at different rates. The sheet's own travel is the driver
+  /// because on a phone it is the only thing the user moves on this screen.
+  ///
+  /// Returns false: the notification keeps bubbling, so nothing above this body
+  /// loses the sheet's extent by our listening for it.
+  bool _sheetDragged(DraggableScrollableNotification sheet) {
+    const double travel =
+        DetailEditorialBody.fullSheetFraction -
+        DetailEditorialBody.restingSheetFraction;
+    final double risen =
+        (sheet.extent - DetailEditorialBody.restingSheetFraction) / travel;
+    _drift.value = -risen.clamp(0.0, 1.0);
+    return false;
+  }
+
+  @override
   Widget build(BuildContext context) {
     // The button is laid out in normal flow *below* the image, not positioned
     // over it. Absolutely positioning it looked equivalent and was not: its own
@@ -85,24 +128,30 @@ class DetailEditorialBody extends StatelessWidget {
     // clipped clean off (seen on the SM-X730, 2026-08-14). Nothing is lost by
     // this — the sheet covers the foot of the screen at every size it can take,
     // so no wallpaper was ever visible behind the button anyway.
-    return Column(
-      children: <Widget>[
-        Expanded(
-          child: Stack(
-            children: <Widget>[
-              Positioned.fill(child: preview),
-              const _TopScrim(),
-              DraggableScrollableSheet(
-                initialChildSize: restingSheetFraction,
-                minChildSize: restingSheetFraction,
-                maxChildSize: fullSheetFraction,
-                builder: _sheet,
+    return BackdropDriftScope(
+      drift: _drift,
+      child: Column(
+        children: <Widget>[
+          Expanded(
+            child: NotificationListener<DraggableScrollableNotification>(
+              onNotification: _sheetDragged,
+              child: Stack(
+                children: <Widget>[
+                  Positioned.fill(child: widget.preview),
+                  const _TopScrim(),
+                  DraggableScrollableSheet(
+                    initialChildSize: DetailEditorialBody.restingSheetFraction,
+                    minChildSize: DetailEditorialBody.restingSheetFraction,
+                    maxChildSize: DetailEditorialBody.fullSheetFraction,
+                    builder: _sheet,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-        _footed(context, applyButton),
-      ],
+          _footed(context, widget.applyButton),
+        ],
+      ),
     );
   }
 
@@ -135,15 +184,17 @@ class DetailEditorialBody extends StatelessWidget {
   Widget _sheet(BuildContext context, ScrollController controller) {
     final ColorScheme colors = Theme.of(context).colorScheme;
     return DecoratedBox(
-      key: sheetKey,
+      key: DetailEditorialBody.sheetKey,
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: ListView(
         controller: controller,
-        padding: const EdgeInsets.only(bottom: sheetFootRoom),
-        children: <Widget>[const _SheetGrip(), metadata],
+        padding: const EdgeInsets.only(
+          bottom: DetailEditorialBody.sheetFootRoom,
+        ),
+        children: <Widget>[const _SheetGrip(), widget.metadata],
       ),
     );
   }
