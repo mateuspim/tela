@@ -87,6 +87,8 @@ section.plain{border-top:none;}
   padding:.32rem .6rem;border:1px solid var(--hair);border-radius:2px;color:var(--muted);
 }
 .chip b{color:var(--ink);font-weight:600;}
+.chip.built{border-color:color-mix(in srgb,var(--ok) 55%,transparent);color:var(--ok);}
+.chip.built b{color:var(--ok);}
 
 /* ---- findings ---- */
 .finds{display:flex;flex-direction:column;gap:1.4rem;margin:1.6rem 0 .4rem;}
@@ -194,7 +196,7 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
   </div>
 
   <div>
-    <p class="eyebrow">Pass L &middot; scoped 14 August 2026 &middot; not built</p>
+    <p class="eyebrow">Pass L &middot; 14 August 2026 &middot; L1a built, L1b&ndash;L4 scoped</p>
     <h1>The chrome has been quiet for <span class="amb">five passes</span>.</h1>
   </div>
 
@@ -216,10 +218,10 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
     <div class="thread-title"><h2>Ambient colour: the wallpaper paints its own screen</h2></div>
   </div>
   <div class="meta">
-    <span class="chip">Cost <b>Low</b></span>
-    <span class="chip">Payoff <b>Highest per unit</b></span>
-    <span class="chip">Surfaces <b>Detail, viewer</b></span>
-    <span class="chip">New data <b>None</b></span>
+    <span class="chip built">L1a <b>Built</b></span>
+    <span class="chip">Tests <b>1337, from 1317</b></span>
+    <span class="chip">Surface <b>Detail</b></span>
+    <span class="chip">Owed <b>An eye on the tablet</b></span>
   </div>
 
   <p>Detail and the immersive viewer derive a colour scheme from the wallpaper&rsquo;s own dominant colour and animate the whole surface into it as the pager moves. Action bar, apply button, fact tiles, scrim &mdash; all take the image&rsquo;s colour. It extends what C2&rsquo;s blurred backdrop already started rather than contradicting it.</p>
@@ -245,6 +247,21 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
     </div>
   </div>
 
+  <h3>What the build found</h3>
+  <div class="finds">
+    <div class="find">
+      <span class="tick v">Fixed</span>
+      <div>
+        <p><strong>The tint was repainting the purity warning.</strong> The download affordance is painted in <code>ColorScheme.error</code> to say <em>this wallpaper is not safe</em> &mdash; and that role&rsquo;s own docstring already claimed it was the one warm colour that could never be repainted into the thing it warns against. True of the accent splice by construction; false the moment a scheme is grown wholly from the wallpaper&rsquo;s seed. A dark-red wallpaper reshaded its own warning.</p>
+        <p>The four error roles are now held back. It was found by an <em>existing</em> test going red, not by inspection.</p>
+      </div>
+    </div>
+    <div class="find">
+      <span class="tick v">Fixed</span>
+      <div><p><strong>The tint needs a <code>Builder</code>, and only one test proves it.</strong> The theme is returned <em>by</em> the screen&rsquo;s build, so anything read off the screen&rsquo;s own context resolves beside the tint rather than under it. Widgets deep enough to resolve their own theme move anyway &mdash; which is exactly what makes it easy to miss: the phone layout looks perfect while the wide layout&rsquo;s information pane sits alone on the untinted surface. Deleting the <code>Builder</code> fails that one test and nothing else in the file.</p></div>
+    </div>
+  </div>
+
   <h3>Three traps, checked in the code rather than assumed</h3>
   <div class="finds">
     <div class="find">
@@ -257,11 +274,15 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
     </div>
     <div class="find">
       <span class="tick v">Verified</span>
-      <div><p><strong>Konachan supplies no colours at all.</strong> <code>konachan_mapper.dart:110</code> returns an empty list, so L1 covers one source of two. Either accept it &mdash; the neutral fallback already handles it silently &mdash; or add L1b: extract a dominant colour from the 64px thumbnail decode the blurred backdrop already performs, behind a project-owned port. <strong>Ship L1a first</strong> and decide L1b on the device; the Konachan wall may not look wrong enough to pay for it.</p></div>
+      <div><p><strong>Konachan supplies no colours at all.</strong> <em>Still open &mdash; L1a ships the fallback, not the fix.</em> <code>konachan_mapper.dart:110</code> returns an empty list, so L1 covers one source of two. Either accept it &mdash; the neutral fallback already handles it silently &mdash; or add L1b: extract a dominant colour from the 64px thumbnail decode the blurred backdrop already performs, behind a project-owned port. <strong>Ship L1a first</strong> and decide L1b on the device; the Konachan wall may not look wrong enough to pay for it.</p></div>
     </div>
     <div class="find">
       <span class="tick p">Proposal</span>
       <div><p><strong>Seed the scheme, never paint the raw hex.</strong> <code>_withAccent</code> is the pattern that already exists: grow a tonal palette at the <em>current</em> brightness and splice only the brand roles. Painting a hex onto a surface directly is how you get unreadable text &mdash; the theme already refuses a brightness mismatch for exactly this reason.</p></div>
+    </div>
+    <div class="find">
+      <span class="tick p">Deferred</span>
+      <div><p><strong>The immersive viewer is not in L1a.</strong> Its canvas is a hardcoded black and its chrome is black scrims, so nothing there reads the scheme at all. Tinting it means editing controls the private library and the download viewer share &mdash; its own slice, with its own device pass.</p></div>
     </div>
     <div class="find">
       <span class="tick p">Watch on device</span>
