@@ -773,9 +773,20 @@ listings and a pure wall on the firehose. If it turns out to be too rare to be
 worth having, the honest next step is removing L4 rather than putting it back on
 Latest, because the twin problem there does not go away.
 
-**Owed:** the tablet dropped off the network before this could be deployed
-(`adb connect` reports no route — the wireless-debugging port rotates when it
-sleeps). The change is `make ci` green; **it has not been seen on hardware.**
+**Device-verified (2026-08-14), both halves.** *Latest* is a pure wall again —
+wallpapers start at the top edge, no band. *Top* carries the band, and the tiles
+beneath it are wholly unrelated (a topographic pattern, a hillside, an anime
+figure, a mountain, an aircraft over forest) — which is the point: a ranked
+listing does not put one uploader's series at positions 0 and 1, so the twin
+that started this cannot arise there.
+
+**The band's softness is worse than the first pass suggested, and it is now the
+open question about L4.** On *Top* it is plainly blocky — a 3840x2160 source
+drawn from a thumbnail across 2560px. It was easy to miss on the near-black orb
+that happened to be featured before; on a bright, detailed image it is the first
+thing you see. The three options are unchanged (accept it; fetch the full image
+for the featured wallpaper only; stop running the band full-bleed on a wide
+screen) but the first is now much harder to defend.
 
 #### L4's earlier device pass (2026-08-14, SM-X730) — works; one finding
 
