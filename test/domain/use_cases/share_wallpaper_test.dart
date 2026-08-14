@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/clipboard_confirmation.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/source_id.dart';
@@ -52,6 +53,55 @@ void main() {
       expect(sharer.sharedImages, isEmpty);
     },
   );
+
+  test('clipboard copies the same file the image share would send', () async {
+    final FakeWallpaperSharer sharer = FakeWallpaperSharer();
+    final ShareWallpaper share = ShareWallpaper(sharer: sharer);
+
+    final ClipboardConfirmation confirmation = await share.clipboard(
+      _wallpaper(),
+    );
+
+    expect(sharer.copiedImages, hasLength(1));
+    expect(
+      sharer.copiedImages.single.source,
+      Uri.parse('https://w.wallhaven.cc/full/e7/wallhaven-e7jvjd.png'),
+    );
+    expect(sharer.copiedImages.single.fileName, 'wallhaven-e7jvjd.png');
+    // Passed through from the port: the platform decides who confirmed it.
+    expect(confirmation, ClipboardConfirmation.tela);
+  });
+
+  test('clipboard reports back what the port says about the notice', () async {
+    final FakeWallpaperSharer sharer = FakeWallpaperSharer(
+      confirmation: ClipboardConfirmation.system,
+    );
+    final ShareWallpaper share = ShareWallpaper(sharer: sharer);
+
+    expect(await share.clipboard(_wallpaper()), ClipboardConfirmation.system);
+  });
+
+  test('an explicit wallpaper is copied, and marked sensitive', () async {
+    // The copy is allowed at every purity; the flag is what tela still controls
+    // once the bytes are on the clipboard, and it keeps the picture out of the
+    // system's own preview. A copy that travelled unmarked would put an
+    // explicit thumbnail on screen for anyone standing nearby.
+    final FakeWallpaperSharer sharer = FakeWallpaperSharer();
+    final ShareWallpaper share = ShareWallpaper(sharer: sharer);
+
+    await share.clipboard(_wallpaper(purity: Purity.nsfw));
+
+    expect(sharer.copiedImages.single.sensitive, isTrue);
+  });
+
+  test('a safe wallpaper is copied unmarked', () async {
+    final FakeWallpaperSharer sharer = FakeWallpaperSharer();
+    final ShareWallpaper share = ShareWallpaper(sharer: sharer);
+
+    await share.clipboard(_wallpaper());
+
+    expect(sharer.copiedImages.single.sensitive, isFalse);
+  });
 
   test(
     'link is allowed for an explicit wallpaper — the page is public',

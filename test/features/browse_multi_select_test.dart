@@ -426,8 +426,16 @@ Future<void> _longPressTile(WidgetTester tester, int index) async {
 }
 
 /// Enters selection mode on the first tile, the way a user does.
+///
+/// Scrolls the sheet first, and has to: this viewport is a 360x800 phone, a
+/// modal sheet is capped at a fraction of that, and *Select wallpapers* is the
+/// last of six rows. Tapping it unscrolled lands on the bottom navigation bar
+/// behind the sheet and quietly switches tabs — which is a missed tap, not a
+/// failure, so the test would go on and fail somewhere unrelated.
 Future<void> _startSelecting(WidgetTester tester) async {
   await _longPressTile(tester, 0);
+  await tester.ensureVisible(find.text('Select wallpapers'));
+  await _settle(tester);
   await tester.tap(find.text('Select wallpapers'));
   await _settle(tester);
 }

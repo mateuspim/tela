@@ -11,7 +11,9 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/blurred_image_backdrop.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
+import 'package:tela/core/ui/shelf_swipe.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/clipboard_confirmation.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
@@ -540,6 +542,95 @@ void main() {
     expect(find.text('Share wallpaper'), findsOneWidget);
     expect(find.text('Link'), findsOneWidget);
     expect(find.text('Image'), findsOneWidget);
+    expect(find.text('Copy image'), findsOneWidget);
+  });
+
+  testWidgets('copying the image routes it to the sharer and says so', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallpaperSharer sharer = FakeWallpaperSharer();
+    final WallpaperDetails details = _details();
+    await _pumpDetail(tester, details, sharer: sharer);
+
+    await tester.tap(find.byTooltip('Share'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Copy image'));
+    await tester.pumpAndSettle();
+
+    expect(sharer.copiedImages, hasLength(1));
+    expect(
+      sharer.copiedImages.single.source,
+      Uri.parse(details.wallpaper.fullImageUrl),
+    );
+    expect(find.text('Image copied.'), findsOneWidget);
+  });
+
+  testWidgets('a copy Android already confirmed is not confirmed twice', (
+    WidgetTester tester,
+  ) async {
+    // From Android 13 the platform shows its own clipboard preview, and a toast
+    // of tela's on top of it is the same news twice.
+    final FakeWallpaperSharer sharer = FakeWallpaperSharer(
+      confirmation: ClipboardConfirmation.system,
+    );
+    await _pumpDetail(tester, _details(), sharer: sharer);
+
+    await tester.tap(find.byTooltip('Share'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Copy image'));
+    await tester.pumpAndSettle();
+
+    expect(sharer.copiedImages, hasLength(1));
+    expect(find.text('Image copied.'), findsNothing);
+  });
+
+  testWidgets('holding the preview copies the wallpaper', (
+    WidgetTester tester,
+  ) async {
+    // The gesture the share sheet's Copy image tile exists beside: the whole
+    // point of it is not opening a sheet at all.
+    final FakeWallpaperSharer sharer = FakeWallpaperSharer();
+    final WallpaperDetails details = _details();
+    await _pumpDetail(tester, details, sharer: sharer);
+
+    await _holdPreview(tester);
+
+    expect(sharer.copiedImages, hasLength(1));
+    expect(
+      sharer.copiedImages.single.source,
+      Uri.parse(details.wallpaper.fullImageUrl),
+    );
+    expect(find.text('Image copied.'), findsOneWidget);
+  });
+
+  testWidgets('holding the fullscreen image copies it too', (
+    WidgetTester tester,
+  ) async {
+    // The surface where the wallpaper is actually being examined, and the one
+    // whose only other route to a copy is closing out of it.
+    final FakeWallpaperSharer sharer = FakeWallpaperSharer();
+    await _pumpDetail(tester, _details(), sharer: sharer);
+
+    await tester.tap(find.byTooltip('View wallpaper full screen'));
+    await tester.pumpAndSettle();
+    await _holdPreview(tester);
+
+    expect(sharer.copiedImages, hasLength(1));
+  });
+
+  testWidgets('holding an explicit wallpaper copies it, marked sensitive', (
+    WidgetTester tester,
+  ) async {
+    // Allowed at every purity since 2026-08-13. The flag is the part that must
+    // not be lost on the way through the screen: it is what keeps an explicit
+    // thumbnail out of Android's clipboard preview.
+    final FakeWallpaperSharer sharer = FakeWallpaperSharer();
+    await _pumpDetail(tester, _details(purity: Purity.nsfw), sharer: sharer);
+
+    await _holdPreview(tester);
+
+    expect(sharer.copiedImages, hasLength(1));
+    expect(sharer.copiedImages.single.sensitive, isTrue);
   });
 
   testWidgets('the share menu withholds the image for an explicit wallpaper', (
@@ -555,6 +646,9 @@ void main() {
 
     expect(find.text('Link'), findsOneWidget);
     expect(find.text('Image'), findsNothing);
+    // The copy is not withheld with it — see `shareOptionsFor` for why the two
+    // parted company.
+    expect(find.text('Copy image'), findsOneWidget);
   });
 
   testWidgets('sharing the link routes the wallpaper to the sharer port', (
@@ -981,6 +1075,19 @@ FakeWallpaperSource _detailsApi(
 Future<void> _tallSurface(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(800, 1600));
   addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
+/// Rests a finger on the image long enough for [ShelfSwipe] to call it a hold.
+///
+/// Targets the viewport's own image frame rather than the screen centre: Detail
+/// is a column, and the centre of it is metadata on a tall layout.
+Future<void> _holdPreview(WidgetTester tester) async {
+  final TestGesture finger = await tester.startGesture(
+    tester.getCenter(find.byKey(GalleryViewport.imageFrameKey).first),
+  );
+  await tester.pump(ShelfSwipe.holdDuration + const Duration(milliseconds: 8));
+  await finger.up();
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pumpDetail(

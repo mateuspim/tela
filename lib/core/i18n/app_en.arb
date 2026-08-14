@@ -768,7 +768,7 @@
 
   "detailShareTitle": "Share wallpaper",
   "@detailShareTitle": {
-    "description": "Heading above the choice of what to share — a link or the image."
+    "description": "Heading above the choice of what to share — a link, the image file, or a clipboard copy."
   },
 
   "detailShareLink": "Link",
@@ -794,6 +794,21 @@
   "detailShareImageDetail": "The picture file itself.",
   "@detailShareImageDetail": {
     "description": "Explains what sharing the image sends."
+  },
+
+  "detailShareClipboard": "Copy image",
+  "@detailShareClipboard": {
+    "description": "Puts the full-resolution image on the clipboard. Labels the share-sheet option and the quick-action row."
+  },
+
+  "detailShareClipboardDetail": "Paste it straight into another app.",
+  "@detailShareClipboardDetail": {
+    "description": "Explains what copying the image to the clipboard is for."
+  },
+
+  "detailShareClipboardDone": "Image copied.",
+  "@detailShareClipboardDone": {
+    "description": "Confirms the image reached the clipboard. Shown only below Android 13, where the system shows no clipboard preview of its own."
   },
 
   "detailShareFailure": "Couldn't share this wallpaper.",

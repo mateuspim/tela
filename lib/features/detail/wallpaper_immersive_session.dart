@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/copy_wallpaper_action.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
@@ -95,11 +96,27 @@ class _WallpaperImmersiveSessionState
       itemCount: gallery.items.length,
       onPrevious: gallery.canSelectPrevious ? gallery.selectPrevious : null,
       onNext: gallery.canSelectNext ? gallery.selectNext : null,
+      onHold: _holdToCopy(wallpaper),
       zoomController: _zoomController,
       systemUi: widget.systemUi,
       onClose: widget.onClose,
       onOpenDetails: widget.onClose,
       barActions: _barActions(l10n, wallpaper),
+    );
+  }
+
+  /// Holding the image copies it — the same gesture Detail's preview carries,
+  /// on the surface where the wallpaper is actually being examined, and at
+  /// every purity (see `shareOptionsFor`). An explicit copy is marked sensitive
+  /// on the way out, which is what keeps its thumbnail out of the system's
+  /// clipboard preview.
+  VoidCallback _holdToCopy(Wallpaper wallpaper) {
+    return () => unawaited(
+      copyWallpaperToClipboard(
+        context: context,
+        ref: ref,
+        wallpaper: wallpaper,
+      ),
     );
   }
 

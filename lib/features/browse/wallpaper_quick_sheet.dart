@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/configured_download.dart';
+import 'package:tela/app/copy_wallpaper_action.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/pinned_download_tier.dart';
 import 'package:tela/app/providers.dart';
@@ -33,9 +34,13 @@ import 'package:tela/features/favorites/favorites_providers.dart';
 ///
 /// Collecting used to cost a full round trip through the detail screen for
 /// every wallpaper, which on a seven-tiles-per-row tablet wall is the slowest
-/// part of it. Sharing is deliberately absent: it is the one action with a
-/// purity rule attached (`shareOptionsFor`), and a menu that has to grow a
-/// condition is the wrong place to offer it — the detail screen still does.
+/// part of it.
+///
+/// The *share menu* is still deliberately absent — it is a second sheet asking
+/// which of three things to send, and a menu that opens a menu is the wrong
+/// shortcut. [copy] is the one piece of it that comes over, because it is a
+/// single act: one row, no follow-up question, and no purity condition of its
+/// own since the clipboard is offered at every purity (`shareOptionsFor`).
 enum WallpaperQuickAction {
   /// Add the wallpaper to favorites, or take it back out.
   favorite,
@@ -45,6 +50,12 @@ enum WallpaperQuickAction {
 
   /// Apply it to a chosen Android surface.
   setWallpaper,
+
+  /// Put the full-resolution image on the clipboard, to paste into another app.
+  ///
+  /// Offered at every purity, unlike the share sheet's image *file* — see
+  /// `shareOptionsFor` for that decision and what it costs.
+  copy,
 
   /// Give up on the shortcut and open the wallpaper properly.
   openDetail,
@@ -111,6 +122,12 @@ Future<void> runWallpaperQuickAction({
       await _download(context, ref, wallpaper);
     case WallpaperQuickAction.setWallpaper:
       await _setWallpaper(context, ref, wallpaper);
+    case WallpaperQuickAction.copy:
+      await copyWallpaperToClipboard(
+        context: context,
+        ref: ref,
+        wallpaper: wallpaper,
+      );
     case WallpaperQuickAction.openDetail:
       openDetail();
     case WallpaperQuickAction.select:
@@ -291,10 +308,10 @@ class _QuickActionSheet extends ConsumerWidget {
     final bool isFavorite =
         ref.watch(isFavoriteProvider(wallpaper.ref)).value ?? false;
     // Scrolls rather than clips. A modal sheet is capped at a fraction of the
-    // screen, and five rows do not fit that cap on a short viewport — a phone
+    // screen, and five rows did not fit that cap on a short viewport — a phone
     // in landscape, or the 800x600 the widget tests run at, where this first
-    // showed up as a 31px overflow. The column still sizes to its content, so
-    // nothing scrolls where everything fits.
+    // showed up as a 31px overflow. Six now, on a safe wallpaper. The column
+    // still sizes to its content, so nothing scrolls where everything fits.
     return SafeArea(
       child: SingleChildScrollView(
         child: Column(
@@ -331,6 +348,15 @@ class _QuickActionSheet extends ConsumerWidget {
               Icons.wallpaper_outlined,
               l10n.detailSetWallpaper,
               WallpaperQuickAction.setWallpaper,
+            ),
+            // Between the wallpaper's own actions and the two that navigate:
+            // copying is something you do *to* the picture, not somewhere you
+            // go.
+            _tile(
+              context,
+              Icons.content_copy_outlined,
+              l10n.detailShareClipboard,
+              WallpaperQuickAction.copy,
             ),
             _tile(
               context,

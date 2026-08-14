@@ -184,16 +184,19 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
     }
 
     /**
-     * Shares a wallpaper out through Android's chooser.
+     * Hands a wallpaper to another app — through Android's chooser, or through
+     * the clipboard.
      *
      * A link resolves on the UI thread — it launches an intent and nothing more.
-     * An image must first be downloaded, so it runs on [shareExecutor] and hops
-     * back to launch the chooser, which Android requires on the UI thread.
+     * Anything carrying pixels must first be downloaded, so it runs on
+     * [shareExecutor] and hops back for the hand-off itself, which Android
+     * requires on the UI thread (see [handOffImage]).
      */
     private fun handleShareCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "shareLink" -> handleShareLink(call, result)
             "shareImage" -> handleShareImage(call, result)
+            "copyImage" -> handleCopyImage(call, result)
             else -> result.notImplemented()
         }
     }
@@ -207,6 +210,36 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
     }
 
     private fun handleShareImage(call: MethodCall, result: MethodChannel.Result) {
+        val sharing = WallpaperSharing(this)
+        handOffImage(call, result, sharing::downloadToShareCache) { file, _ ->
+            sharing.shareImageFile(file)
+        }
+    }
+
+    private fun handleCopyImage(call: MethodCall, result: MethodChannel.Result) {
+        val clipboard = WallpaperClipboard(this)
+        // Absent reads as sensitive, not as ordinary: a copy tela cannot classify
+        // is one whose preview is better left unshown.
+        val sensitive = call.argument<String>("sensitive") != false.toString()
+        handOffImage(call, result, clipboard::downloadToClipboardCache) { file, fileName ->
+            clipboard.copyToClipboard(file, fileName, sensitive)
+        }
+    }
+
+    /**
+     * Fetches the call's image with [download] off the UI thread, then hands it
+     * over with [give] back on it.
+     *
+     * The split is what both pixel hand-offs need and neither may skip: Android
+     * refuses network work on the main thread, and refuses a chooser launch or
+     * a clipboard write anywhere else.
+     */
+    private fun handOffImage(
+        call: MethodCall,
+        result: MethodChannel.Result,
+        download: (String, String) -> File?,
+        give: (File, String) -> Map<String, Any>,
+    ) {
         val source = call.argument<String>("source")
         val fileName = call.argument<String>("fileName")
         if (source == null || fileName == null) {
@@ -214,15 +247,9 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
             return
         }
         shareExecutor.execute {
-            val sharing = WallpaperSharing(this)
-            val file = sharing.downloadToShareCache(source, fileName)
+            val file = download(source, fileName)
             runOnUiThread {
-                val response = if (file == null) {
-                    failure("downloadFailed")
-                } else {
-                    sharing.shareImageFile(file)
-                }
-                result.success(response)
+                result.success(file?.let { give(it, fileName) } ?: failure("downloadFailed"))
             }
         }
     }
