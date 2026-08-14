@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/app/theme.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/ambient_wallpaper_theme.dart';
 import 'package:tela/core/ui/blurred_image_backdrop.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
@@ -44,6 +46,100 @@ import '../fakes/fake_wallpaper_sharer.dart';
 import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
+  testWidgets("paints itself in the wallpaper's own colour", (
+    WidgetTester tester,
+  ) async {
+    await _pumpDetail(tester, _details());
+
+    // The whole scheme travels, not just an accent role: the surface a fixed
+    // accent would have left on Material You's neutrals is the thing that
+    // makes the tint read as the image lighting the page rather than as paint.
+    expect(
+      _detailScheme(tester).primary,
+      TelaTheme.ambient(
+        _untintedScheme(tester),
+        const Color(0xFF660000),
+      ).colorScheme.primary,
+    );
+  });
+
+  testWidgets('carries the tint to the wallpaper stepped to', (
+    WidgetTester tester,
+  ) async {
+    final WallpaperDetails first = _details();
+    final WallpaperDetails second = _otherDetails();
+    final GallerySessionController<Wallpaper> gallery = _twoItemGallery(
+      first,
+      second,
+    );
+    await _pumpDetail(
+      tester,
+      first,
+      gallerySession: gallery,
+      source: _detailsApi(first, second),
+      disableAnimations: true,
+    );
+    final Color opening = _detailScheme(tester).primary;
+
+    await tester.tap(find.byKey(const Key('detail-next')));
+    await tester.pumpAndSettle();
+
+    // The screen already rebuilds on the session's selection; this proves the
+    // tint is one of the things that rebuild carries, so a swipe repaints the
+    // surround instead of stranding it on the wallpaper left behind.
+    expect(_detailScheme(tester).primary, isNot(opening));
+    expect(
+      _detailScheme(tester).primary,
+      TelaTheme.ambient(
+        _untintedScheme(tester),
+        const Color(0xFF0066CC),
+      ).colorScheme.primary,
+    );
+  });
+
+  testWidgets("tints the wide layout's information pane too", (
+    WidgetTester tester,
+  ) async {
+    // The pane paints itself from an explicit `Theme.of` read, which resolves
+    // against this State's *own* context — outside the theme `build` returns.
+    // The Builder is what puts it below instead of beside; delete the Builder
+    // and this pane alone stays on the untinted surface while everything that
+    // resolves its own theme moves, which reads as a rendering bug.
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpDetail(tester, _details());
+
+    final ColoredBox pane = tester.widget<ColoredBox>(
+      find
+          .descendant(
+            of: find.byKey(const Key('detail-information-pane')),
+            matching: find.byType(ColoredBox),
+          )
+          .first,
+    );
+    expect(pane.color, _detailScheme(tester).surfaceContainerLow);
+    expect(pane.color, isNot(_untintedScheme(tester).surfaceContainerLow));
+  });
+
+  testWidgets('stays on the ordinary theme for a greyscale wallpaper', (
+    WidgetTester tester,
+  ) async {
+    // Also every Konachan wallpaper, by the same path: its mapper reports no
+    // colours at all. The tint is absent there, never grey.
+    await _pumpDetail(
+      tester,
+      _details(colors: const <String>['#000000', '#ffffff']),
+    );
+
+    // Asserted as "inside equals outside" rather than "no AnimatedTheme
+    // below": Material scatters its own 200ms ones through buttons and cards,
+    // so counting them measures the framework, not this widget.
+    expect(_detailScheme(tester), same(_untintedScheme(tester)));
+  });
+
   testWidgets(
     'uses an uncropped thumbnail in the same frame as the full image',
     (WidgetTester tester) async {
@@ -1183,6 +1279,7 @@ Future<void> _pumpDetail(
 WallpaperDetails _details({
   Purity purity = Purity.sfw,
   SourceId sourceId = SourceId.wallhaven,
+  List<String> colors = const <String>['#660000'],
 }) {
   final bool konachan = sourceId == SourceId.konachan;
   final String id = konachan ? '406484' : 'e7jvjd';
@@ -1210,7 +1307,7 @@ WallpaperDetails _details({
     fileSizeBytes: 1048576,
     purity: purity,
     category: Category.general,
-    colors: const <String>['#660000'],
+    colors: colors,
   );
   return WallpaperDetails(
     wallpaper: wallpaper,
@@ -1261,3 +1358,23 @@ WallpaperDetails _otherDetails() {
     favorites: 3,
   );
 }
+
+/// The scheme the Detail screen actually renders under — the ambient one, which
+/// therefore exists only *below* the wrapper and never at the level the screen
+/// was pumped at. `MaterialApp` builds an `AnimatedTheme` of its own, so the
+/// finder says whose.
+ColorScheme _detailScheme(WidgetTester tester) => Theme.of(
+  tester.element(
+    find
+        .descendant(
+          of: find.byType(AmbientWallpaperTheme),
+          matching: find.byType(Scaffold),
+        )
+        .first,
+  ),
+).colorScheme;
+
+/// The theme the screen would have worn with no wallpaper to tint it — read
+/// from just *above* the wrapper, which is the only place it survives.
+ColorScheme _untintedScheme(WidgetTester tester) =>
+    Theme.of(tester.element(find.byType(AmbientWallpaperTheme))).colorScheme;

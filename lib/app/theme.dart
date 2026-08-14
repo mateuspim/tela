@@ -67,10 +67,66 @@ abstract final class TelaTheme {
     final ColorScheme scheme = accent == null
         ? base
         : _withAccent(base, accent, brightness);
+    return _componentsOn(scheme);
+  }
+
+  /// The theme one wallpaper paints its own screen with, grown from [seed].
+  ///
+  /// Unlike [_withAccent], which splices the brand roles and leaves Material
+  /// You's neutrals alone, this rebuilds the *whole* scheme: on a screen whose
+  /// subject is a single photograph the surfaces are meant to move too, which
+  /// is what makes the tint read as the image lighting the page rather than as
+  /// a recoloured button. Everywhere else the quiet-chrome rule still holds —
+  /// see the class docstring, and `AmbientWallpaperTheme` for the one caller.
+  ///
+  /// The user's fixed accent is deliberately *not* preserved here. That accent
+  /// answers "which colour is tela's", and this screen is answering a different
+  /// question. Identity is untouched either way: `TelaMark` draws in
+  /// [brandSeed] and never in `ColorScheme.primary`.
+  ///
+  /// **[base]'s error roles are held back, and that is load-bearing.** They are
+  /// semantic, not decorative: `purityAlertTint` paints the download
+  /// affordance in `ColorScheme.error` to say *this wallpaper is not safe*, and
+  /// its docstring already claims error is "the one warm role that cannot be
+  /// repainted into the very accent it is warning against". A scheme grown
+  /// wholly from the seed breaks that claim — a dark-red wallpaper reshades its
+  /// own warning, and at worst tints it to match the surface it sits on. Caught
+  /// by *the download button warns before a not-safe wallpaper lands*, which
+  /// goes red the moment these four are dropped.
+  ///
+  /// Built through the same [_componentsOn] as every other theme, so a card
+  /// radius or a nav height added there cannot go missing on a tinted screen.
+  ///
+  /// ```dart
+  /// TelaTheme.ambient(Theme.of(context).colorScheme, const Color(0xFF660000));
+  /// ```
+  static ThemeData ambient(ColorScheme base, Color seed) {
+    final ColorScheme tinted = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: base.brightness,
+    );
+    return _componentsOn(
+      tinted.copyWith(
+        error: base.error,
+        onError: base.onError,
+        errorContainer: base.errorContainer,
+        onErrorContainer: base.onErrorContainer,
+      ),
+    );
+  }
+
+  /// Dresses [scheme] in tela's component theming.
+  ///
+  /// The single place components are styled. Both entry points — the app's own
+  /// theme and [ambient] — come through here, because the failure mode of two
+  /// builders is a screen whose scheme moved while its scaffold background,
+  /// card colour and app bar stayed behind, which reads as a rendering bug
+  /// rather than as a theme.
+  static ThemeData _componentsOn(ColorScheme scheme) {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      textTheme: _brandText(brightness),
+      textTheme: _brandText(scheme.brightness),
       scaffoldBackgroundColor: scheme.surface,
       dividerTheme: DividerThemeData(
         color: scheme.outlineVariant.withValues(alpha: .55),

@@ -2,8 +2,15 @@
 
 Updated: 2026-08-14
 
-> **START HERE — the clipboard work is merged, and the next pass is scoped but
-> not built** (2026-08-14). `feat/clipboard-copy` landed as `6ee597e` with both
+> **START HERE — pass L has begun: L1a is built and wants an owner's eye**
+> (2026-08-14). Detail paints itself in the wallpaper's own colour and the tint
+> travels with the pager. Dart **1337** (from 1317), analyze and format clean.
+> The tests caught it repainting the **purity warning** on the way — read L1a's
+> block before touching `TelaTheme.ambient`. L2, L3, L4 and L1b are scoped and
+> not built.
+>
+> **The older START HERE — the clipboard work is merged, and the pass was scoped
+> but not built** (2026-08-14). `feat/clipboard-copy` landed as `6ee597e` with both
 > suites run fresh by the merge gate; the tree is clean. The owner then asked
 > for **"a UI/UX overhaul to make this app simply stunning"** and chose all four
 > threads of **pass L — the ambient overhaul** (L1 ambient colour, L2 motion as
@@ -514,6 +521,72 @@ the browse grid has misread this pass.
 Four threads, ordered by cost, each independently shippable. Take them one at a
 time. Every one of them is *observable* — none can be called done on a green
 suite alone, so `make deploy` and a screenshot pass belongs in each.
+
+### L1a — ambient colour on Detail — **BUILT 2026-08-14**; owner's eye owed
+
+Detail now paints itself in the wallpaper's own colour, and the tint travels
+with the pager. Dart **1337** (from 1317), analyze and format clean, Kotlin
+untouched. Files: `domain/models/ambient_seed.dart`,
+`core/ui/ambient_wallpaper_theme.dart`, `TelaTheme.ambient` in `app/theme.dart`,
+wired in `wallpaper_detail_screen.dart`.
+
+**Scoped to Detail; the immersive viewer is deliberately not in it.** That
+viewer's canvas is a hardcoded `Colors.black` and its chrome is `Colors.black45`
+scrims — nothing there reads the scheme, so tinting it means editing
+`ImmersiveGalleryControls`, which the private library and the download viewer
+share. That is its own slice with its own device pass, not a free rider on this
+one.
+
+**A defect the tests caught, and it is the one worth not re-deriving: the tint
+was repainting the purity warning.** `purityAlertTint` paints the download
+affordance in `ColorScheme.error` to say *this wallpaper is not safe*, and its
+docstring already claimed error is "the one warm role that cannot be repainted
+into the very accent it is warning against" — a claim the *accent* splice
+honours by construction. A scheme grown wholly from the wallpaper's seed breaks
+it: a dark-red wallpaper reshades its own warning, and at worst tints it to
+match the surface it is sitting on. `TelaTheme.ambient` now holds `error`,
+`onError`, `errorContainer` and `onErrorContainer` back from `base`. It was
+found by an *existing* test going red — *the download button warns before a
+not-safe wallpaper lands* — not by inspection, which is why that test is named
+in the `ambient` docstring.
+
+**The structural half: the tint needs a `Builder`, and only one test proves it.**
+`AmbientWallpaperTheme` is returned *by* the screen's `build`, so anything the
+screen reads off its own `State.context` resolves against the theme sitting
+**beside** the tint rather than under it. Widgets deep enough to resolve their
+own theme move anyway, which is what makes this so easy to miss — the compact
+layout looks perfect. The wide layout's information pane does not: it paints
+from an explicit `Theme.of(context)` read, so it alone stays on the untinted
+surface. Mutation-checked: deleting the `Builder` fails *tints the wide layout's
+information pane too* and **nothing else in the file**.
+
+**Two things that make the tint absent rather than wrong.** A wallpaper whose
+every colour is achromatic renders under the ordinary theme, and so does every
+Konachan wallpaper, by the same path — its mapper reports no colours at all. The
+neutral rule *computes* chroma rather than naming the palette's four greys, so a
+30th grey is refused by the rule that already exists. Both mutation-checked.
+
+**Two decisions worth not re-litigating.** The whole scheme moves, not just the
+brand roles: splicing the way a fixed accent does would leave the scaffold,
+cards and app bar on Material You's neutrals — a recoloured button on a grey
+page, which is not what "the wallpaper lights the screen" means. And the user's
+fixed accent is **not** preserved on this screen; identity is untouched either
+way, because `TelaMark` draws in `brandSeed` and never in `ColorScheme.primary`.
+Both themes are built through one `_componentsOn`, so a component styled later
+cannot go missing on the tinted screen.
+
+**Owed on the device, and it is the whole point of the slice** — nobody has
+looked at this. What to judge: whether 450ms (`AmbientWallpaperTheme.transition`)
+is right for a swipe between two strongly different wallpapers; whether the tint
+reads as ambience or as a coloured app; whether the pane and C2's blurred
+backdrop now agree *too* well and the fitted preview loses its boundary (the
+hairline is drawn, but this is the melt case again and only an eye settles it);
+and whether overriding a user's fixed accent here is acceptable or wants a
+setting.
+
+**Still not built:** L1b, dominant-colour extraction from the thumbnail decode
+for Konachan, and the viewer. Decide L1b on the device — the Konachan wall may
+not look wrong enough to pay for it.
 
 ### L1 — ambient colour: the wallpaper paints its own screen
 
