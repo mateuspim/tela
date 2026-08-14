@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/ui/justified_rows.dart';
 import 'package:tela/core/ui/tile_density_scope.dart';
+import 'package:tela/core/ui/tile_entrance.dart';
 import 'package:tela/core/ui/wallpaper_grid_columns.dart';
 import 'package:tela/domain/models/tile_density.dart';
 
@@ -33,7 +34,7 @@ typedef JustifiedTileBuilder =
 ///   itemBuilder: (_, int i, double w, double h) => WallpaperTile(...),
 /// )
 /// ```
-class JustifiedWallpaperGrid extends StatelessWidget {
+class JustifiedWallpaperGrid extends StatefulWidget {
   /// Creates a justified shelf of [itemCount] wallpapers.
   const JustifiedWallpaperGrid({
     required this.itemCount,
@@ -61,6 +62,30 @@ class JustifiedWallpaperGrid extends StatelessWidget {
   /// over it.
   final Widget? footer;
 
+  /// The gap between one tile's arrival and the next along a row.
+  static const Duration entranceStagger = Duration(milliseconds: 45);
+
+  /// How many tiles a cascade may stagger before they all arrive together.
+  ///
+  /// A nine-up row at *Small* would otherwise keep its last tile waiting most
+  /// of half a second, which stops reading as one row assembling and starts
+  /// reading as a slow shelf.
+  static const int maxStaggered = 6;
+
+  @override
+  State<JustifiedWallpaperGrid> createState() => _JustifiedWallpaperGridState();
+}
+
+class _JustifiedWallpaperGridState extends State<JustifiedWallpaperGrid> {
+  /// Wallpapers this shelf has already drawn once.
+  ///
+  /// Lives here because the State is the only thing that outlives the rows: a
+  /// `ListView` recycles them, so a tile scrolled off and back would otherwise
+  /// arrive as if it were new and the wall would flicker under a scroll. Kept
+  /// by list index, which is stable for an append-only paged shelf — the same
+  /// property `justifiedRows` already relies on to be safe to append to.
+  final Set<int> _seen = <int>{};
+
   @override
   Widget build(BuildContext context) {
     final EdgeInsets padding = wallpaperGridPadding(context);
@@ -84,7 +109,10 @@ class JustifiedWallpaperGrid extends StatelessWidget {
   ) {
     final TileDensity density = TileDensityScope.of(context);
     final List<JustifiedRow> rows = justifiedRows(
-      aspectRatios: List<double>.generate(itemCount, aspectRatioOf),
+      aspectRatios: List<double>.generate(
+        widget.itemCount,
+        widget.aspectRatioOf,
+      ),
       availableWidth: width,
       targetRowHeight: wallpaperRowHeight(width, density),
       spacing: wallpaperGridSpacing,
@@ -95,9 +123,9 @@ class JustifiedWallpaperGrid extends StatelessWidget {
       // fall through to the packer's own ceiling rather than invent one.
       soleRowMaxHeight: height.isFinite ? soleWallpaperRowHeight(height) : null,
     );
-    final Widget? trailing = footer;
+    final Widget? trailing = widget.footer;
     return ListView.builder(
-      controller: controller,
+      controller: widget.controller,
       padding: padding,
       itemCount: rows.length + (trailing == null ? 0 : 1),
       itemBuilder: (BuildContext context, int index) {
@@ -121,10 +149,27 @@ class JustifiedWallpaperGrid extends StatelessWidget {
   }
 
   Widget _tile(BuildContext context, JustifiedTile tile, int position) {
+    // Recorded while building, which is deliberate: this is a cache of what has
+    // been drawn, not state anything rebuilds on, and the answer is needed by
+    // the very widget being built. Reduce-motion collapses it to "seen", so a
+    // device that wants no motion also pays nothing to track it.
+    final bool fresh =
+        !MediaQuery.disableAnimationsOf(context) && _seen.add(tile.index);
     final Widget built = SizedBox(
       width: tile.width,
       height: tile.height,
-      child: itemBuilder(context, tile.index, tile.width, tile.height),
+      child: TileEntrance(
+        animate: fresh,
+        delay:
+            JustifiedWallpaperGrid.entranceStagger *
+            (position.clamp(0, JustifiedWallpaperGrid.maxStaggered)),
+        child: widget.itemBuilder(
+          context,
+          tile.index,
+          tile.width,
+          tile.height,
+        ),
+      ),
     );
     if (position == 0) return built;
     return Padding(
