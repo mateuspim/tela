@@ -198,8 +198,8 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
   </div>
 
   <div>
-    <p class="eyebrow">Pass L &middot; 14 August 2026 &middot; L1a + L2a shipped &middot; one decision open</p>
-    <h1>The chrome has been quiet for <span class="amb">five passes</span>.</h1>
+    <p class="eyebrow">Pass L &middot; 14 August 2026 &middot; all four threads shipped &middot; two decisions open</p>
+    <h1>The chrome was quiet for <span class="amb">five passes</span>.</h1>
   </div>
 
   <p class="standfirst">Five UI passes executed one doctrine, and executed it well. That is exactly why the app reads as tasteful rather than stunning. This is where the doctrine gets deliberately broken &mdash; and where it doesn&rsquo;t.</p>
@@ -407,10 +407,24 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
     <div class="thread-title"><h2>Detail as an editorial page, not a spec sheet</h2></div>
   </div>
   <div class="meta">
-    <span class="chip">Cost <b>Highest</b></span>
-    <span class="chip">Payoff <b>Highest</b></span>
-    <span class="chip">Wants <b>Its own branch</b></span>
-    <span class="chip">Build <b>Last</b></span>
+    <span class="chip built">Built <b>Phone only</b></span>
+    <span class="chip">Tablet <b>Keeps its two panes</b></span>
+    <span class="chip built">Device <b>Passed, one defect fixed</b></span>
+  </div>
+
+  <div class="finds">
+    <div class="find">
+      <span class="tick v">Decided</span>
+      <div><p><strong>The tablet did not get it, and that was the whole call.</strong> Full-bleed with a sheet over it is a phone pattern because a phone has nowhere to put anything beside a wallpaper. The tablet has 440dp of pane free, so a sheet would cover the thing it describes. The wide layout keeps its two panes and got a typographic pass instead &mdash; the fact grid stopped being eight boxed rows and became plates: tracked labels over values in the display face, on hairlines.</p></div>
+    </div>
+    <div class="find">
+      <span class="tick v">Fixed</span>
+      <div><p><strong>The apply button was drawn under the system bar</strong>, label and icon cut clean off. Its own <code>SafeArea</code> reports nothing under a Scaffold with <code>extendBodyBehindAppBar</code>. Two wrong diagnoses first &mdash; it was not the absolute positioning, and not Samsung&rsquo;s taskbar &mdash; both settled by deploying the previous build and looking. Fixed from <code>viewPadding</code>, verified on the device.</p></div>
+    </div>
+    <div class="find">
+      <span class="tick v">Fixed</span>
+      <div><p><strong>The preview&rsquo;s fullscreen button landed under the app bar&rsquo;s actions.</strong> Eight existing tests caught it before a device could: a tap on fullscreen would have opened the share sheet.</p></div>
+    </div>
   </div>
 
   <p>C3 made the eight scalar facts speak one visual language, which fixed coherence and left the panel reading like a form. The stunning version is different in kind: <strong>full-bleed image behind everything</strong>, metadata riding a draggable sheet that rises over it, apply as a persistent action on the glass.</p>
@@ -430,10 +444,24 @@ footer{border-top:1px solid var(--hair);padding:2.4rem 0 0;color:var(--muted);fo
     <div class="thread-title"><h2>A front page for Browse</h2></div>
   </div>
   <div class="meta">
-    <span class="chip">Cost <b>High</b></span>
-    <span class="chip">Payoff <b>Debatable</b></span>
-    <span class="chip">Touches <b>Every shelf</b></span>
-    <span class="chip">Revert risk <b>Real</b></span>
+    <span class="chip built">Built <b>&amp; device-checked</b></span>
+    <span class="chip">Sliver conversion <b>Not needed</b></span>
+    <span class="chip open">Band sharpness <b>Needs a call</b></span>
+  </div>
+
+  <div class="finds">
+    <div class="find">
+      <span class="tick v">Corrected</span>
+      <div><p><strong>It did not cost a sliver conversion.</strong> I said it would; that was wrong. A header that <em>scrolls with the wall</em> is item 0 of the existing list &mdash; only a pinned or collapsing one forces slivers. All five shelves kept the list they had.</p></div>
+    </div>
+    <div class="find">
+      <span class="tick v">Rebuilt</span>
+      <div><p><strong>The band is a <code>WallpaperTile</code>, and thirty failing tests forced that.</strong> The first cut was bespoke and broke every browse test that indexes the wall by tile. That was not test debt: a bespoke band re-implements the marks, the badge, the selection tick and the ink, then becomes an exception the user must learn. Composing the tile inherits all of it and changed <em>no</em> existing test. Thirty failures to zero by deleting code.</p></div>
+    </div>
+    <div class="find">
+      <span class="tick p">Your call</span>
+      <div><p><strong>The band is visibly soft on a tablet</strong> &mdash; arithmetic, not a guess: it draws the same thumbnail the tiles use, so they downscale it while the band upscales it across 2560px. Accept it (a masthead is judged by opening it), fetch the full image for one wallpaper per listing (several MB for decoration), or stop running it full-bleed on a wide screen (which fights what it is for).</p></div>
+    </div>
   </div>
 
   <p>Browse opens on a search field, seven sorting tabs and a grid: a <em>tool</em>, not a destination. A featured full-bleed hero above the wall, plus the tag shelves the library already knows how to draw, gives the app a front door.</p>
