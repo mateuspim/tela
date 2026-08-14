@@ -12,13 +12,15 @@ Updated: 2026-08-14
 > what a screenshot cannot hold: the 450ms transition, the phone layout, and
 > C2's melt case.
 >
-> **L2a is also built** — the wall assembles rather than appearing, and a real
-> defect went with it: a tile's ink splash was painted *under* an opaque image,
-> so pressing a wallpaper gave no feedback at all, on every shelf, always. Dart
-> **1348**. **L2b (tile parallax) is blocked** — it cannot be built without
-> contradicting the justified-rows "nothing cropped" law, and needs an owner's
-> decision between three named options. L2's device pass is **blocked on a
-> locked tablet**. L3, L4 and L1b are scoped and not built.
+> **L2a is also built and device-checked** — the wall assembles rather than
+> appearing, and a real defect went with it: a tile's ink splash was painted
+> *under* an opaque image, so pressing a wallpaper gave no feedback at all, on
+> every shelf, always. The splash is now measured on the tablet (108k pixels,
+> mean 96 → 129); the entrance animation is **not observable through
+> `screencap`** and still wants a human eye. Dart **1348**. **L2b (tile
+> parallax) is blocked** — it cannot be built without contradicting the
+> justified-rows "nothing cropped" law, and needs an owner's decision between
+> three named options. L3, L4 and L1b are scoped and not built.
 >
 > **The older START HERE — the clipboard work is merged, and the pass was scoped
 > but not built** (2026-08-14). `feat/clipboard-copy` landed as `6ee597e` with both
@@ -690,7 +692,7 @@ construction — which risks the pane becoming *one* colour with no separation.
 `wallpaperTileEdge` at `radius: 0` is already drawn over the contained frame for
 the melt case (see C2's device pass); watch whether it is still enough.
 
-### L2a — the wall assembles, and a tap can be seen — **BUILT 2026-08-14**; device pass blocked
+### L2a — the wall assembles, and a tap can be seen — **BUILT 2026-08-14**; splash device-verified
 
 Two pieces, both law-safe. Dart **1348** (from 1337), analyze and format clean,
 Kotlin untouched. Files: `core/ui/tile_entrance.dart`, wired in
@@ -757,18 +759,40 @@ transition the user cannot currently tell apart. Overscroll on Android is
 already the platform stretch; replacing it with a bounce would make tela the one
 app on the device that scrolls wrong.
 
-#### Device pass — BLOCKED on a locked tablet (2026-08-14)
+#### L2a's device pass (2026-08-14, SM-X730) — the splash is confirmed; the entrance is not observable
 
-The release build is installed and running (`make deploy` succeeded), but the
-tablet re-locked and its keyguard is **secure**: `isKeyguardShowing=true` with no
-`topResumedActivity`, and `screencap` returns the ~20KB black frame this file
-already documents. A swipe and `KEYCODE_MENU` do not dismiss it. **Ask the owner
-to unlock the device**; nothing else in this session can.
+Run after the owner unlocked the tablet. Logcat clean, no crashes.
 
-What to judge once it is unlocked, none of which a screenshot holds: the 45ms
-stagger and 260ms arrival on a real scroll, whether the cascade still reads at
-*Small* density where a row holds nine, and — the cheap one — that pressing a
-tile now visibly splashes.
+**The splash is real, and it is measured.** Holding a finger on a tile and
+capturing on-device: **108,107 pixels differ** from the unpressed frame, and the
+tile's mean brightness lifts **96.4 → 129.4**. By eye it is a soft, even
+highlight across the pressed tile with its neighbour untouched — a proper
+Material press over photography, not a harsh block. So the ink genuinely was
+invisible before, and genuinely is not now.
+
+**A timing note that cost two attempts, worth not re-deriving.** The first
+capture showed *zero* differing pixels: `screencap` fired between the pointer
+going down and the splash's first frame. Insert `sleep 0.25` on the device
+between them and it appears. But 0.25s **plus** screencap's own ~200ms tips past
+Flutter's 500ms long-press threshold, so the quick sheet opens on the way out and
+eats whatever gesture comes next — which is what silently swallowed the next two
+scroll attempts. Dismiss it before continuing.
+
+**Three regression checks, all clean.** The long-press quick sheet still opens
+with all six rows (so moving the `InkWell` cost the tile neither gesture); the
+next-page spinner still appears on scrolling to the end (so `_maybeFetchNext`
+still hears its notifications); and the wall renders normally throughout.
+
+**The entrance itself could not be observed, and that is a tooling limit rather
+than a finding.** `screencap` takes roughly 300ms per frame, which is coarser
+than the 260ms arrival it would have to resolve. A twelve-frame burst across a
+cold launch shows the wall brightening 85 → 107 → steady, but frame 3 is the
+*empty* wall still waiting on page 1, so that step is the page arriving and not
+the fade. **Do not read that burst as evidence either way.** The animation is
+pinned precisely by the four unit tests; what the device can say is only that
+nothing regressed around it. **A human eye on a real scroll is still owed** —
+particularly at *Small* density, where a row holds nine tiles and the cascade is
+capped at six.
 
 ### L2 — motion as a system
 
