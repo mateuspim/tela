@@ -2,14 +2,28 @@
 
 Updated: 2026-08-15
 
-> **NEXT SESSION STARTS HERE — Detail is one layout, built and owed a device
-> pass; the immersive viewer is still unscoped and needs the owner's words.**
-> M's first half is built on `feat/detail-one-layout` (2026-08-15): Dart **1393**
-> (from 1394 — one test deleted, two rewritten), analyze and format clean, the
-> Kotlin suite untouched. **Two things are owed**: the tablet has not seen it —
-> the two things to look at are listed under *M* below — and the second
-> complaint in the owner's sentence, the **immersive viewer**, has never been
-> stated. **Ask what is wrong with it before building anything there.**
+> **NEXT SESSION STARTS HERE — Detail is one layout, it is full-bleed, and it
+> has been driven on the tablet. The branch is unmerged; the immersive viewer is
+> still unscoped.** `feat/detail-one-layout`, three commits (2026-08-15): Dart
+> **1393**, Kotlin **136** untouched, analyze and format clean, and both of the
+> scope's open device questions are answered under *M* — **neither needed a
+> change, and one of them was a non-problem the scope had mis-described.**
+>
+> **The device did find something, and it was the owner who named it:** *"make
+> the fullscreen so that i can see the full background not hide with the
+> details"*. The wallpaper was fitted to the screen *minus the apply button*, so
+> a 1205x753dp screen showed it with letterbox bands down both sides. Fixed in
+> `816413c` — the preview is `Positioned.fill` behind everything and the sheet
+> and button ride over it. See *M*, which also records the two things that were
+> deliberately not done with it.
+>
+> **What is left:** merge the branch, and the second complaint in the owner's
+> original sentence — the **immersive viewer**. They have named three things
+> about it (its black canvas and chrome, its controls getting in the way, and
+> getting in and out of it) but not which of them is the actual objection.
+> **Ask before building anything there**, and note the "full background"
+> complaint above turned out to be Detail, not the viewer — so do not assume
+> these three are one problem either.
 >
 > **One instruction in M's scope was wrong and was measured rather than
 > followed.** It said to keep the `Builder` in `build` because `showDialog` in
@@ -742,16 +756,62 @@ All in `test/features/wallpaper_detail_screen_test.dart`:
 No wide-layout test needed `_tallSurface`/`_reveal` after all — the two that
 survive assert on what is mounted, not on what is reachable by finger.
 
-### Two things to watch on the device — **still owed, this is the merge blocker**
+### Two things to watch on the device — **both answered 2026-08-15, SM-X730 landscape**
 
-1. **The sheet is 1205dp wide in landscape.** A fact row stretched across that is
-   one very long line, and the owner explicitly declined a capped column when
-   offered — so ship it as-is, look at it, and only then decide. If it does read
-   badly, the fix is a `ConstrainedBox` in `DetailEditorialBody._sheet`, not a
-   return of the pane.
-2. **The bump's arithmetic is in fractions of the preview's height**, so it needs
-   no change for a landscape screen — but the preview is much shorter there, so
-   the lift is a smaller number of pixels. Judge whether it still reads.
+1. ~~**The sheet is 1205dp wide in landscape.**~~ **A non-problem, and the
+   scope was wrong about why.** It feared "one very long line" — but
+   `wallpaper_metadata.dart` has laid the eight scalar facts out as a `Wrap` of
+   half-width plates since C3, so at 1205dp they come out **two columns of about
+   600dp**, not one line of 1205. **No `ConstrainedBox`, and the owner's refusal
+   of a capped column never had to be re-litigated.** What it does read as is
+   *airy* — the hairline rule runs the full 600dp with the value hugging its left
+   end. Nobody has objected; leave it until somebody does.
+2. ~~**The bump's arithmetic in a short landscape preview.**~~ **It reads.**
+   Compared at the peek against the 42% snap on the same wallpaper: the picture
+   visibly climbs — Optimus Prime's head is whole at the peek and cut by the top
+   edge at 42%. Nothing was re-tuned.
+
+**And the device found the thing neither of them was looking for**, which is the
+slice below.
+
+### The wallpaper did not actually reach every edge — `816413c`
+
+**The owner, watching the build:** *"make the fullscreen so that i can see the
+full background not hide with the details"*. Asked which screen, they chose
+Detail over the ⛶ viewer.
+
+**What was wrong.** The body was a `Column`: preview in the top cell, apply
+button in the bottom one. So the picture was fitted — it is `BoxFit.contain` —
+to the screen *minus the button*, at every sheet size. On 1205x753dp that cost
+it enough height to open **letterbox bands down both sides**, which is what the
+owner was looking at when they said it. The preview is `Positioned.fill` behind
+everything now; the `Column` holds only the sheet and the button, which ride
+over it. Device-confirmed on the same wallpaper: the bands are gone and the
+picture runs under the button to the bottom edge.
+
+**Two things deliberately *not* done, both because they would cost something
+already paid for:**
+- The button did **not** become a `Positioned`. Inside one its `SafeArea` has
+  nothing to inset against and it is drawn half under the system bar with its
+  label clipped clean off — L3's device pass found exactly that. The `Column` is
+  what keeps `_footed` working.
+- No fraction was re-tuned. Because the sheet is still laid out by that same
+  `Column`, its three sizes remain fractions of *the space above the button* and
+  mean precisely what they meant before. Only the layer behind them moved.
+
+The one arithmetic that did shift is the bump: `_lift` is a fraction of the
+preview, which is the whole body now, so the lift is a hair more than half the
+sheet's travel — the button's height halved. Left alone on purpose and said so
+in the docstring; that is not a difference an eye can find, and the number was
+set by eye.
+
+### Where this leaves the branch
+
+`feat/detail-one-layout`, three commits, **unmerged**. Dart **1393**, Kotlin
+**136**, analyze and format clean, and the layout has now been driven on the
+tablet in landscape. Nothing below is known to be outstanding — merge it through
+the gate (`merge.ff false`, so the hook runs) unless the owner wants another
+look first.
 
 ### The immersive viewer — the second complaint, unscoped
 
