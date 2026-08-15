@@ -2,12 +2,13 @@
 
 Updated: 2026-08-15
 
-> **NEXT SESSION STARTS HERE — Detail is one layout, it is full-bleed, and it
-> has been driven on the tablet. The branch is unmerged; the immersive viewer is
-> still unscoped.** `feat/detail-one-layout`, seven commits (2026-08-15): Dart
-> **1396**, Kotlin **136** untouched, analyze and format clean, and both of the
-> scope's open device questions are answered under *M* — **neither needed a
-> change, and one of them was a non-problem the scope had mis-described.**
+> **NEXT SESSION STARTS HERE — Detail is one layout, it is full-bleed, its sheet
+> is glass, and all of it is merged. The immersive viewer is the only thing left
+> open, and it is still unscoped.** `feat/detail-one-layout` **merged as `6fc02c1`**
+> (2026-08-15), seven commits, through the gate: Dart **1396**, Kotlin **136**
+> untouched, analyze and format clean. Both of the scope's open device questions
+> are answered under *M* — **neither needed a change, and one of them was a
+> non-problem the scope had mis-described.**
 >
 > **The device found two things, and the owner named both while watching.**
 > *"make the fullscreen so that i can see the full background not hide with the
@@ -16,17 +17,16 @@ Updated: 2026-08-15
 > (`816413c`: the preview is `Positioned.fill` behind everything, the sheet and
 > button ride over it). Then *"the details when minimized its clipping"* — the
 > peek was a *fraction*, which cannot know where the heading ends, so it sliced
-> the first fact row in half (`2dceb71`: it is a 68dp height now, spelled as a
-> sum, with the term it cannot compute pinned by a test in
-> `wallpaper_metadata_test`). Then the sheet itself was reworked from the same
+> the first fact row in half (`2dceb71`: a height, spelled as a sum — and then
+> superseded an hour later, when the heading it summed was dropped). Then the sheet itself was reworked from the same
 > chair (`c98874b`): it is **glass until you pull it**, solid by the stop it
 > snaps to, glued to the apply button, and the "Details" heading is gone. All
 > written up under *M* — **including two traps that cost real time**: a lazy
 > `ListView` builds nothing behind a 20dp peek (and `cacheExtent` does not fix
 > it), and a test drag aimed below that peek moves nothing at all.
 >
-> **What is left:** merge the branch, and the second complaint in the owner's
-> original sentence — the **immersive viewer**. They have named three things
+> **What is left is one thing:** the second complaint in the owner's original
+> sentence — the **immersive viewer**. They have named three things
 > about it (its black canvas and chrome, its controls getting in the way, and
 > getting in and out of it) but not which of them is the actual objection.
 > **Ask before building anything there**, and note the "full background"
@@ -685,14 +685,14 @@ Updated: 2026-08-15
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
-## M — Detail is one layout, scoped 2026-08-14; **BUILT 2026-08-15** on `feat/detail-one-layout`
+## M — Detail is one layout, scoped 2026-08-14; **BUILT AND MERGED 2026-08-15** (`6fc02c1`)
 
 The owner's call after living with the L2b build on the tablet: Detail uses the
 **editorial layout at every width**, and the two-pane wide layout is retired.
 The immersive viewer is a **separate** complaint from the same sentence, is
 **still unscoped**, and has its own heading at the end of this section.
 
-**What shipped** (`b29e6ff`, one commit, not yet merged): Dart **1393** (from
+**What shipped** (`b29e6ff`, the first of the branch's seven commits): Dart **1393** (from
 1394), analyze and format clean, Kotlin untouched — nothing under `android/`
 moved. Everything in the table below is gone, `DetailActionBar.expanded` with
 it, and the three tests became what the next-but-one subsection says they
@@ -827,15 +827,21 @@ spells it as the sum it is: grip 20 + metadata padding 8 + "Details" at
 `LayoutBuilder` measures — the body minus the apply button, which no `MediaQuery`
 above the body knows.
 
-**The part worth not re-deriving.** That sum has a term this file cannot compute,
-so it is pinned where it lives: `wallpaper_metadata_test` asserts the first fact
-tile sits `peekSheetHeight - sheetGripHeight` below the widget's top.
-Mutation-checked — 68 to 80 turns it red. **Restyle the "Details" heading and a
-test fails instead of the peek quietly starting to clip again.**
+**The part worth not re-deriving.** That sum had a term this file could not
+compute, so it was pinned where it lived: `wallpaper_metadata_test` asserted the
+first fact tile sat `peekSheetHeight - sheetGripHeight` below the widget's top,
+mutation-checked at 68 against 80.
 
-`_sheetDragged` also stopped reading the constant: it takes the notification's
-own `minExtent`, so the drift and the bump never have to know how the floor was
-computed. Same values, one less pair to keep in step.
+**Both the sum and the pin are gone one commit later** — see the next section:
+the "Details" heading was dropped, so the peek is the handle alone and there is
+nothing left to sum. **The unit is the part that survived, and it is the lesson**:
+a fraction cannot land on a seam, because it does not know where the content's
+seams are. Whatever the peek is made of, it is a height.
+
+`_sheetDragged` also stopped reading the constant here, and that did survive: it
+takes the notification's own `minExtent`, so the drift and the bump never have to
+know how the floor is computed — which is why the next commit could change the
+floor entirely without touching either of them.
 
 Device-confirmed on the tablet: the peek shows the grip and "Details" and cuts
 on the seam below them.
@@ -888,11 +894,10 @@ broken feature and is a broken gesture in the test.
 
 ### Where this leaves the branch
 
-`feat/detail-one-layout`, seven commits, **unmerged**. Dart **1396**, Kotlin
-**136**, analyze and format clean, and every change on it has been driven on the
-tablet in landscape. Nothing is known to be outstanding — merge it through the
-gate (`merge.ff false`, so the hook runs) unless the owner wants another look
-first.
+**Merged as `6fc02c1`** (2026-08-15), seven commits, through the
+`pre-merge-commit` gate with both suites green. Dart **1396**, Kotlin **136**,
+analyze and format clean, and every change on it was driven on the tablet in
+landscape before it landed. Master is clean and nothing here is half-finished.
 
 ### The immersive viewer — the second complaint, unscoped
 
