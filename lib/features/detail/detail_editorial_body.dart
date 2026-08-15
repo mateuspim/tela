@@ -157,6 +157,13 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
   /// so raising the facts moves the wallpaper out of their way instead of
   /// hiding it. Half, so the preview's own bottom edge always stays under the
   /// sheet — a full-rate lift would open a gap of dead canvas beneath it.
+  ///
+  /// The sheet's extent is a fraction of the body *minus the apply button*,
+  /// while this is a fraction of the whole body, so since the picture went
+  /// full-bleed the lift is a hair more than half the sheet's travel. Left
+  /// alone deliberately: the number was tuned by eye on a device and the
+  /// difference is the button's height halved, which is not a thing an eye can
+  /// find. Re-tune it from a device or not at all.
   final ValueNotifier<double> _lift = ValueNotifier<double>(0);
 
   @override
@@ -205,44 +212,53 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
 
   @override
   Widget build(BuildContext context) {
-    // The button is laid out in normal flow *below* the image, not positioned
-    // over it. Absolutely positioning it looked equivalent and was not: its own
-    // `SafeArea` had nothing to inset against inside a `Positioned`, so on the
-    // device the button ran under the system bar and its label and icon were
-    // clipped clean off (seen on the SM-X730, 2026-08-14). Nothing is lost by
-    // this — the sheet covers the foot of the screen at every size it can take,
-    // so no wallpaper was ever visible behind the button anyway.
+    // The wallpaper is the whole body, and the sheet and the button ride over
+    // it. It used to be the top cell of a `Column` whose bottom cell was the
+    // button, which cost the picture the button's height at every sheet size —
+    // "make the fullscreen so that i can see the full background", as the owner
+    // put it on the tablet (2026-08-15). The image is `BoxFit.contain`, so the
+    // taller box is not decoration: it is what the picture is *fitted* to, and
+    // on a 1205x753dp screen the letterbox bands close by that much.
+    //
+    // The `Column` stays, and holds only the two overlays. Everything it lays
+    // out keeps measuring against the same box it always did, so the sheet's
+    // three tuned fractions and the button's inset all mean exactly what they
+    // meant before — what changed is the layer *behind* them.
     return BackdropDriftScope(
       drift: _drift,
-      child: Column(
-        children: <Widget>[
-          Expanded(
-            child: NotificationListener<DraggableScrollableNotification>(
-              onNotification: _sheetDragged,
-              child: Stack(
-                children: <Widget>[
-                  Positioned.fill(child: _bumped(widget.preview)),
-                  const _TopScrim(),
-                  DraggableScrollableSheet(
-                    initialChildSize: DetailEditorialBody.peekSheetFraction,
-                    minChildSize: DetailEditorialBody.peekSheetFraction,
-                    maxChildSize: DetailEditorialBody.fullSheetFraction,
-                    // Snapped, so the sheet always comes to rest at one of its
-                    // three sizes instead of wherever the finger left it. A
-                    // sheet abandoned at 31% is what reads as a stuck scroll.
-                    snap: true,
-                    snapSizes: const <double>[
-                      DetailEditorialBody.restingSheetFraction,
-                    ],
-                    builder: _sheet,
-                  ),
-                ],
-              ),
+      child: NotificationListener<DraggableScrollableNotification>(
+        onNotification: _sheetDragged,
+        child: Stack(
+          children: <Widget>[
+            Positioned.fill(child: _bumped(widget.preview)),
+            const _TopScrim(),
+            Column(
+              children: <Widget>[
+                Expanded(child: _draggableSheet()),
+                _footed(context, widget.applyButton),
+              ],
             ),
-          ),
-          _footed(context, widget.applyButton),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+
+  /// The sheet, which paints only where it has risen to.
+  ///
+  /// Nothing outside it is hit-testable, which is what lets the wallpaper under
+  /// the whole `Column` still take the pinch and the hold-to-copy.
+  Widget _draggableSheet() {
+    return DraggableScrollableSheet(
+      initialChildSize: DetailEditorialBody.peekSheetFraction,
+      minChildSize: DetailEditorialBody.peekSheetFraction,
+      maxChildSize: DetailEditorialBody.fullSheetFraction,
+      // Snapped, so the sheet always comes to rest at one of its three sizes
+      // instead of wherever the finger left it. A sheet abandoned at 31% is
+      // what reads as a stuck scroll.
+      snap: true,
+      snapSizes: const <double>[DetailEditorialBody.restingSheetFraction],
+      builder: _sheet,
     );
   }
 
@@ -254,7 +270,9 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
   /// apply button was drawn half under the system bar with its label cut clean
   /// off, while the same widget in the wide layout was fine. Verified by
   /// deploying the build before this layout, where it rendered correctly
-  /// (SM-X730, 2026-08-14).
+  /// (SM-X730, 2026-08-14). **This is the reason the button is laid out by a
+  /// `Column` rather than a `Positioned`** — inside a `Positioned` its own
+  /// `SafeArea` has nothing to inset against, and the same clipping returns.
   ///
   /// `viewPadding` rather than `padding` because `viewPadding` always reports
   /// the real inset and is never consumed by an ancestor; the button's own

@@ -41,12 +41,16 @@ Future<void> _pump(WidgetTester tester, {double systemBar = 0}) async {
 }
 
 void main() {
-  testWidgets('runs the wallpaper to both side edges and the top', (
+  testWidgets('runs the wallpaper to every edge, the apply button included', (
     WidgetTester tester,
   ) async {
     // The point of the layout: the image is the page, not a picture in a box
-    // above a panel. It stops only where the apply button begins, and the
-    // sheet covers that end of the screen anyway.
+    // above a panel. **The bottom edge is the part the owner had to ask for
+    // twice** — "make the fullscreen so that i can see the full background"
+    // (2026-08-15). It used to stop where the apply button began, which cost
+    // the picture the button's height at every sheet size; the button and the
+    // sheet ride over it now. The image is `BoxFit.contain`, so the box it is
+    // fitted to is the whole feature, not the pixels behind an opaque pill.
     await _pump(tester);
 
     final Rect image = tester.getRect(find.byKey(_preview));
@@ -54,6 +58,7 @@ void main() {
     expect(image.left, body.left);
     expect(image.right, body.right);
     expect(image.top, body.top);
+    expect(image.bottom, body.bottom);
   });
 
   testWidgets('does not clip the apply button off the bottom', (
@@ -93,16 +98,19 @@ void main() {
     // whole and the facts are asked for.
     await _pump(tester);
 
-    // Measured against the image's own area rather than the whole body: the
-    // sheet's fraction is of the space above the apply button, which is what
-    // it shares with the wallpaper.
-    final Rect image = tester.getRect(find.byKey(_preview));
+    // Measured against the sheet's own arena — the body above the apply button
+    // — and no longer against the image, which since the full-bleed change is
+    // the whole body and so would report a different fraction for an
+    // unchanged sheet. This is the yardstick the fraction is actually in.
+    final Rect body = tester.getRect(find.byType(DetailEditorialBody));
+    final Rect apply = tester.getRect(find.byKey(_apply));
+    final double arena = apply.top - body.top;
     final double sheetTop = tester
         .getTopLeft(find.byKey(DetailEditorialBody.sheetKey))
         .dy;
 
     expect(
-      (sheetTop - image.top) / image.height,
+      (sheetTop - body.top) / arena,
       closeTo(1 - DetailEditorialBody.peekSheetFraction, 0.02),
       reason: 'the wallpaper must arrive whole, not two fifths behind a panel',
     );
