@@ -3,9 +3,11 @@
 Updated: 2026-08-14
 
 > **START HERE — L2b is built and the phone layout was rebuilt around what the
-> owner saw** (2026-08-14, branch `feat/backdrop-parallax`). Dart **1392** (from
-> 1378), Kotlin **136** untouched, analyze and format clean. Three commits, two
-> of them written from the device.
+> owner saw** (2026-08-14, **merged as `94f214f`** off
+> `feat/backdrop-parallax`). Dart **1394** (from 1378), Kotlin **136** untouched,
+> analyze and format clean, the merge through the gate. Six commits, three of
+> them written from the tablet while the owner watched — which is why three of
+> the four device debts below are struck through rather than restated.
 >
 > **L2b shipped as option 3: Detail's blurred backdrop drifts, and the wall was
 > never touched.** Parallax needs the image taller than its box; `justified_rows`
