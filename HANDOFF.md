@@ -4,18 +4,22 @@ Updated: 2026-08-15
 
 > **NEXT SESSION STARTS HERE — Detail is one layout, it is full-bleed, and it
 > has been driven on the tablet. The branch is unmerged; the immersive viewer is
-> still unscoped.** `feat/detail-one-layout`, three commits (2026-08-15): Dart
-> **1393**, Kotlin **136** untouched, analyze and format clean, and both of the
+> still unscoped.** `feat/detail-one-layout`, five commits (2026-08-15): Dart
+> **1394**, Kotlin **136** untouched, analyze and format clean, and both of the
 > scope's open device questions are answered under *M* — **neither needed a
 > change, and one of them was a non-problem the scope had mis-described.**
 >
-> **The device did find something, and it was the owner who named it:** *"make
-> the fullscreen so that i can see the full background not hide with the
-> details"*. The wallpaper was fitted to the screen *minus the apply button*, so
-> a 1205x753dp screen showed it with letterbox bands down both sides. Fixed in
-> `816413c` — the preview is `Positioned.fill` behind everything and the sheet
-> and button ride over it. See *M*, which also records the two things that were
-> deliberately not done with it.
+> **The device found two things, and the owner named both while watching.**
+> *"make the fullscreen so that i can see the full background not hide with the
+> details"* — the wallpaper was fitted to the screen *minus the apply button*,
+> so a 1205x753dp screen showed it with letterbox bands down both sides
+> (`816413c`: the preview is `Positioned.fill` behind everything, the sheet and
+> button ride over it). Then *"the details when minimized its clipping"* — the
+> peek was a *fraction*, which cannot know where the heading ends, so it sliced
+> the first fact row in half (`2dceb71`: it is a 68dp height now, spelled as a
+> sum, with the term it cannot compute pinned by a test in
+> `wallpaper_metadata_test`). Both are written up under *M*, including the two
+> things deliberately **not** done with the first.
 >
 > **What is left:** merge the branch, and the second complaint in the owner's
 > original sentence — the **immersive viewer**. They have named three things
@@ -805,13 +809,40 @@ sheet's travel — the button's height halved. Left alone on purpose and said so
 in the docstring; that is not a difference an eye can find, and the number was
 set by eye.
 
+### The peek was clipping, and the unit was the bug — `2dceb71`
+
+**The owner, on the next build:** *"the details when minimized its clipping make
+it better"*.
+
+`peekSheetFraction` was **0.12 of the sheet's box**, and a fraction cannot know
+where the heading ends — so the sheet's bottom edge landed *inside the first
+fact row* and showed its top half sliced off, at a different place on every
+screen size. It is a **height** now, `peekSheetHeight = 68`, and the docstring
+spells it as the sum it is: grip 20 + metadata padding 8 + "Details" at
+`titleLarge` 28 + its 12 gap. `peekFractionIn` divides that by the arena a
+`LayoutBuilder` measures — the body minus the apply button, which no `MediaQuery`
+above the body knows.
+
+**The part worth not re-deriving.** That sum has a term this file cannot compute,
+so it is pinned where it lives: `wallpaper_metadata_test` asserts the first fact
+tile sits `peekSheetHeight - sheetGripHeight` below the widget's top.
+Mutation-checked — 68 to 80 turns it red. **Restyle the "Details" heading and a
+test fails instead of the peek quietly starting to clip again.**
+
+`_sheetDragged` also stopped reading the constant: it takes the notification's
+own `minExtent`, so the drift and the bump never have to know how the floor was
+computed. Same values, one less pair to keep in step.
+
+Device-confirmed on the tablet: the peek shows the grip and "Details" and cuts
+on the seam below them.
+
 ### Where this leaves the branch
 
-`feat/detail-one-layout`, three commits, **unmerged**. Dart **1393**, Kotlin
-**136**, analyze and format clean, and the layout has now been driven on the
-tablet in landscape. Nothing below is known to be outstanding — merge it through
-the gate (`merge.ff false`, so the hook runs) unless the owner wants another
-look first.
+`feat/detail-one-layout`, five commits, **unmerged**. Dart **1394**, Kotlin
+**136**, analyze and format clean, and every change on it has been driven on the
+tablet in landscape. Nothing is known to be outstanding — merge it through the
+gate (`merge.ff false`, so the hook runs) unless the owner wants another look
+first.
 
 ### The immersive viewer — the second complaint, unscoped
 
