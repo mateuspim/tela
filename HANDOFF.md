@@ -4,8 +4,8 @@ Updated: 2026-08-15
 
 > **NEXT SESSION STARTS HERE — Detail is one layout, it is full-bleed, and it
 > has been driven on the tablet. The branch is unmerged; the immersive viewer is
-> still unscoped.** `feat/detail-one-layout`, five commits (2026-08-15): Dart
-> **1394**, Kotlin **136** untouched, analyze and format clean, and both of the
+> still unscoped.** `feat/detail-one-layout`, seven commits (2026-08-15): Dart
+> **1396**, Kotlin **136** untouched, analyze and format clean, and both of the
 > scope's open device questions are answered under *M* — **neither needed a
 > change, and one of them was a non-problem the scope had mis-described.**
 >
@@ -18,8 +18,12 @@ Updated: 2026-08-15
 > peek was a *fraction*, which cannot know where the heading ends, so it sliced
 > the first fact row in half (`2dceb71`: it is a 68dp height now, spelled as a
 > sum, with the term it cannot compute pinned by a test in
-> `wallpaper_metadata_test`). Both are written up under *M*, including the two
-> things deliberately **not** done with the first.
+> `wallpaper_metadata_test`). Then the sheet itself was reworked from the same
+> chair (`c98874b`): it is **glass until you pull it**, solid by the stop it
+> snaps to, glued to the apply button, and the "Details" heading is gone. All
+> written up under *M* — **including two traps that cost real time**: a lazy
+> `ListView` builds nothing behind a 20dp peek (and `cacheExtent` does not fix
+> it), and a test drag aimed below that peek moves nothing at all.
 >
 > **What is left:** merge the branch, and the second complaint in the owner's
 > original sentence — the **immersive viewer**. They have named three things
@@ -836,9 +840,55 @@ computed. Same values, one less pair to keep in step.
 Device-confirmed on the tablet: the peek shows the grip and "Details" and cuts
 on the seam below them.
 
+### The sheet became glass, and the button joined it — `c98874b`
+
+**Three asks in one sentence, all from watching the build:** *"the set wallpaper
+and details one was glued they seem disconnected and because of that it hides
+some of the information of the background, what if we drop the details name and
+just make like a the handle invisible and when we are opening it up it start to
+have background color fading it in until it reachs a certain point that it shows
+the details page"*.
+
+- **Glued.** A strip of wallpaper ran between the sheet's bottom edge and the
+  apply button. The button's block is painted in the sheet's own colour at the
+  sheet's own opacity now, and the two abut — one panel.
+- **Fading.** `surfaceAlphaAt` runs the surface from nothing at the peek to
+  solid at `restingSheetFraction`. That is the first stop the sheet snaps to, so
+  it is a **solid page everywhere it comes to rest** and glass only while it is
+  moving — which is the "certain point" the owner asked for, and it needed no
+  new constant.
+- **The handle alone.** "Details" is gone from `WallpaperMetadata` and its l10n
+  key with it. `peekSheetHeight` is `sheetGripHeight`: the peek is the handle.
+
+**The handle had to earn its contrast and the device said so twice — this is the
+part worth not re-deriving.** Plain white was *invisible* on a near-white
+wallpaper. A shadow alone then measured **1.51:1** against a pure-white one: a
+halo spreads its darkness over too many pixels to be an edge, which is the same
+shape of mistake as the top wash's ramp. Outline **and** shadow, both scaled by
+what the missing surface owes them, measure **8.45:1** on that wallpaper. The
+outline gives it an edge on white; the shadow lifts it off a busy mid-toned
+picture, which an outline alone cannot. **Third time this project has paid for
+"a control over an arbitrary photograph cannot take its contrast on trust"** —
+see `wallpaperTileEdge` and `topScrimOpacity`.
+
+**A Flutter trap that cost an hour, so nobody pays for it again.** The sheet's
+scroll view is a `SingleChildScrollView` and **must not go back to being a
+`ListView`**. A lazy sliver builds nothing past its viewport, and a 20dp peek is
+exactly the handle — so the facts were not in the element tree at all until the
+sheet was pulled, and eight widget tests failed with "found 0 widgets" for
+content that plainly exists. `cacheExtent` does **not** rescue it: measured,
+2000dp of cache still built one child. The sheet's content is one fixed column
+of facts and never a long list, so eager is also simply correct here.
+
+**And a test trap of the same family.** `_raiseSheet` has to grab *inside* the
+20dp peek. `DraggableScrollableSheet` is moved by the scrollable it owns and by
+nothing else, so a drag starting 24dp down lands past the sheet and silently
+does nothing — four tests went red reporting a drift of zero, which reads like a
+broken feature and is a broken gesture in the test.
+
 ### Where this leaves the branch
 
-`feat/detail-one-layout`, five commits, **unmerged**. Dart **1394**, Kotlin
+`feat/detail-one-layout`, seven commits, **unmerged**. Dart **1396**, Kotlin
 **136**, analyze and format clean, and every change on it has been driven on the
 tablet in landscape. Nothing is known to be outstanding — merge it through the
 gate (`merge.ff false`, so the hook runs) unless the owner wants another look
