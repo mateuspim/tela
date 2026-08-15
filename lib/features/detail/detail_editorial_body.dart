@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:tela/core/ui/backdrop_drift_scope.dart';
 
@@ -78,31 +79,17 @@ class DetailEditorialBody extends StatefulWidget {
   /// showed every wallpaper with its bottom two fifths behind a panel — "the
   /// image is behind the details and i cant hide it", as the owner put it. The
   /// wallpaper is the subject, so it arrives unobstructed and the facts are
-  /// asked for. A peek and not zero: what is left is the grip and the heading,
-  /// so the sheet is still visibly *there* to be pulled up. One that can vanish
-  /// is a feature the user has to rediscover.
+  /// asked for.
   ///
-  /// The device settled the *unit* a day later: "the details when minimized its
-  /// clipping" (2026-08-15). It was 0.12 of the sheet's box, and a fraction
-  /// cannot know where the heading ends — so it landed **inside the first fact
-  /// row**, showing its top half sliced off by the sheet's own bottom edge, and
-  /// landed somewhere different on every screen size. This is the exact height
-  /// of what the peek is *for*, so the cut falls on the seam below the heading
-  /// on every device:
-  ///
-  /// | | dip |
-  /// |---|---|
-  /// | [sheetGripHeight]: 12 margin + 4 bar + 4 margin | 20 |
-  /// | `WallpaperMetadata`'s top padding | 8 |
-  /// | "Details", `titleLarge` at 22sp | 28 |
-  /// | its gap before the fact grid | 12 |
-  /// | **total** | **68** |
-  ///
-  /// Change `WallpaperMetadata`'s heading and this number is stale, so it is
-  /// spelled out as a sum rather than left as 68 — and the second term is
-  /// pinned against the real widget by `wallpaper_metadata_test`, which goes
-  /// red rather than letting the peek quietly start clipping again.
-  static const double peekSheetHeight = 68;
+  /// It settled the *unit* a day later — a fraction landed inside the first
+  /// fact row and sliced it in half — and then settled the **contents**: the
+  /// peek is now [sheetGripHeight] and nothing else. It was the grip plus a
+  /// "Details" heading on an opaque band, and *"because of that it hides some
+  /// of the information of the background"* (2026-08-15). The heading is gone
+  /// from `WallpaperMetadata` entirely and the band is gone with it — see
+  /// [surfaceAlphaAt]. What is left over the wallpaper is a handle and the
+  /// apply button, which is the whole of what a closed sheet has to say.
+  static const double peekSheetHeight = sheetGripHeight;
 
   /// [peekSheetHeight] as a fraction of a sheet box [arena] dip tall.
   ///
@@ -127,6 +114,33 @@ class DetailEditorialBody extends StatefulWidget {
 
   /// Breathing room at the foot of the sheet's content.
   static const double sheetFootRoom = 24;
+
+  /// How opaque the sheet's own surface is at [extent], 0..1.
+  ///
+  /// The sheet used to be a solid panel at every size, so its closed state put
+  /// an opaque band across the foot of the picture — *"it hides some of the
+  /// information of the background"*, and *"make like a the handle invisible
+  /// and when we are opening it up it starts to have background color fading
+  /// it in until it reaches a certain point that it shows the details page"*
+  /// (the owner, 2026-08-15). So: nothing at the peek, and full by
+  /// [restingSheetFraction], which is the first stop it snaps to and therefore
+  /// the "certain point" — the sheet is a solid page everywhere it comes to
+  /// rest, and glass only while it is actually moving.
+  ///
+  /// Takes [floor] rather than reading [peekSheetHeight], because the floor is
+  /// a height converted against a box only the layout has measured.
+  ///
+  /// ```dart
+  /// DetailEditorialBody.surfaceAlphaAt(extent: 0.42, floor: 0.03); // 1.0
+  /// ```
+  static double surfaceAlphaAt({
+    required double extent,
+    required double floor,
+  }) {
+    final double travel = restingSheetFraction - floor;
+    if (travel <= 0) return 1;
+    return ((extent - floor) / travel).clamp(0.0, 1.0);
+  }
 
   /// The grip's whole vertical footprint: 12 margin + 4 bar + 4 margin.
   ///
@@ -209,10 +223,19 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
   /// find. Re-tune it from a device or not at all.
   final ValueNotifier<double> _lift = ValueNotifier<double>(0);
 
+  /// How solid the sheet's surface is, 0..1 — see
+  /// [DetailEditorialBody.surfaceAlphaAt].
+  ///
+  /// Shared by the sheet and by the block behind the apply button, which is
+  /// what makes the two read as one panel rather than two things that happen
+  /// to be near each other.
+  final ValueNotifier<double> _surfaceAlpha = ValueNotifier<double>(0);
+
   @override
   void dispose() {
     _drift.dispose();
     _lift.dispose();
+    _surfaceAlpha.dispose();
     super.dispose();
   }
 
@@ -234,6 +257,10 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
     final double risen = (sheet.extent - sheet.minExtent) / travel;
     _drift.value = -risen.clamp(0.0, 1.0);
     _lift.value = (sheet.extent - sheet.minExtent) / 2;
+    _surfaceAlpha.value = DetailEditorialBody.surfaceAlphaAt(
+      extent: sheet.extent,
+      floor: sheet.minExtent,
+    );
     return false;
   }
 
@@ -278,7 +305,7 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
             Column(
               children: <Widget>[
                 Expanded(child: _draggableSheet()),
-                _footed(context, widget.applyButton),
+                _glued(_footed(context, widget.applyButton)),
               ],
             ),
           ],
@@ -342,20 +369,61 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
     );
   }
 
+  /// Paints [child]'s block in the sheet's own surface, at the sheet's own
+  /// opacity.
+  ///
+  /// The apply button and the sheet *"seem disconnected"* — the owner's word,
+  /// looking at the strip of wallpaper that ran between the sheet's bottom edge
+  /// and the button below it (2026-08-15). They abut exactly, and share this
+  /// colour, so they rise and solidify as one panel. Squared off rather than
+  /// rounded on purpose: this is the panel's middle, not its top.
+  Widget _glued(Widget child) {
+    return ValueListenableBuilder<double>(
+      valueListenable: _surfaceAlpha,
+      builder: (BuildContext context, double alpha, Widget? built) =>
+          ColoredBox(color: _surface(context, alpha), child: built),
+      child: child,
+    );
+  }
+
+  /// The sheet's colour at [alpha], from the wallpaper's own ambient scheme.
+  Color _surface(BuildContext context, double alpha) =>
+      Theme.of(context).colorScheme.surface.withValues(alpha: alpha);
+
   Widget _sheet(BuildContext context, ScrollController controller) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      key: DetailEditorialBody.sheetKey,
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: ListView(
+    return ValueListenableBuilder<double>(
+      valueListenable: _surfaceAlpha,
+      builder: (BuildContext context, double alpha, Widget? built) =>
+          DecoratedBox(
+            key: DetailEditorialBody.sheetKey,
+            decoration: BoxDecoration(
+              color: _surface(context, alpha),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+            ),
+            child: built,
+          ),
+      // A `SingleChildScrollView` and not a `ListView`, since the peek shrank
+      // to the handle alone. A lazy sliver builds nothing past its viewport,
+      // and 20dp of viewport is exactly the handle — so the facts were not in
+      // the tree at all until the sheet was pulled, and `cacheExtent` does not
+      // rescue it (measured: 2000dp of cache still built one child). This
+      // content is one fixed column of facts, never a long list, so building
+      // it eagerly costs a layout nobody notices and buys a pull-up that has
+      // nothing left to construct.
+      child: SingleChildScrollView(
         controller: controller,
         padding: const EdgeInsets.only(
           bottom: DetailEditorialBody.sheetFootRoom,
         ),
-        children: <Widget>[const _SheetGrip(), widget.metadata],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _SheetGrip(alpha: _surfaceAlpha),
+            widget.metadata,
+          ],
+        ),
       ),
     );
   }
@@ -411,20 +479,68 @@ class _TopScrim extends StatelessWidget {
 /// Drawn rather than taken from `BottomSheetThemeData.showDragHandle`, which
 /// only applies to a `showModalBottomSheet` — this sheet is part of the page
 /// and was never presented, so it inherits none of that theming.
+///
+/// Its colour travels with the surface it sits on. At rest there is no surface
+/// at all — the handle is alone over the photograph, where `onSurfaceVariant`
+/// is a mid grey that a pale sky swallows — so it is white there and settles
+/// onto the scheme's own colour as the panel fades in.
+///
+/// White is not enough on its own, and the device proved it twice rather than
+/// the argument. On a near-white wallpaper the plain white handle was
+/// *invisible*; a shadow alone then measured **1.51:1** against a pure-white
+/// one — a soft halo spreads its darkness over too many pixels to be an edge
+/// (SM-X730, 2026-08-15). So it carries **both**, at exactly the strength the
+/// missing surface owes it and none once the panel is solid: a hairline outline
+/// that gives the bar a hard edge on white, and the shadow that lifts it off a
+/// busy or mid-toned picture, which an outline alone cannot do.
+///
+/// Third time this project has paid for the same lesson — see
+/// `wallpaperTileEdge` and [DetailEditorialBody.topScrimOpacity]: a control
+/// over an arbitrary photograph cannot take its contrast on trust.
 class _SheetGrip extends StatelessWidget {
-  const _SheetGrip();
+  const _SheetGrip({required this.alpha});
+
+  /// How solid the surface beneath the handle is, 0..1.
+  final ValueListenable<double> alpha;
+
+  /// The bar itself, before either of its defences.
+  static const double _barWidth = 32;
+  static const double _barHeight = 5;
+
+  /// The outline's and the shadow's strength where the handle is alone over
+  /// the wallpaper. Both scale to nothing as the panel fades in.
+  static const double _outlineOpacity = 0.7;
+  static const double _shadowOpacity = 0.45;
 
   @override
   Widget build(BuildContext context) {
+    final Color settled = Theme.of(context).colorScheme.onSurfaceVariant;
     return Center(
-      child: Container(
-        width: 32,
-        height: 4,
-        margin: const EdgeInsets.only(top: 12, bottom: 4),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-          borderRadius: BorderRadius.circular(2),
-        ),
+      child: ValueListenableBuilder<double>(
+        valueListenable: alpha,
+        builder: (BuildContext context, double solid, Widget? child) =>
+            Container(
+              width: _barWidth,
+              height: _barHeight,
+              margin: const EdgeInsets.only(top: 12, bottom: 4),
+              decoration: BoxDecoration(
+                color: Color.lerp(Colors.white, settled, solid),
+                borderRadius: BorderRadius.circular(_barHeight / 2),
+                border: Border.all(
+                  color: Colors.black.withValues(
+                    alpha: _outlineOpacity * (1 - solid),
+                  ),
+                ),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                      alpha: _shadowOpacity * (1 - solid),
+                    ),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+            ),
       ),
     );
   }

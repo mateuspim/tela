@@ -183,6 +183,12 @@ void main() {
     // wallpaper's colour rather than staying grey inside a tinted page.
     await _pumpDetail(tester, _details());
 
+    // Dragged up first: the sheet's surface fades in with the gesture and is
+    // fully transparent at the peek, so a closed sheet has no colour to
+    // assert. Dragged rather than `ensureVisible`d, because the fade is driven
+    // by `DraggableScrollableNotification` and only a real drag sends one.
+    await _raiseSheet(tester);
+
     final DecoratedBox sheet = tester.widget<DecoratedBox>(
       find.byKey(DetailEditorialBody.sheetKey),
     );
@@ -483,7 +489,11 @@ void main() {
     final WallpaperDetails details = _details();
     await _pumpDetail(tester, details);
 
-    expect(find.text('Details'), findsOneWidget);
+    // No 'Details' heading to look for: it was dropped on 2026-08-15 because
+    // it labelled a panel that is already unmistakably the facts, and cost the
+    // sheet's peek an opaque band across the foot of the picture. The facts
+    // themselves are the assertion now.
+    expect(find.byKey(const Key('metadata-fact-Resolution')), findsOneWidget);
     expect(find.text('1,048,576 bytes'), findsOneWidget);
     expect(find.text('tela-fixture'), findsOneWidget);
     expect(find.text('landscape'), findsOneWidget);
@@ -1240,6 +1250,21 @@ FakeWallpaperSource _detailsApi(
 Future<void> _tallSurface(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(800, 1600));
   addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
+/// Drags the fact sheet to the top of its travel, starting on its handle.
+///
+/// The grab must land inside [DetailEditorialBody.peekSheetHeight] — the peek
+/// is the handle and nothing else, 20dp of it, and `DraggableScrollableSheet`
+/// is moved by the scrollable it owns and by nothing else. Aim below that and
+/// the drag silently does nothing.
+Future<void> _raiseSheet(WidgetTester tester) async {
+  final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
+  await tester.dragFrom(
+    Offset(tester.getCenter(sheet).dx, tester.getTopLeft(sheet).dy + 10),
+    const Offset(0, -400),
+  );
+  await tester.pumpAndSettle();
 }
 
 /// Brings something on the fact sheet into view, as a user on a phone must.

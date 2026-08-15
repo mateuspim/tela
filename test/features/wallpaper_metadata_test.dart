@@ -11,7 +11,6 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
-import 'package:tela/features/detail/detail_editorial_body.dart';
 import 'package:tela/features/detail/wallpaper_metadata.dart';
 
 void main() {
@@ -86,33 +85,6 @@ void main() {
         reason: '$label must render as a fact tile',
       );
     }
-  });
-
-  testWidgets("the heading block is the height Detail's peek reserves", (
-    WidgetTester tester,
-  ) async {
-    // The sheet opens at exactly grip + this heading, so its bottom edge falls
-    // on the seam below "Details" instead of slicing the first fact row in
-    // half — "the details when minimized its clipping" (the owner, 2026-08-15).
-    // That is a sum written down in `DetailEditorialBody.peekSheetHeight`, and
-    // this is the term it cannot compute for itself. Restyle the heading, or
-    // change the gap under it, and this goes red rather than the peek quietly
-    // starting to clip again.
-    await _pumpMetadata(tester);
-
-    final double top = tester.getRect(find.byType(WallpaperMetadata)).top;
-    final double firstFact = tester
-        .getRect(find.byKey(const Key('metadata-fact-Resolution')))
-        .top;
-
-    expect(
-      firstFact - top,
-      closeTo(
-        DetailEditorialBody.peekSheetHeight -
-            DetailEditorialBody.sheetGripHeight,
-        1,
-      ),
-    );
   });
 
   testWidgets('the colours sit above the attribution links and the tags', (

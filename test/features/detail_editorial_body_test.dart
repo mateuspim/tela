@@ -98,10 +98,10 @@ void main() {
     // whole and the facts are asked for.
     await _pump(tester);
 
-    // Asserted in dip, because the peek is a height: it is exactly the grip
-    // plus the heading, so the sheet's bottom edge never slices a fact row in
-    // half. "the details when minimized its clipping", as the owner put it
-    // (2026-08-15) — a fraction cannot know where the heading ends.
+    // Asserted in dip, because the peek is a height: it is exactly the grip,
+    // and the grip is the whole of what a closed sheet shows. "the details
+    // when minimized its clipping", then "make the handle invisible" — the
+    // owner, 2026-08-15. A fraction could not have landed on either.
     final Rect apply = tester.getRect(find.byKey(_apply));
     final double sheetTop = tester
         .getTopLeft(find.byKey(DetailEditorialBody.sheetKey))
@@ -160,10 +160,10 @@ void main() {
     final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
     final double before = tester.getTopLeft(sheet).dy;
 
-    // Dragged from the sheet's own surface: the metadata inside it is taller
-    // than the screen, so its centre — where `drag` aims — is off-screen.
+    // Dragged from the handle, for the reason _raiseSheet spells out: the
+    // peek is 20dp tall, so a grab further down lands past the sheet entirely.
     await tester.dragFrom(
-      Offset(tester.getCenter(sheet).dx, before + 24),
+      Offset(tester.getCenter(sheet).dx, before + 10),
       const Offset(0, -400),
     );
     await tester.pumpAndSettle();
@@ -176,6 +176,69 @@ void main() {
       reason: 'a sheet that covers everything strands the user off the image',
     );
   });
+
+  testWidgets('shows no surface at all until the sheet is pulled', (
+    WidgetTester tester,
+  ) async {
+    // "make like a the handle invisible and when we are opening it up it start
+    // to have background color fading it in" (the owner, 2026-08-15). The
+    // closed sheet used to be an opaque band across the foot of the picture,
+    // which is information about the wallpaper that the wallpaper screen was
+    // hiding.
+    await _pump(tester);
+
+    expect(_surfaceAlpha(tester), 0);
+
+    await _raiseSheet(tester);
+
+    // Solid by the time it comes to rest anywhere: the fade is what the sheet
+    // looks like while it is moving, never what it settles as.
+    expect(_surfaceAlpha(tester), 1);
+  });
+
+  testWidgets('the apply button rides on the same surface as the sheet', (
+    WidgetTester tester,
+  ) async {
+    // "the set wallpaper and details one was glued they seem disconnected" —
+    // the owner, looking at the strip of wallpaper that ran between the two.
+    // One colour, at one opacity, on two boxes that abut.
+    await _pump(tester);
+    await _raiseSheet(tester);
+
+    final Rect sheet = tester.getRect(
+      find.byKey(DetailEditorialBody.sheetKey),
+    );
+    // The closest ColoredBox above the button is the one `_glued` paints;
+    // further out are the Scaffold's own.
+    final Finder glue = find
+        .ancestor(of: find.byKey(_apply), matching: find.byType(ColoredBox))
+        .first;
+
+    expect(tester.widget<ColoredBox>(glue).color, _sheetColor(tester));
+    expect(tester.getRect(glue).top, closeTo(sheet.bottom, 0.5));
+  });
+
+  testWidgets(
+    'the handle is outlined and shadowed while alone on the picture',
+    (
+      WidgetTester tester,
+    ) async {
+      // The device found this twice: a plain white handle over no surface is
+      // invisible on a near-white wallpaper, and a shadow alone then measured
+      // 1.51:1 against a pure-white one — a halo is not an edge (SM-X730,
+      // 2026-08-15). Both are what the missing surface owes it, so both are
+      // strongest at the peek and gone once the panel is solid and the scheme's
+      // own contrast has taken over.
+      await _pump(tester);
+      expect(_gripOutline(tester).a, greaterThan(0.3));
+      expect(_gripShadow(tester).a, greaterThan(0.3));
+
+      await _raiseSheet(tester);
+
+      expect(_gripOutline(tester).a, 0);
+      expect(_gripShadow(tester).a, 0);
+    },
+  );
 
   testWidgets('lets the wallpaper take gestures under the scrim', (
     WidgetTester tester,
@@ -373,14 +436,54 @@ double _drift(WidgetTester tester) {
       .value;
 }
 
-/// Drags the sheet to the top of its travel.
+/// The handle's decoration. Found as the first `Container` inside the sheet
+/// rather than by a key: the grip is private to the body, and a key exported
+/// only for a test would outlive the reason it was added.
+BoxDecoration _gripDecoration(WidgetTester tester) {
+  final Container grip = tester.widget<Container>(
+    find
+        .descendant(
+          of: find.byKey(DetailEditorialBody.sheetKey),
+          matching: find.byType(Container),
+        )
+        .first,
+  );
+  return grip.decoration! as BoxDecoration;
+}
+
+/// The handle's shadow colour, whose alpha is the whole of the assertion.
+Color _gripShadow(WidgetTester tester) =>
+    _gripDecoration(tester).boxShadow!.single.color;
+
+/// The handle's outline colour, likewise.
+Color _gripOutline(WidgetTester tester) =>
+    _gripDecoration(tester).border!.top.color;
+
+/// The colour the sheet is actually painting, alpha included.
+Color _sheetColor(WidgetTester tester) {
+  final DecoratedBox sheet = tester.widget<DecoratedBox>(
+    find.byKey(DetailEditorialBody.sheetKey),
+  );
+  return (sheet.decoration as BoxDecoration).color!;
+}
+
+/// How solid that surface is, 0..1.
+double _surfaceAlpha(WidgetTester tester) => _sheetColor(tester).a;
+
+/// Drags the sheet to the top of its travel, starting on its handle.
 ///
-/// From the sheet's own surface: the metadata inside it is taller than the
-/// screen, so its centre — where `drag` aims — is off-screen.
+/// From the sheet's own surface rather than its centre: the metadata inside it
+/// is taller than the screen, so the centre `drag` aims at is off-screen.
+///
+/// The offset must stay inside [DetailEditorialBody.peekSheetHeight] — since
+/// the peek became the handle alone it is only 20dp tall, and a grab 24dp down
+/// landed *past* the sheet, on the button block below it. `DraggableScrollable
+/// Sheet` is moved by the scrollable it owns and by nothing else, so that drag
+/// silently did nothing and four tests failed reporting a drift of zero.
 Future<void> _raiseSheet(WidgetTester tester) async {
   final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
   await tester.dragFrom(
-    Offset(tester.getCenter(sheet).dx, tester.getTopLeft(sheet).dy + 24),
+    Offset(tester.getCenter(sheet).dx, tester.getTopLeft(sheet).dy + 10),
     const Offset(0, -600),
   );
   await tester.pumpAndSettle();
