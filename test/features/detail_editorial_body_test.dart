@@ -300,6 +300,63 @@ void main() {
       lessThan(0.03),
     );
   });
+
+  test('the top wash still covers the controls, not just the edge', () {
+    // The device found this against a genuinely pale wallpaper: the white bar
+    // controls measured 2.9:1, over the 3:1 floor for UI graphics by nothing.
+    // A straight ramp spends its darkness above the controls where there is
+    // nothing to read, so the wash holds full strength down past them instead.
+    expect(
+      DetailEditorialBody.topScrimAlphaAt(0),
+      DetailEditorialBody.topScrimOpacity,
+    );
+    expect(
+      DetailEditorialBody.topScrimAlphaAt(
+        DetailEditorialBody.topScrimControlRow,
+      ),
+      DetailEditorialBody.topScrimOpacity,
+      reason: 'the controls sit here; a fading wash is what failed on device',
+    );
+    // And it is a wash, not a bar: gone by its own height, so nothing draws an
+    // edge across the wallpaper.
+    expect(
+      DetailEditorialBody.topScrimAlphaAt(DetailEditorialBody.topScrimHeight),
+      0,
+    );
+    expect(
+      DetailEditorialBody.topScrimAlphaAt(
+        (DetailEditorialBody.topScrimControlRow +
+                DetailEditorialBody.topScrimHeight) /
+            2,
+      ),
+      closeTo(DetailEditorialBody.topScrimOpacity / 2, 0.001),
+    );
+  });
+
+  testWidgets('paints that wash, held and then faded', (
+    WidgetTester tester,
+  ) async {
+    // The constant is only worth pinning if the gradient is actually built from
+    // it — three stops, the first two at the same opacity.
+    await _pump(tester);
+
+    final DecoratedBox scrim = tester.widget<DecoratedBox>(
+      find
+          .descendant(
+            of: find.byType(DetailEditorialBody),
+            matching: find.byType(DecoratedBox),
+          )
+          .first,
+    );
+    final LinearGradient wash =
+        (scrim.decoration as BoxDecoration).gradient! as LinearGradient;
+    expect(
+      wash.colors.first.a,
+      closeTo(DetailEditorialBody.topScrimOpacity, 0.01),
+    );
+    expect(wash.colors[1].a, wash.colors.first.a);
+    expect(wash.colors.last.a, 0);
+  });
 }
 
 /// How far the scenery has been told to drift, from the scope over the body.

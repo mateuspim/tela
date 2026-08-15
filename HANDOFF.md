@@ -1212,12 +1212,17 @@ quote. `tool/device/README.md` says the same thing where the script lives.
   provided` gave a warm brown sheet (`#302A25`) and a peach apply button
   (`#DE9C69`) against the app's neutral `#343539`. The pixel-decode fallback
   works and the colour is one you would have picked.
-- **A genuinely pale wallpaper, for the phone bar's white controls** — 
-  **2.9–3.1:1** (`icon_contrast.py`), against 7:1 on a dark one. It clears the
-  3:1 floor for UI graphics and no more. **Untested and worse:** a wallpaper
-  *taller* than the screen, whose own pixels reach the bar rather than the
-  45%-darkened backdrop. If that case is to be fixed, `_TopScrim` is one
-  gradient stop.
+- **A genuinely pale wallpaper, for the phone bar's white controls** —
+  **2.9–3.1:1** (`icon_contrast.py`), against 7:1 on a dark one: over the 3:1
+  floor for UI graphics by nothing. **Fixed, by the owner's call, and the fix is
+  not the obvious one.** Deepening the top of the ramp was measured to reach only
+  ~3.6:1, because a straight ramp spends its darkness at the top edge where there
+  is nothing to read and arrives at the controls already half gone. The wash now
+  **holds** full strength (0.6) down past `topScrimControlRow` and fades after —
+  same darkness where it is needed, no extra darkness on the wallpaper's top
+  edge. `topScrimAlphaAt` is a pure function so the contract is unit-tested
+  rather than eyeballed. **Untested and worse:** a wallpaper *taller* than the
+  screen, whose own pixels reach the bar rather than the 45%-darkened backdrop.
 
 ### L2b — the original scope, kept for the reasoning (built as option 3 above)
 

@@ -100,6 +100,37 @@ class DetailEditorialBody extends StatefulWidget {
   /// underneath rather than sixty.
   static const double topScrimHeight = 148;
 
+  /// How far down the wash the app bar's own controls sit.
+  ///
+  /// The status bar plus half a toolbar: where the back arrow and the actions
+  /// are actually drawn, which is the only place this wash has to work.
+  static const double topScrimControlRow = 80;
+
+  /// The wash's opacity at the top edge and where it finally reaches zero.
+  ///
+  /// It **holds** at full strength down to [topScrimControlRow] instead of
+  /// fading from the first pixel, which is the whole fix: a straight ramp
+  /// spends most of its darkness above the controls, where there is nothing to
+  /// read, and arrives at them already half gone. Measured on the device
+  /// (SM-X730, 2026-08-14) against a genuinely pale wallpaper, the old ramp
+  /// left the white controls at **2.9:1** — over the 3:1 floor for UI graphics
+  /// by nothing. Holding the wash rather than steepening it buys the contrast
+  /// without making the top edge of every wallpaper darker than it already is.
+  static const double topScrimOpacity = 0.6;
+
+  /// The wash's opacity [dip] logical pixels below the top of the screen.
+  ///
+  /// ```dart
+  /// DetailEditorialBody.topScrimAlphaAt(0); // 0.6, full strength
+  /// ```
+  static double topScrimAlphaAt(double dip) {
+    if (dip <= topScrimControlRow) return topScrimOpacity;
+    if (dip >= topScrimHeight) return 0;
+    final double fade =
+        (dip - topScrimControlRow) / (topScrimHeight - topScrimControlRow);
+    return topScrimOpacity * (1 - fade);
+  }
+
   @override
   State<DetailEditorialBody> createState() => _DetailEditorialBodyState();
 }
@@ -257,6 +288,20 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
 class _TopScrim extends StatelessWidget {
   const _TopScrim();
 
+  /// Where the wash stops holding, as a fraction of its own height.
+  static const double _controlRowStop =
+      DetailEditorialBody.topScrimControlRow /
+      DetailEditorialBody.topScrimHeight;
+
+  /// The held colour, and the nothing it fades to.
+  static const Color _wash = Color.fromRGBO(
+    0,
+    0,
+    0,
+    DetailEditorialBody.topScrimOpacity,
+  );
+  static const Color _clear = Color.fromRGBO(0, 0, 0, 0);
+
   @override
   Widget build(BuildContext context) {
     return const Positioned(
@@ -272,7 +317,10 @@ class _TopScrim extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: <Color>[Color(0x8C000000), Color(0x00000000)],
+              // Three stops, not two: full strength down past the controls,
+              // then out. See DetailEditorialBody.topScrimAlphaAt.
+              stops: <double>[0, _controlRowStop, 1],
+              colors: <Color>[_wash, _wash, _clear],
             ),
           ),
         ),
