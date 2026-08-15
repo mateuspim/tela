@@ -25,6 +25,11 @@ Updated: 2026-08-14
 > full-rate lift strands dead canvas above the sheet. Three layers at three
 > rates: sheet fastest, wallpaper at half, scenery drifting 6% behind both.
 >
+> **The pale wallpaper found a real defect and it is fixed.** See the bullet
+> below: the white bar controls went from **2.9:1 to 7.0:1** on the same
+> wallpaper, by holding the top wash across the controls instead of ramping it
+> from the top edge.
+>
 > **Two device findings worth not re-deriving.** The wide layout's drift span
 > started at 600dp and an ordinary facts pane holds only ~180dp of scroll, so the
 > effect could never spend a third of its travel — 22 device pixels. It is 250dp
@@ -1221,8 +1226,11 @@ quote. `tool/device/README.md` says the same thing where the script lives.
   **holds** full strength (0.6) down past `topScrimControlRow` and fades after —
   same darkness where it is needed, no extra darkness on the wallpaper's top
   edge. `topScrimAlphaAt` is a pure function so the contract is unit-tested
-  rather than eyeballed. **Untested and worse:** a wallpaper *taller* than the
-  screen, whose own pixels reach the bar rather than the 45%-darkened backdrop.
+  rather than eyeballed. **Re-measured on the same wallpaper after the fix:
+  2.9 → 7.00:1, 3.1 → 7.46:1** — the pale case now reads exactly as well as a
+  dark one, and the bar still fades to nothing rather than becoming a slab.
+  **Untested and worse:** a wallpaper *taller* than the screen, whose own pixels
+  reach the bar rather than the 45%-darkened backdrop.
 
 ### L2b — the original scope, kept for the reasoning (built as option 3 above)
 
