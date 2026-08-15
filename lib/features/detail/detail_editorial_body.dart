@@ -24,7 +24,8 @@ import 'package:tela/core/ui/backdrop_drift_scope.dart';
 /// The sheet has three sizes — a peek, a middle 42%, and nearly full — and it
 /// snaps between them. It **opens at the peek**, so the wallpaper arrives
 /// unobstructed, and raising it *bumps the picture up* rather than covering it.
-/// See [peekSheetFraction], which the device demanded.
+/// See [peekSheetHeight], which the device demanded twice — once for the peek
+/// itself and once for it being a height rather than a fraction.
 ///
 /// It also owns the one moving part of the arrangement: dragging the sheet
 /// drifts the wallpaper's blurred scenery behind it, published through a
@@ -64,23 +65,59 @@ class DetailEditorialBody extends StatefulWidget {
 
   /// The sheet's middle size — a snap stop between the peek and full.
   ///
-  /// The screen no longer *opens* here: see [peekSheetFraction]. It stays as
+  /// The screen no longer *opens* here: see [peekSheetHeight]. It stays as
   /// the size a single upward flick lands on, which is the old resting layout —
   /// enough facts to answer "what is this" without losing the picture.
   static const double restingSheetFraction = 0.42;
 
-  /// The size the screen opens at, and the sheet's floor.
+  /// The size the screen opens at, and the sheet's floor — **in dip, not a
+  /// fraction.**
   ///
-  /// The device settled this one (SM-X730, 2026-08-14). The screen used to open
-  /// at [restingSheetFraction] with no way down, so a phone showed every
-  /// wallpaper with its bottom two fifths behind a panel — "the image is behind
-  /// the details and i cant hide it", as the owner put it. The wallpaper is the
-  /// subject, so it arrives unobstructed and the facts are asked for.
-  ///
-  /// A peek and not zero: what is left is the grip and the first heading, so
-  /// the sheet is still visibly *there* to be pulled up. One that can vanish
+  /// The device settled that there *is* a peek (SM-X730, 2026-08-14). The
+  /// screen used to open at [restingSheetFraction] with no way down, so a phone
+  /// showed every wallpaper with its bottom two fifths behind a panel — "the
+  /// image is behind the details and i cant hide it", as the owner put it. The
+  /// wallpaper is the subject, so it arrives unobstructed and the facts are
+  /// asked for. A peek and not zero: what is left is the grip and the heading,
+  /// so the sheet is still visibly *there* to be pulled up. One that can vanish
   /// is a feature the user has to rediscover.
-  static const double peekSheetFraction = 0.12;
+  ///
+  /// The device settled the *unit* a day later: "the details when minimized its
+  /// clipping" (2026-08-15). It was 0.12 of the sheet's box, and a fraction
+  /// cannot know where the heading ends — so it landed **inside the first fact
+  /// row**, showing its top half sliced off by the sheet's own bottom edge, and
+  /// landed somewhere different on every screen size. This is the exact height
+  /// of what the peek is *for*, so the cut falls on the seam below the heading
+  /// on every device:
+  ///
+  /// | | dip |
+  /// |---|---|
+  /// | [sheetGripHeight]: 12 margin + 4 bar + 4 margin | 20 |
+  /// | `WallpaperMetadata`'s top padding | 8 |
+  /// | "Details", `titleLarge` at 22sp | 28 |
+  /// | its gap before the fact grid | 12 |
+  /// | **total** | **68** |
+  ///
+  /// Change `WallpaperMetadata`'s heading and this number is stale, so it is
+  /// spelled out as a sum rather than left as 68 — and the second term is
+  /// pinned against the real widget by `wallpaper_metadata_test`, which goes
+  /// red rather than letting the peek quietly start clipping again.
+  static const double peekSheetHeight = 68;
+
+  /// [peekSheetHeight] as a fraction of a sheet box [arena] dip tall.
+  ///
+  /// Clamped below [restingSheetFraction] so the snap stop always stays above
+  /// the floor: on a very short box — a split-screen window, a landscape phone
+  /// — the heading's own height could otherwise exceed the resting size, and
+  /// `DraggableScrollableSheet` asserts on a snap size outside its range.
+  ///
+  /// ```dart
+  /// DetailEditorialBody.peekFractionIn(800); // 0.085
+  /// ```
+  static double peekFractionIn(double arena) {
+    if (arena <= 0) return restingSheetFraction;
+    return (peekSheetHeight / arena).clamp(0.0, restingSheetFraction);
+  }
 
   /// How far the sheet rises when dragged up.
   ///
@@ -90,6 +127,12 @@ class DetailEditorialBody extends StatefulWidget {
 
   /// Breathing room at the foot of the sheet's content.
   static const double sheetFootRoom = 24;
+
+  /// The grip's whole vertical footprint: 12 margin + 4 bar + 4 margin.
+  ///
+  /// Named because [peekSheetHeight] is a sum and this is one of its terms —
+  /// `wallpaper_metadata_test` pins the other one against the real heading.
+  static const double sheetGripHeight = 20;
 
   /// Stable hook for tests asserting where the sheet has come to rest.
   ///
@@ -178,19 +221,19 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
   /// Three layers at three rates, which is what makes the screen read as having
   /// depth: the sheet travels fastest, the wallpaper is bumped at half that,
   /// and the blurred scenery behind it drifts by 6% of its height over the
-  /// whole gesture. Both are measured from the peek, where the screen opens, so
-  /// nothing has moved at the moment the user arrives.
+  /// whole gesture. Both are measured from the notification's own `minExtent`
+  /// — the peek, where the screen opens — so nothing has moved at the moment
+  /// the user arrives, and neither has to know that the floor is now computed
+  /// from a height rather than named as a fraction.
   ///
   /// Returns false: the notification keeps bubbling, so nothing above this body
   /// loses the sheet's extent by our listening for it.
   bool _sheetDragged(DraggableScrollableNotification sheet) {
-    const double travel =
-        DetailEditorialBody.fullSheetFraction -
-        DetailEditorialBody.peekSheetFraction;
-    final double risen =
-        (sheet.extent - DetailEditorialBody.peekSheetFraction) / travel;
+    final double travel = sheet.maxExtent - sheet.minExtent;
+    if (travel <= 0) return false;
+    final double risen = (sheet.extent - sheet.minExtent) / travel;
     _drift.value = -risen.clamp(0.0, 1.0);
-    _lift.value = (sheet.extent - DetailEditorialBody.peekSheetFraction) / 2;
+    _lift.value = (sheet.extent - sheet.minExtent) / 2;
     return false;
   }
 
@@ -248,17 +291,26 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
   ///
   /// Nothing outside it is hit-testable, which is what lets the wallpaper under
   /// the whole `Column` still take the pinch and the hold-to-copy.
+  ///
+  /// Behind a `LayoutBuilder` because the floor is a height and this widget
+  /// only speaks fractions — and the box to divide by is this one, the body
+  /// *minus the apply button*, which no `MediaQuery` above knows.
   Widget _draggableSheet() {
-    return DraggableScrollableSheet(
-      initialChildSize: DetailEditorialBody.peekSheetFraction,
-      minChildSize: DetailEditorialBody.peekSheetFraction,
-      maxChildSize: DetailEditorialBody.fullSheetFraction,
-      // Snapped, so the sheet always comes to rest at one of its three sizes
-      // instead of wherever the finger left it. A sheet abandoned at 31% is
-      // what reads as a stuck scroll.
-      snap: true,
-      snapSizes: const <double>[DetailEditorialBody.restingSheetFraction],
-      builder: _sheet,
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints arena) {
+        final double peek = DetailEditorialBody.peekFractionIn(arena.maxHeight);
+        return DraggableScrollableSheet(
+          initialChildSize: peek,
+          minChildSize: peek,
+          maxChildSize: DetailEditorialBody.fullSheetFraction,
+          // Snapped, so the sheet always comes to rest at one of its three
+          // sizes instead of wherever the finger left it. A sheet abandoned at
+          // 31% is what reads as a stuck scroll.
+          snap: true,
+          snapSizes: const <double>[DetailEditorialBody.restingSheetFraction],
+          builder: _sheet,
+        );
+      },
     );
   }
 

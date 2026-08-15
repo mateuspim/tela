@@ -98,20 +98,18 @@ void main() {
     // whole and the facts are asked for.
     await _pump(tester);
 
-    // Measured against the sheet's own arena — the body above the apply button
-    // — and no longer against the image, which since the full-bleed change is
-    // the whole body and so would report a different fraction for an
-    // unchanged sheet. This is the yardstick the fraction is actually in.
-    final Rect body = tester.getRect(find.byType(DetailEditorialBody));
+    // Asserted in dip, because the peek is a height: it is exactly the grip
+    // plus the heading, so the sheet's bottom edge never slices a fact row in
+    // half. "the details when minimized its clipping", as the owner put it
+    // (2026-08-15) — a fraction cannot know where the heading ends.
     final Rect apply = tester.getRect(find.byKey(_apply));
-    final double arena = apply.top - body.top;
     final double sheetTop = tester
         .getTopLeft(find.byKey(DetailEditorialBody.sheetKey))
         .dy;
 
     expect(
-      (sheetTop - body.top) / arena,
-      closeTo(1 - DetailEditorialBody.peekSheetFraction, 0.02),
+      apply.top - sheetTop,
+      closeTo(DetailEditorialBody.peekSheetHeight, 1),
       reason: 'the wallpaper must arrive whole, not two fifths behind a panel',
     );
   });
@@ -301,7 +299,7 @@ void main() {
         (area.bottom - tester.getTopLeft(sheet).dy) / area.height;
     expect(
       <double>[
-        DetailEditorialBody.peekSheetFraction,
+        DetailEditorialBody.peekFractionIn(area.height),
         DetailEditorialBody.restingSheetFraction,
         DetailEditorialBody.fullSheetFraction,
       ].map((double size) => (settled - size).abs()).reduce(min),
