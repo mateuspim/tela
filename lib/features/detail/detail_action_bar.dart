@@ -44,27 +44,20 @@ import 'package:tela/features/favorites/favorite_button.dart';
 /// than a list of builders: a download that is in flight concerns this row and
 /// nothing else on the screen, so nothing else needs to rebuild for it.
 ///
-/// Sits in the app bar when Detail is compact and above the metadata pane when
-/// it is expanded; [expanded] is only about the arrangement — the favorite
-/// pushed to the far left, away from the rest — never about what is offered.
+/// Sits in Detail's floating app bar, over the wallpaper itself. It once had a
+/// second arrangement — spread wide, the favorite pushed away from the rest —
+/// for the two-pane wide layout's information pane; that layout is gone and so
+/// is the flag.
 ///
 /// ```dart
-/// DetailActionBar(wallpaper: wallpaper, expanded: false)
+/// DetailActionBar(wallpaper: wallpaper)
 /// ```
 class DetailActionBar extends ConsumerStatefulWidget {
   /// Creates the action row for [wallpaper].
-  const DetailActionBar({
-    required this.wallpaper,
-    this.expanded = false,
-    super.key,
-  });
+  const DetailActionBar({required this.wallpaper, super.key});
 
   /// The wallpaper every action here acts on.
   final Wallpaper wallpaper;
-
-  /// Whether to spread the favorite away from the rest, as the wide layout's
-  /// information pane does.
-  final bool expanded;
 
   @override
   ConsumerState<DetailActionBar> createState() => _DetailActionBarState();
@@ -355,10 +348,9 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final DownloadRecord? downloaded = _downloadedRecord();
     return Row(
-      mainAxisSize: widget.expanded ? MainAxisSize.max : MainAxisSize.min,
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         FavoriteButton(wallpaper: _wallpaper),
-        if (widget.expanded) const Spacer(),
         _adjustButton(l10n),
         _shareButton(l10n),
         _downloadButton(l10n),

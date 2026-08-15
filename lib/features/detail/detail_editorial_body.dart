@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/ui/backdrop_drift_scope.dart';
 
-/// Detail on a phone: the wallpaper full-bleed, its facts on a sheet over it.
+/// Detail, at every width: the wallpaper full-bleed, its facts on a sheet.
 ///
-/// The narrow half of the split C3 built. A phone has no room to put anything
-/// *beside* a wallpaper, so the old layout stacked a fixed-height preview above
-/// a scrolling panel and the image was a picture in a box. Here the image is
-/// the page and everything else rides over it — which is the one arrangement
-/// that lets a phone show a wallpaper at the size a wallpaper is judged at.
+/// Built as the narrow half of the split C3 made. A phone has no room to put
+/// anything *beside* a wallpaper, so the old layout stacked a fixed-height
+/// preview above a scrolling panel and the image was a picture in a box. Here
+/// the image is the page and everything else rides over it — the one
+/// arrangement that shows a wallpaper at the size a wallpaper is judged at.
 ///
-/// **This is not the tablet's layout and must not become it.** With 440dp of
-/// pane free beside the image, a sheet over the picture covers the very thing
-/// it is describing; the wide layout keeps its two panes. `_expandedWidth` on
-/// the detail screen is the only place that choice is made.
+/// **It used to say it must not become the tablet's layout, and it now is it.**
+/// The argument for the two panes was real: with 440dp free beside the image, a
+/// sheet over the picture covers the very thing it describes. What beat it was
+/// use — the owner drove both on an SM-X730 and chose this one (2026-08-14).
+/// Three of the four things below are compact-only by construction, and the
+/// tablet had none of them: the peek the wallpaper arrives behind, the snapping
+/// between three sizes, and the bump. The fourth, the scenery drift, reached
+/// the pane in the one form that fails silently — the pane's own scroll drove
+/// it, and an ordinary wallpaper's facts hold about 180dp of scroll, so on many
+/// wallpapers nothing moved at all. One layout answers all four at once, which
+/// is why this is not a patch to the pane.
 ///
 /// The sheet has three sizes — a peek, a middle 42%, and nearly full — and it
 /// snaps between them. It **opens at the peek**, so the wallpaper arrives
