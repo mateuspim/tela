@@ -9,6 +9,7 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/ambient_wallpaper_theme.dart';
+import 'package:tela/core/ui/backdrop_drift_scope.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/tela_toast.dart';
@@ -106,6 +107,14 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   late final GallerySessionController<Wallpaper> _gallery;
   late final bool _ownsGallery;
 
+  /// How far the wide layout's blurred scenery has drifted, -1..1.
+  ///
+  /// The phone layout owns its own — `DetailEditorialBody` drives that one off
+  /// the sheet. This is the tablet's driver, and it is a different gesture on
+  /// purpose: there the facts are a *pane*, and scrolling it is the only motion
+  /// the screen has.
+  final ValueNotifier<double> _paneDrift = ValueNotifier<double>(0);
+
   Wallpaper get _wallpaper => _gallery.selectedItem;
 
   @override
@@ -134,6 +143,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   @override
   void dispose() {
     _gallery.removeListener(_selectionChanged);
+    _paneDrift.dispose();
     if (_ownsGallery) _gallery.dispose();
     super.dispose();
   }
@@ -311,45 +321,81 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     String sourceName,
   ) {
     final ColorScheme colors = Theme.of(context).colorScheme;
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: ColoredBox(
-                key: const Key('detail-preview-pane'),
-                color: Colors.black,
-                child: _preview(),
+    return BackdropDriftScope(
+      drift: _paneDrift,
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: ColoredBox(
+                  key: const Key('detail-preview-pane'),
+                  color: Colors.black,
+                  child: _preview(),
+                ),
               ),
             ),
           ),
-        ),
-        SizedBox(
-          key: const Key('detail-information-pane'),
-          width: 440,
-          child: ColoredBox(
-            color: colors.surfaceContainerLow,
-            child: Column(
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                  child: DetailActionBar(wallpaper: _wallpaper, expanded: true),
-                ),
-                const Divider(),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: _metadata(details, l10n, sourceName),
+          SizedBox(
+            key: const Key('detail-information-pane'),
+            width: 440,
+            child: ColoredBox(
+              color: colors.surfaceContainerLow,
+              child: Column(
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                    child: DetailActionBar(
+                      wallpaper: _wallpaper,
+                      expanded: true,
+                    ),
                   ),
-                ),
-                DetailApplyButton(wallpaper: _wallpaper),
-              ],
+                  const Divider(),
+                  Expanded(
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: _paneScrolled,
+                      child: SingleChildScrollView(
+                        child: _metadata(details, l10n, sourceName),
+                      ),
+                    ),
+                  ),
+                  DetailApplyButton(wallpaper: _wallpaper),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
+  }
+
+  /// How far the information pane must scroll for the scenery to drift fully.
+  ///
+  /// A distance rather than a fraction of the pane's content, so the scenery
+  /// moves at the same *rate* whatever the wallpaper's metadata happens to
+  /// weigh — a picture with forty tags would otherwise drift a tenth as fast as
+  /// one with two, for the same finger travel.
+  ///
+  /// Measured on the device (SM-X730, 2026-08-14): an ordinary wallpaper's pane
+  /// has only about 180dp of scroll in it, so at the 600 this started on the
+  /// effect could never spend more than a third of its travel — 22 device
+  /// pixels of drift, which is nothing. 250 lets a typical pane spend most of
+  /// it and simply comes to rest early on a long one.
+  static const double _paneDriftSpan = 250;
+
+  /// Drifts the scenery up as the facts beside it are scrolled up.
+  ///
+  /// Reads the notification rather than owning a `ScrollController`: the pane's
+  /// scroll view builds its own, and taking that over would mean disposing a
+  /// controller for an effect that is pure decoration.
+  ///
+  /// Returns false so the notification carries on up the tree.
+  bool _paneScrolled(ScrollNotification pane) {
+    if (pane.depth > 0) return false;
+    _paneDrift.value = -(pane.metrics.pixels / _paneDriftSpan).clamp(0.0, 1.0);
+    return false;
   }
 
   Widget _preview() {

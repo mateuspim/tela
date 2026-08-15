@@ -1,7 +1,9 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/core/network/wallpaper_image_caches.dart';
+import 'package:tela/core/ui/backdrop_drift_scope.dart';
 import 'package:tela/core/ui/blurred_image_backdrop.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
 import 'package:tela/core/ui/progressive_network_gallery_source.dart';
@@ -98,6 +100,92 @@ void main() {
     });
   });
 
+  group('BlurredImageBackdrop drift', () {
+    testWidgets('stands still with no scope over it', (
+      WidgetTester tester,
+    ) async {
+      // The immersive viewer, the crop editor and every test that mounts a
+      // backdrop alone get exactly the tree that existed before drift did.
+      await _pumpBackdrop(tester);
+
+      expect(_driftOf(tester), isNull);
+      expect(find.byType(ValueListenableBuilder<double>), findsNothing);
+    });
+
+    testWidgets('slides with the surface the scope is publishing', (
+      WidgetTester tester,
+    ) async {
+      final ValueNotifier<double> drift = ValueNotifier<double>(0);
+      addTearDown(drift.dispose);
+      await _pumpBackdrop(tester, drift: drift);
+
+      expect(_driftOf(tester)!.dy, 0);
+
+      drift.value = -1;
+      await tester.pump();
+
+      // Up by the whole headroom, as a fraction of the frame's own height —
+      // the same 6% the tile entrance lifts by.
+      expect(_driftOf(tester)!.dy, -BlurredImageBackdrop.driftHeadroom);
+    });
+
+    testWidgets('never slides past the scenery it has room for', (
+      WidgetTester tester,
+    ) async {
+      // A caller that maps its gesture wrongly must not be able to drag the
+      // blurred layer off its own frame and expose the black canvas beneath.
+      final ValueNotifier<double> drift = ValueNotifier<double>(-4);
+      addTearDown(drift.dispose);
+      await _pumpBackdrop(tester, drift: drift);
+
+      expect(_driftOf(tester)!.dy, -BlurredImageBackdrop.driftHeadroom);
+    });
+
+    testWidgets('is drawn larger than its frame, so no blurred edge shows', (
+      WidgetTester tester,
+    ) async {
+      // TileMode.decal fades the blur to transparent at the layer's bounds. At
+      // full drift an exact margin would walk that fade into view as a dark
+      // band, so the scenery is drawn with twice the travel to spare.
+      final ValueNotifier<double> drift = ValueNotifier<double>(0);
+      addTearDown(drift.dispose);
+      await _pumpBackdrop(tester, drift: drift);
+
+      final Transform scaled = tester.widget<Transform>(
+        find.descendant(
+          of: find.byKey(BlurredImageBackdrop.backdropKey),
+          matching: find.byType(Transform),
+        ),
+      );
+      final double scale = scaled.transform.getMaxScaleOnAxis();
+      expect(scale, greaterThan(1 + 2 * BlurredImageBackdrop.driftHeadroom));
+    });
+
+    testWidgets('holds still for reduce-motion', (WidgetTester tester) async {
+      // Scroll-linked parallax is the effect that setting names outright.
+      final ValueNotifier<double> drift = ValueNotifier<double>(-1);
+      addTearDown(drift.dispose);
+      await _pumpBackdrop(tester, drift: drift, disableAnimations: true);
+
+      expect(_driftOf(tester), isNull);
+    });
+
+    testWidgets('keeps the letterbox filled at every drift', (
+      WidgetTester tester,
+    ) async {
+      // Layout is untouched by the slide: a paint-time transform, so the
+      // backdrop still measures the box it fills.
+      final ValueNotifier<double> drift = ValueNotifier<double>(-1);
+      addTearDown(drift.dispose);
+      await _pumpBackdrop(tester, drift: drift, boxSize: const Size(400, 300));
+
+      expect(
+        tester.getSize(find.byType(CachedNetworkImage)),
+        const Size(400, 300),
+      );
+    });
+  });
+
   group('GalleryViewport backdrop', () {
     testWidgets('fills the viewport, not the contained frame', (
       WidgetTester tester,
@@ -188,17 +276,37 @@ BoxDecoration? _frameEdge(WidgetTester tester) {
   return null;
 }
 
+/// The fractional offset the scenery is drifted by, or null where it is still.
+Offset? _driftOf(WidgetTester tester) {
+  final Iterable<FractionalTranslation> slid = tester
+      .widgetList<FractionalTranslation>(
+        find.descendant(
+          of: find.byKey(BlurredImageBackdrop.backdropKey),
+          matching: find.byType(FractionalTranslation),
+        ),
+      );
+  return slid.isEmpty ? null : slid.first.translation;
+}
+
 Future<void> _pumpBackdrop(
   WidgetTester tester, {
   Size boxSize = const Size(300, 200),
+  ValueListenable<double>? drift,
+  bool disableAnimations = false,
 }) async {
+  const Widget backdrop = BlurredImageBackdrop(imageUrl: _backdropUrl);
   await tester.pumpWidget(
     MaterialApp(
-      home: Center(
-        child: SizedBox(
-          width: boxSize.width,
-          height: boxSize.height,
-          child: const BlurredImageBackdrop(imageUrl: _backdropUrl),
+      home: MediaQuery(
+        data: MediaQueryData(disableAnimations: disableAnimations),
+        child: Center(
+          child: SizedBox(
+            width: boxSize.width,
+            height: boxSize.height,
+            child: drift == null
+                ? backdrop
+                : BackdropDriftScope(drift: drift, child: backdrop),
+          ),
         ),
       ),
     ),

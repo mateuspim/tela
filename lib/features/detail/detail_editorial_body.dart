@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tela/core/ui/backdrop_drift_scope.dart';
 
 /// Detail on a phone: the wallpaper full-bleed, its facts on a sheet over it.
 ///
@@ -13,6 +14,16 @@ import 'package:flutter/material.dart';
 /// it is describing; the wide layout keeps its two panes. `_expandedWidth` on
 /// the detail screen is the only place that choice is made.
 ///
+/// The sheet has three sizes — a peek, a middle 42%, and nearly full — and it
+/// snaps between them. It **opens at the peek**, so the wallpaper arrives
+/// unobstructed, and raising it *bumps the picture up* rather than covering it.
+/// See [peekSheetFraction], which the device demanded.
+///
+/// It also owns the one moving part of the arrangement: dragging the sheet
+/// drifts the wallpaper's blurred scenery behind it, published through a
+/// `BackdropDriftScope`. That is the parallax the browse wall could not have —
+/// nothing on a shelf may be cropped, and the letterbox backdrop already is.
+///
 /// Pure layout: it takes the three pieces already built and arranges them, so
 /// it can be tested without a wallpaper, a source, or a network.
 ///
@@ -23,7 +34,7 @@ import 'package:flutter/material.dart';
 ///   applyButton: DetailApplyButton(wallpaper: wallpaper),
 /// );
 /// ```
-class DetailEditorialBody extends StatelessWidget {
+class DetailEditorialBody extends StatefulWidget {
   /// Arranges [preview], [metadata] and [applyButton] as one page.
   const DetailEditorialBody({
     required this.preview,
@@ -44,12 +55,25 @@ class DetailEditorialBody extends StatelessWidget {
   /// wallpaper, and a button you must first scroll to is a fourth.
   final Widget applyButton;
 
-  /// How much of the screen the sheet covers at rest.
+  /// The sheet's middle size — a snap stop between the peek and full.
   ///
-  /// The remaining 58% is exactly what the old fixed-height preview occupied,
-  /// so the wallpaper is no smaller than it was — what changed is that it now
-  /// continues *behind* the sheet instead of stopping at a seam.
+  /// The screen no longer *opens* here: see [peekSheetFraction]. It stays as
+  /// the size a single upward flick lands on, which is the old resting layout —
+  /// enough facts to answer "what is this" without losing the picture.
   static const double restingSheetFraction = 0.42;
+
+  /// The size the screen opens at, and the sheet's floor.
+  ///
+  /// The device settled this one (SM-X730, 2026-08-14). The screen used to open
+  /// at [restingSheetFraction] with no way down, so a phone showed every
+  /// wallpaper with its bottom two fifths behind a panel — "the image is behind
+  /// the details and i cant hide it", as the owner put it. The wallpaper is the
+  /// subject, so it arrives unobstructed and the facts are asked for.
+  ///
+  /// A peek and not zero: what is left is the grip and the first heading, so
+  /// the sheet is still visibly *there* to be pulled up. One that can vanish
+  /// is a feature the user has to rediscover.
+  static const double peekSheetFraction = 0.12;
 
   /// How far the sheet rises when dragged up.
   ///
@@ -76,6 +100,102 @@ class DetailEditorialBody extends StatelessWidget {
   /// underneath rather than sixty.
   static const double topScrimHeight = 148;
 
+  /// How far down the wash the app bar's own controls sit.
+  ///
+  /// The status bar plus half a toolbar: where the back arrow and the actions
+  /// are actually drawn, which is the only place this wash has to work.
+  static const double topScrimControlRow = 80;
+
+  /// The wash's opacity at the top edge and where it finally reaches zero.
+  ///
+  /// It **holds** at full strength down to [topScrimControlRow] instead of
+  /// fading from the first pixel, which is the whole fix: a straight ramp
+  /// spends most of its darkness above the controls, where there is nothing to
+  /// read, and arrives at them already half gone. Measured on the device
+  /// (SM-X730, 2026-08-14) against a genuinely pale wallpaper, the old ramp
+  /// left the white controls at **2.9:1** — over the 3:1 floor for UI graphics
+  /// by nothing. Holding the wash rather than steepening it buys the contrast
+  /// without making the top edge of every wallpaper darker than it already is.
+  static const double topScrimOpacity = 0.6;
+
+  /// The wash's opacity [dip] logical pixels below the top of the screen.
+  ///
+  /// ```dart
+  /// DetailEditorialBody.topScrimAlphaAt(0); // 0.6, full strength
+  /// ```
+  static double topScrimAlphaAt(double dip) {
+    if (dip <= topScrimControlRow) return topScrimOpacity;
+    if (dip >= topScrimHeight) return 0;
+    final double fade =
+        (dip - topScrimControlRow) / (topScrimHeight - topScrimControlRow);
+    return topScrimOpacity * (1 - fade);
+  }
+
+  @override
+  State<DetailEditorialBody> createState() => _DetailEditorialBodyState();
+}
+
+class _DetailEditorialBodyState extends State<DetailEditorialBody> {
+  /// How far the wallpaper's own blurred scenery has drifted, -1..1.
+  ///
+  /// A notifier rather than `setState` because the sheet reports every frame of
+  /// a drag: rebuilding this body would rebuild the preview, the pager and the
+  /// sheet's whole list to move a background by a few pixels.
+  final ValueNotifier<double> _drift = ValueNotifier<double>(0);
+
+  /// How far the wallpaper itself is bumped up, as a fraction of its height.
+  ///
+  /// The sheet does not cover the picture, it *pushes* it: rising by half of
+  /// what the sheet takes keeps the image centred in the strip left above it,
+  /// so raising the facts moves the wallpaper out of their way instead of
+  /// hiding it. Half, so the preview's own bottom edge always stays under the
+  /// sheet — a full-rate lift would open a gap of dead canvas beneath it.
+  final ValueNotifier<double> _lift = ValueNotifier<double>(0);
+
+  @override
+  void dispose() {
+    _drift.dispose();
+    _lift.dispose();
+    super.dispose();
+  }
+
+  /// Drifts the scenery, and bumps the wallpaper, as the sheet is moved.
+  ///
+  /// Three layers at three rates, which is what makes the screen read as having
+  /// depth: the sheet travels fastest, the wallpaper is bumped at half that,
+  /// and the blurred scenery behind it drifts by 6% of its height over the
+  /// whole gesture. Both are measured from the peek, where the screen opens, so
+  /// nothing has moved at the moment the user arrives.
+  ///
+  /// Returns false: the notification keeps bubbling, so nothing above this body
+  /// loses the sheet's extent by our listening for it.
+  bool _sheetDragged(DraggableScrollableNotification sheet) {
+    const double travel =
+        DetailEditorialBody.fullSheetFraction -
+        DetailEditorialBody.peekSheetFraction;
+    final double risen =
+        (sheet.extent - DetailEditorialBody.peekSheetFraction) / travel;
+    _drift.value = -risen.clamp(0.0, 1.0);
+    _lift.value = (sheet.extent - DetailEditorialBody.peekSheetFraction) / 2;
+    return false;
+  }
+
+  /// The wallpaper, bumped up by whatever the sheet has taken from it.
+  ///
+  /// Only the translation rebuilds: the preview is the builder's `child`, so a
+  /// drag never rebuilds the pager or re-requests an image.
+  Widget _bumped(Widget preview) {
+    return ValueListenableBuilder<double>(
+      valueListenable: _lift,
+      builder: (BuildContext context, double lift, Widget? child) =>
+          FractionalTranslation(
+            translation: Offset(0, -lift),
+            child: child,
+          ),
+      child: preview,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // The button is laid out in normal flow *below* the image, not positioned
@@ -85,24 +205,37 @@ class DetailEditorialBody extends StatelessWidget {
     // clipped clean off (seen on the SM-X730, 2026-08-14). Nothing is lost by
     // this — the sheet covers the foot of the screen at every size it can take,
     // so no wallpaper was ever visible behind the button anyway.
-    return Column(
-      children: <Widget>[
-        Expanded(
-          child: Stack(
-            children: <Widget>[
-              Positioned.fill(child: preview),
-              const _TopScrim(),
-              DraggableScrollableSheet(
-                initialChildSize: restingSheetFraction,
-                minChildSize: restingSheetFraction,
-                maxChildSize: fullSheetFraction,
-                builder: _sheet,
+    return BackdropDriftScope(
+      drift: _drift,
+      child: Column(
+        children: <Widget>[
+          Expanded(
+            child: NotificationListener<DraggableScrollableNotification>(
+              onNotification: _sheetDragged,
+              child: Stack(
+                children: <Widget>[
+                  Positioned.fill(child: _bumped(widget.preview)),
+                  const _TopScrim(),
+                  DraggableScrollableSheet(
+                    initialChildSize: DetailEditorialBody.peekSheetFraction,
+                    minChildSize: DetailEditorialBody.peekSheetFraction,
+                    maxChildSize: DetailEditorialBody.fullSheetFraction,
+                    // Snapped, so the sheet always comes to rest at one of its
+                    // three sizes instead of wherever the finger left it. A
+                    // sheet abandoned at 31% is what reads as a stuck scroll.
+                    snap: true,
+                    snapSizes: const <double>[
+                      DetailEditorialBody.restingSheetFraction,
+                    ],
+                    builder: _sheet,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-        _footed(context, applyButton),
-      ],
+          _footed(context, widget.applyButton),
+        ],
+      ),
     );
   }
 
@@ -135,15 +268,17 @@ class DetailEditorialBody extends StatelessWidget {
   Widget _sheet(BuildContext context, ScrollController controller) {
     final ColorScheme colors = Theme.of(context).colorScheme;
     return DecoratedBox(
-      key: sheetKey,
+      key: DetailEditorialBody.sheetKey,
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: ListView(
         controller: controller,
-        padding: const EdgeInsets.only(bottom: sheetFootRoom),
-        children: <Widget>[const _SheetGrip(), metadata],
+        padding: const EdgeInsets.only(
+          bottom: DetailEditorialBody.sheetFootRoom,
+        ),
+        children: <Widget>[const _SheetGrip(), widget.metadata],
       ),
     );
   }
@@ -152,6 +287,20 @@ class DetailEditorialBody extends StatelessWidget {
 /// The wash that keeps the back arrow readable over a bright wallpaper.
 class _TopScrim extends StatelessWidget {
   const _TopScrim();
+
+  /// Where the wash stops holding, as a fraction of its own height.
+  static const double _controlRowStop =
+      DetailEditorialBody.topScrimControlRow /
+      DetailEditorialBody.topScrimHeight;
+
+  /// The held colour, and the nothing it fades to.
+  static const Color _wash = Color.fromRGBO(
+    0,
+    0,
+    0,
+    DetailEditorialBody.topScrimOpacity,
+  );
+  static const Color _clear = Color.fromRGBO(0, 0, 0, 0);
 
   @override
   Widget build(BuildContext context) {
@@ -168,7 +317,10 @@ class _TopScrim extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: <Color>[Color(0x8C000000), Color(0x00000000)],
+              // Three stops, not two: full strength down past the controls,
+              // then out. See DetailEditorialBody.topScrimAlphaAt.
+              stops: <double>[0, _controlRowStop, 1],
+              colors: <Color>[_wash, _wash, _clear],
             ),
           ),
         ),

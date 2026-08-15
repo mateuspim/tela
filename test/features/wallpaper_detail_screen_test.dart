@@ -10,6 +10,7 @@ import 'package:tela/app/theme.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/ambient_wallpaper_theme.dart';
+import 'package:tela/core/ui/backdrop_drift_scope.dart';
 import 'package:tela/core/ui/blurred_image_backdrop.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
@@ -469,6 +470,36 @@ void main() {
     expect(preview.dx, lessThan(information.dx));
   });
 
+  testWidgets('drifts the preview scenery as the facts beside it scroll', (
+    WidgetTester tester,
+  ) async {
+    // The tablet's half of L2b. Parallax on the browse wall would have meant
+    // cropping every thumbnail, which `justified_rows.dart` forbids three
+    // times over; this letterbox backdrop is `BoxFit.cover` already, so
+    // drifting it costs no law. The pane's scroll is the driver here because
+    // the wide layout has no sheet to drag.
+    tester.view.physicalSize = const Size(1200, 400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpDetail(tester, _details());
+    expect(_paneDrift(tester), 0);
+
+    await tester.drag(
+      find.descendant(
+        of: find.byKey(const Key('detail-information-pane')),
+        matching: find.byType(SingleChildScrollView),
+      ),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+
+    // Up, with the facts, and never further than the scenery has room for.
+    expect(_paneDrift(tester), lessThan(0));
+    expect(_paneDrift(tester), greaterThanOrEqualTo(-1));
+  });
+
   testWidgets('fills the preview letterbox with the wallpaper itself', (
     WidgetTester tester,
   ) async {
@@ -844,6 +875,7 @@ void main() {
     final FakeExternalLink links = FakeExternalLink();
     final WallpaperDetails details = _details();
     await _pumpDetail(tester, details, externalLink: links);
+    await _reveal(tester, find.text('View on Wallhaven'));
 
     await tester.tap(find.text('View on Wallhaven'));
     await tester.pumpAndSettle();
@@ -888,6 +920,7 @@ void main() {
       failure: const ExternalLinkFailure(ExternalLinkProblem.unavailable),
     );
     await _pumpDetail(tester, _details(), externalLink: links);
+    await _reveal(tester, find.text('View on Wallhaven'));
 
     await tester.tap(find.text('View on Wallhaven'));
     await tester.pumpAndSettle();
@@ -1246,6 +1279,16 @@ Future<void> _tallSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
+/// Brings something on the fact sheet into view, as a user on a phone must.
+///
+/// The compact layout opens at a peek so the wallpaper arrives unobstructed, so
+/// anything past the first heading has to be asked for — in a test exactly as
+/// on the device.
+Future<void> _reveal(WidgetTester tester, Finder target) async {
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
+}
+
 /// Rests a finger on the image long enough for [ShelfSwipe] to call it a hold.
 ///
 /// Targets the viewport's own image frame rather than the screen centre: Detail
@@ -1457,3 +1500,11 @@ ColorScheme _detailScheme(WidgetTester tester) => Theme.of(
 /// from just *above* the wrapper, which is the only place it survives.
 ColorScheme _untintedScheme(WidgetTester tester) =>
     Theme.of(tester.element(find.byType(AmbientWallpaperTheme))).colorScheme;
+
+/// How far the wide layout has told its scenery to drift.
+double _paneDrift(WidgetTester tester) {
+  return tester
+      .widget<BackdropDriftScope>(find.byType(BackdropDriftScope))
+      .drift
+      .value;
+}

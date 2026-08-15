@@ -2,7 +2,49 @@
 
 Updated: 2026-08-14
 
-> **START HERE — pass L is complete: all four threads built, merged and seen on
+> **START HERE — L2b is built and the phone layout was rebuilt around what the
+> owner saw** (2026-08-14, branch `feat/backdrop-parallax`). Dart **1392** (from
+> 1378), Kotlin **136** untouched, analyze and format clean. Three commits, two
+> of them written from the device.
+>
+> **L2b shipped as option 3: Detail's blurred backdrop drifts, and the wall was
+> never touched.** Parallax needs the image taller than its box; `justified_rows`
+> promises three times over that nothing on a shelf is cropped. The letterbox
+> backdrop is `BoxFit.cover` already, so drifting *it* costs no law. Measured on
+> the SM-X730: scrolling the tablet's facts pane drifts **both** letterbox bands
+> up by an identical amount, MSE **0.0** at that shift — a pure translation —
+> while the fitted wallpaper stays **pixel-identical**, and it holds where the
+> finger left it.
+>
+> **The phone layout changed shape, and the owner's words are the spec:** *"the
+> image is behind the details and i cant hide it to see the image, or it opens
+> like minimized"*, then *"it should open minimized so it doesn't obstruct the
+> wallpaper, and when shown it should bump the image"*. Detail now **opens at a
+> 12% peek**, snaps between peek / 42% / 92%, and **raising the sheet bumps the
+> picture up** at half the sheet's rate rather than covering it — half, because a
+> full-rate lift strands dead canvas above the sheet. Three layers at three
+> rates: sheet fastest, wallpaper at half, scenery drifting 6% behind both.
+>
+> **The pale wallpaper found a real defect and it is fixed.** See the bullet
+> below: the white bar controls went from **2.9:1 to 7.0:1** on the same
+> wallpaper, by holding the top wash across the controls instead of ramping it
+> from the top edge.
+>
+> **Two device findings worth not re-deriving.** The wide layout's drift span
+> started at 600dp and an ordinary facts pane holds only ~180dp of scroll, so the
+> effect could never spend a third of its travel — 22 device pixels. It is 250dp
+> now. And a **genuinely pale wallpaper** was finally found: the phone bar's
+> white controls measure **2.9–3.1:1** against it (7:1 on a dark one), which
+> clears the 3:1 floor for UI graphics and no more. The worse sub-case — a
+> wallpaper *taller* than the screen, whose own pixels reach the bar instead of
+> the darkened backdrop — is still untested.
+>
+> **L1b is confirmed on a real Konachan screen.** A sunset wallpaper reporting
+> `Colors: Not provided` gave a warm brown sheet (`#302A25`) and a peach apply
+> button (`#DE9C69`) against the app's neutral `#343539`. The pixel-decode
+> fallback works and the colour is one you would have picked.
+>
+> **The older START HERE — pass L is complete: all four threads built, merged and seen on
 > the tablet** (2026-08-14). Dart **1378** (from 1317 at the session's start),
 > Kotlin **136** untouched, analyze and format clean, every merge through the
 > gate. The tree is clean and nothing is half-finished.
@@ -18,7 +60,7 @@ Updated: 2026-08-14
 > | **L1a** | Detail paints itself in the wallpaper's own colour, tint follows the pager | device-verified |
 > | **L1b** | Konachan tints from its own pixels — it reports no palette | built; tint unseen on a Konachan screen |
 > | **L2a** | The wall assembles; **a tile's ink splash was invisible on every shelf, always** | splash measured on device |
-> | **L2b** | Tile parallax | **BLOCKED — needs a decision** |
+> | **L2b** | Tile parallax | **decided and built as backdrop drift — see L2b** |
 > | **L3** | Phone gets the full-bleed editorial layout; **the tablet keeps its two panes on purpose** | device-verified |
 > | **L4** | Browse leads with the listing's own top wallpaper, full-resolution, captioned | device-verified |
 >
@@ -30,33 +72,61 @@ Updated: 2026-08-14
 > the system bar. And `FeaturedWallpaper` **is a `WallpaperTile`** — a bespoke
 > band broke thirty tests and had to re-implement marks, badge, tick and ink.
 >
-> **Two decisions are open and belong to the owner, not the next session:**
+> **Two decisions were open. Both were taken on 2026-08-14 — do not reopen them
+> without a reason:**
 >
-> 1. **L2b — tile parallax.** It cannot be built without cropping every
->    thumbnail, which contradicts justified rows' *"without cropping any of
->    them"*. Three options are written up in L2b; the recommendation is to
->    parallax Detail's blurred backdrop instead, which is `cover` already and
->    costs no law.
-> 2. **Whether L4 earns its keep at all.** The band is off *Latest* (an
+> 1. ~~**L2b — tile parallax.**~~ **Settled: option 3.** The backdrop drifts, the
+>    wall was not touched, and it is built and device-verified. See the L2b
+>    section.
+> 2. ~~**Whether L4 earns its keep at all.**~~ **Settled: kept as-is**, rare but
+>    correct. The reasoning below stands as the record. The band is off *Latest* (an
 >    uploader's series puts near-identical wallpapers at positions 0 and 1, and
 >    it read as a duplicate — it was not; `pog7ze` over `6lyp66`). Latest is the
 >    default tab, so **most sessions will not see the band**. If that makes it
 >    too rare to be worth having, the honest move is removing L4, not putting it
 >    back on Latest.
 >
-> **What the device still owes, all of it cheap:**
-> - **A genuinely pale wallpaper.** Two things exist for that case and neither
->   has met it: the phone bar's white controls, and the featured caption's
->   outline. Every top-of-listing image tried has been mid-tone or dark.
-> - **The entrance animation on a real scroll** (L2a) — `screencap` runs ~300ms
->   per frame and cannot resolve a 260ms fade, so this needs an eye, not a tool.
->   Worth checking at *Small* density, where a row holds nine and the cascade
->   caps at six.
-> - **A Konachan detail screen**, to see whether the extracted tint is a colour
->   you would have picked (L1b).
-> - **The phone layout's sheet drag** — whether it reads as a sheet or a stuck
->   scroll. Reachable on the tablet by rotating: portrait is 753dp, under the
->   840dp threshold, so no second device and no `wm size` are needed.
+> **What the device still owes, all of it cheap** (three of the four below were
+> answered on 2026-08-14 — see the new START HERE at the top of this file):
+> - ~~**A genuinely pale wallpaper.**~~ **Half-answered.** The phone bar's white
+>   controls have now met one: **2.9–3.1:1**, against 7:1 on a dark wallpaper.
+>   That clears the 3:1 floor for UI graphics and no more, and the worse
+>   sub-case — a wallpaper taller than the screen, whose own pixels reach the bar
+>   instead of the darkened backdrop — is still untested. **The featured
+>   caption's outline has still never met a pale wallpaper**: the band only
+>   appears on Browse's merit-ranked tabs, so which wallpaper it gets cannot be
+>   chosen.
+> - ~~**The entrance animation on a real scroll** (L2a)~~ **Answered, and
+>   measured — it does not need an eye after all.** The trick is not to resolve
+>   the fade in time but to catch the *cascade* in space: in one frame of a cold
+>   launch at *Small* density, the first row's nine tiles read
+>   `0.99 0.99 1.00 0.97 0.84 0.73 0.46 0.31 0.28` of their settled brightness —
+>   a strict left-to-right ramp, on every row of the frame, gone by the next
+>   capture ~250ms later. Image decoding cannot produce that: it completes in
+>   whatever order the network answers, not in tile order. Recipe below.
+> - ~~**A Konachan detail screen**~~ **Answered, and the colour is right.** A
+>   sunset wallpaper reporting `Colors: Not provided` gave a warm brown sheet
+>   (`#302A25`) and a peach apply button (`#DE9C69`) against the app's neutral
+>   `#343539`. L1b's pixel-decode fallback works on real Konachan data.
+> - ~~**The phone layout's sheet drag**~~ **Answered by rebuilding it.** It reads
+>   as a sheet now because it snaps to three sizes rather than staying where the
+>   finger left it — and the drag found a bigger defect than the one it was sent
+>   to look for; see L2b. The original wording follows.
+>   *(Original wording: whether it reads as a sheet or a stuck scroll. Reachable
+>   on the tablet by rotating — portrait is 753dp, under the 840dp threshold, so
+>   no second device and no `wm size` are needed. That rotation recipe is still
+>   the way in: `settings put system accelerometer_rotation 0` then
+>   `user_rotation 0`, and put both back afterwards.)*
+>
+> **How to catch an animation `screencap` is too slow for.** Two things make it
+> work. Run the burst **on the device** — `adb shell "am start …; for i in 1 2 3
+> …; do screencap -p /sdcard/f$i.png; done"` — because a per-frame adb round trip
+> costs more than the animation lasts. Then measure a *spatial* signature rather
+> than a temporal one: crop one row, resize it to `9x1!`, and compare each tile's
+> brightness against the settled frame. A staggered animation is a monotonic ramp
+> across that row; anything else is not. Both scripts are committed —
+> **`tool/device/`**, with a README naming each one's limits — so the next device
+> pass measures instead of squinting.
 >
 > **Reaching the tablet: no address in this file stays valid.** Wireless
 > debugging rotates its port on every reconnect and DHCP moves the IP. Ask the
@@ -1040,7 +1110,131 @@ settled assertion uses `pumpAndSettle`; the cascade test steps the clock twice
 on purpose, because one large advance starts every tile's ticker together and
 collapses the very stagger it is measuring.
 
-### L2b — tile parallax — **BLOCKED, and it needs an owner's decision**
+### L2b — the scenery drifts, and the phone layout was rebuilt — **BUILT AND DEVICE-VERIFIED 2026-08-14**
+
+**The owner chose option 3 below: parallax Detail's blurred backdrop, and leave
+the wall alone.** Dart **1392** (from 1378), analyze and format clean, Kotlin
+untouched. New `core/ui/backdrop_drift_scope.dart`; touched
+`blurred_image_backdrop.dart`, `detail_editorial_body.dart`,
+`wallpaper_detail_screen.dart`. Branch `feat/backdrop-parallax`, three commits.
+
+**Two drivers, because the two layouts move differently.** On a phone the fact
+sheet is the only thing the user moves, so the scenery travels with it. On the
+tablet the facts are a *pane* beside the picture, so its scroll drives it. One
+`BackdropDriftScope` carries the value — an InheritedWidget, because the backdrop
+is built three widgets down past the pager and the preview, and threading a
+listenable through both would hand the pager a concern that is not its own. A
+*listenable* and not a value, so a drag repaints the scenery alone.
+
+**Two constants that are not arbitrary.** Travel is **6% of the frame's height**,
+the fraction `TileEntrance.lift` already uses, so it reads as the same gesture on
+a phone letterbox and a tablet pane. The scenery is drawn at **1.24x** — twice
+the travel on each side, because `TileMode.decal` fades the blur to transparent
+at the layer's bounds and an exact margin walks that fade into frame as a dark
+band over the black canvas beneath. Mutation-checked: dropping the clamp, the
+reduce-motion guard, the extra scale, or the pane's `NotificationListener` each
+fails exactly one new test.
+
+Held still under **reduce-motion** — scroll-linked parallax is the effect that
+setting names outright — and absent entirely with no scope above, which is what
+the immersive viewer, the crop editor and every widget test that mounts a
+backdrop alone keep getting.
+
+#### The phone layout was rebuilt on what the owner saw, and their words are the spec
+
+Reported while the first build was on the tablet: *"the image is behind the
+details and i cant hide it to see the image, or it opens like minimized"* — then,
+after the first fix, *"it should open minimized so it doesnt obstruct the
+wallpaper, and when shown it should bump the image [so] it is still visible."*
+
+Both are the same defect. The sheet's floor **was its own resting size**, so no
+gesture uncovered the picture: every wallpaper was shown with its bottom two
+fifths behind a panel, on the one screen whose subject is the image.
+
+- **It opens at a 12% peek** (`peekSheetFraction`) — grip and first heading — so
+  the wallpaper arrives whole and the facts are asked for. 42% survives as the
+  middle snap stop, which is what one upward flick lands on.
+- **It snaps** between peek / 42% / 92%. A sheet abandoned at 31% because that is
+  where the finger stopped is exactly what reads as a stuck scroll — which was
+  the open question this layout owed the device, and it is now closed by
+  construction rather than by an eye.
+- **Raising it bumps the picture up instead of covering it**, at *half* the
+  sheet's rate. Half for a structural reason: at the full rate the preview's own
+  bottom edge climbs above the sheet's top and strands a band of dead canvas
+  between them. A test asserts that edge, not the number.
+
+So the screen has **three layers at three rates**, which is what reads as depth:
+sheet fastest, wallpaper at half of it, scenery drifting 6% behind both. Both
+effects are measured from the peek, so nothing has moved at the moment the user
+arrives.
+
+**It cost two existing tests a reveal.** *View on Wallhaven* now starts below the
+fold, so those tests `ensureVisible` it first — the way a user must. Not a bigger
+test surface: the point of the change is that the facts are asked for.
+
+#### L2b's device pass (2026-08-14, SM-X730) — measured, not eyeballed
+
+Method worth reusing: the blurred backdrop is a smooth vertical gradient, so its
+displacement is read by cross-correlating **row-brightness profiles** of a crop
+between two frames (`profile.py` in the session scratchpad — least-squares over
+candidate shifts). Where a band has structure this is exact; where it is a smooth
+blur it is not, which is the limit named below.
+
+| claim | measured |
+|---|---|
+| the tablet's scenery drifts as the facts pane scrolls | both letterbox bands shift up by an identical 22px, **MSE 0.0** at that shift — a pure translation |
+| the fitted wallpaper never moves | **pixel-identical** before and after (MSE 0.0 at shift 0) |
+| the drift follows position, not momentum | after release the frame is unchanged from the held frame |
+| the phone's scenery drifts as the sheet rises | up by ~140–150px against a designed ~139 |
+
+**A tuning the device demanded.** `_paneDriftSpan` started at 600dp. An ordinary
+wallpaper's information pane holds only **~180dp of scroll** — the drift
+saturated at 22 device pixels, under a third of its range, which is nothing. It
+is **250** now: a typical pane spends most of its travel and a long one simply
+comes to rest early. The span is a distance rather than a fraction of the pane's
+content on purpose — a picture with forty tags would otherwise drift a tenth as
+fast as one with two for the same finger travel.
+
+**The phone layout, on the third build:** it opens with the wallpaper whole, and
+raising the sheet to its middle stop bumps the picture **up 305 device pixels**
+against a designed ~350 — measured over a crop with real image structure, so this
+one is trustworthy. Released, it snaps to a size rather than staying under the
+finger.
+
+**What the tooling could not settle, so do not claim it.** On the phone layout
+the rising sheet covers the very band being measured, and a smooth blur
+correlates well at many offsets — intermediate positions gave contradictory
+shifts (including a 28px shift for a strip of the *image*, which cannot move).
+Only the endpoints there are trustworthy. The tablet's numbers are the ones to
+quote. `tool/device/README.md` says the same thing where the script lives.
+
+#### The other three device debts, closed in the same pass
+
+- **The entrance at *Small* density** — measured, not eyeballed: one cold-launch
+  frame has every row ramping left-to-right (`0.99 … 0.28` of settled
+  brightness), gone by the next capture. See the recipe in the START HERE block.
+- **L1b on a real Konachan screen** — a sunset wallpaper reporting `Colors: Not
+  provided` gave a warm brown sheet (`#302A25`) and a peach apply button
+  (`#DE9C69`) against the app's neutral `#343539`. The pixel-decode fallback
+  works and the colour is one you would have picked.
+- **A genuinely pale wallpaper, for the phone bar's white controls** —
+  **2.9–3.1:1** (`icon_contrast.py`), against 7:1 on a dark one: over the 3:1
+  floor for UI graphics by nothing. **Fixed, by the owner's call, and the fix is
+  not the obvious one.** Deepening the top of the ramp was measured to reach only
+  ~3.6:1, because a straight ramp spends its darkness at the top edge where there
+  is nothing to read and arrives at the controls already half gone. The wash now
+  **holds** full strength (0.6) down past `topScrimControlRow` and fades after —
+  same darkness where it is needed, no extra darkness on the wallpaper's top
+  edge. `topScrimAlphaAt` is a pure function so the contract is unit-tested
+  rather than eyeballed. **Re-measured on the same wallpaper after the fix:
+  2.9 → 7.00:1, 3.1 → 7.46:1** — the pale case now reads exactly as well as a
+  dark one, and the bar still fades to nothing rather than becoming a slab.
+  **Untested and worse:** a wallpaper *taller* than the screen, whose own pixels
+  reach the bar rather than the 45%-darkened backdrop.
+
+### L2b — the original scope, kept for the reasoning (built as option 3 above)
+
+#### Why the wall was refused, and the three ways out
 
 **It cannot be built without contradicting the layout law.** `justified_rows.dart`
 states it three times — *"without cropping any of them"*, *"every tile keeps its
@@ -1050,7 +1244,8 @@ image to be *taller* than its box so it has room to drift, which means cropping
 every thumbnail on the wall. That law came out of pass B and was proven on the
 tablet; it is not something to quietly reverse for an effect.
 
-Three ways out, none of them free — this is the decision:
+Three ways out, none of them free — this was the decision, and **the owner took
+3**:
 
 1. **Drop it.** The entrance already gives the wall motion, and the law stands.
 2. **Accept a small crop** (roughly 6% top and bottom at rest). Honest about
@@ -1061,7 +1256,8 @@ Three ways out, none of them free — this is the decision:
    is `BoxFit.cover` by construction, so drifting it as the metadata scrolls
    costs no law at all. Much smaller effect, zero conflict.
 
-**Recommended: 3, then reconsider 2 only if the wall still feels static.**
+**Recommended: 3, then reconsider 2 only if the wall still feels static.** Taken
+2026-08-14 and built; the wall was not touched.
 
 ### L2c/L2d — shared-axis tabs and overscroll — examined and declined
 
