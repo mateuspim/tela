@@ -896,7 +896,6 @@
     "description": "Overflow-menu action in the download viewer that forgets the shown row. Opens the same confirmation as the grid's long-press; deliberately not 'Delete', which would name the wrong object."
   },
 
-  "detailMetadataTitle": "Details",
   "detailResolution": "Resolution",
   "detailFileSize": "File size",
   "detailFileSizeBytes": "{size} bytes",

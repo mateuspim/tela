@@ -10,7 +10,6 @@ import 'package:tela/app/theme.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/ambient_wallpaper_theme.dart';
-import 'package:tela/core/ui/backdrop_drift_scope.dart';
 import 'package:tela/core/ui/blurred_image_backdrop.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
@@ -30,6 +29,7 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/wallpaper_source.dart';
+import 'package:tela/features/detail/detail_editorial_body.dart';
 import 'package:tela/features/detail/wallpaper_detail_screen.dart';
 import 'package:tela/features/favorites/favorite_button.dart';
 
@@ -171,31 +171,30 @@ void main() {
     );
   });
 
-  testWidgets("tints the wide layout's information pane too", (
+  testWidgets('tints the fact sheet the metadata rides on', (
     WidgetTester tester,
   ) async {
-    // The pane paints itself from an explicit `Theme.of` read, which resolves
-    // against this State's *own* context — outside the theme `build` returns.
-    // The Builder is what puts it below instead of beside; delete the Builder
-    // and this pane alone stays on the untinted surface while everything that
-    // resolves its own theme moves, which reads as a rendering bug.
-    tester.view.physicalSize = const Size(1200, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
+    // The surface that used to pin this was the wide layout's information
+    // pane, and it pinned a `Builder` in `build` that put the pane's explicit
+    // `Theme.of` read below the tint. Both are gone: the sheet resolves its
+    // own context, which is already under the theme, so deleting that Builder
+    // changed nothing (measured 2026-08-15). What survives is the assertion
+    // worth keeping — the largest opaque surface on the screen takes the
+    // wallpaper's colour rather than staying grey inside a tinted page.
     await _pumpDetail(tester, _details());
 
-    final ColoredBox pane = tester.widget<ColoredBox>(
-      find
-          .descendant(
-            of: find.byKey(const Key('detail-information-pane')),
-            matching: find.byType(ColoredBox),
-          )
-          .first,
+    // Dragged up first: the sheet's surface fades in with the gesture and is
+    // fully transparent at the peek, so a closed sheet has no colour to
+    // assert. Dragged rather than `ensureVisible`d, because the fade is driven
+    // by `DraggableScrollableNotification` and only a real drag sends one.
+    await _raiseSheet(tester);
+
+    final DecoratedBox sheet = tester.widget<DecoratedBox>(
+      find.byKey(DetailEditorialBody.sheetKey),
     );
-    expect(pane.color, _detailScheme(tester).surfaceContainerLow);
-    expect(pane.color, isNot(_untintedScheme(tester).surfaceContainerLow));
+    final BoxDecoration decoration = sheet.decoration as BoxDecoration;
+    expect(decoration.color, _detailScheme(tester).surface);
+    expect(decoration.color, isNot(_untintedScheme(tester).surface));
   });
 
   testWidgets('stays on the ordinary theme for a greyscale wallpaper', (
@@ -451,9 +450,13 @@ void main() {
     },
   );
 
-  testWidgets('uses preview and information panes on a wide screen', (
+  testWidgets('uses the editorial layout on a wide screen too', (
     WidgetTester tester,
   ) async {
+    // The inverse of the test that stood here: above 840dp the screen used to
+    // split into a preview pane and an information pane. The owner drove both
+    // on the tablet and retired the panes (2026-08-14) — see
+    // `DetailEditorialBody`. One layout, at every width, stated as a test.
     tester.view.physicalSize = const Size(1200, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -461,43 +464,9 @@ void main() {
 
     await _pumpDetail(tester, _details());
 
-    final Offset preview = tester.getTopLeft(
-      find.byKey(const Key('detail-preview-pane')),
-    );
-    final Offset information = tester.getTopLeft(
-      find.byKey(const Key('detail-information-pane')),
-    );
-    expect(preview.dx, lessThan(information.dx));
-  });
-
-  testWidgets('drifts the preview scenery as the facts beside it scroll', (
-    WidgetTester tester,
-  ) async {
-    // The tablet's half of L2b. Parallax on the browse wall would have meant
-    // cropping every thumbnail, which `justified_rows.dart` forbids three
-    // times over; this letterbox backdrop is `BoxFit.cover` already, so
-    // drifting it costs no law. The pane's scroll is the driver here because
-    // the wide layout has no sheet to drag.
-    tester.view.physicalSize = const Size(1200, 400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await _pumpDetail(tester, _details());
-    expect(_paneDrift(tester), 0);
-
-    await tester.drag(
-      find.descendant(
-        of: find.byKey(const Key('detail-information-pane')),
-        matching: find.byType(SingleChildScrollView),
-      ),
-      const Offset(0, -200),
-    );
-    await tester.pumpAndSettle();
-
-    // Up, with the facts, and never further than the scenery has room for.
-    expect(_paneDrift(tester), lessThan(0));
-    expect(_paneDrift(tester), greaterThanOrEqualTo(-1));
+    expect(find.byType(DetailEditorialBody), findsOneWidget);
+    expect(find.byKey(const Key('detail-information-pane')), findsNothing);
+    expect(find.byKey(const Key('detail-preview-pane')), findsNothing);
   });
 
   testWidgets('fills the preview letterbox with the wallpaper itself', (
@@ -520,7 +489,11 @@ void main() {
     final WallpaperDetails details = _details();
     await _pumpDetail(tester, details);
 
-    expect(find.text('Details'), findsOneWidget);
+    // No 'Details' heading to look for: it was dropped on 2026-08-15 because
+    // it labelled a panel that is already unmistakably the facts, and cost the
+    // sheet's peek an opaque band across the foot of the picture. The facts
+    // themselves are the assertion now.
+    expect(find.byKey(const Key('metadata-fact-Resolution')), findsOneWidget);
     expect(find.text('1,048,576 bytes'), findsOneWidget);
     expect(find.text('tela-fixture'), findsOneWidget);
     expect(find.text('landscape'), findsOneWidget);
@@ -1279,6 +1252,21 @@ Future<void> _tallSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
+/// Drags the fact sheet to the top of its travel, starting on its handle.
+///
+/// The grab must land inside [DetailEditorialBody.peekSheetHeight] — the peek
+/// is the handle and nothing else, 20dp of it, and `DraggableScrollableSheet`
+/// is moved by the scrollable it owns and by nothing else. Aim below that and
+/// the drag silently does nothing.
+Future<void> _raiseSheet(WidgetTester tester) async {
+  final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
+  await tester.dragFrom(
+    Offset(tester.getCenter(sheet).dx, tester.getTopLeft(sheet).dy + 10),
+    const Offset(0, -400),
+  );
+  await tester.pumpAndSettle();
+}
+
 /// Brings something on the fact sheet into view, as a user on a phone must.
 ///
 /// The compact layout opens at a peek so the wallpaper arrives unobstructed, so
@@ -1500,11 +1488,3 @@ ColorScheme _detailScheme(WidgetTester tester) => Theme.of(
 /// from just *above* the wrapper, which is the only place it survives.
 ColorScheme _untintedScheme(WidgetTester tester) =>
     Theme.of(tester.element(find.byType(AmbientWallpaperTheme))).colorScheme;
-
-/// How far the wide layout has told its scenery to drift.
-double _paneDrift(WidgetTester tester) {
-  return tester
-      .widget<BackdropDriftScope>(find.byType(BackdropDriftScope))
-      .drift
-      .value;
-}

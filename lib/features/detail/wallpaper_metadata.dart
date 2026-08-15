@@ -50,14 +50,14 @@ class WallpaperMetadata extends StatelessWidget {
     final WallpaperDetails item = details;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      // No "Details" heading. It labelled a panel that is already unmistakably
+      // the facts, and on the sheet it cost the peek 40dp of opaque band across
+      // the foot of the picture — "it hides some of the information of the
+      // background" (the owner, 2026-08-15). The handle says the sheet moves;
+      // the facts say what they are.
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            l10n.detailMetadataTitle,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
           LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) =>
                 _factGrid(l10n, item, constraints.maxWidth),

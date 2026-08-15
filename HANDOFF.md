@@ -1,8 +1,80 @@
 # tela handoff
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
-> **START HERE — L2b is built and the phone layout was rebuilt around what the
+> **NEXT SESSION STARTS HERE — Detail is one layout, it is full-bleed, and it
+> has been driven on the tablet. The branch is unmerged; the immersive viewer is
+> still unscoped.** `feat/detail-one-layout`, seven commits (2026-08-15): Dart
+> **1396**, Kotlin **136** untouched, analyze and format clean, and both of the
+> scope's open device questions are answered under *M* — **neither needed a
+> change, and one of them was a non-problem the scope had mis-described.**
+>
+> **The device found two things, and the owner named both while watching.**
+> *"make the fullscreen so that i can see the full background not hide with the
+> details"* — the wallpaper was fitted to the screen *minus the apply button*,
+> so a 1205x753dp screen showed it with letterbox bands down both sides
+> (`816413c`: the preview is `Positioned.fill` behind everything, the sheet and
+> button ride over it). Then *"the details when minimized its clipping"* — the
+> peek was a *fraction*, which cannot know where the heading ends, so it sliced
+> the first fact row in half (`2dceb71`: it is a 68dp height now, spelled as a
+> sum, with the term it cannot compute pinned by a test in
+> `wallpaper_metadata_test`). Then the sheet itself was reworked from the same
+> chair (`c98874b`): it is **glass until you pull it**, solid by the stop it
+> snaps to, glued to the apply button, and the "Details" heading is gone. All
+> written up under *M* — **including two traps that cost real time**: a lazy
+> `ListView` builds nothing behind a 20dp peek (and `cacheExtent` does not fix
+> it), and a test drag aimed below that peek moves nothing at all.
+>
+> **What is left:** merge the branch, and the second complaint in the owner's
+> original sentence — the **immersive viewer**. They have named three things
+> about it (its black canvas and chrome, its controls getting in the way, and
+> getting in and out of it) but not which of them is the actual objection.
+> **Ask before building anything there**, and note the "full background"
+> complaint above turned out to be Detail, not the viewer — so do not assume
+> these three are one problem either.
+>
+> **One instruction in M's scope was wrong and was measured rather than
+> followed.** It said to keep the `Builder` in `build` because `showDialog` in
+> `_confirmBlockTag` reads this State's context. It does — and that is exactly
+> why the Builder cannot help it: the State's own element sits *above*
+> everything `build` returns, so no Builder inside `build` can move it. Probed
+> on 2026-08-15: with the Builder in place the block-tag dialog resolves the
+> **untinted** scheme. The Builder was inert once the pane went, so it went too,
+> with the measurement written into the comment that replaced it.
+>
+> **The scope's original framing, kept because the reversal is the point:**
+>
+> **The decision, in the owner's words:** *"on tablet mode doesnt always work,
+> and the full screen and the blocky details section is throwing off the
+> section, not working, everything portrait mode is way cooler."* Asked
+> directly, they chose **editorial everywhere, retire the two-pane wide
+> layout** — and named the **immersive viewer** as a second, separate problem.
+>
+> **This reverses a decision that was written down in three places, and the
+> reversal is the owner's to make — but the documents must not be left
+> contradicting the code. All three were rewritten with the change, and none of
+> the reasoning was deleted.** `DetailEditorialBody`'s docstring said *"This is
+> not the tablet's layout and must not become it"* and now carries both halves
+> of the argument; the L3 section below said the tablet kept its two panes on
+> purpose and is marked superseded rather than edited; and L1a's *Builder*
+> finding was pinned by a test about a pane that no longer exists — see the
+> paragraph above for what that test became and why the Builder went with it.
+> The pane's argument was that 440dp of free pane means a sheet covers the very
+> thing it describes. **What beat that argument is use**: the owner has driven
+> both and prefers the sheet, and L2b gave the sheet three sizes and a bump that
+> the pane layout never got.
+>
+> **"Doesn't always work" on the tablet is a real defect, not flakiness.** The
+> wide layout's scenery drift is driven by the *information pane scrolling*, and
+> an ordinary wallpaper's pane barely overflows — so on many wallpapers nothing
+> moves at all, and on the tablet the sheet's peek, its snapping and the picture
+> bump do not exist at all. One layout fixes all four at once, which is the real
+> argument for this change over patching the pane.
+>
+> **The full write-up, with what shipped and what the device still owes, is the
+> section `M — Detail is one layout`.**
+>
+> **The previous START HERE — L2b is built and the phone layout was rebuilt around what the
 > owner saw** (2026-08-14, **merged as `94f214f`** off
 > `feat/backdrop-parallax`). Dart **1394** (from 1378), Kotlin **136** untouched,
 > analyze and format clean, the merge through the gate. Six commits, three of
@@ -63,7 +135,7 @@ Updated: 2026-08-14
 > | **L1b** | Konachan tints from its own pixels — it reports no palette | built; tint unseen on a Konachan screen |
 > | **L2a** | The wall assembles; **a tile's ink splash was invisible on every shelf, always** | splash measured on device |
 > | **L2b** | Tile parallax | **decided and built as backdrop drift — see L2b** |
-> | **L3** | Phone gets the full-bleed editorial layout; **the tablet keeps its two panes on purpose** | device-verified |
+> | **L3** | Phone gets the full-bleed editorial layout; the tablet kept its two panes — **reversed by M, 2026-08-15: one layout at every width** | device-verified, then superseded |
 > | **L4** | Browse leads with the listing's own top wallpaper, full-resolution, captioned | device-verified |
 >
 > **Three things a next session must not re-derive, each with a section below:**
@@ -613,6 +685,227 @@ Updated: 2026-08-14
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
+## M — Detail is one layout, scoped 2026-08-14; **BUILT 2026-08-15** on `feat/detail-one-layout`
+
+The owner's call after living with the L2b build on the tablet: Detail uses the
+**editorial layout at every width**, and the two-pane wide layout is retired.
+The immersive viewer is a **separate** complaint from the same sentence, is
+**still unscoped**, and has its own heading at the end of this section.
+
+**What shipped** (`b29e6ff`, one commit, not yet merged): Dart **1393** (from
+1394), analyze and format clean, Kotlin untouched — nothing under `android/`
+moved. Everything in the table below is gone, `DetailActionBar.expanded` with
+it, and the three tests became what the next-but-one subsection says they
+became. **Still owed: the device.** The two things to look at are below, and
+they are the reason this is on a branch rather than merged.
+
+**Why, and it is not only taste.** Three of L2b's four improvements are compact-
+only by construction — the peek that lets the wallpaper arrive unobstructed, the
+snapping between three sizes, and the bump that pushes the picture out of the
+sheet's way. The tablet got the fourth, the scenery drift, in the one form that
+can fail silently: it is driven by the information pane's scroll, and an ordinary
+wallpaper's pane holds only ~180dp of it. That is what "doesn't always work"
+means, and no amount of tuning fixes a pane that sometimes has nothing to scroll.
+
+### What to change, file by file
+
+`lib/features/detail/wallpaper_detail_screen.dart` — most of the work was
+deletion, and all of it is done:
+
+| what | why it goes |
+|---|---|
+| `_expandedWidth` (840) and the `expanded` branch in `_screen` | one layout, one path |
+| `_expandedBody` | the two panes |
+| `_paneDrift`, `_paneScrolled`, `_paneDriftSpan` | the drift's only driver was the pane's scroll; the sheet drives it now, from `DetailEditorialBody` |
+| the `BackdropDriftScope` import | the compact body publishes its own |
+| `_compactBody`'s name | it contrasts with nothing once it is the only body |
+
+`extendBodyBehindAppBar` is unconditional now and `_floatingBar()` is the only
+app bar. `_screen` no longer takes a `BuildContext` — nothing in it read one
+once the width check went.
+
+`lib/features/detail/detail_action_bar.dart` — `expanded` (the flag, the
+`MainAxisSize` it picked and the `Spacer` it inserted) existed **only** for the
+information pane. Deleted rather than left as a dead knob; the docstring now
+says the arrangement existed and why it does not any more.
+
+**~~Keep the `Builder` in `build`.~~ Wrong, and measured.** The scope said to
+keep it because the `showDialog` in `_confirmBlockTag` reads this State's
+context. It does — which is precisely why the Builder cannot serve it: the
+State's element is *above* everything `build` returns, so a Builder placed
+inside `build` can never move what that context resolves. Probed on 2026-08-15
+by reading the `AlertDialog`'s own scheme with the Builder still in place: it
+is the **untinted** one, both before and after. The Builder's only real
+customer was the pane's explicit `Theme.of`, so it went with the pane, and the
+comment that replaced it records the measurement instead of a guess. *(If a
+tinted block-tag dialog is ever wanted, the fix is passing a context from below
+the theme into `showDialog` — a different change, and nobody has asked.)*
+
+### The tests that broke, and what each became
+
+All in `test/features/wallpaper_detail_screen_test.dart`:
+
+- **`tints the wide layout's information pane too`** → **`tints the fact sheet
+  the metadata rides on`**. The scope asked for the mutation check to survive —
+  it did not, and could not: deleting the `Builder` leaves it green, because the
+  sheet resolves its own context and that is already below the tint. Said
+  plainly in the test's comment rather than dressed up. What it still asserts is
+  worth having: the largest opaque surface on the screen takes the wallpaper's
+  colour instead of staying grey inside a tinted page.
+- **`uses preview and information panes on a wide screen`** → **`uses the
+  editorial layout on a wide screen too`**. Inverted, as scoped: at 1200x800
+  there is a `DetailEditorialBody` and **neither** pane key resolves.
+- **`drifts the preview scenery as the facts beside it scroll`** — deleted, with
+  the `_paneDrift` helper it was the only caller of. The sheet-driven drift is
+  covered by `detail_editorial_body_test`.
+- **`fills the preview letterbox with the wallpaper itself`** — checked, not
+  assumed: still green, untouched.
+
+No wide-layout test needed `_tallSurface`/`_reveal` after all — the two that
+survive assert on what is mounted, not on what is reachable by finger.
+
+### Two things to watch on the device — **both answered 2026-08-15, SM-X730 landscape**
+
+1. ~~**The sheet is 1205dp wide in landscape.**~~ **A non-problem, and the
+   scope was wrong about why.** It feared "one very long line" — but
+   `wallpaper_metadata.dart` has laid the eight scalar facts out as a `Wrap` of
+   half-width plates since C3, so at 1205dp they come out **two columns of about
+   600dp**, not one line of 1205. **No `ConstrainedBox`, and the owner's refusal
+   of a capped column never had to be re-litigated.** What it does read as is
+   *airy* — the hairline rule runs the full 600dp with the value hugging its left
+   end. Nobody has objected; leave it until somebody does.
+2. ~~**The bump's arithmetic in a short landscape preview.**~~ **It reads.**
+   Compared at the peek against the 42% snap on the same wallpaper: the picture
+   visibly climbs — Optimus Prime's head is whole at the peek and cut by the top
+   edge at 42%. Nothing was re-tuned.
+
+**And the device found the thing neither of them was looking for**, which is the
+slice below.
+
+### The wallpaper did not actually reach every edge — `816413c`
+
+**The owner, watching the build:** *"make the fullscreen so that i can see the
+full background not hide with the details"*. Asked which screen, they chose
+Detail over the ⛶ viewer.
+
+**What was wrong.** The body was a `Column`: preview in the top cell, apply
+button in the bottom one. So the picture was fitted — it is `BoxFit.contain` —
+to the screen *minus the button*, at every sheet size. On 1205x753dp that cost
+it enough height to open **letterbox bands down both sides**, which is what the
+owner was looking at when they said it. The preview is `Positioned.fill` behind
+everything now; the `Column` holds only the sheet and the button, which ride
+over it. Device-confirmed on the same wallpaper: the bands are gone and the
+picture runs under the button to the bottom edge.
+
+**Two things deliberately *not* done, both because they would cost something
+already paid for:**
+- The button did **not** become a `Positioned`. Inside one its `SafeArea` has
+  nothing to inset against and it is drawn half under the system bar with its
+  label clipped clean off — L3's device pass found exactly that. The `Column` is
+  what keeps `_footed` working.
+- No fraction was re-tuned. Because the sheet is still laid out by that same
+  `Column`, its three sizes remain fractions of *the space above the button* and
+  mean precisely what they meant before. Only the layer behind them moved.
+
+The one arithmetic that did shift is the bump: `_lift` is a fraction of the
+preview, which is the whole body now, so the lift is a hair more than half the
+sheet's travel — the button's height halved. Left alone on purpose and said so
+in the docstring; that is not a difference an eye can find, and the number was
+set by eye.
+
+### The peek was clipping, and the unit was the bug — `2dceb71`
+
+**The owner, on the next build:** *"the details when minimized its clipping make
+it better"*.
+
+`peekSheetFraction` was **0.12 of the sheet's box**, and a fraction cannot know
+where the heading ends — so the sheet's bottom edge landed *inside the first
+fact row* and showed its top half sliced off, at a different place on every
+screen size. It is a **height** now, `peekSheetHeight = 68`, and the docstring
+spells it as the sum it is: grip 20 + metadata padding 8 + "Details" at
+`titleLarge` 28 + its 12 gap. `peekFractionIn` divides that by the arena a
+`LayoutBuilder` measures — the body minus the apply button, which no `MediaQuery`
+above the body knows.
+
+**The part worth not re-deriving.** That sum has a term this file cannot compute,
+so it is pinned where it lives: `wallpaper_metadata_test` asserts the first fact
+tile sits `peekSheetHeight - sheetGripHeight` below the widget's top.
+Mutation-checked — 68 to 80 turns it red. **Restyle the "Details" heading and a
+test fails instead of the peek quietly starting to clip again.**
+
+`_sheetDragged` also stopped reading the constant: it takes the notification's
+own `minExtent`, so the drift and the bump never have to know how the floor was
+computed. Same values, one less pair to keep in step.
+
+Device-confirmed on the tablet: the peek shows the grip and "Details" and cuts
+on the seam below them.
+
+### The sheet became glass, and the button joined it — `c98874b`
+
+**Three asks in one sentence, all from watching the build:** *"the set wallpaper
+and details one was glued they seem disconnected and because of that it hides
+some of the information of the background, what if we drop the details name and
+just make like a the handle invisible and when we are opening it up it start to
+have background color fading it in until it reachs a certain point that it shows
+the details page"*.
+
+- **Glued.** A strip of wallpaper ran between the sheet's bottom edge and the
+  apply button. The button's block is painted in the sheet's own colour at the
+  sheet's own opacity now, and the two abut — one panel.
+- **Fading.** `surfaceAlphaAt` runs the surface from nothing at the peek to
+  solid at `restingSheetFraction`. That is the first stop the sheet snaps to, so
+  it is a **solid page everywhere it comes to rest** and glass only while it is
+  moving — which is the "certain point" the owner asked for, and it needed no
+  new constant.
+- **The handle alone.** "Details" is gone from `WallpaperMetadata` and its l10n
+  key with it. `peekSheetHeight` is `sheetGripHeight`: the peek is the handle.
+
+**The handle had to earn its contrast and the device said so twice — this is the
+part worth not re-deriving.** Plain white was *invisible* on a near-white
+wallpaper. A shadow alone then measured **1.51:1** against a pure-white one: a
+halo spreads its darkness over too many pixels to be an edge, which is the same
+shape of mistake as the top wash's ramp. Outline **and** shadow, both scaled by
+what the missing surface owes them, measure **8.45:1** on that wallpaper. The
+outline gives it an edge on white; the shadow lifts it off a busy mid-toned
+picture, which an outline alone cannot. **Third time this project has paid for
+"a control over an arbitrary photograph cannot take its contrast on trust"** —
+see `wallpaperTileEdge` and `topScrimOpacity`.
+
+**A Flutter trap that cost an hour, so nobody pays for it again.** The sheet's
+scroll view is a `SingleChildScrollView` and **must not go back to being a
+`ListView`**. A lazy sliver builds nothing past its viewport, and a 20dp peek is
+exactly the handle — so the facts were not in the element tree at all until the
+sheet was pulled, and eight widget tests failed with "found 0 widgets" for
+content that plainly exists. `cacheExtent` does **not** rescue it: measured,
+2000dp of cache still built one child. The sheet's content is one fixed column
+of facts and never a long list, so eager is also simply correct here.
+
+**And a test trap of the same family.** `_raiseSheet` has to grab *inside* the
+20dp peek. `DraggableScrollableSheet` is moved by the scrollable it owns and by
+nothing else, so a drag starting 24dp down lands past the sheet and silently
+does nothing — four tests went red reporting a drift of zero, which reads like a
+broken feature and is a broken gesture in the test.
+
+### Where this leaves the branch
+
+`feat/detail-one-layout`, seven commits, **unmerged**. Dart **1396**, Kotlin
+**136**, analyze and format clean, and every change on it has been driven on the
+tablet in landscape. Nothing is known to be outstanding — merge it through the
+gate (`merge.ff false`, so the hook runs) unless the owner wants another look
+first.
+
+### The immersive viewer — the second complaint, unscoped
+
+Named in the same sentence (*"the full screen ... is throwing off"*) and
+confirmed as a separate problem: the fullscreen ⛶ viewer reached from Detail, not
+the wide layout's image pane. **What is wrong with it has not been said**, so ask
+before building. Two things already known about it from earlier passes: it is
+deliberately outside L1a's ambient tint (its canvas is a hardcoded
+`Colors.black`, its chrome `Colors.black45` scrims, and `ImmersiveGalleryControls`
+is shared with the private library and the download viewer, so tinting it is its
+own slice), and it is the surface `ShelfSwipe`'s hold-to-copy shares with
+Detail's preview. Do not assume either is the complaint.
+
 ## L — the ambient overhaul, scoped and BUILT 2026-08-14
 
 The owner asked for "a UI/UX overhaul to make this app simply stunning" and
@@ -955,7 +1248,14 @@ decided — this wants the owner's eye before anything is spent on it.**
 **Still unjudged:** the band on an actual phone, where the upscale is far
 smaller, and whether losing the first wallpaper from the grid reads badly.
 
-### L3 — Detail, split by shape — **BUILT AND DEVICE-VERIFIED 2026-08-14**
+### L3 — Detail, split by shape — **BUILT AND DEVICE-VERIFIED 2026-08-14; the split is SUPERSEDED by M, 2026-08-15**
+
+> **Read this heading before the section.** Everything below about the *phone*
+> layout is still exactly what ships — it is simply the only layout now. What is
+> superseded is the split itself: the paragraph *"Why the tablet did not get it"*
+> lost, on the owner's own use of both (see `M`). It is kept unedited because it
+> is the argument M had to beat, and a section rewritten to agree with the
+> present is a section that can no longer explain how anything was decided.
 
 Taken as **option A**, chosen over building the editorial treatment everywhere.
 Dart **1363** (from 1357), analyze and format clean. New
@@ -1010,6 +1310,10 @@ The tablet is 1205dp wide in landscape and **753dp in portrait**, which is under
 `_expandedWidth`. So the phone layout can be seen on it by rotating — no `wm
 size`, no second device. Worth knowing: it is the only way anyone has ever
 looked at the compact body.
+
+> **Since M there is no `_expandedWidth`, so the rotation trick is no longer how
+> you reach this layout — every width is this layout.** Rotating is now how you
+> see it *wide*, which is the thing M still owes a device pass on.
 
 **It reads well.** Full-bleed image behind a floating bar whose white controls
 are legible over a dark wallpaper, the fullscreen button clear of them, the sheet
@@ -1358,7 +1662,7 @@ Highest cost, highest payoff. What it must not lose:
   prove a fact is a tile rather than a row.
 - **Two layouts, and one of them has never been looked at.** C3 shipped an
   expanded 440dp pane and a compact `ListView`; only the expanded one has been
-  seen on hardware. A draggable sheet changes both, so the compact layout stops
+  seen on hardware. *(Both are now one — M, 2026-08-15.)* A draggable sheet changes both, so the compact layout stops
   being "nothing suspected" and becomes the thing to check first.
 - The screen carries the gallery session, the immersive hand-off, the copy hold
   and the apply button. `wallpaper_detail_screen_test.dart` and

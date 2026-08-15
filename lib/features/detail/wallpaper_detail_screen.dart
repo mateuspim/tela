@@ -9,7 +9,6 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/ambient_wallpaper_theme.dart';
-import 'package:tela/core/ui/backdrop_drift_scope.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/tela_toast.dart';
@@ -67,8 +66,8 @@ final FutureProviderFamily<WallpaperColor?, String> ambientFallbackProvider =
 /// every part of it reads from, and arranges three pieces that own their own
 /// state — [DetailPreviewPager], [DetailActionBar] and [DetailApplyButton] —
 /// around the metadata. What is left here is what genuinely belongs to the
-/// screen: which body the width gets, and where a tag, an uploader or a credit
-/// link takes you next.
+/// screen: the one body every width gets — see [DetailEditorialBody] — and
+/// where a tag, an uploader or a credit link takes you next.
 class WallpaperDetailScreen extends ConsumerStatefulWidget {
   /// Creates the detail screen for a grid [wallpaper].
   const WallpaperDetailScreen({
@@ -107,14 +106,6 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   late final GallerySessionController<Wallpaper> _gallery;
   late final bool _ownsGallery;
 
-  /// How far the wide layout's blurred scenery has drifted, -1..1.
-  ///
-  /// The phone layout owns its own — `DetailEditorialBody` drives that one off
-  /// the sheet. This is the tablet's driver, and it is a different gesture on
-  /// purpose: there the facts are a *pane*, and scrolling it is the only motion
-  /// the screen has.
-  final ValueNotifier<double> _paneDrift = ValueNotifier<double>(0);
-
   Wallpaper get _wallpaper => _gallery.selectedItem;
 
   @override
@@ -143,7 +134,6 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   @override
   void dispose() {
     _gallery.removeListener(_selectionChanged);
-    _paneDrift.dispose();
     if (_ownsGallery) _gallery.dispose();
     super.dispose();
   }
@@ -222,18 +212,19 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     final String sourceName = ref
         .watch(wallpaperSourceForProvider(_wallpaper.source))
         .displayName;
-    // The tint sits *above* the Scaffold, and the Builder is what puts the
-    // screen beneath it rather than beside it: the panes below read
-    // `Theme.of` off this State's own context, which is outside the theme
-    // this method returns, so without it only the widgets deep enough to
-    // resolve their own would move and the surfaces would stay behind.
+    // There was a `Builder` between these two, so that the wide layout's
+    // information pane — which read `Theme.of` in `_expandedBody`, on this
+    // State's own context, outside the theme this method returns — resolved
+    // below the tint instead of beside it. That pane is gone, and with it the
+    // only caller that read a theme up here: everything left resolves its own
+    // context, which is already under this widget. Measured before removing
+    // it (2026-08-15): with the Builder in place the block-tag dialog is
+    // *untinted* either way, because `showDialog` captures from this State's
+    // context, which no Builder inside `build` can move.
     return AmbientWallpaperTheme(
       colors: _wallpaper.colors,
       fallbackSeed: _ambientFallback(),
-      child: Builder(
-        builder: (BuildContext context) =>
-            _screen(context, details, l10n, sourceName),
-      ),
+      child: _screen(details, l10n, sourceName),
     );
   }
 
@@ -252,25 +243,20 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   }
 
   Widget _screen(
-    BuildContext context,
     AsyncValue<WallpaperDetails> details,
     AppLocalizations l10n,
     String sourceName,
   ) {
-    final bool expanded = MediaQuery.sizeOf(context).width >= _expandedWidth;
     return Scaffold(
-      // The narrow layout runs the wallpaper to every edge, so the bar stops
-      // reserving space and floats over it instead. The wide one still has a
-      // pane of its own and keeps an ordinary bar above it.
-      extendBodyBehindAppBar: !expanded,
+      // The layout runs the wallpaper to every edge at every width, so the bar
+      // stops reserving space and floats over it instead.
+      extendBodyBehindAppBar: true,
       // No title: the resolution that used to sit here is a spec, not a name,
       // and it already has a tile in the Details grid — a title bar reading
       // "2880x1800" labelled the screen with a number. The image is the
       // subject, so the bar carries only the back affordance and the actions.
-      appBar: expanded ? AppBar() : _floatingBar(),
-      body: expanded
-          ? _expandedBody(context, details, l10n, sourceName)
-          : _compactBody(details, l10n, sourceName),
+      appBar: _floatingBar(),
+      body: _body(details, l10n, sourceName),
     );
   }
 
@@ -291,15 +277,14 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     );
   }
 
-  static const double _expandedWidth = 840;
-
-  /// The phone layout: the wallpaper is the page, the facts ride over it.
+  /// The layout, at every width: the wallpaper is the page, the facts ride
+  /// over it on a sheet.
   ///
-  /// Replaced a fixed-height preview stacked above a scrolling panel, where the
-  /// image was a picture in a box on the one screen whose subject *is* the
-  /// image. See [DetailEditorialBody] — including why the wide layout
-  /// deliberately did not follow.
-  Widget _compactBody(
+  /// There used to be a second, two-pane body above 840dp. It was retired on
+  /// 2026-08-14 by the owner, after driving both on the tablet — see
+  /// [DetailEditorialBody], which carries the argument the pane once won and
+  /// what beat it.
+  Widget _body(
     AsyncValue<WallpaperDetails> details,
     AppLocalizations l10n,
     String sourceName,
@@ -309,93 +294,6 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       metadata: _metadata(details, l10n, sourceName),
       applyButton: DetailApplyButton(wallpaper: _wallpaper),
     );
-  }
-
-  /// Takes [context] rather than reading this State's own: the information
-  /// pane paints itself from the scheme, and on this screen that scheme is the
-  /// wallpaper's — which only exists below the ambient theme.
-  Widget _expandedBody(
-    BuildContext context,
-    AsyncValue<WallpaperDetails> details,
-    AppLocalizations l10n,
-    String sourceName,
-  ) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    return BackdropDriftScope(
-      drift: _paneDrift,
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: ColoredBox(
-                  key: const Key('detail-preview-pane'),
-                  color: Colors.black,
-                  child: _preview(),
-                ),
-              ),
-            ),
-          ),
-          SizedBox(
-            key: const Key('detail-information-pane'),
-            width: 440,
-            child: ColoredBox(
-              color: colors.surfaceContainerLow,
-              child: Column(
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                    child: DetailActionBar(
-                      wallpaper: _wallpaper,
-                      expanded: true,
-                    ),
-                  ),
-                  const Divider(),
-                  Expanded(
-                    child: NotificationListener<ScrollNotification>(
-                      onNotification: _paneScrolled,
-                      child: SingleChildScrollView(
-                        child: _metadata(details, l10n, sourceName),
-                      ),
-                    ),
-                  ),
-                  DetailApplyButton(wallpaper: _wallpaper),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// How far the information pane must scroll for the scenery to drift fully.
-  ///
-  /// A distance rather than a fraction of the pane's content, so the scenery
-  /// moves at the same *rate* whatever the wallpaper's metadata happens to
-  /// weigh — a picture with forty tags would otherwise drift a tenth as fast as
-  /// one with two, for the same finger travel.
-  ///
-  /// Measured on the device (SM-X730, 2026-08-14): an ordinary wallpaper's pane
-  /// has only about 180dp of scroll in it, so at the 600 this started on the
-  /// effect could never spend more than a third of its travel — 22 device
-  /// pixels of drift, which is nothing. 250 lets a typical pane spend most of
-  /// it and simply comes to rest early on a long one.
-  static const double _paneDriftSpan = 250;
-
-  /// Drifts the scenery up as the facts beside it are scrolled up.
-  ///
-  /// Reads the notification rather than owning a `ScrollController`: the pane's
-  /// scroll view builds its own, and taking that over would mean disposing a
-  /// controller for an effect that is pure decoration.
-  ///
-  /// Returns false so the notification carries on up the tree.
-  bool _paneScrolled(ScrollNotification pane) {
-    if (pane.depth > 0) return false;
-    _paneDrift.value = -(pane.metrics.pixels / _paneDriftSpan).clamp(0.0, 1.0);
-    return false;
   }
 
   Widget _preview() {
