@@ -25,13 +25,21 @@ Updated: 2026-08-15
 > `ListView` builds nothing behind a 20dp peek (and `cacheExtent` does not fix
 > it), and a test drag aimed below that peek moves nothing at all.
 >
-> **What is left is one thing:** the second complaint in the owner's original
-> sentence — the **immersive viewer**. They have named three things
-> about it (its black canvas and chrome, its controls getting in the way, and
-> getting in and out of it) but not which of them is the actual objection.
-> **Ask before building anything there**, and note the "full background"
-> complaint above turned out to be Detail, not the viewer — so do not assume
-> these three are one problem either.
+> **What is left is one thing, and it is now scoped: the immersive viewer.**
+> Asked directly on 2026-08-17, the owner named **all three** of the things
+> earlier passes had guessed at — its black canvas and chrome, its controls
+> getting in the way, and getting in and out of it — and explicitly declined the
+> fourth option, that Detail's new full-bleed layout had made the viewer
+> redundant. **It stays.** Three forks were put to them and all three came back:
+> the chrome takes the wallpaper's colour but **the canvas stays near-black**;
+> the chrome **auto-hides after a few seconds** rather than never appearing; and
+> the trip in and out is wrong in all three of the ways the code suggested — no
+> hero, no swipe-down, and a ⛶ that is hard to hit. That is pass **N**, scoped
+> below as N1/N2/N3.
+>
+> Note while working it that the "full background" complaint from the same
+> original sentence turned out to be **Detail, not the viewer** — so do not
+> assume these three are one problem either.
 >
 > **One instruction in M's scope was wrong and was measured rather than
 > followed.** It said to keep the `Builder` in `build` because `showDialog` in
@@ -684,6 +692,92 @@ Updated: 2026-08-15
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## N — the immersive viewer, scoped 2026-08-17
+
+The second complaint from the owner's *"the full screen ... is throwing off"*
+sentence, unscoped since M shipped. Asked directly on 2026-08-17, they named
+**all three** of the things earlier passes had guessed at — and explicitly did
+**not** take the fourth option, *"it isn't redundant with Detail"*. The viewer
+stays; it is the chrome, the timing and the trip that are wrong.
+
+**Read this before touching any of it.** The viewer is `core/ui`, and three
+sessions mount it: `WallpaperImmersiveSession` (Detail), plus the private
+library's and the downloads'. Nothing below may make the private library
+brighter, louder, or easier to screenshot. `FLAG_SECURE` and the unarmed hold
+stay exactly as they are.
+
+**Three slices, ordered by cost, each independently shippable and each owing a
+device pass** — none of these can be called done on a green suite, they are all
+things you look at.
+
+### N1 — the chrome takes the wallpaper's colour; the canvas does not
+
+The owner's choice, given the fork: **controls only, canvas stays near-black.**
+`ImmersiveGalleryViewer` paints `Material(color: Colors.black)` and
+`ImmersiveGalleryControls` hardcodes `Colors.black45` in six places with
+`Colors.white` on top of it. Only `_closeButton` reads the scheme at all, because
+`IconButton.filled` does it by default — which is why the way out is the one
+control that already looks like it belongs to the app.
+
+What changes: the scrims and the button foregrounds resolve from
+`Theme.of(context).colorScheme` instead of from constants. Detail's session wraps
+in `AmbientWallpaperTheme` — the same one L1a gave the Detail screen — so the
+viewer arrives in the wallpaper's own colour. **The other two sessions wrap in
+nothing and therefore keep the app's neutral scheme**, which is very close to
+what they render today. That is the point: one code path, and the private
+library is tinted by nothing.
+
+**The canvas stays near-black on purpose, and this is not timidity.** L2b
+measured the phone bar's white controls at **2.9–3.1:1** against a genuinely pale
+wallpaper — clearing the 3:1 floor for UI graphics and nothing more. A scrim that
+takes a *light* wallpaper's colour spends the only margin there is. So the scrim
+darkens toward the seed rather than lightening toward it, and **N1 is not done
+until it has been measured on a pale wallpaper**, the same way L2b's was.
+
+### N2 — the chrome gets out of the way on its own
+
+The owner's choice: **auto-hide after a few seconds**, not open-with-nothing.
+Today the chrome opens visible and only leaves by a tap on the canvas or the
+`visibility_off` button — so on the one screen whose whole job is showing a
+wallpaper, ten controls sit over the picture until you do something about them.
+
+Opening visible and *then* fading is the deliberate half of this: a first-time
+user has to be shown the way out before it goes, and `_hideChrome`'s docstring
+already argues that the canvas tap is what keeps the hide from being a one-way
+door. The timer is the same argument with a clock on it.
+
+**Three things the timer must not do**, and each is a test:
+- Never fade while a screen reader is driving the screen —
+  `MediaQuery.accessibleNavigationOf`. Chrome that vanishes on a timer is chrome
+  a switch user cannot reach.
+- Never fade out from under a finger: any interaction restarts it.
+- Never fire after dispose, and never leave a `Timer` behind — the viewer already
+  has `_restoreSystemUi` to be careful about on the way out.
+
+### N3 — the trip in and out
+
+The owner named **three** frictions here, all of them real in the code:
+
+1. **The transition is jarring.** `ImmersiveGalleryViewer` takes a `heroTag` and
+   `WallpaperImmersiveSession` **passes none**, so the route is
+   `_fadeFullscreenRoute` — a plain crossfade. The picture pops instead of
+   growing out of the preview.
+2. **No swipe-down to dismiss.**
+3. **The ⛶ is hard to find or hit** — a bare `IconButton.filledTonal` at the
+   preview's top-right, deliberately inset below a floating app bar it would
+   otherwise collide with.
+
+**Where the dismiss gesture goes, and this is the trap.** It goes in
+`ShelfSwipe`, as a third branch of the state machine that is already there —
+**not** in a `GestureDetector`. `ShelfSwipe`'s own docstring is the argument:
+a vertical drag recognizer would sweep the arena and cost the viewer its pinch
+exactly the way the horizontal one did, measured on the SM-X730. The room is
+already free: `_selectAcross` discards any travel that is more vertical than
+horizontal, so nothing today reads a downward drag at all.
+
+It must stay disarmed while `isZoomed` — a magnified image's vertical drag is a
+pan across it — which is the condition `_startSwipe` already applies.
 
 ## M — Detail is one layout, scoped 2026-08-14; **BUILT AND MERGED 2026-08-15** (`6fc02c1`)
 
