@@ -25,7 +25,25 @@ Updated: 2026-08-15
 > `ListView` builds nothing behind a 20dp peek (and `cacheExtent` does not fix
 > it), and a test drag aimed below that peek moves nothing at all.
 >
-> **What is left is one thing, and it is now scoped: the immersive viewer.**
+> **NEXT SESSION STARTS HERE — pass N is built and waiting on a device.** All
+> three of the viewer's slices are on `feat/immersive-viewer`, four commits,
+> **nothing merged**: Dart **1414** (from 1396), Kotlin **136** untouched,
+> analyze and format clean. The chrome takes the wallpaper's colour and the
+> canvas stays black (N1); the chrome fades on its own after three seconds and
+> never under `accessibleNavigation` (N2); and the picture grows into fullscreen
+> on Detail's own hero tag, can be thrown downward to dismiss, and is itself the
+> way in beside a ⛶ that now carries the viewer's scrim and a 48dp target (N3).
+>
+> **Four things the device owes, two of them suspected seams rather than
+> checks** — the blurred-letterbox pop at the end of the hero flight, and
+> whether tap-to-fullscreen misfires against M's 12% sheet peek. Both are
+> written out under *N*, with the two traps that cost time here: a pushed route
+> inherits none of Detail's theme, and `MaterialApp` crossfades themes so the
+> frame after a `pumpWidget` still shows the old one.
+>
+> **The scope, and how it was arrived at:**
+>
+> **What was left was one thing, and it is now built: the immersive viewer.**
 > Asked directly on 2026-08-17, the owner named **all three** of the things
 > earlier passes had guessed at — its black canvas and chrome, its controls
 > getting in the way, and getting in and out of it — and explicitly declined the
@@ -693,7 +711,7 @@ Updated: 2026-08-15
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
-## N — the immersive viewer, scoped 2026-08-17
+## N — the immersive viewer, scoped and **BUILT 2026-08-17**; device pass owed
 
 The second complaint from the owner's *"the full screen ... is throwing off"*
 sentence, unscoped since M shipped. Asked directly on 2026-08-17, they named
@@ -707,11 +725,37 @@ library's and the downloads'. Nothing below may make the private library
 brighter, louder, or easier to screenshot. `FLAG_SECURE` and the unarmed hold
 stay exactly as they are.
 
+**All three are built** on `feat/immersive-viewer`, three commits after the
+scope: Dart **1414** (from 1396), Kotlin **136** untouched — nothing under
+`android/` moved — analyze and format clean. **Nothing is merged.** Every one of
+these is a thing you *look at*, so the branch waits for the device.
+
+**What the device owes, and it is the whole reason this is a branch:**
+
+- **N1 — the tinted scrim against a pale wallpaper.** The blend is argued from
+  L2b's 2.9–3.1:1 measurement but has not itself been measured. Same recipe as
+  L2b: find a genuinely pale wallpaper, open fullscreen, sample the bar's ink
+  against its scrim. The unit test pins that a pale *seed* still yields a
+  near-black scrim; it cannot pin what that scrim looks like over real pixels.
+- **N2 — whether three seconds is the right three seconds.** Long enough to read
+  the row, short enough that a wallpaper you are looking at is soon clear. It is
+  one constant, `_chromeIdleTimeout`, and it is meant to be argued with.
+- **N3 — the hero flight, and it has a suspected seam.** Detail's preview paints
+  its letterbox with a *blurred copy of the wallpaper* (`fillLetterbox: true`);
+  the viewer's letterbox is plain black. So the shared element flies between two
+  differently-framed pictures and the surround may pop at the moment the flight
+  ends. Untested — look for it specifically, on a wallpaper whose aspect ratio
+  is far from the screen's, where the letterbox is largest.
+- **N3 — whether tap-to-fullscreen misfires.** The whole picture is now the way
+  in, and M put a sheet at a 12% peek over that same picture. A user reaching
+  for the sheet and landing short would leave the screen instead. If it does
+  misfire, the fix is the tap, not the sheet.
+
 **Three slices, ordered by cost, each independently shippable and each owing a
 device pass** — none of these can be called done on a green suite, they are all
 things you look at.
 
-### N1 — the chrome takes the wallpaper's colour; the canvas does not
+### N1 — the chrome takes the wallpaper's colour; the canvas does not — **BUILT** (`b2e376a`)
 
 The owner's choice, given the fork: **controls only, canvas stays near-black.**
 `ImmersiveGalleryViewer` paints `Material(color: Colors.black)` and
@@ -735,7 +779,7 @@ takes a *light* wallpaper's colour spends the only margin there is. So the scrim
 darkens toward the seed rather than lightening toward it, and **N1 is not done
 until it has been measured on a pale wallpaper**, the same way L2b's was.
 
-### N2 — the chrome gets out of the way on its own
+### N2 — the chrome gets out of the way on its own — **BUILT** (`bfeed38`)
 
 The owner's choice: **auto-hide after a few seconds**, not open-with-nothing.
 Today the chrome opens visible and only leaves by a tap on the canvas or the
@@ -755,7 +799,7 @@ door. The timer is the same argument with a clock on it.
 - Never fire after dispose, and never leave a `Timer` behind — the viewer already
   has `_restoreSystemUi` to be careful about on the way out.
 
-### N3 — the trip in and out
+### N3 — the trip in and out — **BUILT** (`bdef614`)
 
 The owner named **three** frictions here, all of them real in the code:
 
@@ -778,6 +822,48 @@ horizontal, so nothing today reads a downward drag at all.
 
 It must stay disarmed while `isZoomed` — a magnified image's vertical drag is a
 pan across it — which is the condition `_startSwipe` already applies.
+
+
+### What shipped, and the two things worth not re-deriving
+
+**`ImmersiveChromePalette` is the only place the tint stops.** One helper, read
+by the controls, the viewer's *Open details* button, Detail's ⛶, the download
+viewer's overflow, and Detail's own bar actions. The scrim is `Color.alphaBlend`
+of the scheme's surface at 35% **into black**, then taken back to
+`Colors.black45`'s exact alpha — `0x73/0xFF`, which is 0.451 and *not* the 0.45
+the constant is named after. That byte cost a test failure before it was
+noticed; `Colors.white38` is `0x62`, or 0.384, for the same reason.
+
+**The viewer is a pushed route, so it inherits none of Detail's theme.** This is
+the trap N1 nearly fell into: wrapping the Detail *screen* in
+`AmbientWallpaperTheme` does nothing for a route built under the Navigator,
+which sits above it. `WallpaperImmersiveSession` therefore asks for the tint
+itself, through `AmbientWallpaperTint` — extracted out of
+`wallpaper_detail_screen.dart` so the two surfaces share one path instead of
+growing two copies of L1b's Konachan pixel-decode fallback.
+
+**The idle fade is armed in `didChangeDependencies`, not `initState`.** Whether
+it may run at all depends on `MediaQueryData.accessibleNavigation`, and there is
+no inherited widget to ask in `initState`. It is guarded by a bool so an
+ordinary dependency change — a rotation, a theme crossfade — cannot keep pushing
+the fade further away, and cancelled in `dispose` because a pending `Timer`
+outliving its widget is both a leak and an automatic test failure.
+
+**The throw is the third gesture on `ShelfSwipe`'s one state machine**, and the
+docstring now makes that argument for the third time. `_selectAcross` has always
+discarded travel more vertical than horizontal, so the room was free — no
+existing behaviour had to move to make space. `onDragDown` reports live travel
+so the viewer can follow the finger; it reports **zero** on a release that falls
+short, which is the instruction to spring back. The viewer's
+`TweenAnimationBuilder` reads that: duration **zero** while the throw is live so
+the picture sits under the finger rather than trailing it, and the chrome's own
+180ms on the way back so an abandoned throw settles instead of snapping.
+
+**A test trap, since it cost time here too.** `MaterialApp` crossfades between
+two themes, so the frame straight after a second `pumpWidget` with a new
+`ColorScheme` is still mostly the *old* one. The chrome-reads-the-theme test
+pumps 500ms before measuring; without it, it fails claiming the tint never
+changed, which is exactly the wrong diagnosis.
 
 ## M — Detail is one layout, scoped 2026-08-14; **BUILT AND MERGED 2026-08-15** (`6fc02c1`)
 
