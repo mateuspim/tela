@@ -39,7 +39,7 @@ class ImmersiveChromePalette {
   /// that already hold one.
   factory ImmersiveChromePalette.fromScheme(ColorScheme scheme) {
     final Color tintedBlack = Color.alphaBlend(
-      scheme.surface.withValues(alpha: _seedShare),
+      scheme.primary.withValues(alpha: _seedShare),
       Colors.black,
     );
     return ImmersiveChromePalette._(
@@ -51,12 +51,20 @@ class ImmersiveChromePalette {
 
   /// How much of the wallpaper's colour survives the blend into black.
   ///
-  /// A third is enough to read as tinted beside the untinted app and little
-  /// enough that a pale wallpaper's scrim is still a dark one. It is a share of
-  /// the *hue*, not of the opacity — [_scrimAlpha] is unchanged from the
-  /// `Colors.black45` these replaced, so the chrome hides exactly as much of
-  /// the picture as it did before.
-  static const double _seedShare = 0.35;
+  /// It is a share of the *hue*, not of the opacity — [_scrimAlpha] is
+  /// unchanged from the `Colors.black45` these replaced, so the chrome hides
+  /// exactly as much of the picture as it did before.
+  ///
+  /// **The role is [ColorScheme.primary] and it has to be**, which cost a
+  /// device pass to learn. This blended `surface` first, on the reasoning that
+  /// a surface is what a scrim is. Measured on the SM-X730 (2026-08-17) over a
+  /// vivid yellow wallpaper, the resulting scrim was **rgb(7, 7, 6)** — black,
+  /// to the eye and to the sampler. Material 3 builds a dark scheme's `surface`
+  /// almost fully desaturated by construction: L1a's own Konachan example is
+  /// `#302A25`, which is a *grey*. Thirty-five percent of a grey blended into
+  /// black is black, so the tint could never have shown through it, on any
+  /// wallpaper. `primary` is the role that actually carries the hue.
+  static const double _seedShare = 0.30;
 
   /// `Colors.black45`'s own alpha, to the byte rather than to the name — the
   /// constant is `0x73`, which is 0.451 and not the 0.45 it is called.
