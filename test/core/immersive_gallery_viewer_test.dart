@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
+import 'package:tela/core/ui/immersive_chrome_palette.dart';
 import 'package:tela/core/ui/immersive_gallery_viewer.dart';
 
 import '../fakes/fake_immersive_system_ui.dart';
@@ -428,6 +429,38 @@ void main() {
     expect(find.bySemanticsLabel('Selected wallpaper'), findsOneWidget);
     expect(source.buildCalls, greaterThanOrEqualTo(2));
   });
+
+  /// The chrome must resolve its scrim from the scheme, not from a constant.
+  /// It used to hardcode `Colors.black45` in six places, which is why the
+  /// viewer stayed a black void while the Detail screen it opens from paints
+  /// itself in the wallpaper's own colour. Two themes, two scrims — a revert
+  /// to constants fails here.
+  testWidgets('the chrome is painted by the theme, not by a constant', (
+    WidgetTester tester,
+  ) async {
+    final ColorScheme warm = ColorScheme.fromSeed(
+      seedColor: const Color(0xFFCC5500),
+      brightness: Brightness.dark,
+    );
+    final ColorScheme cool = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF0055CC),
+      brightness: Brightness.dark,
+    );
+
+    await _pumpViewer(tester, theme: ThemeData(colorScheme: warm));
+    final Set<Color?> warmScrims = _chromeScrims(tester);
+
+    await _pumpViewer(tester, theme: ThemeData(colorScheme: cool));
+    // MaterialApp crossfades between two themes, so the frame straight after
+    // the pump is still mostly the warm one — measured here, not assumed.
+    await tester.pump(const Duration(milliseconds: 500));
+    final Set<Color?> coolScrims = _chromeScrims(tester);
+
+    expect(warmScrims, contains(ImmersiveChromePalette.fromScheme(warm).scrim));
+    expect(coolScrims, contains(ImmersiveChromePalette.fromScheme(cool).scrim));
+    expect(warmScrims.intersection(coolScrims), isEmpty);
+    expect(warmScrims, isNot(contains(Colors.black45)));
+  });
 }
 
 Future<void> _pumpViewer(
@@ -444,9 +477,11 @@ Future<void> _pumpViewer(
   int itemCount = 1,
   VoidCallback? onPrevious,
   VoidCallback? onNext,
+  ThemeData? theme,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      theme: theme,
       localizationsDelegates: const <LocalizationsDelegate<Object>>[
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -498,4 +533,19 @@ Future<void> _doubleTap(WidgetTester tester, Finder finder) async {
   await tester.pump(kDoubleTapMinTime);
   await tester.tap(finder, warnIfMissed: false);
   await tester.pump(kDoubleTapTimeout);
+}
+
+/// Every scrim the chrome is currently painting, from both the position label
+/// and the action bar.
+Set<Color?> _chromeScrims(WidgetTester tester) {
+  return tester
+      .widgetList<DecoratedBox>(
+        find.descendant(
+          of: find.byKey(const Key('immersive-viewer-chrome')),
+          matching: find.byType(DecoratedBox),
+        ),
+      )
+      .map((DecoratedBox box) => (box.decoration as BoxDecoration).color)
+      .whereType<Color>()
+      .toSet();
 }

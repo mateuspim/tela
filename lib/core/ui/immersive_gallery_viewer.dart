@@ -6,6 +6,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
 import 'package:tela/core/ui/gallery_zoom_animator.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
+import 'package:tela/core/ui/immersive_chrome_palette.dart';
 import 'package:tela/core/ui/immersive_gallery_controls.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/shelf_swipe.dart';
@@ -308,12 +309,13 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
 
   Widget _openDetailsButton() {
     final String label = AppLocalizations.of(context).quickActionOpenDetail;
+    final ImmersiveChromePalette chrome = ImmersiveChromePalette.of(context);
     return IconButton.filledTonal(
       key: const Key('immersive-viewer-open-details'),
       onPressed: () => unawaited(_openDetails()),
       style: IconButton.styleFrom(
-        backgroundColor: Colors.black45,
-        foregroundColor: Colors.white,
+        backgroundColor: chrome.scrim,
+        foregroundColor: chrome.ink,
       ),
       constraints: const BoxConstraints.tightFor(width: 48, height: 48),
       icon: Icon(Icons.info_outline, semanticLabel: label),
@@ -350,6 +352,12 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
         child: Focus(
           autofocus: true,
           child: Material(
+            // Black, and deliberately still black after N1 tinted the chrome
+            // around it. The owner was asked how far the wallpaper's colour
+            // should reach and chose the controls only: a letterbox glowing in
+            // the picture's own hue competes with the picture, on the one
+            // surface where it is largest. `ImmersiveChromePalette` is where
+            // the tint stops.
             color: Colors.black,
             child: Stack(
               fit: StackFit.expand,

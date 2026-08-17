@@ -6,10 +6,12 @@ import 'package:tela/app/copy_wallpaper_action.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
+import 'package:tela/core/ui/immersive_chrome_palette.dart';
 import 'package:tela/core/ui/immersive_gallery_viewer.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_quick_sheet.dart';
+import 'package:tela/features/detail/ambient_wallpaper_tint.dart';
 import 'package:tela/features/detail/progressive_wallpaper_preview.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 
@@ -88,6 +90,23 @@ class _WallpaperImmersiveSessionState
     final AppLocalizations l10n = AppLocalizations.of(context);
     final GallerySessionController<Wallpaper> gallery = widget.gallery;
     final Wallpaper wallpaper = gallery.selectedItem;
+    // The tint is asked for here rather than inherited: this is a route pushed
+    // onto the Navigator, which sits *above* the Detail screen, so none of the
+    // theme Detail wrapped itself in reaches down here. Wrapping the viewer is
+    // what makes N1's chrome arrive in the wallpaper's colour — and because
+    // this rebuilds on every selection change, the colour travels with the
+    // pager exactly as it does on Detail.
+    return AmbientWallpaperTint(
+      wallpaper: wallpaper,
+      child: _viewer(l10n, gallery, wallpaper),
+    );
+  }
+
+  Widget _viewer(
+    AppLocalizations l10n,
+    GallerySessionController<Wallpaper> gallery,
+    Wallpaper wallpaper,
+  ) {
     return ImmersiveGalleryViewer(
       aspectRatio: wallpaper.resolution.width / wallpaper.resolution.height,
       semanticsLabel: l10n.detailPreviewLabel(wallpaper.id),
@@ -171,7 +190,7 @@ class _WallpaperImmersiveSessionState
       // The Icon carries the accessible name; see the controls' note on why
       // a tooltip is not a dependable source for one.
       icon: Icon(icon, semanticLabel: label),
-      color: Colors.white,
+      color: ImmersiveChromePalette.of(context).ink,
       constraints: const BoxConstraints.tightFor(width: 48, height: 48),
       onPressed: () => unawaited(_run(action, wallpaper)),
     );
