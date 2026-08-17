@@ -5,6 +5,7 @@ import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_zoom_animator.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
+import 'package:tela/core/ui/immersive_chrome_palette.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/shelf_swipe.dart';
@@ -139,9 +140,18 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager>
           // reserves its own space, reports zero here.
           top: 12 + MediaQuery.paddingOf(context).top,
           right: 12,
+          // Sized and painted like the chrome it opens into, rather than as a
+          // default tonal button: it sits over an arbitrary wallpaper, so it
+          // needs the scrim its neighbours in the viewer get, and 48dp is the
+          // target size the viewer's own controls are already held to.
           child: IconButton.filledTonal(
             onPressed: _enterFullscreen,
             tooltip: l10n.detailEnterFullscreen,
+            style: IconButton.styleFrom(
+              backgroundColor: ImmersiveChromePalette.of(context).scrim,
+              foregroundColor: ImmersiveChromePalette.of(context).ink,
+            ),
+            constraints: const BoxConstraints.tightFor(width: 48, height: 48),
             icon: const Icon(Icons.fullscreen),
           ),
         ),
@@ -229,6 +239,11 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager>
       onInteractionStart: _zoomAnimator.stopForInteraction,
       onDoubleTapDown: _zoomAnimator.rememberDoubleTap,
       onDoubleTap: _toggleDoubleTapZoom,
+      // The whole picture is the way into fullscreen, because the ⛶ alone was
+      // hard to find and hard to hit (owner, 2026-08-17). The button stays: a
+      // tap on an image is invisible to a screen reader, so it is never the
+      // only route in — the same rule the hold-to-copy gesture follows.
+      onTap: _enterFullscreen,
       heroTag: shelfHeroTag(_gallery.identity, wallpaper.ref.key, index),
     );
   }

@@ -6,6 +6,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
 import 'package:tela/core/ui/gallery_zoom_animator.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
+import 'package:tela/core/ui/immersive_chrome_palette.dart';
 import 'package:tela/core/ui/immersive_gallery_controls.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/shelf_swipe.dart';
@@ -103,6 +104,14 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
     with SingleTickerProviderStateMixin {
   static const Duration _transitionDuration = Duration(milliseconds: 180);
 
+  /// How long the chrome stays up with nothing touching it.
+  ///
+  /// The viewer opens with its controls *visible* and only then fades them,
+  /// rather than opening bare: a first-time user has to be shown the way out
+  /// before it goes. Three seconds is long enough to read the row and short
+  /// enough that a wallpaper you are actually looking at is soon unobstructed.
+  static const Duration _chromeIdleTimeout = Duration(seconds: 3);
+
   late GalleryZoomController _zoomController;
   late bool _ownsZoomController;
   late final GalleryZoomAnimator _zoomAnimator;
@@ -112,6 +121,9 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
   bool _systemUiRestored = false;
   bool _isExiting = false;
   bool _allowPop = false;
+  Timer? _chromeIdle;
+  bool _armedOnce = false;
+  double _dismissDrag = 0;
 
   @override
   void initState() {
@@ -124,6 +136,20 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
     _zoomAnimator = GalleryZoomAnimator(vsync: this, zoom: _zoomController);
     _activeSystemUi = widget.systemUi;
     _enterSystemUi = _activeSystemUi.enterImmersive();
+  }
+
+  /// Arms the idle fade on the first frame that has a [MediaQuery] to read.
+  ///
+  /// Not [initState]: whether the chrome may fade at all depends on
+  /// [MediaQueryData.accessibleNavigation], and there is no inherited widget to
+  /// ask in there. Guarded so that an ordinary dependency change — a rotation,
+  /// a theme crossfade — cannot keep pushing the fade further away.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_armedOnce) return;
+    _armedOnce = true;
+    _armChromeIdle();
   }
 
   @override
@@ -144,6 +170,7 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
 
   @override
   void dispose() {
+    _chromeIdle?.cancel();
     unawaited(_restoreSystemUi());
     _zoomAnimator.dispose();
     _zoomController.removeListener(_rebuildZoomChrome);
@@ -183,6 +210,41 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
 
   void _toggleChrome() {
     setState(() => _chromeVisible = !_chromeVisible);
+    _armChromeIdle();
+  }
+
+  /// Starts the countdown that hides the chrome, or cancels it.
+  ///
+  /// Three things it must not do, and each of them is a test:
+  ///
+  /// It never fades while a screen reader or a switch is driving the screen.
+  /// Chrome that vanishes on a clock is chrome an assistive user cannot get
+  /// back to — the way back is a tap on the canvas, which is a gesture, and a
+  /// gesture is exactly what that user does not have. So the timeout is a
+  /// sighted-touch affordance and [MediaQueryData.accessibleNavigation] turns
+  /// it off entirely.
+  ///
+  /// It never runs while the chrome is already hidden, which would otherwise
+  /// leave a timer alive for the whole session doing nothing.
+  ///
+  /// And it never fires after the route is gone: [dispose] cancels it. A
+  /// pending timer outliving its widget is both a leak and a test failure.
+  void _armChromeIdle() {
+    _chromeIdle?.cancel();
+    _chromeIdle = null;
+    if (!_chromeVisible) return;
+    if (MediaQuery.accessibleNavigationOf(context)) return;
+    _chromeIdle = Timer(_chromeIdleTimeout, _hideChrome);
+  }
+
+  /// Restarts the countdown on any touch, so the chrome never fades out from
+  /// under a finger that is reaching for it.
+  ///
+  /// A [Listener] rather than a gesture: this sits above the whole surface and
+  /// must see the pointer without competing for it — taking it would cost the
+  /// canvas its pinch, which is the trap `ShelfSwipe` documents at length.
+  void _touched(PointerDownEvent event) {
+    _armChromeIdle();
   }
 
   /// Hides the chrome from the chrome's own button.
@@ -193,6 +255,8 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
   /// (`galleryShowControls`) for a screen reader. Those two are what keep this
   /// from being a control that hides itself for good.
   void _hideChrome() {
+    _chromeIdle?.cancel();
+    _chromeIdle = null;
     if (_chromeVisible) setState(() => _chromeVisible = false);
   }
 
@@ -216,12 +280,61 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
         : _transitionDuration;
   }
 
+  /// How far down the canvas has been thrown, as a share of the distance that
+  /// commits the dismiss. Clamped, because a finger can travel further than
+  /// the threshold before it lifts.
+  double get _dismissProgress {
+    return (_dismissDrag / ShelfSwipe.dismissThreshold).clamp(0.0, 1.0);
+  }
+
+  void _dragCanvasDown(double distance) {
+    if (distance == _dismissDrag) return;
+    setState(() => _dismissDrag = distance);
+  }
+
+  void _dismissByThrow() {
+    unawaited(_exitFullscreen());
+  }
+
+  /// Follows the finger on the way down, and springs back if it falls short.
+  ///
+  /// The duration is the tell: zero while the throw is live, so the picture is
+  /// under the finger rather than trailing it, and the chrome's own fade on the
+  /// way back, so an abandoned throw settles instead of snapping.
+  Widget _throwableCanvas(Widget canvas) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: _dismissDrag),
+      duration: _dismissDrag == 0 ? _chromeDuration() : Duration.zero,
+      curve: Curves.easeOut,
+      child: canvas,
+      builder: (BuildContext context, double drag, Widget? child) {
+        return Transform.translate(
+          offset: Offset(0, drag),
+          child: Opacity(opacity: _thrownOpacity(drag), child: child),
+        );
+      },
+    );
+  }
+
+  /// The picture dims as it is thrown, but never past half — it has to stay
+  /// legible enough that a user who changes their mind can see what they are
+  /// dragging back.
+  double _thrownOpacity(double drag) {
+    final double progress = (drag / ShelfSwipe.dismissThreshold).clamp(
+      0.0,
+      1.0,
+    );
+    return 1 - progress * 0.5;
+  }
+
   Widget _imageCanvas(AppLocalizations l10n) {
     return ShelfSwipe(
       isZoomed: _zoomController.isZoomed,
       onPrevious: widget.onPrevious,
       onNext: widget.onNext,
       onHold: widget.onHold,
+      onDragDown: _dragCanvasDown,
+      onDismiss: _dismissByThrow,
       child: Semantics(
         container: true,
         explicitChildNodes: true,
@@ -229,16 +342,18 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
             ? l10n.galleryHideControls
             : l10n.galleryShowControls,
         onTap: _toggleChrome,
-        child: GalleryViewport(
-          aspectRatio: widget.aspectRatio,
-          semanticsLabel: widget.semanticsLabel,
-          source: widget.source,
-          heroTag: widget.heroTag,
-          transformationController: _zoomController.transformationController,
-          onInteractionStart: _zoomAnimator.stopForInteraction,
-          onTap: _toggleChrome,
-          onDoubleTapDown: _zoomAnimator.rememberDoubleTap,
-          onDoubleTap: _toggleDoubleTapZoom,
+        child: _throwableCanvas(
+          GalleryViewport(
+            aspectRatio: widget.aspectRatio,
+            semanticsLabel: widget.semanticsLabel,
+            source: widget.source,
+            heroTag: widget.heroTag,
+            transformationController: _zoomController.transformationController,
+            onInteractionStart: _zoomAnimator.stopForInteraction,
+            onTap: _toggleChrome,
+            onDoubleTapDown: _zoomAnimator.rememberDoubleTap,
+            onDoubleTap: _toggleDoubleTapZoom,
+          ),
         ),
       ),
     );
@@ -284,7 +399,9 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
 
   Widget _viewerChrome() {
     return ImmersiveGalleryControls(
-      visible: _chromeVisible,
+      // A throw in progress hides the chrome without touching `_chromeVisible`,
+      // so abandoning the throw brings back exactly the controls that were up.
+      visible: _chromeVisible && _dismissProgress == 0,
       duration: _chromeDuration(),
       zoomed: _zoomController.isZoomed,
       onToggleZoom: _toggleCenteredZoom,
@@ -308,12 +425,13 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
 
   Widget _openDetailsButton() {
     final String label = AppLocalizations.of(context).quickActionOpenDetail;
+    final ImmersiveChromePalette chrome = ImmersiveChromePalette.of(context);
     return IconButton.filledTonal(
       key: const Key('immersive-viewer-open-details'),
       onPressed: () => unawaited(_openDetails()),
       style: IconButton.styleFrom(
-        backgroundColor: Colors.black45,
-        foregroundColor: Colors.white,
+        backgroundColor: chrome.scrim,
+        foregroundColor: chrome.ink,
       ),
       constraints: const BoxConstraints.tightFor(width: 48, height: 48),
       icon: Icon(Icons.info_outline, semanticLabel: label),
@@ -349,15 +467,24 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
         },
         child: Focus(
           autofocus: true,
-          child: Material(
-            color: Colors.black,
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                _imageCanvas(l10n),
-                _viewerChrome(),
-                if (widget.statusOverlay != null) _statusOverlay(),
-              ],
+          child: Listener(
+            onPointerDown: _touched,
+            child: Material(
+              // Black, and deliberately still black after N1 tinted the chrome
+              // around it. The owner was asked how far the wallpaper's colour
+              // should reach and chose the controls only: a letterbox glowing
+              // in the picture's own hue competes with the picture, on the one
+              // surface where it is largest. `ImmersiveChromePalette` is where
+              // the tint stops.
+              color: Colors.black,
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  _imageCanvas(l10n),
+                  _viewerChrome(),
+                  if (widget.statusOverlay != null) _statusOverlay(),
+                ],
+              ),
             ),
           ),
         ),

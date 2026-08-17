@@ -4,7 +4,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// The one-finger gestures a zoomable shelf surface owns — swipe, and hold.
+/// The one-finger gestures a zoomable shelf surface owns — swipe, hold, and
+/// the downward throw that dismisses a fullscreen view.
 ///
 /// Every zoomable gallery surface in tela has the same problem: an
 /// [InteractiveViewer] and a page-turning drag both want the same fingers, and
@@ -30,11 +31,22 @@ import 'package:flutter/services.dart';
 /// the same pointer stream it cannot, and the two gestures share one state
 /// machine, so a finger can never both copy the image and turn the page.
 ///
+/// The dismiss is here for the third time on the same argument. A
+/// `VerticalDragGestureRecognizer` would sweep the arena the instant a finger
+/// crossed slop downward and the pinch would be gone with it — the very bug
+/// measured on the SM-X730. Measured off the same pointer stream it cannot,
+/// and the room was already free: the swipe has always discarded travel
+/// that is more vertical than horizontal, so nothing here read a downward drag
+/// at all. It stays disarmed while [isZoomed], where a vertical drag is a pan
+/// across a magnified image and nothing else.
+///
 /// ```dart
 /// ShelfSwipe(
 ///   isZoomed: zoom.isZoomed,
 ///   onNext: gallery.canSelectNext ? gallery.selectNext : null,
 ///   onHold: () => copy(wallpaper),
+///   onDragDown: (double dy) => setState(() => _dismissDrag = dy),
+///   onDismiss: close,
 ///   child: viewport,
 /// )
 /// ```
@@ -46,6 +58,8 @@ class ShelfSwipe extends StatefulWidget {
     this.onPrevious,
     this.onNext,
     this.onHold,
+    this.onDragDown,
+    this.onDismiss,
     super.key,
   });
 
@@ -75,6 +89,22 @@ class ShelfSwipe extends StatefulWidget {
   /// screen reader, so the surfaces using it keep a labelled control too.
   final VoidCallback? onHold;
 
+  /// Reports how far a downward throw has travelled, for a surface that wants
+  /// to follow the finger — the fullscreen viewer slides and fades its canvas
+  /// by this. Called with zero when the throw is released short of
+  /// [dismissThreshold] and the surface should spring back.
+  ///
+  /// Only ever downward, and only while the gesture is more vertical than
+  /// horizontal: a sideways drag is a page turn and must not drag the picture
+  /// off the screen on its way.
+  final ValueChanged<double>? onDragDown;
+
+  /// Called when a downward throw is released past [dismissThreshold].
+  ///
+  /// Null leaves the gesture unarmed, which is what every surface that is not
+  /// a fullscreen route passes — a shelf tile has nothing to dismiss.
+  final VoidCallback? onDismiss;
+
   /// How far a finger must travel horizontally before it counts as a swipe.
   ///
   /// Wide enough that steadying a thumb on the image, or starting a pinch that
@@ -86,6 +116,13 @@ class ShelfSwipe extends StatefulWidget {
   /// on the device rather than like a number tela picked.
   static const Duration holdDuration = kLongPressTimeout;
 
+  /// How far a finger must travel downward before releasing it dismisses.
+  ///
+  /// Deliberately larger than [swipeThreshold]: a page turn that misfires
+  /// costs one swipe back, while a dismiss that misfires throws the user out
+  /// of the screen they were reading. The asymmetry is the point.
+  static const double dismissThreshold = 120;
+
   @override
   State<ShelfSwipe> createState() => _ShelfSwipeState();
 }
@@ -96,6 +133,7 @@ class _ShelfSwipeState extends State<ShelfSwipe> {
   Offset? _latest;
   Timer? _hold;
   int? _held;
+  bool _dragging = false;
 
   @override
   void dispose() {
@@ -138,7 +176,25 @@ class _ShelfSwipeState extends State<ShelfSwipe> {
     final Offset? start = _start;
     if (_pointers != 1 || start == null) return;
     _latest = event.localPosition;
-    if ((event.localPosition - start).distance > kTouchSlop) _cancelHold();
+    final Offset travel = event.localPosition - start;
+    if (travel.distance > kTouchSlop) _cancelHold();
+    _reportDragDown(travel);
+  }
+
+  /// Follows a downward throw while it is still in the finger.
+  ///
+  /// The same rule [_selectAcross] applies, and for the same reason: a gesture
+  /// is only a dismiss while it is more vertical than horizontal, so a diagonal
+  /// that resolves into a page turn never drags the picture with it. Crossing
+  /// back over that line, or upward, reports zero and springs the surface back.
+  void _reportDragDown(Offset travel) {
+    final ValueChanged<double>? report = widget.onDragDown;
+    if (report == null || widget.onDismiss == null) return;
+    final bool dismissing =
+        travel.dy > kTouchSlop && travel.dy.abs() > travel.dx.abs();
+    if (!dismissing && !_dragging) return;
+    _dragging = dismissing;
+    report(dismissing ? travel.dy : 0);
   }
 
   void _armHold() {
@@ -174,12 +230,17 @@ class _ShelfSwipeState extends State<ShelfSwipe> {
   void _finishSwipe(PointerUpEvent event) {
     final Offset? start = _start;
     final Offset end = _latest ?? event.localPosition;
+    final bool wasDragging = _dragging;
     _releasePointer();
     if (_pointers != 0 || start == null || widget.isZoomed) return;
+    if (_dismissAcross(end - start, wasDragging)) return;
     _selectAcross(end - start);
   }
 
-  void _cancelSwipe(PointerCancelEvent event) => _releasePointer();
+  void _cancelSwipe(PointerCancelEvent event) {
+    if (_dragging) widget.onDragDown?.call(0);
+    _releasePointer();
+  }
 
   void _releasePointer() {
     if (_pointers > 0) _pointers--;
@@ -187,6 +248,20 @@ class _ShelfSwipeState extends State<ShelfSwipe> {
     _start = null;
     _latest = null;
     _held = null;
+    _dragging = false;
+  }
+
+  /// Commits or abandons a downward throw, and reports which by returning
+  /// whether the gesture was one at all — a throw that fell short still
+  /// belonged to the dismiss, so it springs back rather than turning a page.
+  bool _dismissAcross(Offset travel, bool wasDragging) {
+    if (!wasDragging) return false;
+    if (travel.dy >= ShelfSwipe.dismissThreshold) {
+      widget.onDismiss?.call();
+      return true;
+    }
+    widget.onDragDown?.call(0);
+    return true;
   }
 
   /// Reads a direction out of [travel], ignoring anything too short or more

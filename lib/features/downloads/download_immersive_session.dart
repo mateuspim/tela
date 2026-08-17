@@ -9,6 +9,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
+import 'package:tela/core/ui/immersive_chrome_palette.dart';
 import 'package:tela/core/ui/immersive_gallery_viewer.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
@@ -179,7 +180,13 @@ class _DownloadImmersiveSessionState
     return PopupMenuButton<void>(
       key: const Key('download-viewer-overflow'),
       tooltip: l10n.galleryMoreActions,
-      icon: const Icon(Icons.more_vert, color: Colors.white),
+      // Tinted with the rest of the top row it sits in. The "not on this
+      // device" badge below is not: it is a persistent status shown
+      // independent of chrome, and keeps its own heavier scrim.
+      icon: Icon(
+        Icons.more_vert,
+        color: ImmersiveChromePalette.of(context).ink,
+      ),
       itemBuilder: (BuildContext context) => <PopupMenuEntry<void>>[
         PopupMenuItem<void>(
           onTap: _confirmForget,

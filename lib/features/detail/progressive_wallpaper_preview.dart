@@ -15,6 +15,7 @@ class ProgressiveWallpaperPreview extends StatelessWidget {
     this.onInteractionStart,
     this.onDoubleTapDown,
     this.onDoubleTap,
+    this.onTap,
     this.fillLetterbox = false,
     super.key,
   });
@@ -45,6 +46,15 @@ class ProgressiveWallpaperPreview extends StatelessWidget {
   /// pre-builds: an off-screen neighbour's gesture would write to zoom state
   /// belonging to the wallpaper actually on screen.
   final GestureTapCallback? onDoubleTap;
+
+  /// Called for a single tap on the image.
+  ///
+  /// Detail passes the way into fullscreen, so the picture itself is the target
+  /// rather than only the ⛶ in its corner. Withheld from a pager's pre-built
+  /// neighbours alongside the other gestures — not because a tap there would do
+  /// the wrong thing, but because a page that is not the selected one has no
+  /// business being interactive.
+  final GestureTapCallback? onTap;
 
   /// Whether to paint the letterbox with a blurred copy of the wallpaper.
   ///
@@ -79,6 +89,7 @@ class ProgressiveWallpaperPreview extends StatelessWidget {
       onInteractionStart: onInteractionStart,
       onDoubleTapDown: onDoubleTapDown,
       onDoubleTap: onDoubleTap,
+      onTap: onTap,
       backdrop: fillLetterbox
           // The same thumbnail the preview and the shelf tile already fetched,
           // so the fill costs no request.

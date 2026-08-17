@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_viewport.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
+import 'package:tela/core/ui/immersive_chrome_palette.dart';
 import 'package:tela/core/ui/immersive_gallery_viewer.dart';
+import 'package:tela/core/ui/shelf_swipe.dart';
 
 import '../fakes/fake_immersive_system_ui.dart';
 
@@ -428,6 +430,153 @@ void main() {
     expect(find.bySemanticsLabel('Selected wallpaper'), findsOneWidget);
     expect(source.buildCalls, greaterThanOrEqualTo(2));
   });
+
+  /// The chrome must resolve its scrim from the scheme, not from a constant.
+  /// It used to hardcode `Colors.black45` in six places, which is why the
+  /// viewer stayed a black void while the Detail screen it opens from paints
+  /// itself in the wallpaper's own colour. Two themes, two scrims — a revert
+  /// to constants fails here.
+  testWidgets('the chrome is painted by the theme, not by a constant', (
+    WidgetTester tester,
+  ) async {
+    final ColorScheme warm = ColorScheme.fromSeed(
+      seedColor: const Color(0xFFCC5500),
+      brightness: Brightness.dark,
+    );
+    final ColorScheme cool = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF0055CC),
+      brightness: Brightness.dark,
+    );
+
+    await _pumpViewer(tester, theme: ThemeData(colorScheme: warm));
+    final Set<Color?> warmScrims = _chromeScrims(tester);
+
+    await _pumpViewer(tester, theme: ThemeData(colorScheme: cool));
+    // MaterialApp crossfades between two themes, so the frame straight after
+    // the pump is still mostly the warm one — measured here, not assumed.
+    await tester.pump(const Duration(milliseconds: 500));
+    final Set<Color?> coolScrims = _chromeScrims(tester);
+
+    expect(warmScrims, contains(ImmersiveChromePalette.fromScheme(warm).scrim));
+    expect(coolScrims, contains(ImmersiveChromePalette.fromScheme(cool).scrim));
+    expect(warmScrims.intersection(coolScrims), isEmpty);
+    expect(warmScrims, isNot(contains(Colors.black45)));
+  });
+
+  testWidgets('the chrome fades on its own once nothing is touching it', (
+    WidgetTester tester,
+  ) async {
+    await _pumpViewer(tester, disableAnimations: true);
+
+    // It opens visible on purpose: the way out has to be shown before it goes.
+    expect(_chromeOpacity(tester), 1);
+
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(_chromeOpacity(tester), 0);
+  });
+
+  testWidgets('a touch restarts the countdown rather than being ignored', (
+    WidgetTester tester,
+  ) async {
+    await _pumpViewer(tester, disableAnimations: true);
+
+    await tester.pump(const Duration(seconds: 2));
+    // Straight down and up on the canvas without travelling: a tap, which
+    // toggles the chrome off and back on, is not what is being measured here.
+    final TestGesture gesture = await tester.startGesture(
+      tester.getCenter(find.byType(GalleryViewport)),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(_chromeOpacity(tester), 1);
+
+    await gesture.up();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(_chromeOpacity(tester), 0);
+  });
+
+  /// The fade is a sighted-touch affordance. Bringing the chrome back is a tap
+  /// on the canvas — a gesture, and a gesture is exactly what a switch or
+  /// screen-reader user does not have — so a clock that takes the controls
+  /// away would take them away for good.
+  testWidgets('the chrome never fades while assistive navigation is on', (
+    WidgetTester tester,
+  ) async {
+    await _pumpViewer(
+      tester,
+      disableAnimations: true,
+      accessibleNavigation: true,
+    );
+
+    await tester.pump(const Duration(seconds: 10));
+
+    expect(_chromeOpacity(tester), 1);
+  });
+
+  testWidgets('throwing the picture down closes the viewer', (
+    WidgetTester tester,
+  ) async {
+    int closed = 0;
+    await _pumpViewer(
+      tester,
+      disableAnimations: true,
+      onClose: () async => closed++,
+    );
+
+    await _throwDown(tester, ShelfSwipe.dismissThreshold + 40);
+
+    expect(closed, 1);
+  });
+
+  /// The chrome goes without touching `_chromeVisible`, so abandoning the
+  /// throw brings back exactly the controls that were up rather than a fresh
+  /// set the user did not ask for.
+  testWidgets('a live throw hides the chrome, and giving up brings it back', (
+    WidgetTester tester,
+  ) async {
+    await _pumpViewer(tester, disableAnimations: true);
+
+    final TestGesture finger = await tester.startGesture(
+      tester.getCenter(find.byType(GalleryViewport)),
+    );
+    for (int step = 0; step < 4; step++) {
+      await finger.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    expect(_chromeOpacity(tester), 0);
+
+    // Released well short of the threshold: the picture springs back and so
+    // does everything that was riding on it.
+    await finger.up();
+    await tester.pumpAndSettle();
+
+    expect(_chromeOpacity(tester), 1);
+  });
+
+  testWidgets('a magnified picture is panned, not thrown away', (
+    WidgetTester tester,
+  ) async {
+    final GalleryZoomController zoomController = GalleryZoomController();
+    addTearDown(zoomController.dispose);
+    int closed = 0;
+    await _pumpViewer(
+      tester,
+      zoomController: zoomController,
+      disableAnimations: true,
+      onClose: () async => closed++,
+    );
+
+    await _doubleTap(tester, find.byType(GalleryViewport));
+    await tester.pump();
+    expect(zoomController.isZoomed, isTrue);
+
+    await _throwDown(tester, ShelfSwipe.dismissThreshold + 80);
+
+    expect(closed, 0);
+  });
 }
 
 Future<void> _pumpViewer(
@@ -444,9 +593,12 @@ Future<void> _pumpViewer(
   int itemCount = 1,
   VoidCallback? onPrevious,
   VoidCallback? onNext,
+  ThemeData? theme,
+  bool accessibleNavigation = false,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      theme: theme,
       localizationsDelegates: const <LocalizationsDelegate<Object>>[
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -458,6 +610,7 @@ Future<void> _pumpViewer(
         data: MediaQueryData(
           size: viewportSize,
           disableAnimations: disableAnimations,
+          accessibleNavigation: accessibleNavigation,
         ),
         child: Center(
           child: SizedBox.fromSize(
@@ -498,4 +651,41 @@ Future<void> _doubleTap(WidgetTester tester, Finder finder) async {
   await tester.pump(kDoubleTapMinTime);
   await tester.tap(finder, warnIfMissed: false);
   await tester.pump(kDoubleTapTimeout);
+}
+
+/// Every scrim the chrome is currently painting, from both the position label
+/// and the action bar.
+Set<Color?> _chromeScrims(WidgetTester tester) {
+  return tester
+      .widgetList<DecoratedBox>(
+        find.descendant(
+          of: find.byKey(const Key('immersive-viewer-chrome')),
+          matching: find.byType(DecoratedBox),
+        ),
+      )
+      .map((DecoratedBox box) => (box.decoration as BoxDecoration).color)
+      .whereType<Color>()
+      .toSet();
+}
+
+/// The chrome's current opacity, which is how visible it actually is — the
+/// widget stays mounted either way.
+double _chromeOpacity(WidgetTester tester) {
+  return tester
+      .widget<AnimatedOpacity>(find.byKey(const Key('immersive-viewer-chrome')))
+      .opacity;
+}
+
+/// Drags the canvas straight down over several frames and lets go, which is
+/// the throw a dismiss is made of.
+Future<void> _throwDown(WidgetTester tester, double distance) async {
+  final TestGesture finger = await tester.startGesture(
+    tester.getCenter(find.byType(GalleryViewport)),
+  );
+  for (int step = 0; step < 8; step++) {
+    await finger.moveBy(Offset(0, distance / 8));
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  await finger.up();
+  await tester.pumpAndSettle();
 }

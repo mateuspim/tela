@@ -296,6 +296,104 @@ void main() {
 
     expect(selected, <String>['next']);
   });
+
+  testWidgets('a long downward throw dismisses, and reports its travel', (
+    WidgetTester tester,
+  ) async {
+    final List<double> dragged = <double>[];
+    final List<String> dismissed = <String>[];
+    await _pumpSwipe(
+      tester,
+      selected: <String>[],
+      dragged: dragged,
+      dismissed: dismissed,
+    );
+
+    await _drag(tester, const Offset(0, ShelfSwipe.dismissThreshold + 20));
+
+    expect(dismissed, <String>['dismiss']);
+    // The surface followed the finger on the way down rather than only
+    // hearing about it at the end.
+    expect(dragged, isNotEmpty);
+    expect(dragged.last, greaterThan(0));
+  });
+
+  testWidgets('a throw that falls short springs back instead of dismissing', (
+    WidgetTester tester,
+  ) async {
+    final List<double> dragged = <double>[];
+    final List<String> dismissed = <String>[];
+    await _pumpSwipe(
+      tester,
+      selected: <String>[],
+      dragged: dragged,
+      dismissed: dismissed,
+    );
+
+    await _drag(tester, const Offset(0, ShelfSwipe.dismissThreshold - 20));
+
+    expect(dismissed, isEmpty);
+    // Zero last, which is the instruction to spring back.
+    expect(dragged.last, 0);
+  });
+
+  /// The dismiss threshold is deliberately larger than the swipe's: a page turn
+  /// that misfires costs one swipe back, a dismiss that misfires throws the
+  /// user out of the screen they were reading.
+  testWidgets('a sideways drag turns the page without dragging the picture', (
+    WidgetTester tester,
+  ) async {
+    final List<String> selected = <String>[];
+    final List<double> dragged = <double>[];
+    final List<String> dismissed = <String>[];
+    await _pumpSwipe(
+      tester,
+      selected: selected,
+      dragged: dragged,
+      dismissed: dismissed,
+    );
+
+    await _drag(tester, const Offset(-140, 30));
+
+    expect(selected, <String>['next']);
+    expect(dismissed, isEmpty);
+    expect(dragged, isEmpty);
+  });
+
+  testWidgets('a magnified image is panned downward, never dismissed', (
+    WidgetTester tester,
+  ) async {
+    final List<double> dragged = <double>[];
+    final List<String> dismissed = <String>[];
+    await _pumpSwipe(
+      tester,
+      selected: <String>[],
+      isZoomed: true,
+      dragged: dragged,
+      dismissed: dismissed,
+    );
+
+    await _drag(tester, const Offset(0, ShelfSwipe.dismissThreshold + 60));
+
+    expect(dismissed, isEmpty);
+    expect(dragged, isEmpty);
+  });
+
+  testWidgets('an upward drag is not a dismiss', (WidgetTester tester) async {
+    final List<double> dragged = <double>[];
+    final List<String> dismissed = <String>[];
+    await _pumpSwipe(
+      tester,
+      selected: <String>[],
+      dragged: dragged,
+      dismissed: dismissed,
+    );
+
+    await _drag(tester, const Offset(0, -(ShelfSwipe.dismissThreshold + 60)));
+
+    expect(dismissed, isEmpty);
+    expect(dragged, isEmpty);
+  });
 }
 
 Offset _centre(WidgetTester tester) =>
@@ -320,6 +418,8 @@ Future<void> _pumpSwipe(
   VoidCallback? onTap,
   bool isZoomed = false,
   bool atLastItem = false,
+  List<double>? dragged,
+  List<String>? dismissed,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -329,6 +429,8 @@ Future<void> _pumpSwipe(
           onPrevious: () => selected.add('previous'),
           onNext: atLastItem ? null : () => selected.add('next'),
           onHold: held == null ? null : () => held.add('held'),
+          onDragDown: dragged?.add,
+          onDismiss: dismissed == null ? null : () => dismissed.add('dismiss'),
           // The viewport's tap, standing in for the real one: fullscreen wires
           // a chrome toggle here, and it is what the hold has to take away.
           child: GestureDetector(
