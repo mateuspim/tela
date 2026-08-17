@@ -5,7 +5,8 @@ Updated: 2026-08-17
 > **NEXT SESSION STARTS HERE — pass N is built, device-verified and merged. The
 > immersive viewer was the last thing open from the owner's original sentence,
 > and it is closed.** All three of the viewer's slices are on
-> `feat/immersive-viewer`, **merged**: Dart **1414**
+> `feat/immersive-viewer` **merged as `b84f446`** (2026-08-17), eight commits through
+> the gate: Dart **1414**
 > (from 1396), Kotlin **136** untouched, analyze and format clean. The chrome
 > takes the wallpaper's colour and the canvas stays black (N1); the chrome fades
 > on its own after three seconds and never under `accessibleNavigation` (N2);
@@ -727,7 +728,7 @@ Updated: 2026-08-17
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
-## N — the immersive viewer, scoped and **BUILT 2026-08-17**; device pass owed
+## N — the immersive viewer, scoped, built, device-verified and **MERGED 2026-08-17** (`b84f446`)
 
 The second complaint from the owner's *"the full screen ... is throwing off"*
 sentence, unscoped since M shipped. Asked directly on 2026-08-17, they named
@@ -741,10 +742,10 @@ library's and the downloads'. Nothing below may make the private library
 brighter, louder, or easier to screenshot. `FLAG_SECURE` and the unarmed hold
 stay exactly as they are.
 
-**All three are built and device-verified** on `feat/immersive-viewer`: Dart
-**1414** (from 1396), Kotlin **136** untouched — nothing under `android/` moved
-— analyze and format clean. **Nothing is merged**, and one question is still the
-owner's to answer; see the device pass below.
+**All three are built, device-verified and merged** (`b84f446`): Dart **1414** (from
+1396), Kotlin **136** untouched — nothing under `android/` moved — analyze and
+format clean, the merge through the gate. The pass's one open question was put
+to the owner and settled; see the device pass below.
 
 ### The device pass — run 2026-08-17, SM-X730, all four questions answered
 
