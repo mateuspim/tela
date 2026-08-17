@@ -2,9 +2,10 @@
 
 Updated: 2026-08-17
 
-> **NEXT SESSION STARTS HERE — pass N is built, device-verified, and waiting on
-> one decision before it merges.** All three of the viewer's slices are on
-> `feat/immersive-viewer`, seven commits, **nothing merged**: Dart **1414**
+> **NEXT SESSION STARTS HERE — pass N is built, device-verified and merged. The
+> immersive viewer was the last thing open from the owner's original sentence,
+> and it is closed.** All three of the viewer's slices are on
+> `feat/immersive-viewer`, **merged**: Dart **1414**
 > (from 1396), Kotlin **136** untouched, analyze and format clean. The chrome
 > takes the wallpaper's colour and the canvas stays black (N1); the chrome fades
 > on its own after three seconds and never under `accessibleNavigation` (N2);
@@ -20,14 +21,16 @@ Updated: 2026-08-17
 > `primary` is the role that carries the hue; it now measures rgb(33, 31, 19) on
 > yellow and rgb(72, 71, 87) on purple, with the ink holding 7.8:1 to 13.4:1.
 >
-> **One thing is open and it is the owner's call, not a bug.** The letterbox
-> *does* pop on the way into fullscreen — Detail blurs those bands, the viewer
+> **The one open question was put to the owner and settled: leave the letterbox
+> pop alone.** It *does* pop on the way into fullscreen — Detail blurs those bands, the viewer
 > paints them black, and the cut happens in a single frame. Measured at
 > rgb(18, 15, 48) → rgb(0, 0, 0) on a dark wallpaper, where it is nearly
 > invisible; the worst a wallpaper can produce is about 55% of white, which
 > would flash. **Both fixes cost something already chosen** — one is the blurred
-> backdrop the owner declined, the other keeps Detail painting under the viewer.
-> The full argument is in the device-pass section under *N*.
+> backdrop the owner declined, the other keeps Detail painting under the viewer
+> — so neither is worth its price for a flash nobody has seen. Do not re-open it
+> without an actual sighting. The full argument is in the device-pass section
+> under *N*.
 >
 > Two traps that cost time here: a pushed route inherits none of Detail's theme,
 > and `MaterialApp` crossfades themes so the frame after a `pumpWidget` still
@@ -792,16 +795,19 @@ wallpaper-dependent** — `BlurredImageBackdrop` carries a 45% black scrim, so t
 brightest band any wallpaper can produce is about 55% of white, and *that* one
 would flash.
 
-**Both fixes cost something the owner already chose**, which is why this is not
-being taken unilaterally:
-1. Give the viewer Detail's blurred backdrop — this is **option 3 of the tint
-   fork, which the owner declined** in favour of a black canvas.
+**Both fixes cost something the owner already chose**, which is why it was put
+to them rather than taken:
+1. Give the viewer Detail's blurred backdrop — **option 3 of the tint fork,
+   which they had already declined** in favour of a black canvas.
 2. Set `opaque: false` on the fullscreen route so the existing `FadeTransition`
    actually crossfades the two. Correct, and keeps the black canvas — but Detail
    then keeps painting underneath for as long as the viewer is open.
 
-Ask before doing either. Doing nothing is also defensible: the pop is invisible
-on a dark wallpaper and nobody has yet seen it on a bright one.
+**Settled 2026-08-17: leave it.** The owner's call, with both fixes and their
+costs in front of them. It is invisible on a dark wallpaper, no one has yet met
+the bright one, and neither fix is worth its price for a flash nobody has seen.
+**Do not re-open this without an actual sighting** — and if one comes, option 2
+is the one that keeps the black canvas the owner picked.
 
 **Three slices, ordered by cost, each independently shippable and each owing a
 device pass** — none of these can be called done on a green suite, they are all
