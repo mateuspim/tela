@@ -9,6 +9,7 @@ import 'package:tela/core/ui/gallery_zoom_controller.dart';
 import 'package:tela/core/ui/immersive_chrome_palette.dart';
 import 'package:tela/core/ui/immersive_gallery_viewer.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
+import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/wallpaper_quick_sheet.dart';
 import 'package:tela/features/detail/ambient_wallpaper_tint.dart';
@@ -120,6 +121,16 @@ class _WallpaperImmersiveSessionState
       systemUi: widget.systemUi,
       onClose: widget.onClose,
       onOpenDetails: widget.onClose,
+      // The same tag Detail's pager already puts on the wallpaper it is
+      // showing, so the picture *grows* into fullscreen and flies back rather
+      // than crossfading in place. Both sides read the one gallery session, so
+      // paging inside the viewer leaves the two tags in step and the flight
+      // home lands on the wallpaper actually being looked at.
+      heroTag: shelfHeroTag(
+        gallery.identity,
+        wallpaper.ref.key,
+        gallery.selectedIndex,
+      ),
       barActions: _barActions(l10n, wallpaper),
     );
   }

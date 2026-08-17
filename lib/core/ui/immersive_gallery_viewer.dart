@@ -123,6 +123,7 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
   bool _allowPop = false;
   Timer? _chromeIdle;
   bool _armedOnce = false;
+  double _dismissDrag = 0;
 
   @override
   void initState() {
@@ -279,12 +280,61 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
         : _transitionDuration;
   }
 
+  /// How far down the canvas has been thrown, as a share of the distance that
+  /// commits the dismiss. Clamped, because a finger can travel further than
+  /// the threshold before it lifts.
+  double get _dismissProgress {
+    return (_dismissDrag / ShelfSwipe.dismissThreshold).clamp(0.0, 1.0);
+  }
+
+  void _dragCanvasDown(double distance) {
+    if (distance == _dismissDrag) return;
+    setState(() => _dismissDrag = distance);
+  }
+
+  void _dismissByThrow() {
+    unawaited(_exitFullscreen());
+  }
+
+  /// Follows the finger on the way down, and springs back if it falls short.
+  ///
+  /// The duration is the tell: zero while the throw is live, so the picture is
+  /// under the finger rather than trailing it, and the chrome's own fade on the
+  /// way back, so an abandoned throw settles instead of snapping.
+  Widget _throwableCanvas(Widget canvas) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: _dismissDrag),
+      duration: _dismissDrag == 0 ? _chromeDuration() : Duration.zero,
+      curve: Curves.easeOut,
+      child: canvas,
+      builder: (BuildContext context, double drag, Widget? child) {
+        return Transform.translate(
+          offset: Offset(0, drag),
+          child: Opacity(opacity: _thrownOpacity(drag), child: child),
+        );
+      },
+    );
+  }
+
+  /// The picture dims as it is thrown, but never past half — it has to stay
+  /// legible enough that a user who changes their mind can see what they are
+  /// dragging back.
+  double _thrownOpacity(double drag) {
+    final double progress = (drag / ShelfSwipe.dismissThreshold).clamp(
+      0.0,
+      1.0,
+    );
+    return 1 - progress * 0.5;
+  }
+
   Widget _imageCanvas(AppLocalizations l10n) {
     return ShelfSwipe(
       isZoomed: _zoomController.isZoomed,
       onPrevious: widget.onPrevious,
       onNext: widget.onNext,
       onHold: widget.onHold,
+      onDragDown: _dragCanvasDown,
+      onDismiss: _dismissByThrow,
       child: Semantics(
         container: true,
         explicitChildNodes: true,
@@ -292,16 +342,18 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
             ? l10n.galleryHideControls
             : l10n.galleryShowControls,
         onTap: _toggleChrome,
-        child: GalleryViewport(
-          aspectRatio: widget.aspectRatio,
-          semanticsLabel: widget.semanticsLabel,
-          source: widget.source,
-          heroTag: widget.heroTag,
-          transformationController: _zoomController.transformationController,
-          onInteractionStart: _zoomAnimator.stopForInteraction,
-          onTap: _toggleChrome,
-          onDoubleTapDown: _zoomAnimator.rememberDoubleTap,
-          onDoubleTap: _toggleDoubleTapZoom,
+        child: _throwableCanvas(
+          GalleryViewport(
+            aspectRatio: widget.aspectRatio,
+            semanticsLabel: widget.semanticsLabel,
+            source: widget.source,
+            heroTag: widget.heroTag,
+            transformationController: _zoomController.transformationController,
+            onInteractionStart: _zoomAnimator.stopForInteraction,
+            onTap: _toggleChrome,
+            onDoubleTapDown: _zoomAnimator.rememberDoubleTap,
+            onDoubleTap: _toggleDoubleTapZoom,
+          ),
         ),
       ),
     );
@@ -347,7 +399,9 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
 
   Widget _viewerChrome() {
     return ImmersiveGalleryControls(
-      visible: _chromeVisible,
+      // A throw in progress hides the chrome without touching `_chromeVisible`,
+      // so abandoning the throw brings back exactly the controls that were up.
+      visible: _chromeVisible && _dismissProgress == 0,
       duration: _chromeDuration(),
       zoomed: _zoomController.isZoomed,
       onToggleZoom: _toggleCenteredZoom,

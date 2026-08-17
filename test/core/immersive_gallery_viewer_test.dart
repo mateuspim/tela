@@ -8,6 +8,7 @@ import 'package:tela/core/ui/gallery_viewport.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
 import 'package:tela/core/ui/immersive_chrome_palette.dart';
 import 'package:tela/core/ui/immersive_gallery_viewer.dart';
+import 'package:tela/core/ui/shelf_swipe.dart';
 
 import '../fakes/fake_immersive_system_ui.dart';
 
@@ -513,6 +514,69 @@ void main() {
 
     expect(_chromeOpacity(tester), 1);
   });
+
+  testWidgets('throwing the picture down closes the viewer', (
+    WidgetTester tester,
+  ) async {
+    int closed = 0;
+    await _pumpViewer(
+      tester,
+      disableAnimations: true,
+      onClose: () async => closed++,
+    );
+
+    await _throwDown(tester, ShelfSwipe.dismissThreshold + 40);
+
+    expect(closed, 1);
+  });
+
+  /// The chrome goes without touching `_chromeVisible`, so abandoning the
+  /// throw brings back exactly the controls that were up rather than a fresh
+  /// set the user did not ask for.
+  testWidgets('a live throw hides the chrome, and giving up brings it back', (
+    WidgetTester tester,
+  ) async {
+    await _pumpViewer(tester, disableAnimations: true);
+
+    final TestGesture finger = await tester.startGesture(
+      tester.getCenter(find.byType(GalleryViewport)),
+    );
+    for (int step = 0; step < 4; step++) {
+      await finger.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    expect(_chromeOpacity(tester), 0);
+
+    // Released well short of the threshold: the picture springs back and so
+    // does everything that was riding on it.
+    await finger.up();
+    await tester.pumpAndSettle();
+
+    expect(_chromeOpacity(tester), 1);
+  });
+
+  testWidgets('a magnified picture is panned, not thrown away', (
+    WidgetTester tester,
+  ) async {
+    final GalleryZoomController zoomController = GalleryZoomController();
+    addTearDown(zoomController.dispose);
+    int closed = 0;
+    await _pumpViewer(
+      tester,
+      zoomController: zoomController,
+      disableAnimations: true,
+      onClose: () async => closed++,
+    );
+
+    await _doubleTap(tester, find.byType(GalleryViewport));
+    await tester.pump();
+    expect(zoomController.isZoomed, isTrue);
+
+    await _throwDown(tester, ShelfSwipe.dismissThreshold + 80);
+
+    expect(closed, 0);
+  });
 }
 
 Future<void> _pumpViewer(
@@ -610,4 +674,18 @@ double _chromeOpacity(WidgetTester tester) {
   return tester
       .widget<AnimatedOpacity>(find.byKey(const Key('immersive-viewer-chrome')))
       .opacity;
+}
+
+/// Drags the canvas straight down over several frames and lets go, which is
+/// the throw a dismiss is made of.
+Future<void> _throwDown(WidgetTester tester, double distance) async {
+  final TestGesture finger = await tester.startGesture(
+    tester.getCenter(find.byType(GalleryViewport)),
+  );
+  for (int step = 0; step < 8; step++) {
+    await finger.moveBy(Offset(0, distance / 8));
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  await finger.up();
+  await tester.pumpAndSettle();
 }

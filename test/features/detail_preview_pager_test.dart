@@ -243,6 +243,38 @@ void main() {
     );
     await tester.pumpAndSettle();
   });
+
+  /// The ⛶ in the corner was hard to find and hard to hit (owner, 2026-08-17),
+  /// so the picture itself is the target now. The button stays — a tap on an
+  /// image is invisible to a screen reader, so it is never the only way in.
+  testWidgets('a tap on the wallpaper is the way into fullscreen', (
+    WidgetTester tester,
+  ) async {
+    await _pumpPager(tester, _session());
+
+    final List<ProgressiveWallpaperPreview> pages = _pages(tester);
+    expect(pages.single.onTap, isNotNull);
+  });
+
+  testWidgets('only the page on screen answers a tap', (
+    WidgetTester tester,
+  ) async {
+    await _pumpPager(tester, _session());
+
+    await tester.tap(find.byKey(const Key('detail-next')));
+    await tester.pump(_frame);
+    await tester.pump(const Duration(milliseconds: 60));
+
+    final List<ProgressiveWallpaperPreview> pages = _pages(tester);
+    expect(pages.length, greaterThan(1), reason: 'mid-turn, two are on screen');
+    expect(
+      pages
+          .where((ProgressiveWallpaperPreview page) => page.onTap != null)
+          .length,
+      1,
+    );
+    await tester.pumpAndSettle();
+  });
 }
 
 /// Drives two fingers apart from the centre, optionally letting the first one
