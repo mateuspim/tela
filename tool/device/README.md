@@ -45,6 +45,27 @@ adb shell "am start -n cc.pym.tela/.MainActivity >/dev/null; \
   for i in 1 2 3 4 5 6 7 8 9 10 11 12; do screencap -p /sdcard/f\$i.png; done"
 ```
 
+### When even the on-device burst is too slow — slow the animation down
+
+The burst above works for an entrance that ripples across a whole grid. It is
+**not** enough for a single route transition: `screencap` costs ~300ms a frame
+and a `PageRoute` runs in ~180ms, so the first frame you get is already the
+destination. Stretch the clock instead, and put it back afterwards:
+
+```bash
+adb shell settings put global animator_duration_scale 8
+adb shell settings put global transition_animation_scale 8
+# ...capture the burst...
+adb shell settings put global animator_duration_scale 1
+adb shell settings put global transition_animation_scale 1
+```
+
+At 8× a 180ms flight lasts ~1.4s, which is four or five catchable frames. That
+is how N proved the fullscreen letterbox cuts from blurred to black **in a
+single frame** rather than crossfading — a claim no still frame could support
+and no unslowed burst could catch. **Put both scales back**: a tablet left at 8×
+reads as a device that has become mysteriously slow.
+
 ## `icon_contrast.py` — can you still see the white controls?
 
 ```bash

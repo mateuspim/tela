@@ -4,11 +4,10 @@ Updated: 2026-08-17
 
 > **NEXT SESSION STARTS HERE — pass N is built, device-verified and merged. The
 > immersive viewer was the last thing open from the owner's original sentence,
-> and it is closed.** All three of the viewer's slices are on
-> `feat/immersive-viewer` **merged as `b84f446`** (2026-08-17), eight commits through
-> the gate: Dart **1414**
-> (from 1396), Kotlin **136** untouched, analyze and format clean. The chrome
-> takes the wallpaper's colour and the canvas stays black (N1); the chrome fades
+> and it is closed.** `feat/immersive-viewer` **merged as `b84f446`**
+> (2026-08-17), nine commits, through the gate: Dart **1414** (from 1396),
+> Kotlin **136** untouched, analyze and format clean. The chrome takes the
+> wallpaper's colour and the canvas stays black (N1); the chrome fades
 > on its own after three seconds and never under `accessibleNavigation` (N2);
 > and the picture grows into fullscreen on Detail's own hero tag, can be thrown
 > downward to dismiss, and is itself the way in beside a ⛶ that now carries the
@@ -23,8 +22,9 @@ Updated: 2026-08-17
 > yellow and rgb(72, 71, 87) on purple, with the ink holding 7.8:1 to 13.4:1.
 >
 > **The one open question was put to the owner and settled: leave the letterbox
-> pop alone.** It *does* pop on the way into fullscreen — Detail blurs those bands, the viewer
-> paints them black, and the cut happens in a single frame. Measured at
+> pop alone.** It *does* pop on the way into fullscreen — Detail blurs those
+> bands, the viewer paints them black, and the cut happens in a single frame.
+> Measured at
 > rgb(18, 15, 48) → rgb(0, 0, 0) on a dark wallpaper, where it is nearly
 > invisible; the worst a wallpaper can produce is about 55% of white, which
 > would flash. **Both fixes cost something already chosen** — one is the blurred
@@ -36,6 +36,24 @@ Updated: 2026-08-17
 > Two traps that cost time here: a pushed route inherits none of Detail's theme,
 > and `MaterialApp` crossfades themes so the frame after a `pumpWidget` still
 > shows the old one.
+>
+> **WHAT IS NEXT, AND IT IS AN HONEST QUESTION — ASK, DO NOT PICK.** M and N
+> together closed every complaint in the owner's *"tablet mode doesn't always
+> work"* sentence, and the six UI passes before them (A, B, C, D, H, L) closed
+> the ones before that. **There is no queued instruction left in this file.**
+> What remains is *product* work rather than polish, and it has been sitting in
+> **Wave 4** since long before the UI passes started: **auto-rotate, collections,
+> and Omarchy sync** — crop is the one already done. That section is still the
+> live description of all three.
+>
+> A next session should put those three to the owner rather than start one on
+> its own read: they are weeks apart in size, none has been asked for recently,
+> and Omarchy sync in particular assumes the `filesOutsideGallery` tier is being
+> used the way it was built for — which nobody has confirmed. **Two things worth
+> naming in the same breath**, because they are cheap and neither is in Wave 4:
+> the **featured caption's outline has still never met a pale wallpaper** (L4's
+> band only appears on merit-ranked tabs, so its wallpaper cannot be chosen),
+> and **Play Store** remains scoped-but-unsettled — see its section.
 >
 > **The scope, and how it was arrived at:**
 >
@@ -747,11 +765,27 @@ stay exactly as they are.
 format clean, the merge through the gate. The pass's one open question was put
 to the owner and settled; see the device pass below.
 
+### Device state after N (SM-X730, 2026-08-17)
+
+- **Installed: the merged N build**, `make deploy` twice in the session — once
+  for the pass, once after the scrim fix — so what is on the tablet is `b84f446`
+  and not something between.
+- The tablet was reachable over wireless debugging for the whole session. **Do
+  not copy the address out of here**: it rotates on every reconnect, and the
+  rule above about asking the owner to run `adb connect` in the session still
+  stands.
+- **Animation scales were changed and put back.** `animator_duration_scale` and
+  `transition_animation_scale` went to **8** to catch the hero flight — a
+  180ms transition is invisible to `screencap`, which costs ~300ms a frame — and
+  both are back at **1**. If a future pass finds the tablet animating strangely,
+  check these two first. The burst files under `/sdcard` were deleted.
+
 ### The device pass — run 2026-08-17, SM-X730, all four questions answered
 
 **Three of the four came back clean. The fourth found a real defect in N1, and
-it was fixed and re-measured on the same device** (`06a091a`). One seam is
-confirmed real, is the owner's to rule on, and is the only thing still open.
+it was fixed and re-measured on the same device** (`06a091a`). One seam was
+confirmed real, was put to the owner, and was **settled the same day: leave it**
+— the argument is at the end of this section.
 
 - **N1 — the scrim was black, and the reason is structural.** The blend took
   `ColorScheme.surface`, on the reasoning that a surface is what a scrim is.
@@ -785,7 +819,7 @@ confirmed real, is the owner's to rule on, and is the only thing still open.
 - **N3 — the throw dismisses.** Swiped down from the middle of the picture and
   landed back on Detail, same wallpaper.
 
-**The one thing still open, and it is a decision rather than a bug.** The
+**The one seam that was real, and it was a decision rather than a bug.** The
 letterbox **does** pop, as suspected. Detail paints its bands with a blurred
 copy of the wallpaper; the viewer paints them black; and the band cuts from one
 to the other in a single frame rather than crossfading — measured across a burst
@@ -928,8 +962,11 @@ changed, which is exactly the wrong diagnosis.
 
 The owner's call after living with the L2b build on the tablet: Detail uses the
 **editorial layout at every width**, and the two-pane wide layout is retired.
-The immersive viewer is a **separate** complaint from the same sentence, is
-**still unscoped**, and has its own heading at the end of this section.
+The immersive viewer is a **separate** complaint from the same sentence. It was
+unscoped when this was written and is now **pass N**, built, device-verified and
+merged — see that section. The heading at the end of *this* one is kept as the
+record of what was known about the viewer before it was asked about, and is
+marked superseded there.
 
 **What shipped** (`b29e6ff`, the first of the branch's seven commits): Dart **1393** (from
 1394), analyze and format clean, Kotlin untouched — nothing under `android/`
@@ -1138,7 +1175,16 @@ broken feature and is a broken gesture in the test.
 analyze and format clean, and every change on it was driven on the tablet in
 landscape before it landed. Master is clean and nothing here is half-finished.
 
-### The immersive viewer — the second complaint, unscoped
+### The immersive viewer — the second complaint — **SUPERSEDED by N, 2026-08-17**
+
+**Kept because the instruction it gave was followed and paid off.** It said to
+ask before building, and asking is what turned three guesses into three
+confirmed complaints — plus a fourth option (that Detail's full-bleed layout had
+made the viewer redundant) which the owner explicitly declined. Both of the
+things this section "already knew" turned out to be **half right**: the black
+chrome *was* one of the complaints, and the shared `ImmersiveGalleryControls`
+*was* the reason it took its own slice — but the hold-to-copy never came up at
+all. The original wording follows.
 
 Named in the same sentence (*"the full screen ... is throwing off"*) and
 confirmed as a separate problem: the fullscreen ⛶ viewer reached from Detail, not
@@ -1588,13 +1634,16 @@ the apply button clear of the system bar*.
 wallpaper (every one tried was dark), and the drag's feel — a screenshot cannot
 show whether the sheet reads as a sheet or as a stuck scroll.
 
-### L1b — Konachan tints too — **BUILT 2026-08-14**; device pass owed
+### L1b — Konachan tints too — **BUILT 2026-08-14; DEVICE-VERIFIED 2026-08-14**
 
 The source that reports no colours now reads one out of the wallpaper itself, so
 Konachan stops being the one catalogue that never tints. Dart **1357** (from
 1348), analyze and format clean. Files: `domain/models/dominant_swatch.dart`,
 `domain/ports/dominant_color.dart`, `data/images/decoded_dominant_color.dart`,
-`AmbientWallpaperTheme.fallbackSeed`, wired in `wallpaper_detail_screen.dart`.
+`AmbientWallpaperTheme.fallbackSeed`, wired in `wallpaper_detail_screen.dart`
+— **and since N, wired through `features/detail/ambient_wallpaper_tint.dart`
+instead**, which the screen and the fullscreen viewer now share so this fallback
+has one caller rather than two copies.
 
 **It is a bucket count, not an average, and that is the whole algorithm.**
 Averaging a photograph yields the muddy brown-grey halfway between everything in
@@ -7292,7 +7341,13 @@ Verified statically against the R8'd APK, and at runtime:
 theirs to run), the real biometric prompt (adb cannot pass `FLAG_SECURE`), and the
 cache figure after a real browse.
 
-## Device state as of this handoff
+## Device state as of 2026-07-16 — historical
+
+**Retitled 2026-08-17.** It said "as of this handoff" for a month of handoffs
+after it stopped being true, which is the failure mode a dated heading avoids.
+Superseded twice since: by the post-reinstall state (SM-X730, 2026-08-11, after
+the app got a real signing key) and by N's own note below. Kept for the R8 and
+cold-launch evidence, which nothing has invalidated.
 
 - Installed: `app-release.apk` — universal, **R8 on**, debug-signed, versionCode 1,
   **carrying the cold-launch fix and the database binding** (`3a09f67`), built
