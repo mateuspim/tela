@@ -461,6 +461,58 @@ void main() {
     expect(warmScrims.intersection(coolScrims), isEmpty);
     expect(warmScrims, isNot(contains(Colors.black45)));
   });
+
+  testWidgets('the chrome fades on its own once nothing is touching it', (
+    WidgetTester tester,
+  ) async {
+    await _pumpViewer(tester, disableAnimations: true);
+
+    // It opens visible on purpose: the way out has to be shown before it goes.
+    expect(_chromeOpacity(tester), 1);
+
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(_chromeOpacity(tester), 0);
+  });
+
+  testWidgets('a touch restarts the countdown rather than being ignored', (
+    WidgetTester tester,
+  ) async {
+    await _pumpViewer(tester, disableAnimations: true);
+
+    await tester.pump(const Duration(seconds: 2));
+    // Straight down and up on the canvas without travelling: a tap, which
+    // toggles the chrome off and back on, is not what is being measured here.
+    final TestGesture gesture = await tester.startGesture(
+      tester.getCenter(find.byType(GalleryViewport)),
+    );
+    await tester.pump(const Duration(seconds: 2));
+
+    expect(_chromeOpacity(tester), 1);
+
+    await gesture.up();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(_chromeOpacity(tester), 0);
+  });
+
+  /// The fade is a sighted-touch affordance. Bringing the chrome back is a tap
+  /// on the canvas — a gesture, and a gesture is exactly what a switch or
+  /// screen-reader user does not have — so a clock that takes the controls
+  /// away would take them away for good.
+  testWidgets('the chrome never fades while assistive navigation is on', (
+    WidgetTester tester,
+  ) async {
+    await _pumpViewer(
+      tester,
+      disableAnimations: true,
+      accessibleNavigation: true,
+    );
+
+    await tester.pump(const Duration(seconds: 10));
+
+    expect(_chromeOpacity(tester), 1);
+  });
 }
 
 Future<void> _pumpViewer(
@@ -478,6 +530,7 @@ Future<void> _pumpViewer(
   VoidCallback? onPrevious,
   VoidCallback? onNext,
   ThemeData? theme,
+  bool accessibleNavigation = false,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -493,6 +546,7 @@ Future<void> _pumpViewer(
         data: MediaQueryData(
           size: viewportSize,
           disableAnimations: disableAnimations,
+          accessibleNavigation: accessibleNavigation,
         ),
         child: Center(
           child: SizedBox.fromSize(
@@ -548,4 +602,12 @@ Set<Color?> _chromeScrims(WidgetTester tester) {
       .map((DecoratedBox box) => (box.decoration as BoxDecoration).color)
       .whereType<Color>()
       .toSet();
+}
+
+/// The chrome's current opacity, which is how visible it actually is — the
+/// widget stays mounted either way.
+double _chromeOpacity(WidgetTester tester) {
+  return tester
+      .widget<AnimatedOpacity>(find.byKey(const Key('immersive-viewer-chrome')))
+      .opacity;
 }

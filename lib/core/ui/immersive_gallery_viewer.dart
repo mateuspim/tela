@@ -104,6 +104,14 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
     with SingleTickerProviderStateMixin {
   static const Duration _transitionDuration = Duration(milliseconds: 180);
 
+  /// How long the chrome stays up with nothing touching it.
+  ///
+  /// The viewer opens with its controls *visible* and only then fades them,
+  /// rather than opening bare: a first-time user has to be shown the way out
+  /// before it goes. Three seconds is long enough to read the row and short
+  /// enough that a wallpaper you are actually looking at is soon unobstructed.
+  static const Duration _chromeIdleTimeout = Duration(seconds: 3);
+
   late GalleryZoomController _zoomController;
   late bool _ownsZoomController;
   late final GalleryZoomAnimator _zoomAnimator;
@@ -113,6 +121,8 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
   bool _systemUiRestored = false;
   bool _isExiting = false;
   bool _allowPop = false;
+  Timer? _chromeIdle;
+  bool _armedOnce = false;
 
   @override
   void initState() {
@@ -125,6 +135,20 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
     _zoomAnimator = GalleryZoomAnimator(vsync: this, zoom: _zoomController);
     _activeSystemUi = widget.systemUi;
     _enterSystemUi = _activeSystemUi.enterImmersive();
+  }
+
+  /// Arms the idle fade on the first frame that has a [MediaQuery] to read.
+  ///
+  /// Not [initState]: whether the chrome may fade at all depends on
+  /// [MediaQueryData.accessibleNavigation], and there is no inherited widget to
+  /// ask in there. Guarded so that an ordinary dependency change — a rotation,
+  /// a theme crossfade — cannot keep pushing the fade further away.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_armedOnce) return;
+    _armedOnce = true;
+    _armChromeIdle();
   }
 
   @override
@@ -145,6 +169,7 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
 
   @override
   void dispose() {
+    _chromeIdle?.cancel();
     unawaited(_restoreSystemUi());
     _zoomAnimator.dispose();
     _zoomController.removeListener(_rebuildZoomChrome);
@@ -184,6 +209,41 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
 
   void _toggleChrome() {
     setState(() => _chromeVisible = !_chromeVisible);
+    _armChromeIdle();
+  }
+
+  /// Starts the countdown that hides the chrome, or cancels it.
+  ///
+  /// Three things it must not do, and each of them is a test:
+  ///
+  /// It never fades while a screen reader or a switch is driving the screen.
+  /// Chrome that vanishes on a clock is chrome an assistive user cannot get
+  /// back to — the way back is a tap on the canvas, which is a gesture, and a
+  /// gesture is exactly what that user does not have. So the timeout is a
+  /// sighted-touch affordance and [MediaQueryData.accessibleNavigation] turns
+  /// it off entirely.
+  ///
+  /// It never runs while the chrome is already hidden, which would otherwise
+  /// leave a timer alive for the whole session doing nothing.
+  ///
+  /// And it never fires after the route is gone: [dispose] cancels it. A
+  /// pending timer outliving its widget is both a leak and a test failure.
+  void _armChromeIdle() {
+    _chromeIdle?.cancel();
+    _chromeIdle = null;
+    if (!_chromeVisible) return;
+    if (MediaQuery.accessibleNavigationOf(context)) return;
+    _chromeIdle = Timer(_chromeIdleTimeout, _hideChrome);
+  }
+
+  /// Restarts the countdown on any touch, so the chrome never fades out from
+  /// under a finger that is reaching for it.
+  ///
+  /// A [Listener] rather than a gesture: this sits above the whole surface and
+  /// must see the pointer without competing for it — taking it would cost the
+  /// canvas its pinch, which is the trap `ShelfSwipe` documents at length.
+  void _touched(PointerDownEvent event) {
+    _armChromeIdle();
   }
 
   /// Hides the chrome from the chrome's own button.
@@ -194,6 +254,8 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
   /// (`galleryShowControls`) for a screen reader. Those two are what keep this
   /// from being a control that hides itself for good.
   void _hideChrome() {
+    _chromeIdle?.cancel();
+    _chromeIdle = null;
     if (_chromeVisible) setState(() => _chromeVisible = false);
   }
 
@@ -351,21 +413,24 @@ class _ImmersiveGalleryViewerState extends State<ImmersiveGalleryViewer>
         },
         child: Focus(
           autofocus: true,
-          child: Material(
-            // Black, and deliberately still black after N1 tinted the chrome
-            // around it. The owner was asked how far the wallpaper's colour
-            // should reach and chose the controls only: a letterbox glowing in
-            // the picture's own hue competes with the picture, on the one
-            // surface where it is largest. `ImmersiveChromePalette` is where
-            // the tint stops.
-            color: Colors.black,
-            child: Stack(
-              fit: StackFit.expand,
-              children: <Widget>[
-                _imageCanvas(l10n),
-                _viewerChrome(),
-                if (widget.statusOverlay != null) _statusOverlay(),
-              ],
+          child: Listener(
+            onPointerDown: _touched,
+            child: Material(
+              // Black, and deliberately still black after N1 tinted the chrome
+              // around it. The owner was asked how far the wallpaper's colour
+              // should reach and chose the controls only: a letterbox glowing
+              // in the picture's own hue competes with the picture, on the one
+              // surface where it is largest. `ImmersiveChromePalette` is where
+              // the tint stops.
+              color: Colors.black,
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  _imageCanvas(l10n),
+                  _viewerChrome(),
+                  if (widget.statusOverlay != null) _statusOverlay(),
+                ],
+              ),
             ),
           ),
         ),
