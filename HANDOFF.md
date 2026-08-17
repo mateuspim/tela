@@ -2,21 +2,36 @@
 
 Updated: 2026-08-17
 
-> **NEXT SESSION STARTS HERE — pass N is built and waiting on a device.** All
-> three of the viewer's slices are on `feat/immersive-viewer`, four commits,
-> **nothing merged**: Dart **1414** (from 1396), Kotlin **136** untouched,
-> analyze and format clean. The chrome takes the wallpaper's colour and the
-> canvas stays black (N1); the chrome fades on its own after three seconds and
-> never under `accessibleNavigation` (N2); and the picture grows into fullscreen
-> on Detail's own hero tag, can be thrown downward to dismiss, and is itself the
-> way in beside a ⛶ that now carries the viewer's scrim and a 48dp target (N3).
+> **NEXT SESSION STARTS HERE — pass N is built, device-verified, and waiting on
+> one decision before it merges.** All three of the viewer's slices are on
+> `feat/immersive-viewer`, seven commits, **nothing merged**: Dart **1414**
+> (from 1396), Kotlin **136** untouched, analyze and format clean. The chrome
+> takes the wallpaper's colour and the canvas stays black (N1); the chrome fades
+> on its own after three seconds and never under `accessibleNavigation` (N2);
+> and the picture grows into fullscreen on Detail's own hero tag, can be thrown
+> downward to dismiss, and is itself the way in beside a ⛶ that now carries the
+> viewer's scrim and a 48dp target (N3).
 >
-> **Four things the device owes, two of them suspected seams rather than
-> checks** — the blurred-letterbox pop at the end of the hero flight, and
-> whether tap-to-fullscreen misfires against M's 12% sheet peek. Both are
-> written out under *N*, with the two traps that cost time here: a pushed route
-> inherits none of Detail's theme, and `MaterialApp` crossfades themes so the
-> frame after a `pumpWidget` still shows the old one.
+> **The device pass ran on 2026-08-17 and answered all four of its questions.**
+> Three came back clean. The fourth found a real defect and it is fixed
+> (`06a091a`): **the tinted scrim was black**, rgb(7, 7, 6), because it blended
+> `ColorScheme.surface` and Material 3 builds a dark scheme's surface almost
+> fully desaturated — a grey blended into black is black, on any wallpaper.
+> `primary` is the role that carries the hue; it now measures rgb(33, 31, 19) on
+> yellow and rgb(72, 71, 87) on purple, with the ink holding 7.8:1 to 13.4:1.
+>
+> **One thing is open and it is the owner's call, not a bug.** The letterbox
+> *does* pop on the way into fullscreen — Detail blurs those bands, the viewer
+> paints them black, and the cut happens in a single frame. Measured at
+> rgb(18, 15, 48) → rgb(0, 0, 0) on a dark wallpaper, where it is nearly
+> invisible; the worst a wallpaper can produce is about 55% of white, which
+> would flash. **Both fixes cost something already chosen** — one is the blurred
+> backdrop the owner declined, the other keeps Detail painting under the viewer.
+> The full argument is in the device-pass section under *N*.
+>
+> Two traps that cost time here: a pushed route inherits none of Detail's theme,
+> and `MaterialApp` crossfades themes so the frame after a `pumpWidget` still
+> shows the old one.
 >
 > **The scope, and how it was arrived at:**
 >
@@ -723,31 +738,70 @@ library's and the downloads'. Nothing below may make the private library
 brighter, louder, or easier to screenshot. `FLAG_SECURE` and the unarmed hold
 stay exactly as they are.
 
-**All three are built** on `feat/immersive-viewer`, three commits after the
-scope: Dart **1414** (from 1396), Kotlin **136** untouched — nothing under
-`android/` moved — analyze and format clean. **Nothing is merged.** Every one of
-these is a thing you *look at*, so the branch waits for the device.
+**All three are built and device-verified** on `feat/immersive-viewer`: Dart
+**1414** (from 1396), Kotlin **136** untouched — nothing under `android/` moved
+— analyze and format clean. **Nothing is merged**, and one question is still the
+owner's to answer; see the device pass below.
 
-**What the device owes, and it is the whole reason this is a branch:**
+### The device pass — run 2026-08-17, SM-X730, all four questions answered
 
-- **N1 — the tinted scrim against a pale wallpaper.** The blend is argued from
-  L2b's 2.9–3.1:1 measurement but has not itself been measured. Same recipe as
-  L2b: find a genuinely pale wallpaper, open fullscreen, sample the bar's ink
-  against its scrim. The unit test pins that a pale *seed* still yields a
-  near-black scrim; it cannot pin what that scrim looks like over real pixels.
-- **N2 — whether three seconds is the right three seconds.** Long enough to read
-  the row, short enough that a wallpaper you are looking at is soon clear. It is
-  one constant, `_chromeIdleTimeout`, and it is meant to be argued with.
-- **N3 — the hero flight, and it has a suspected seam.** Detail's preview paints
-  its letterbox with a *blurred copy of the wallpaper* (`fillLetterbox: true`);
-  the viewer's letterbox is plain black. So the shared element flies between two
-  differently-framed pictures and the surround may pop at the moment the flight
-  ends. Untested — look for it specifically, on a wallpaper whose aspect ratio
-  is far from the screen's, where the letterbox is largest.
-- **N3 — whether tap-to-fullscreen misfires.** The whole picture is now the way
-  in, and M put a sheet at a 12% peek over that same picture. A user reaching
-  for the sheet and landing short would leave the screen instead. If it does
-  misfire, the fix is the tap, not the sheet.
+**Three of the four came back clean. The fourth found a real defect in N1, and
+it was fixed and re-measured on the same device** (`06a091a`). One seam is
+confirmed real, is the owner's to rule on, and is the only thing still open.
+
+- **N1 — the scrim was black, and the reason is structural.** The blend took
+  `ColorScheme.surface`, on the reasoning that a surface is what a scrim is.
+  Over a vivid yellow wallpaper it measured **rgb(7, 7, 6)** — black, to the eye
+  and to the sampler — while the close button, the one control that reads the
+  scheme at *full* opacity, was a clear **rgb(185, 172, 92)**. So the tint was
+  reaching the pushed route correctly and dying in the blend. **Material 3
+  builds a dark scheme's `surface` almost fully desaturated by construction** —
+  L1a's own Konachan example, `#302A25`, is a grey — and 35% of a grey into
+  black is black, on any wallpaper. `primary` is the role that carries the hue.
+  After the fix: yellow gives **rgb(33, 31, 19)**, purple **rgb(72, 71, 87)** —
+  visibly hue-bearing, visibly different from each other.
+- **N1 — contrast, which was the thing the blend was cautious for.** The ink
+  holds **7.8:1** with the bar over the picture and **11.4–13.4:1** over the
+  letterbox, against the 3:1 floor for UI graphics. The caution was aimed at the
+  wrong risk: the viewer's bars usually sit over the *letterbox*, not over the
+  wallpaper, which is why they have margin the phone bar never had. A wallpaper
+  taller than the screen puts the bar over live pixels — that is the 7.8:1
+  reading, and it is still comfortable.
+- **N2 — the fade works, and three seconds felt right.** Opened with the chrome
+  up, waited, and the controls were gone leaving nothing but the wallpaper. The
+  ⛶ that opens it measured **4.12:1** against bright yellow, from a scrim it did
+  not have before N3.
+- **N3 — tap-to-fullscreen does not steal the sheet, and the worry was
+  misplaced.** Grabbing the sheet is a *drag*; a drag on the picture does
+  nothing at all (Detail's `ShelfSwipe` is passed no `onDismiss`, so the
+  downward branch never arms). Only a mis-aimed *tap* goes fullscreen, and a tap
+  was never a way to open the sheet. Verified both ways: dragging from the
+  sheet's handle still raises it to the facts, and dragging up from the picture
+  leaves everything where it was.
+- **N3 — the throw dismisses.** Swiped down from the middle of the picture and
+  landed back on Detail, same wallpaper.
+
+**The one thing still open, and it is a decision rather than a bug.** The
+letterbox **does** pop, as suspected. Detail paints its bands with a blurred
+copy of the wallpaper; the viewer paints them black; and the band cuts from one
+to the other in a single frame rather than crossfading — measured across a burst
+at 8× animation scale on a portrait wallpaper, **rgb(18, 15, 48) → rgb(0, 0, 0)
+with no intermediate frame**. On that wallpaper it is nearly invisible: the
+blurred band was already almost black. **The severity is bounded and
+wallpaper-dependent** — `BlurredImageBackdrop` carries a 45% black scrim, so the
+brightest band any wallpaper can produce is about 55% of white, and *that* one
+would flash.
+
+**Both fixes cost something the owner already chose**, which is why this is not
+being taken unilaterally:
+1. Give the viewer Detail's blurred backdrop — this is **option 3 of the tint
+   fork, which the owner declined** in favour of a black canvas.
+2. Set `opaque: false` on the fullscreen route so the existing `FadeTransition`
+   actually crossfades the two. Correct, and keeps the black canvas — but Detail
+   then keeps painting underneath for as long as the viewer is open.
+
+Ask before doing either. Doing nothing is also defensible: the pop is invisible
+on a dark wallpaper and nobody has yet seen it on a bright one.
 
 **Three slices, ordered by cost, each independently shippable and each owing a
 device pass** — none of these can be called done on a green suite, they are all
