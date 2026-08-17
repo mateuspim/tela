@@ -1,30 +1,7 @@
 # tela handoff
 
-Updated: 2026-08-15
+Updated: 2026-08-17
 
-> **NEXT SESSION STARTS HERE — Detail is one layout, it is full-bleed, its sheet
-> is glass, and all of it is merged. The immersive viewer is the only thing left
-> open, and it is still unscoped.** `feat/detail-one-layout` **merged as `6fc02c1`**
-> (2026-08-15), seven commits, through the gate: Dart **1396**, Kotlin **136**
-> untouched, analyze and format clean. Both of the scope's open device questions
-> are answered under *M* — **neither needed a change, and one of them was a
-> non-problem the scope had mis-described.**
->
-> **The device found two things, and the owner named both while watching.**
-> *"make the fullscreen so that i can see the full background not hide with the
-> details"* — the wallpaper was fitted to the screen *minus the apply button*,
-> so a 1205x753dp screen showed it with letterbox bands down both sides
-> (`816413c`: the preview is `Positioned.fill` behind everything, the sheet and
-> button ride over it). Then *"the details when minimized its clipping"* — the
-> peek was a *fraction*, which cannot know where the heading ends, so it sliced
-> the first fact row in half (`2dceb71`: a height, spelled as a sum — and then
-> superseded an hour later, when the heading it summed was dropped). Then the sheet itself was reworked from the same
-> chair (`c98874b`): it is **glass until you pull it**, solid by the stop it
-> snaps to, glued to the apply button, and the "Details" heading is gone. All
-> written up under *M* — **including two traps that cost real time**: a lazy
-> `ListView` builds nothing behind a 20dp peek (and `cacheExtent` does not fix
-> it), and a test drag aimed below that peek moves nothing at all.
->
 > **NEXT SESSION STARTS HERE — pass N is built and waiting on a device.** All
 > three of the viewer's slices are on `feat/immersive-viewer`, four commits,
 > **nothing merged**: Dart **1414** (from 1396), Kotlin **136** untouched,
@@ -59,6 +36,27 @@ Updated: 2026-08-15
 > original sentence turned out to be **Detail, not the viewer** — so do not
 > assume these three are one problem either.
 >
+> **The previous START HERE — Detail is one layout, it is full-bleed, its sheet
+> is glass, and all of it is merged.** `feat/detail-one-layout` **merged as `6fc02c1`**
+> (2026-08-15), seven commits, through the gate: Dart **1396**, Kotlin **136**
+> untouched, analyze and format clean. Both of the scope's open device questions
+> are answered under *M* — **neither needed a change, and one of them was a
+> non-problem the scope had mis-described.**
+>
+> **The device found two things, and the owner named both while watching.**
+> *"make the fullscreen so that i can see the full background not hide with the
+> details"* — the wallpaper was fitted to the screen *minus the apply button*,
+> so a 1205x753dp screen showed it with letterbox bands down both sides
+> (`816413c`: the preview is `Positioned.fill` behind everything, the sheet and
+> button ride over it). Then *"the details when minimized its clipping"* — the
+> peek was a *fraction*, which cannot know where the heading ends, so it sliced
+> the first fact row in half (`2dceb71`: a height, spelled as a sum — and then
+> superseded an hour later, when the heading it summed was dropped). Then the sheet itself was reworked from the same
+> chair (`c98874b`): it is **glass until you pull it**, solid by the stop it
+> snaps to, glued to the apply button, and the "Details" heading is gone. All
+> written up under *M* — **including two traps that cost real time**: a lazy
+> `ListView` builds nothing behind a 20dp peek (and `cacheExtent` does not fix
+> it), and a test drag aimed below that peek moves nothing at all.
 > **One instruction in M's scope was wrong and was measured rather than
 > followed.** It said to keep the `Builder` in `build` because `showDialog` in
 > `_confirmBlockTag` reads this State's context. It does — and that is exactly
