@@ -8,9 +8,46 @@ import 'package:tela/core/diagnostics/slow_frame_log.dart';
 ///
 /// It is measurement rather than behaviour, so what is pinned is the thing a
 /// measurement must not get wrong: never lying about the count, never writing
-/// when there is nothing to say, and never costing anything while frames are
-/// on time.
+/// when there is nothing to say, never costing anything while frames are on
+/// time — and saying once that it is running at all, so that a silent log can
+/// be told from a broken one.
 void main() {
+  test('says it is watching before any frame has been judged', () {
+    // The line the first device capture needed and did not have. An empty
+    // `grep tela.frames` was read as ambiguous — no jank, or no logging — and
+    // a jank number that cannot be told from a dead probe is not a number.
+    final List<String> written = <String>[];
+
+    _log(written).reportWatching();
+
+    final Map<String, Object?> line = _lines(written).single;
+    expect(line['event'], 'watching');
+    expect(
+      line['budgetMs'],
+      32,
+      reason: 'the threshold it will judge frames by',
+    );
+    expect(line['batch'], 30);
+  });
+
+  test('a batch line is tagged apart from the watching line', () {
+    // Both are `tela.frames`, so whoever greps gets both. The reading turns on
+    // which is which: one means the probe is alive, the other means jank.
+    final List<String> written = <String>[];
+
+    _log(written, batch: 1)
+      ..reportWatching()
+      ..observe(build: const Duration(milliseconds: 50), raster: Duration.zero);
+
+    expect(
+      _lines(written).map((Map<String, Object?> l) => l['event']),
+      <String>[
+        'watching',
+        'slow',
+      ],
+    );
+  });
+
   test('says nothing at all while every frame is on time', () {
     // The state the app is in almost always. A probe that wrote a line per
     // frame would be its own performance problem, and would drown the log it
