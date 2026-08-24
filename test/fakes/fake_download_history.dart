@@ -22,8 +22,19 @@ class FakeDownloadHistory implements DownloadHistory {
     _recorded,
   );
 
+  /// How many times the history has been listed.
+  ///
+  /// The download queue re-reads this after every entry it settles, and a
+  /// hundred-wallpaper batch settles three a second — so "how often" is a
+  /// behaviour worth pinning, not an implementation detail. See
+  /// `DownloadQueueController.listingRefreshWindow`.
+  int reads = 0;
+
   @override
-  Future<List<DownloadRecord>> downloads() async => _recorded.reversed.toList();
+  Future<List<DownloadRecord>> downloads() async {
+    reads++;
+    return _recorded.reversed.toList();
+  }
 
   @override
   Future<void> forget(WallpaperRef ref) async {

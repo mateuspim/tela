@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:tela/app/app.dart';
 import 'package:tela/app/download_queue_notice.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/core/diagnostics/slow_frame_log.dart';
 
 /// Entry point. The [ProviderScope] here is the app's one DI root — every port
 /// is bound to an adapter in `app/providers.dart`, never reached for globally.
@@ -16,6 +18,8 @@ import 'package:tela/app/providers.dart';
 /// real thing. [openTelaDatabase] is still the adapter, and still lives beside
 /// every other one; this is only the line that switches it on for the app.
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  _watchFrameTimes();
   final ProviderContainer container = ProviderContainer(
     overrides: <Override>[telaDatabaseProvider.overrideWith(openTelaDatabase)],
   );
@@ -30,6 +34,25 @@ void main() {
   runApp(
     UncontrolledProviderScope(container: container, child: const TelaApp()),
   );
+}
+
+/// Starts the frame probe that answers "why is the wall slow three pages in".
+///
+/// Wired here rather than inside a screen because it measures the *engine*, not
+/// a widget: it wants every frame the process draws, whichever shelf drew it.
+/// It is in release builds deliberately — see [SlowFrameLog] for why a
+/// debug-only probe would measure the one build nobody runs on the device — and
+/// costs one comparison per frame while nothing is late.
+void _watchFrameTimes() {
+  final SlowFrameLog frames = SlowFrameLog(write: debugPrint);
+  SchedulerBinding.instance.addTimingsCallback((List<FrameTiming> timings) {
+    for (final FrameTiming timing in timings) {
+      frames.observe(
+        build: timing.buildDuration,
+        raster: timing.rasterDuration,
+      );
+    }
+  });
 }
 
 /// Gives back what an older tela cached, without making anyone ask for it.
