@@ -4,7 +4,7 @@ Updated: 2026-08-24
 
 > **NEXT SESSION STARTS HERE — pass O is built and merged: three things the
 > owner named on 2026-08-24, all of them things they had actually felt on the
-> device.** `feat/reach-tag-refresh` **merged as (see git log)**, three commits,
+> device.** `feat/reach-tag-refresh` **merged as `3d439ab`** (2026-08-24), four commits,
 > through the gate: Dart **1445** (from 1414), Kotlin **136** untouched,
 > analyze and format clean. Full write-up in *O* below.
 >
@@ -819,7 +819,7 @@ Updated: 2026-08-24
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
-## O — reach, the listing's own tag, and the background rebuild (**MERGED 2026-08-24**)
+## O — reach, the listing's own tag, and the background rebuild (**MERGED 2026-08-24**, `3d439ab`)
 
 Three complaints the owner named in one sentence each, all felt on the device.
 Nothing here was scoped from a guess.
