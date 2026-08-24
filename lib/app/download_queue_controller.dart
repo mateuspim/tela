@@ -56,9 +56,36 @@ class DownloadQueueController extends AsyncNotifier<List<QueuedDownload>> {
   bool _draining = false;
   bool _disposed = false;
 
+  /// How often a draining queue may re-read the listings a download changes.
+  ///
+  /// **A number, because there was none, and that was the cost.** Every settled
+  /// entry invalidated `recentDownloadsProvider`, `privateImagesProvider` and
+  /// the rest — a SQLite listing *and* a native directory sweep, the latter on
+  /// `ImageStoreChannel`'s single storage thread — and the drain settles three
+  /// at a time. On top of that every one of those recomputed the tile marks,
+  /// which used to rebuild the whole app and both themes (see `TelaApp`). The
+  /// owner felt all of it at once: "the application seems to be sluggish when
+  /// downloading images on the background" (2026-08-24).
+  ///
+  /// Half a second keeps the promise the refresh was added for — the History
+  /// tab fills behind the Queue tab rather than on the next launch — while a
+  /// hundred-wallpaper batch pays for it twice a second instead of six times.
+  static const Duration listingRefreshWindow = Duration(milliseconds: 500);
+
+  /// Open while a refresh window is running; null when the next one may fire
+  /// immediately.
+  Timer? _refreshWindow;
+
+  /// Whether a settle arrived during the open window and is still owed a read.
+  bool _refreshOwed = false;
+
   @override
   Future<List<QueuedDownload>> build() async {
-    ref.onDispose(() => _disposed = true);
+    ref.onDispose(() {
+      _disposed = true;
+      _refreshWindow?.cancel();
+      _refreshWindow = null;
+    });
     final DownloadQueue queue = ref.read(downloadQueueProvider);
     // Entries a killed process left marked running are not running. Demote them
     // before anything reads or claims, or they are stranded forever.
@@ -174,9 +201,36 @@ class DownloadQueueController extends AsyncNotifier<List<QueuedDownload>> {
   /// After each entry lands or fails: republish the queue, and re-read the
   /// listings the new file belongs in so the History tab fills behind the
   /// Queue tab rather than on the next launch.
+  ///
+  /// The queue's own state is republished every time — it is one small query,
+  /// and it is what the screen the user is most likely watching shows. The
+  /// listings are throttled; see [listingRefreshWindow].
   Future<void> _onSettled() async {
     await _republish();
-    if (!_disposed) refreshDownloadsFrom(ref);
+    _refreshListings();
+  }
+
+  /// Re-reads the download listings, at most once per [listingRefreshWindow].
+  ///
+  /// Leading-edge, so a single download still refreshes the instant it lands
+  /// and nothing about the one-off case changed. A burst collapses into one
+  /// read per window, and [_windowClosed] guarantees the trailing one — a
+  /// batch must never *end* on a settle whose listings were swallowed.
+  void _refreshListings() {
+    if (_disposed) return;
+    if (_refreshWindow != null) {
+      _refreshOwed = true;
+      return;
+    }
+    refreshDownloadsFrom(ref);
+    _refreshWindow = Timer(listingRefreshWindow, _windowClosed);
+  }
+
+  void _windowClosed() {
+    _refreshWindow = null;
+    if (!_refreshOwed) return;
+    _refreshOwed = false;
+    _refreshListings();
   }
 
   Future<void> _republish() async {

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/private_image.dart';
-import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
@@ -149,9 +148,14 @@ const int tagSuggestionBudget = 25;
 /// supertype — the same wall [refreshDownloads] and [refreshDownloadsFrom]
 /// split over — and every one of them has already read [known] for the chooser
 /// anyway. It also leaves the whole thing testable without a container.
+///
+/// [listingTag] is the folder the shelf on screen names, from
+/// `ListingOrigin.folderOf`. It used to be derived here from Browse's global
+/// query, which is the wrong listing the moment the user has followed a tag —
+/// see `ListingOrigin` for the bug that was.
 Future<List<TagCandidate>> suggestedTagsFor({
   required WallpaperSource source,
-  required SearchQuery query,
+  required TagFolder? listingTag,
   required List<TagFolder> known,
   required List<Wallpaper> selection,
 }) async {
@@ -161,11 +165,11 @@ Future<List<TagCandidate>> suggestedTagsFor({
   // could add worth a request per wallpaper, and on Wallhaven a hundred-item
   // selection would spend the whole budget rediscovering the word already in
   // the search box. The free candidate wins and nothing is fetched.
-  if (searchTagIn(query) != null) {
+  if (listingTag != null) {
     return const SuggestTagFolders()(
       tags: const <String, List<WallpaperTag>>{},
       selectionSize: 0,
-      query: query,
+      searched: listingTag,
       existing: known.toSet(),
     );
   }
@@ -186,7 +190,7 @@ Future<List<TagCandidate>> suggestedTagsFor({
     // and reporting "25/30" would claim five of them lack a tag nobody looked
     // for. The denominator has to be the sample, or the number is a lie.
     selectionSize: tags.length,
-    query: query,
+    searched: null,
     existing: known.toSet(),
   );
 }

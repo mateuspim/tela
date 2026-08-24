@@ -3,8 +3,6 @@ import 'package:tela/app/library_listings.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
-import 'package:tela/domain/models/search_query.dart';
-import 'package:tela/domain/models/search_tag.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
@@ -38,7 +36,7 @@ void main() {
   test('spends nothing when the listing is already a tag search', () async {
     final List<TagCandidate> offers = await suggestedTagsFor(
       source: source,
-      query: const SearchQuery(tags: <SearchTag>[SearchTag('Leo (artist)')]),
+      listingTag: TagFolder.sanitize('Leo (artist)'),
       known: const <TagFolder>[],
       selection: selection(100),
     );
@@ -51,7 +49,7 @@ void main() {
   test('spends nothing for a bare search term either', () async {
     await suggestedTagsFor(
       source: source,
-      query: const SearchQuery(term: 'cyberpunk'),
+      listingTag: TagFolder.sanitize('cyberpunk'),
       known: const <TagFolder>[],
       selection: selection(100),
     );
@@ -62,7 +60,7 @@ void main() {
   test('looks the tags up when the listing names none', () async {
     final List<TagCandidate> offers = await suggestedTagsFor(
       source: source,
-      query: const SearchQuery(),
+      listingTag: null,
       known: const <TagFolder>[],
       selection: selection(3),
     );
@@ -77,7 +75,7 @@ void main() {
   test('counts against what was examined, not what was selected', () async {
     final List<TagCandidate> offers = await suggestedTagsFor(
       source: source,
-      query: const SearchQuery(),
+      listingTag: null,
       known: const <TagFolder>[],
       selection: selection(30),
     );
@@ -88,7 +86,7 @@ void main() {
   test('an empty selection asks nothing', () async {
     final List<TagCandidate> offers = await suggestedTagsFor(
       source: source,
-      query: const SearchQuery(),
+      listingTag: null,
       known: const <TagFolder>[],
       selection: const <Wallpaper>[],
     );

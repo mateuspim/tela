@@ -5,7 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// The one-finger gestures a zoomable shelf surface owns — swipe, hold, and
-/// the downward throw that dismisses a fullscreen view.
+/// the two vertical throws: down to dismiss a fullscreen view, up to reveal
+/// what the surface keeps below the image.
 ///
 /// Every zoomable gallery surface in tela has the same problem: an
 /// [InteractiveViewer] and a page-turning drag both want the same fingers, and
@@ -40,6 +41,14 @@ import 'package:flutter/services.dart';
 /// at all. It stays disarmed while [isZoomed], where a vertical drag is a pan
 /// across a magnified image and nothing else.
 ///
+/// [onSwipeUp] is the fourth, and it takes the other half of that free room.
+/// Detail's facts sheet used to be reachable only by its own handle, which at
+/// rest is the whole of a 20dp peek — under half the 48dp a touch target owes
+/// a thumb, with the apply button immediately below it and, since pass N, a
+/// tap-to-fullscreen image immediately above. Both misses did something loud.
+/// An upward throw anywhere on the picture reaches the same sheet, and costs
+/// no recognizer here for exactly the reason the dismiss cost none.
+///
 /// ```dart
 /// ShelfSwipe(
 ///   isZoomed: zoom.isZoomed,
@@ -60,6 +69,7 @@ class ShelfSwipe extends StatefulWidget {
     this.onHold,
     this.onDragDown,
     this.onDismiss,
+    this.onSwipeUp,
     super.key,
   });
 
@@ -104,6 +114,20 @@ class ShelfSwipe extends StatefulWidget {
   /// Null leaves the gesture unarmed, which is what every surface that is not
   /// a fullscreen route passes — a shelf tile has nothing to dismiss.
   final VoidCallback? onDismiss;
+
+  /// Called when a fitted image is thrown upward past [swipeThreshold],
+  /// conventionally to reveal what the surface keeps below it.
+  ///
+  /// Null leaves it unarmed, which is what a surface with nothing underneath
+  /// passes. Never the *only* way to reach whatever it reveals: a gesture is
+  /// invisible to a screen reader, so the one surface using it keeps its
+  /// handle — the same rule [onHold] follows.
+  ///
+  /// Deliberately not reported while the finger travels, unlike [onDragDown].
+  /// The sheet it reveals is itself draggable, so following the finger here
+  /// would hand one gesture to two things that both want to move; this fires
+  /// once, on release, and lets the sheet animate to its own stop.
+  final VoidCallback? onSwipeUp;
 
   /// How far a finger must travel horizontally before it counts as a swipe.
   ///
@@ -234,6 +258,7 @@ class _ShelfSwipeState extends State<ShelfSwipe> {
     _releasePointer();
     if (_pointers != 0 || start == null || widget.isZoomed) return;
     if (_dismissAcross(end - start, wasDragging)) return;
+    if (_revealAcross(end - start)) return;
     _selectAcross(end - start);
   }
 
@@ -261,6 +286,22 @@ class _ShelfSwipeState extends State<ShelfSwipe> {
       return true;
     }
     widget.onDragDown?.call(0);
+    return true;
+  }
+
+  /// Fires the upward reveal, and reports whether it took the gesture.
+  ///
+  /// [ShelfSwipe.swipeThreshold] rather than [ShelfSwipe.dismissThreshold],
+  /// which is the reverse of the asymmetry [ShelfSwipe.dismissThreshold]
+  /// explains and for the same reason read the other way: a reveal that
+  /// misfires costs one flick back down, while the dismiss it mirrors throws
+  /// the user off the screen. The cheap direction gets the low bar.
+  bool _revealAcross(Offset travel) {
+    final VoidCallback? reveal = widget.onSwipeUp;
+    if (reveal == null) return false;
+    if (travel.dy > -ShelfSwipe.swipeThreshold) return false;
+    if (travel.dy.abs() <= travel.dx.abs()) return false;
+    reveal();
     return true;
   }
 

@@ -275,6 +275,60 @@ void main() {
     );
     await tester.pumpAndSettle();
   });
+
+  testWidgets('an upward throw on the wallpaper reaches the facts', (
+    WidgetTester tester,
+  ) async {
+    // The grip is a band at the very foot of the screen; the wallpaper above
+    // it is everything else. "the details button is kinda hit or miss on
+    // portrait" — the owner, 2026-08-24.
+    int revealed = 0;
+    await _pumpPager(
+      tester,
+      _session(),
+      onRevealDetails: () => revealed++,
+    );
+
+    await _swipe(tester, const Offset(0, -40));
+    expect(revealed, 0, reason: 'too short to be a throw');
+
+    await _swipe(tester, const Offset(0, -200));
+    expect(revealed, 1);
+  });
+
+  testWidgets('an upward throw never also turns the page', (
+    WidgetTester tester,
+  ) async {
+    // One finger does one thing. A diagonal resolves to whichever axis it
+    // travelled furthest along, and the two readings must stay exclusive.
+    final GallerySessionController<Wallpaper> session = _session();
+    int revealed = 0;
+    await _pumpPager(tester, session, onRevealDetails: () => revealed++);
+
+    await _swipe(tester, const Offset(-90, -200));
+
+    expect(revealed, 1);
+    expect(session.selectedIndex, 0);
+  });
+
+  testWidgets('an upward drag across a zoomed wallpaper is a pan', (
+    WidgetTester tester,
+  ) async {
+    // Same rule the page turn and the dismiss already follow: on a magnified
+    // image a vertical drag is the user moving around it, and raising a sheet
+    // over it would throw away the position they worked to reach.
+    int revealed = 0;
+    await _pumpPager(
+      tester,
+      _session(),
+      onRevealDetails: () => revealed++,
+    );
+    await _doubleTap(tester, tester.getCenter(find.byType(PageView)));
+
+    await _swipe(tester, const Offset(0, -200));
+
+    expect(revealed, 0);
+  });
 }
 
 /// Drives two fingers apart from the centre, optionally letting the first one
@@ -388,6 +442,7 @@ Future<void> _pumpPager(
   WidgetTester tester,
   GallerySessionController<Wallpaper> session, {
   void Function(Wallpaper wallpaper)? onHoldImage,
+  VoidCallback? onRevealDetails,
 }) async {
   addTearDown(session.dispose);
   await tester.pumpWidget(
@@ -405,6 +460,7 @@ Future<void> _pumpPager(
             gallery: session,
             systemUi: FakeImmersiveSystemUi(),
             onHoldImage: onHoldImage,
+            onRevealDetails: onRevealDetails,
           ),
         ),
       ),

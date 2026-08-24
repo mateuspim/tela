@@ -12,6 +12,7 @@ import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
@@ -24,9 +25,15 @@ import 'package:tela/features/browse/linked_listing_screen.dart';
 import 'package:tela/features/browse/wallpaper_grid.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 
+import '../fakes/fake_download_history.dart';
+import '../fakes/fake_download_queue.dart';
+import '../fakes/fake_favorites_repository.dart';
+import '../fakes/fake_image_store.dart';
 import '../fakes/fake_secret_store.dart';
 import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_tag_blocklist_repository.dart';
+import '../fakes/fake_wallpaper_applier.dart';
+import '../fakes/fake_wallpaper_sharer.dart';
 import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
@@ -48,6 +55,93 @@ void main() {
       tester.widget<WallpaperGrid>(find.byType(WallpaperGrid)).galleryIdentity,
       'linked:tag:37',
     );
+  });
+
+  testWidgets('a download files under the tag being browsed, not the last', (
+    WidgetTester tester,
+  ) async {
+    // The owner's report, in their words: "if I enter the pictures with tag
+    // flower, then check the user pictures, then go to another tag like white
+    // minimalist ... it just fixups on the flower tag" (2026-08-24). Every
+    // download path used to ask `browseQueryProvider` what listing it was on —
+    // and a followed listing keeps its filters in *this* screen's state, so
+    // that provider still held whatever was last typed into the search box.
+    final FakeWallpaperSource source = _api();
+    final FakeImageStore images = FakeImageStore();
+    final ProviderContainer scope = _container(source, images: images);
+    // The stale listing, still on the Browse tabs underneath.
+    scope.read(browseQueryProvider.notifier).search('flower');
+    await _pumpListing(
+      tester,
+      source,
+      const TagLink(WallpaperTag(id: 37, name: 'white minimalist')),
+      container: scope,
+    );
+
+    await _quickDownload(tester);
+
+    expect(images.receivedTag, TagFolder('white minimalist'));
+  });
+
+  testWidgets('a tag listing never files under the id it searches on', (
+    WidgetTester tester,
+  ) async {
+    // The second half of the same bug, and the reason the link's own name has
+    // to travel with the listing: `TagLink.narrow` sets the term to `id:37`,
+    // which sanitizes into a perfectly legal folder called `id 37`. Handing
+    // the listing's *query* to the chooser would have swapped one wrong answer
+    // for another.
+    final FakeWallpaperSource source = _api();
+    final FakeImageStore images = FakeImageStore();
+    await _pumpListing(
+      tester,
+      source,
+      const TagLink(WallpaperTag(id: 37, name: 'nature')),
+      container: _container(source, images: images),
+    );
+
+    await _quickDownload(tester);
+
+    expect(images.receivedTag, TagFolder('nature'));
+  });
+
+  testWidgets("an uploader's listing files under their name", (
+    WidgetTester tester,
+  ) async {
+    // "I am looking at Leo and I want these filed under it" — the case
+    // `suggestTagFolders` already argued a listing answers for free, and the
+    // one an uploader listing could not answer at all before this.
+    final FakeWallpaperSource source = _api();
+    final FakeImageStore images = FakeImageStore();
+    await _pumpListing(
+      tester,
+      source,
+      const UploaderLink('pym'),
+      container: _container(source, images: images),
+    );
+
+    await _quickDownload(tester);
+
+    expect(images.receivedTag, TagFolder('pym'));
+  });
+
+  testWidgets('a colour listing names no folder, and invents none', (
+    WidgetTester tester,
+  ) async {
+    // A colour has no word on screen — the title is a swatch — so there is
+    // nothing to call a directory. Untagged is the honest answer.
+    final FakeWallpaperSource source = _api();
+    final FakeImageStore images = FakeImageStore();
+    await _pumpListing(
+      tester,
+      source,
+      ColorLink(WallpaperColor('#660000')),
+      container: _container(source, images: images),
+    );
+
+    await _quickDownload(tester);
+
+    expect(images.receivedTag, isNull);
   });
 
   testWidgets('an uploader listing is their uploads, and never a profile', (
@@ -275,7 +369,10 @@ FakeWallpaperSource _api() => FakeWallpaperSource(
   ),
 );
 
-ProviderContainer _container(FakeWallpaperSource source) {
+ProviderContainer _container(
+  FakeWallpaperSource source, {
+  FakeImageStore? images,
+}) {
   return ProviderContainer(
     overrides: <Override>[
       wallhavenSourceProvider.overrideWithValue(source),
@@ -284,6 +381,14 @@ ProviderContainer _container(FakeWallpaperSource source) {
       tagBlocklistRepositoryProvider.overrideWithValue(
         FakeTagBlocklistRepository(),
       ),
+      // Only the download path below needs these; bound always so a test that
+      // reaches one never opens the real database or method channel.
+      imageStoreProvider.overrideWithValue(images ?? FakeImageStore()),
+      downloadHistoryProvider.overrideWithValue(FakeDownloadHistory()),
+      downloadQueueProvider.overrideWithValue(FakeDownloadQueue()),
+      favoritesRepositoryProvider.overrideWithValue(FakeFavoritesRepository()),
+      wallpaperApplierProvider.overrideWithValue(FakeWallpaperApplier()),
+      wallpaperSharerProvider.overrideWithValue(FakeWallpaperSharer()),
     ],
   );
 }
@@ -313,6 +418,20 @@ Future<void> _pumpListing(
   );
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
+}
+
+/// Downloads the one tile on the listing through the wall's quick sheet.
+///
+/// The safe-wallpaper path, which asks nothing and files straight away — so
+/// whatever folder it lands in is the one the code chose with no user in the
+/// loop, which is exactly the question these tests ask.
+Future<void> _quickDownload(WidgetTester tester) async {
+  await tester.longPress(find.byType(WallpaperTile));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.tap(find.text('Download'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 500));
 }
 
 Wallpaper _wallpaper() => Wallpaper(

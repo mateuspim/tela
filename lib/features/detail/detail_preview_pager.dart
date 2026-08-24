@@ -37,6 +37,7 @@ class DetailPreviewPager extends StatefulWidget {
     required this.gallery,
     required this.systemUi,
     this.onHoldImage,
+    this.onRevealDetails,
     super.key,
   });
 
@@ -54,6 +55,14 @@ class DetailPreviewPager extends StatefulWidget {
   /// what it costs. Withholding it here would have been the third place the
   /// same rule was spelled out, and the first to disagree with the other two.
   final void Function(Wallpaper wallpaper)? onHoldImage;
+
+  /// Called when the wallpaper is thrown upward, conventionally to raise the
+  /// facts sheet the picture sits in front of.
+  ///
+  /// Null leaves the gesture unarmed, which is what a pager with nothing
+  /// beneath it passes. Disarmed on a magnified image by [ShelfSwipe] itself,
+  /// where an upward drag is a pan and nothing else.
+  final VoidCallback? onRevealDetails;
 
   @override
   State<DetailPreviewPager> createState() => _DetailPreviewPagerState();
@@ -197,6 +206,7 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager>
           : null,
       onNext: _gallery.canSelectNext ? () => _turnTo(_selectedIndex + 1) : null,
       onHold: _holdSelected(),
+      onSwipeUp: widget.onRevealDetails,
       child: PageView.builder(
         controller: _pages,
         physics: const NeverScrollableScrollPhysics(),

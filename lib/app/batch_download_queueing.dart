@@ -12,6 +12,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_destination_choice.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
+import 'package:tela/core/ui/listing_origin.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -20,7 +21,6 @@ import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
-import 'package:tela/features/browse/browse_query_controller.dart';
 
 /// Puts the whole selection in the download queue and says so.
 ///
@@ -190,6 +190,9 @@ _resolveBatchDestination(
   WidgetRef ref,
   List<Wallpaper> wallpapers,
 ) async {
+  // Read before the first await, while the context is certainly still the one
+  // under the shelf that published it. See `ListingOrigin`.
+  final TagFolder? searched = ListingOrigin.folderOf(context);
   final StorageTier? pin = await ref.read(pinnedDownloadTierProvider.future);
   final Set<Purity> purities = wallpapers
       .map((Wallpaper wallpaper) => wallpaper.purity)
@@ -206,7 +209,6 @@ _resolveBatchDestination(
   final TagFolder? remembered = ref
       .read(rememberedDownloadTagProvider.notifier)
       .offeredFor(StorageTier.sharedGallery);
-  final TagFolder? searched = searchTagIn(ref.read(browseQueryProvider));
   final TagFolder? suggested = searched ?? remembered;
   final List<TagFolder> known = await ref.read(
     knownDownloadTagsProvider.future,
@@ -216,7 +218,7 @@ _resolveBatchDestination(
   // destination decision must not wait on a round trip per tile.
   final Future<List<TagCandidate>> suggestions = suggestedTagsFor(
     source: ref.read(activeWallpaperSourceProvider),
-    query: ref.read(browseQueryProvider),
+    listingTag: searched,
     known: known,
     selection: wallpapers,
   );

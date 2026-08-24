@@ -92,7 +92,7 @@ class TagCandidate {
 /// final List<TagCandidate> offers = suggestTagFolders(
 ///   tags: fetched,
 ///   selectionSize: 10,
-///   query: browseQuery,
+///   searched: ListingOrigin.folderOf(context),
 ///   existing: knownTags,
 /// );
 /// ```
@@ -120,6 +120,12 @@ class SuggestTagFolders {
   /// 4. **Then alphabetically**, so the list is stable — a chooser whose chips
   ///    reorder between two identical selections is one nobody can learn.
   ///
+  /// [searched] is that first candidate, and it is **passed in rather than
+  /// read back out of a query**. A followed tag listing searches on `id:37`,
+  /// so a query cannot always say what it is a listing *of* — only the screen
+  /// that followed the link can. `ListingOrigin.folderOf` is the one place
+  /// that decision is made; [searchTagIn] is the half of it a query can answer.
+  ///
   /// [existing] folders that nothing in the selection mentions are appended
   /// last: still reachable in one tap, never in front of a tag that actually
   /// describes what is being downloaded.
@@ -132,10 +138,9 @@ class SuggestTagFolders {
   List<TagCandidate> call({
     required Map<String, List<WallpaperTag>> tags,
     required int selectionSize,
-    required SearchQuery query,
+    required TagFolder? searched,
     required Set<TagFolder> existing,
   }) {
-    final TagFolder? searched = searchTagIn(query);
     // The search's tag is offered from the front, so it must not also appear
     // among the counted ones — the same tag twice reads as two folders.
     final Map<TagFolder, int> shares = _shares(tags)..remove(searched);

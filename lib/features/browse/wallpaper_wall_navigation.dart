@@ -23,6 +23,7 @@ import 'package:go_router/go_router.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/features/browse/gallery_paging_bridge.dart';
 import 'package:tela/features/browse/wallpaper_quick_sheet.dart';
@@ -40,6 +41,7 @@ Future<void> openWallpaperDetail({
   required SearchQuery query,
   required List<Wallpaper> wallpapers,
   required int selectedIndex,
+  TagFolder? listingFolder,
 }) async {
   // `late` so the request-more seam can hand the bridge the very session it
   // belongs to; the closure only runs once the viewer nears the loaded end.
@@ -60,7 +62,11 @@ Future<void> openWallpaperDetail({
       // The grid's own query travels with the session so a tag or colour
       // followed from the detail screen inherits the filters this listing is
       // under, not Browse's global ones (see WallpaperDetailArgs).
-      extra: WallpaperDetailArgs(session: session, originFilters: query),
+      extra: WallpaperDetailArgs(
+        session: session,
+        originFilters: query,
+        originFolder: listingFolder,
+      ),
     );
   } finally {
     session.dispose();

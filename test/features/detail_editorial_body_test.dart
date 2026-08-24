@@ -15,7 +15,11 @@ const Key _apply = Key('the-apply');
 /// at a sheet row landed on the navigation bar and the failure said only that
 /// the target was missing. This layout is *about* proportions of a phone
 /// screen, so testing it on a squat landscape box measures nothing.
-Future<void> _pump(WidgetTester tester, {double systemBar = 0}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  double systemBar = 0,
+  DraggableScrollableController? sheetController,
+}) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.resetPhysicalSize);
@@ -28,11 +32,12 @@ Future<void> _pump(WidgetTester tester, {double systemBar = 0}) async {
           viewPadding: EdgeInsets.only(bottom: systemBar),
           padding: EdgeInsets.only(bottom: systemBar),
         ),
-        child: const Scaffold(
+        child: Scaffold(
           body: DetailEditorialBody(
-            preview: ColoredBox(key: _preview, color: Colors.black),
-            metadata: SizedBox(key: _metadata, height: 900),
-            applyButton: SizedBox(key: _apply, height: 84),
+            preview: const ColoredBox(key: _preview, color: Colors.black),
+            metadata: const SizedBox(key: _metadata, height: 900),
+            applyButton: const SizedBox(key: _apply, height: 84),
+            sheetController: sheetController,
           ),
         ),
       ),
@@ -240,6 +245,85 @@ void main() {
     },
   );
 
+  testWidgets('the closed sheet is a whole touch target, not a hairline', (
+    WidgetTester tester,
+  ) async {
+    // "the details button is kinda hit or miss on portrait" (the owner,
+    // 2026-08-24). The peek *is* the grip, so the grip's band was the entire
+    // hit area of the only control that opens the facts — 21dp of it, with the
+    // apply button glued below and a tap-to-fullscreen picture above, so both
+    // misses did something loud. Flutter gives its own drag handle
+    // `kMinInteractiveDimension`; this one draws itself and had to be told.
+    await _pump(tester);
+
+    expect(
+      tester.getSize(_gripBand()).height,
+      kMinInteractiveDimension,
+      reason: 'a thumb is owed 48dp, and this band is the whole of the peek',
+    );
+    expect(
+      tester.getRect(find.byKey(DetailEditorialBody.sheetKey)).height,
+      greaterThanOrEqualTo(kMinInteractiveDimension),
+    );
+  });
+
+  testWidgets('gives the band back once the panel is solid', (
+    WidgetTester tester,
+  ) async {
+    // The reach is a closed-sheet problem. Open, the handle is decoration —
+    // and 48dp of blank above the first fact row is exactly the kind of thing
+    // the peek's own history says gets noticed on a device.
+    await _pump(tester);
+
+    await _raiseSheet(tester);
+
+    expect(
+      tester.getSize(_gripBand()).height,
+      DetailEditorialBody.sheetGripSettledHeight,
+    );
+  });
+
+  testWidgets('tapping the handle opens the sheet, and again closes it', (
+    WidgetTester tester,
+  ) async {
+    // The labelled equivalent of the upward throw on the picture: a gesture is
+    // invisible to a screen reader, so the sheet is never reachable only that
+    // way. A tap is also simply the cheaper thing to do to a handle.
+    final DraggableScrollableController sheet = DraggableScrollableController();
+    addTearDown(sheet.dispose);
+    await _pump(tester, sheetController: sheet);
+    final Finder surface = find.byKey(DetailEditorialBody.sheetKey);
+    final double closed = tester.getTopLeft(surface).dy;
+
+    await tester.tap(_gripBand());
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(surface).dy, lessThan(closed));
+
+    await tester.tap(_gripBand());
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(surface).dy, closeTo(closed, 1));
+  });
+
+  testWidgets('revealing a sheet already open never lowers it', (
+    WidgetTester tester,
+  ) async {
+    // The throw that calls this is armed across the whole picture, and a
+    // picture is still visible above a fully-raised sheet. Without the guard a
+    // flick up there would pull the facts *down*, which is the opposite of
+    // what the gesture says.
+    final DraggableScrollableController sheet = DraggableScrollableController();
+    addTearDown(sheet.dispose);
+    await _pump(tester, sheetController: sheet);
+    await _raiseSheet(tester);
+    final double open = sheet.size;
+
+    await DetailEditorialBody.revealSheet(sheet, animate: false);
+    await tester.pumpAndSettle();
+
+    expect(sheet.size, open);
+    expect(open, greaterThan(DetailEditorialBody.restingSheetFraction));
+  });
+
   testWidgets('lets the wallpaper take gestures under the scrim', (
     WidgetTester tester,
   ) async {
@@ -427,6 +511,20 @@ void main() {
     expect(wash.colors.last.a, 0);
   });
 }
+
+/// The band around the handle — what a thumb actually has to hit, as opposed
+/// to the 32x5 bar drawn in the middle of it.
+///
+/// Found by type rather than by a key, for the same reason [_gripDecoration]
+/// is: the grip is private to the body. `Scrollable` builds a
+/// `RawGestureDetector`, not this type, so the sheet's own scrolling does not
+/// answer here.
+Finder _gripBand() => find
+    .descendant(
+      of: find.byKey(DetailEditorialBody.sheetKey),
+      matching: find.byType(GestureDetector),
+    )
+    .first;
 
 /// How far the scenery has been told to drift, from the scope over the body.
 double _drift(WidgetTester tester) {

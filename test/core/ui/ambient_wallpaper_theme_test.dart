@@ -114,12 +114,21 @@ void main() {
     expect(_themeUnder(tester).colorScheme.primary, app.colorScheme.primary);
   });
 
-  testWidgets('inserts no theme at all when there is nothing to tint', (
+  testWidgets('keeps its wrapper, and its colours, when there is no tint', (
     WidgetTester tester,
   ) async {
-    await _pump(tester, colors: const <String>[]);
+    // It used to insert no theme at all here, and that was the defect rather
+    // than the contract: `fallbackSeed` arrives a beat after the first build,
+    // so appearing later re-inflated the whole screen below this widget —
+    // costing the tint its crossfade and, once Detail's sheet held a
+    // controller, throwing outright. The wrapper is unconditional now, and
+    // what must stay true is that an untinted screen still wears its
+    // ancestor's colours.
+    final ThemeData app = TelaTheme.dark(null);
+    await _pump(tester, colors: const <String>[], app: app);
 
-    expect(_ambientTheme, findsNothing);
+    expect(_ambientTheme, findsOneWidget);
+    expect(_themeUnder(tester).colorScheme, app.colorScheme);
   });
 
   testWidgets('takes its brightness from the theme it sits under', (

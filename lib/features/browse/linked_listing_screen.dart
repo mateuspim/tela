@@ -103,7 +103,14 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
             const SizedBox(width: 8),
           ],
         ),
-        body: WallpaperGrid(query: query, galleryIdentity: identity),
+        body: WallpaperGrid(
+          query: query,
+          galleryIdentity: identity,
+          // The query cannot say this: a tag searches on `id:37`, which reads
+          // back as a folder called `id 37`. Only the link still holds the
+          // word — see `WallpaperLink.folderName`.
+          listingFolder: widget.link.folderName,
+        ),
       ),
     );
   }

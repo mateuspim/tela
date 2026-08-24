@@ -1,5 +1,6 @@
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 
 /// What a wallpaper grid hands the detail route: the shelf to page through, and
@@ -17,7 +18,11 @@ import 'package:tela/domain/models/wallpaper.dart';
 /// back to Browse's own filters, exactly as it did before this existed.
 class WallpaperDetailArgs {
   /// Bundles a [session] with the [originFilters] it was opened from.
-  const WallpaperDetailArgs({required this.session, this.originFilters});
+  const WallpaperDetailArgs({
+    required this.session,
+    this.originFilters,
+    this.originFolder,
+  });
 
   /// The ordered shelf snapshot the detail screen pages through.
   final GallerySessionController<Wallpaper> session;
@@ -25,4 +30,10 @@ class WallpaperDetailArgs {
   /// The filters of the listing this detail was opened from, or null when the
   /// shelf has none to inherit.
   final SearchQuery? originFilters;
+
+  /// The folder that listing names, when [originFilters] cannot spell it — a
+  /// followed tag searches on `id:37`. Republished by the detail screen so the
+  /// download button offers the listing the user is actually in, which a
+  /// pushed route inherits nothing of. See `ListingOrigin`.
+  final TagFolder? originFolder;
 }
