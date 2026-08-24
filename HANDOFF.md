@@ -47,7 +47,31 @@ Updated: 2026-08-24
 > **release** build on purpose, because `make deploy` builds release and a
 > `kDebugMode` probe would measure the one build nobody runs on the tablet.
 >
-> **WHAT THE NEXT SESSION SHOULD DO FIRST: run the probe.** Browse three pages
+> **THE OWNER HAS NAMED THE NEXT WORK (2026-08-24, after the device pass):
+> duplicate downloads.** *"a way to not download duplicate images or remove
+> duplicate from the albums ive already downloaded because i could on error
+> download the same image to two tags, i could just have both images set for
+> both but only 1 downloaded."* **Read `## Duplicate downloads` below before
+> touching anything** — the "do not download it twice" rule is *already decided
+> and already built in all three tiers*, so the work is the gaps and a cleanup
+> sweep, not a policy. It also contains one product question that is the
+> owner's: what they described is **not** the rule that shipped, and on the SAF
+> tier it may not be implementable at all.
+>
+> **The probe reading is still owed, and the first attempt produced nothing.**
+> `make deploy` ran on 2026-08-24 and the owner tested; a `adb logcat -s
+> flutter` capture over that session came back **empty**. That is *not* a
+> finding: a release Flutter build emits nothing else on that tag, so an empty
+> capture is equally consistent with "no slow frames" and with "the line never
+> reaches logcat". **Settle that first, and do not report a jank number until
+> you have.** The cheap way is to make `SlowFrameLog` write one line at startup
+> — or drop the budget to zero for one build — and confirm it appears. A signal
+> that definitely does reach logcat, and is worth grepping as a cross-check, is
+> the system's own: `adb logcat | grep "queueBuffer.*cc.pym.tela"` prints
+> `fps=` and `max=` per surface, and a bad `max=` there is jank whoever caused
+> it.
+>
+> **Then run the probe.** Browse three pages
 > deep on the SM-X730 and read:
 >
 > ```sh
@@ -818,6 +842,128 @@ Updated: 2026-08-24
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## Duplicate downloads — the rule exists; the gaps are the work (asked 2026-08-24)
+
+**The owner's words:** *"lets put now on the handoff to work on a way to not
+download duplicate images or remove duplicate from the albums ive already
+downloaded because i could on error download the same image to two tags, i could
+just have both images set for both but only 1 downloaded capiche?"*
+
+Note the conditional — *"i could"*. This is a guard they want, not damage they
+have. **Checked on the SM-X730 the same day: there is nothing duplicated on it.**
+`/sdcard/Pictures/tela` held exactly one file, untagged, and there were no tag
+subfolders and no files-tier folder at all. So nothing here is urgent, and
+nobody should go hunting for a duplicate on that device expecting to find one.
+
+### Read this first: the rule is already decided, and already built
+
+**"One wallpaper, one tag" is not a new policy. It is written down, argued, and
+enforced in all three tiers**, and a session that starts by building
+deduplication from scratch will be rewriting working code.
+
+`TierWriting.dropOtherPrivateTags` carries the argument in full: *"Downloading
+something you already have, under a different tag, means 'file it there' — not
+'keep two'."* Each tier has its own sweep, run **after** a successful write so a
+failed download can never relocate a file the user already had:
+
+| Tier | Sweep | How it matches |
+|---|---|---|
+| `sharedGallery` | `dropOtherGalleryTags` | MediaStore delete by `DISPLAY_NAME` under `tela/%`, excluding the folder just written |
+| `filesOutsideGallery` | `SafDocuments.dropFromOtherFolders` | walks the tela folder's subdirectories, deletes the same child name |
+| `appPrivate` | `dropOtherPrivateTags` | same file name, any private tag directory |
+
+Detection needs **no hashing and no new index**. Every file tela writes is
+`source-id.ext` (`ImageFileNaming.fileName`), and `ImageFileNaming.keyOf` already
+parses that back into a `source-id` identity — a rule the private tier depends on
+so hard that a file not matching it is simply not listed.
+
+### The five gaps, which are the actual work
+
+Ordered by how likely they are to be what the owner eventually sees.
+
+1. **Cross-tier duplicates are not covered, by construction.** Every sweep stays
+   inside its own tier. The same wallpaper in `Pictures/tela/flower` and in the
+   files tier under `white minimalist` is two files and nothing looks for it.
+   This may well be *correct* — the tiers are different places for different
+   purposes, and the files tier exists to be synced to a desktop — but it is the
+   case a per-purity routing default plus a per-download override makes easy to
+   reach, and it has never been decided either way. **Decide it before writing
+   the sweep**, because it changes what the sweep is allowed to delete.
+2. **A file from a previous install cannot be swept, and this is documented.**
+   `dropOtherGalleryTags` swallows its failure on purpose: media ownership is per
+   install, so a file written before the **2026-08-11 reinstall** belongs to
+   nobody as far as this package is concerned and needs the user's confirmation
+   to delete — *"a prompt that cannot be raised here, because a queued download
+   drains with no screen attached."* This is the strongest candidate for a real
+   duplicate on that tablet, and it is exactly the case a **cleanup sweep fixes
+   that the write path cannot**: a sweep runs from a screen, so it *can* ask.
+3. **The Konachan prefix bug leaves two names for one wallpaper.** Before
+   2026-07-26 every download was filed as `wallhaven-`, Konachan's included. So
+   one wallpaper can exist as `wallhaven-12345.jpg` *and* `konachan-12345.jpg`,
+   and every sweep matches on the exact file name, so the two never see each
+   other. Only affects files written before that date. `ImageFileNaming.keyOf`'s
+   own docstring already flags the read-back consequence.
+4. **The sweep runs only on `success == true`.** A write that fails partway
+   leaves whatever was already there, under any tag.
+5. **Extension is part of the match.** `wallhaven-abc123.png` and
+   `wallhaven-abc123.jpg` are two files to every sweep. Probably unreachable —
+   the extension comes from the source URL and is stable per wallpaper — but it
+   is the one gap that would survive all four fixes above, so confirm it rather
+   than assume it.
+
+### The product question, and it is the owner's
+
+**What they described is not the rule that shipped.** *"i could just have both
+images set for both but only 1 downloaded"* is **one file, many tags**. What is
+built is **one wallpaper, one tag**: the second download *moves* it, so it is
+never in two places and never downloaded twice either. Both satisfy "don't
+download it twice"; they differ in what the library then looks like.
+
+Put the fork to them rather than picking:
+
+- **(a) Keep one wallpaper, one tag.** Already built. The second download files
+  it under the new tag and the old copy goes. Cheap — the work is only the five
+  gaps and the cleanup sweep. Cost: a wallpaper cannot be in two albums.
+- **(b) One file, many tags.** What they asked for. **This may not be
+  implementable on the tier that most wants it.** A tag *is* a directory
+  (`TagFolder`'s docstring is explicit that this is what makes tags organize the
+  library in Photos, in a file manager and over USB). One file in two directories
+  needs a link — and `filesOutsideGallery` is reached through **SAF**, which has
+  no link API at all, hard or symbolic. MTP does not represent symlinks usefully
+  either, which is the desktop-sync path the tier exists for. So (b) means either
+  abandoning tag-as-directory for a tag *index* — which the app-private tier
+  cannot have, because it deliberately writes no database row — or accepting one
+  canonical folder plus tags-as-metadata, which is (a) wearing a different label
+  in the UI.
+
+**A third option worth offering, because it is cheap and may be all they want:**
+leave the rule alone and simply *tell them*. A download of a wallpaper already on
+disk under another tag currently moves it silently. Saying "you already have
+this, filed under `flower` — move it to `white minimalist`?" turns the whole
+complaint into a question the user answers, needs no new storage model, and is
+the honest reading of *"i could **on error** download the same image to two
+tags"*.
+
+### What a cleanup sweep needs, whichever way the fork goes
+
+- Group by `ImageFileNaming.keyOf`, not by bytes. No hashing, no reads.
+- **Never move or link a private-tier file into a shared one.** That is an
+  export, and `mayExportBitmap` is the rule — see the crop and share slices,
+  where the same wall is enforced twice on purpose. A private-tier sweep is
+  filesystem-only and belongs behind the app-lock, on a `FLAG_SECURE` screen.
+- The private tier has **no database rows at all**, so its sweep can only read
+  directories. `PrivateTierListing` is the existing listing.
+- The history cannot help, and this trips people: `DownloadedWallpapers` is keyed
+  `(source, id)` — **one row per wallpaper** — so it has never been able to
+  represent one wallpaper in two places. A second copy is already invisible to
+  History and therefore already un-deletable through *Delete from device*, which
+  works off the row. The filesystem is the only witness.
+- `StoredImageRetagging` already moves a stored image between tags in all three
+  tiers, by rename where it can and copy-then-delete where SAF forces it. That is
+  the primitive; the sweep should not grow a second one.
+- It is a batch delete, so it goes through `DownloadDeleting`, which already owns
+  the system delete confirmation and already batches it.
 
 ## O — reach, the listing's own tag, and the background rebuild (**MERGED 2026-08-24**, `3d439ab`)
 
