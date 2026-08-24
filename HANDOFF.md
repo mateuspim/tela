@@ -58,18 +58,30 @@ Updated: 2026-08-24
 > owner's: what they described is **not** the rule that shipped, and on the SAF
 > tier it may not be implementable at all.
 >
-> **The probe reading is still owed, and the first attempt produced nothing.**
-> `make deploy` ran on 2026-08-24 and the owner tested; a `adb logcat -s
-> flutter` capture over that session came back **empty**. That is *not* a
-> finding: a release Flutter build emits nothing else on that tag, so an empty
-> capture is equally consistent with "no slow frames" and with "the line never
-> reaches logcat". **Settle that first, and do not report a jank number until
-> you have.** The cheap way is to make `SlowFrameLog` write one line at startup
-> — or drop the budget to zero for one build — and confirm it appears. A signal
-> that definitely does reach logcat, and is worth grepping as a cross-check, is
-> the system's own: `adb logcat | grep "queueBuffer.*cc.pym.tela"` prints
-> `fps=` and `max=` per surface, and a bad `max=` there is jank whoever caused
-> it.
+> **The probe reading is still owed, and the ambiguity that blocked it is now
+> fixed in code — the device run is what is left.** `make deploy` ran on
+> 2026-08-24 and the owner tested; a `adb logcat -s flutter` capture over that
+> session came back **empty**, which was *not* a finding: a release Flutter
+> build emits nothing else on that tag, so an empty capture was equally
+> consistent with "no slow frames" and with "the line never reaches logcat".
+>
+> `SlowFrameLog.reportWatching()` now writes one line at startup (branch
+> `feat/frame-probe-announce`, `72656f9`; Dart **1447** from 1445, analyze and
+> format clean, Kotlin untouched). Both lines carry `event`, so **the capture
+> now reads itself**:
+>
+> | What the grep shows | What it means |
+> |---|---|
+> | nothing at all | the log is not arriving — the reading is worthless, **do not report a number** |
+> | `event: watching` and nothing after | the probe ran and the wall was on time |
+> | a `event: slow` line | jank, and the line says which kind |
+>
+> **Start `adb logcat` before launching**, or read the buffer back with `adb
+> logcat -d` — the watching line is written in the first moments of the process
+> and is not repeated. A signal that definitely does reach logcat, and is worth
+> grepping as a cross-check if even the watching line is missing, is the
+> system's own: `adb logcat | grep "queueBuffer.*cc.pym.tela"` prints `fps=`
+> and `max=` per surface, and a bad `max=` there is jank whoever caused it.
 >
 > **Then run the probe.** Browse three pages
 > deep on the SM-X730 and read:
