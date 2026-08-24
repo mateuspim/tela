@@ -10,10 +10,12 @@ import 'package:tela/app/wallpaper_batch_actions.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
+import 'package:tela/core/ui/listing_origin.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/tile_density_scope.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/domain/models/search_query.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
@@ -36,6 +38,7 @@ class WallpaperGrid extends ConsumerStatefulWidget {
   const WallpaperGrid({
     required this.query,
     this.galleryIdentity = 'browse',
+    this.listingFolder,
     super.key,
   });
 
@@ -44,6 +47,11 @@ class WallpaperGrid extends ConsumerStatefulWidget {
 
   /// Stable shelf kind used to distinguish Browse from linked listings.
   final String galleryIdentity;
+
+  /// The folder a download from this listing should be offered, when [query]
+  /// cannot spell it — a followed tag searches on `id:37`. Null on Browse,
+  /// where the query says everything. See `ListingOrigin`.
+  final TagFolder? listingFolder;
 
   @override
   ConsumerState<WallpaperGrid> createState() => _WallpaperGridState();
@@ -177,9 +185,16 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
         if (_blocklistChanged(previous, next)) unawaited(_reapplyBlocklist());
       },
     );
-    return PagingListener<int, Wallpaper>(
-      controller: _paging,
-      builder: _grid,
+    // Published around the whole wall, empty state included: a download can
+    // start from a tile, from the quick sheet, or from the batch chooser, and
+    // all three used to ask Browse's global query what listing they were on.
+    return ListingOrigin(
+      filters: widget.query,
+      folder: widget.listingFolder,
+      child: PagingListener<int, Wallpaper>(
+        controller: _paging,
+        builder: _grid,
+      ),
     );
   }
 
@@ -477,6 +492,7 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
         bridge: _bridge,
         identity: _identity,
         query: widget.query,
+        listingFolder: widget.listingFolder,
         wallpapers: loaded,
         selectedIndex: index,
       ),

@@ -15,6 +15,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_destination_choice.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
+import 'package:tela/core/ui/listing_origin.dart';
 import 'package:tela/core/ui/purity_alert_tint.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_share_sheet.dart';
@@ -32,7 +33,6 @@ import 'package:tela/domain/models/wallpaper_share_failure.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/use_cases/share_wallpaper.dart';
 import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
-import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/detail/crop_wallpaper_screen.dart';
 import 'package:tela/features/favorites/favorite_button.dart';
 
@@ -134,6 +134,9 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
   /// user takes the "Always" offer, the new default is persisted through the
   /// same controller the settings screen writes, so that screen stays in step.
   Future<void> _chooseDownloadTier() async {
+    // Read before the first await, while the context is certainly still the
+    // one under the shelf that published it.
+    final TagFolder? searched = ListingOrigin.folderOf(context);
     final SettingsRepository settings = ref.read(settingsRepositoryProvider);
     final StorageSettings storage = await ref.read(
       storageSettingsProvider.future,
@@ -149,7 +152,10 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
     final TagFolder? remembered = ref
         .read(rememberedDownloadTagProvider.notifier)
         .offeredFor(StorageTier.sharedGallery);
-    final TagFolder? searched = searchTagIn(ref.read(browseQueryProvider));
+    // `searched` is the listing on screen, never Browse's global query: a
+    // followed tag or uploader keeps its filters in its own screen's state, so
+    // reading that provider offered the tag from two listings ago. See
+    // `ListingOrigin`.
     final TagFolder? suggestedTag = searched ?? remembered;
     final List<TagFolder> knownTags = await ref.read(
       knownDownloadTagsProvider.future,
@@ -159,7 +165,7 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
     // batch chooser applies, rather than a second spelling of it.
     final Future<List<TagCandidate>> suggestions = suggestedTagsFor(
       source: ref.read(activeWallpaperSourceProvider),
-      query: ref.read(browseQueryProvider),
+      listingTag: searched,
       known: knownTags,
       selection: <Wallpaper>[_wallpaper],
     );

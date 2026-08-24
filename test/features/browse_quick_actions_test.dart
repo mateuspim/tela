@@ -10,6 +10,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
@@ -140,6 +141,24 @@ void main() {
     expect(find.byIcon(Icons.download_done), findsOneWidget);
   });
 
+  testWidgets('a download files under the tag Browse is searching for', (
+    WidgetTester tester,
+  ) async {
+    // The other side of `ListingOrigin`: Browse publishes its own query and
+    // nothing hands it a name, because the query *is* the name. Downloading a
+    // page of `cyberpunk` means these wallpapers are that, which is the free
+    // candidate `searchTagIn` has always answered — this pins that it survived
+    // the move off `browseQueryProvider`.
+    final FakeImageStore images = FakeImageStore();
+    await _pumpWall(tester, images: images, term: 'cyberpunk');
+
+    await _longPressTile(tester);
+    await tester.tap(find.text('Download'));
+    await _settle(tester);
+
+    expect(images.receivedTag, TagFolder('cyberpunk'));
+  });
+
   testWidgets('a safe download skips the chooser and routes silently', (
     WidgetTester tester,
   ) async {
@@ -261,6 +280,7 @@ Future<void> _pumpWall(
   FakeWallpaperSharer? sharer,
   Purity purity = Purity.sfw,
   Size size = const Size(1080, 2400),
+  String term = '',
 }) async {
   // A real phone's geometry, not the 800x600 default. It is load-bearing: a
   // modal sheet is capped at a fraction of the screen, and on the short default
@@ -307,6 +327,13 @@ Future<void> _pumpWall(
       child: const TelaApp(),
     ),
   );
+  await _settle(tester);
+  if (term.isEmpty) return;
+  // Typed rather than injected: the search field is what writes this provider
+  // in the app, and a test that set it directly would not prove the wall is
+  // publishing what the user actually searched.
+  await tester.enterText(find.byType(TextField).first, term);
+  await tester.testTextInput.receiveAction(TextInputAction.search);
   await _settle(tester);
 }
 

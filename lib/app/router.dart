@@ -89,6 +89,7 @@ abstract final class TelaRouter {
                         ? extra
                         : null),
                 originFilters: args?.originFilters,
+                originFolder: args?.originFolder,
               ),
             );
           },

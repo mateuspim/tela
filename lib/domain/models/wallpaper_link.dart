@@ -1,6 +1,7 @@
 import 'package:meta/meta.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/search_tag.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper_color.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 
@@ -22,6 +23,15 @@ sealed class WallpaperLink {
   /// Creates a link.
   const WallpaperLink();
 
+  /// The folder a download from this link's listing would be filed under, or
+  /// null when the link names nothing a directory can be called.
+  ///
+  /// **The listing's query cannot answer this**, which is the whole reason it
+  /// is here: [TagLink] narrows the term to `id:37`, so anything reading the
+  /// query back would offer a folder called `id 37`. The link still holds the
+  /// word the user actually followed.
+  TagFolder? get folderName;
+
   /// Narrows [query] to this link's listing, keeping the filters already on it.
   ///
   /// Always newest-first. A tag or uploader replaces the search term with its
@@ -40,6 +50,10 @@ final class TagLink extends WallpaperLink {
   /// The tag followed, carried whole so the screen can title itself with the
   /// name while the query searches on the id.
   final WallpaperTag tag;
+
+  /// The tag's own name — the thing the user tapped, not the id it searches on.
+  @override
+  TagFolder? get folderName => TagFolder.sanitize(tag.name);
 
   /// `id:{n}`, Wallhaven's **exact**-tag operator — not `+{name}`, which is a
   /// fuzzy text match that would quietly return a *different* tag reading the
@@ -82,6 +96,12 @@ final class UploaderLink extends WallpaperLink {
   /// The uploader's public name, without a source-specific operator.
   final String username;
 
+  /// The uploader's name, which is a perfectly good folder: "I am looking at
+  /// Leo and I want these filed under it" is the case `suggestTagFolders`
+  /// already argues a listing answers for free.
+  @override
+  TagFolder? get folderName => TagFolder.sanitize(username);
+
   /// Carries the uploader structurally so each source can encode its operator.
   @override
   SearchQuery narrow(SearchQuery query) => query.copyWith(
@@ -110,6 +130,11 @@ final class ColorLink extends WallpaperLink {
 
   /// The dominant colour tapped, from Wallhaven's fixed palette.
   final WallpaperColor color;
+
+  /// Nothing. A colour has no name to print — the screen shows a swatch where
+  /// the other two show a word — so there is nothing to call a folder either.
+  @override
+  TagFolder? get folderName => null;
 
   @override
   SearchQuery narrow(SearchQuery query) => query

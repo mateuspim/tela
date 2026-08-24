@@ -12,6 +12,7 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_destination_choice.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
+import 'package:tela/core/ui/listing_origin.dart';
 import 'package:tela/core/ui/purity_alert_tint.dart';
 import 'package:tela/core/ui/sheet_header.dart';
 import 'package:tela/core/ui/tela_toast.dart';
@@ -27,7 +28,6 @@ import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
-import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 
 /// What a long press on a wall tile offers, without opening the wallpaper.
@@ -197,6 +197,9 @@ Future<({bool proceed, StorageTier? tier, TagFolder? tag})> _resolveDestination(
   WidgetRef ref,
   Wallpaper wallpaper,
 ) async {
+  // Read before the first await, while the context is certainly still the one
+  // under the shelf that published it. See `ListingOrigin`.
+  final TagFolder? searched = ListingOrigin.folderOf(context);
   final SettingsRepository settings = ref.read(settingsRepositoryProvider);
   // A pin is the whole point: with one set, downloading no longer asks. The
   // download use case applies the pin (invariant permitting), so a null tier
@@ -209,14 +212,13 @@ Future<({bool proceed, StorageTier? tier, TagFolder? tag})> _resolveDestination(
   final TagFolder? remembered = ref
       .read(rememberedDownloadTagProvider.notifier)
       .offeredFor(StorageTier.sharedGallery);
-  final TagFolder? searched = searchTagIn(ref.read(browseQueryProvider));
   if (pin != null || wallpaper.purity == Purity.sfw) {
     return (
       proceed: true,
       tier: null,
       // The listing's own tag first here too, so a quick download taken while
       // browsing one lands in it rather than in whatever was last used.
-      tag: searchTagIn(ref.read(browseQueryProvider)) ?? remembered,
+      tag: searched ?? remembered,
     );
   }
   final StorageSettings storage = await ref.read(
@@ -229,7 +231,7 @@ Future<({bool proceed, StorageTier? tier, TagFolder? tag})> _resolveDestination(
   );
   final Future<List<TagCandidate>> suggestions = suggestedTagsFor(
     source: ref.read(activeWallpaperSourceProvider),
-    query: ref.read(browseQueryProvider),
+    listingTag: searched,
     known: knownTags,
     selection: <Wallpaper>[wallpaper],
   );

@@ -10,11 +10,13 @@ import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
+import 'package:tela/core/ui/listing_origin.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_failure.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
@@ -60,6 +62,7 @@ class WallpaperDetailScreen extends ConsumerStatefulWidget {
     this.wallpaper,
     this.gallerySession,
     this.originFilters,
+    this.originFolder,
     this.immersiveSystemUi = const FlutterImmersiveSystemUi(),
     super.key,
   }) : assert(
@@ -79,6 +82,12 @@ class WallpaperDetailScreen extends ConsumerStatefulWidget {
   /// Browse's own. Null when the shelf had no filters to inherit (Favorites,
   /// History, a deep link), which falls back to Browse, as it always did.
   final SearchQuery? originFilters;
+
+  /// The folder that listing names, when [originFilters] cannot spell it.
+  /// Republished below as a `ListingOrigin`, because a pushed route inherits
+  /// none of the shelf's scopes and the download button has to know which
+  /// listing it is filing from.
+  final TagFolder? originFolder;
 
   /// The Android system-chrome seam used by the immersive preview.
   final ImmersiveSystemUi immersiveSystemUi;
@@ -216,7 +225,25 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
     // context, which no Builder inside `build` can move.
     return AmbientWallpaperTint(
       wallpaper: _wallpaper,
-      child: _screen(details, l10n, sourceName),
+      child: _listed(_screen(details, l10n, sourceName)),
+    );
+  }
+
+  /// Republishes the listing this screen was opened from.
+  ///
+  /// A pushed route is built under the Navigator, so it inherits nothing from
+  /// the shelf that pushed it — the same reason `AmbientWallpaperTint` wraps
+  /// this screen rather than being inherited from the wall. A shelf with no
+  /// filters to hand over (Favorites, the download history, a deep link)
+  /// publishes nothing, and the download button then suggests only the
+  /// remembered tag, which is the honest answer there.
+  Widget _listed(Widget screen) {
+    final SearchQuery? filters = widget.originFilters;
+    if (filters == null) return screen;
+    return ListingOrigin(
+      filters: filters,
+      folder: widget.originFolder,
+      child: screen,
     );
   }
 

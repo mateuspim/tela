@@ -26,7 +26,7 @@ void main() {
     return suggest(
       tags: carried,
       selectionSize: carried.length,
-      query: query,
+      searched: searchTagIn(query),
       existing: existing,
     ).map((TagCandidate c) => c.tag).toList();
   }
@@ -55,7 +55,7 @@ void main() {
         'c': tags(<String>['cars']),
       },
       selectionSize: 3,
-      query: const SearchQuery(),
+      searched: null,
       existing: const <TagFolder>{},
     );
 
@@ -141,7 +141,7 @@ void main() {
           'a': tags(<String>['neon']),
         },
         selectionSize: 1,
-        query: const SearchQuery(),
+        searched: null,
         existing: <TagFolder>{TagFolder('archive')},
       );
 
@@ -194,7 +194,7 @@ void main() {
           'a': tags(<String>['sci fi', 'sci  fi']),
         },
         selectionSize: 1,
-        query: const SearchQuery(),
+        searched: null,
         existing: const <TagFolder>{},
       );
 
@@ -262,7 +262,7 @@ void main() {
           for (int i = 0; i < 30; i++) 'w$i': tags(<String>['tag$i']),
         },
         selectionSize: 30,
-        query: const SearchQuery(tags: <SearchTag>[SearchTag('cyberpunk')]),
+        searched: TagFolder('cyberpunk'),
         existing: <TagFolder>{TagFolder('archive')},
       );
 
