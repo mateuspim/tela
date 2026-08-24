@@ -1,8 +1,81 @@
 # tela handoff
 
-Updated: 2026-08-17
+Updated: 2026-08-24
 
-> **NEXT SESSION STARTS HERE — pass N is built, device-verified and merged. The
+> **NEXT SESSION STARTS HERE — pass O is built and merged: three things the
+> owner named on 2026-08-24, all of them things they had actually felt on the
+> device.** `feat/reach-tag-refresh` **merged as (see git log)**, three commits,
+> through the gate: Dart **1445** (from 1414), Kotlin **136** untouched,
+> analyze and format clean. Full write-up in *O* below.
+>
+> **O1 — "the details button is kinda hit or miss on portrait."** The peek *is*
+> the grip, so the grip's band was the entire hit area of the only control that
+> opens the facts: 21dp, with the apply button glued below it and, since pass N,
+> a tap-to-fullscreen picture above. Every miss did something loud. The band is
+> `kMinInteractiveDimension` now — the box Flutter gives its own drag handle,
+> which this sheet missed only because it draws itself — and it shrinks back to
+> 21dp as the panel solidifies, so an opened sheet keeps its old spacing.
+> Nothing *looks* different: the sheet is transparent at the peek, so what grew
+> is invisible. An upward throw anywhere on the wallpaper raises the sheet
+> (`ShelfSwipe.onSwipeUp`, no recognizer, so the pinch is safe), and tapping the
+> handle opens or closes it.
+>
+> **O2 — the download tag stuck on the last listing searched.** Every download
+> path asked `browseQueryProvider` what listing it was on, and a followed tag or
+> uploader is a pushed `LinkedListingScreen` that keeps its filters in its own
+> State. **And the listing's query cannot always name itself** — `TagLink.narrow`
+> sets the term to `id:37`, which sanitizes into a legal folder called `id 37`,
+> so threading the right query would have swapped one wrong answer for another.
+> `ListingOrigin` carries both halves. An uploader's listing files under their
+> name, by the owner's call; a colour names nothing, because its title is a
+> swatch.
+>
+> **O3 — performance, and only half of it is fixed.** The background half was
+> structural and is closed: `TelaApp.build` watched the tile marks, so every
+> landed download rebuilt `MaterialApp` *and both `ThemeData`s*, three a second
+> through a batch. The scopes moved below the app. The listing refresh is also
+> throttled to one read per 500ms — worth being plain that this is the smaller
+> win, since real downloads settle hundreds of milliseconds apart anyway.
+>
+> **The deep-scroll half is open, and deliberately so.** "looking up like 3
+> pages deep it just have poor performance" has two plausible causes visible in
+> the code and neither was tuned on reasoning: `WallpaperTile` decodes at a
+> hardcoded **200dp** (`wallpaper_tile.dart:293`) while `JustifiedWallpaperGrid`
+> hands `itemBuilder` the row's real width and height, which `wallpaper_grid.dart`
+> discards; and `justifiedRows` re-packs the whole loaded list on every rebuild.
+> `SlowFrameLog` was added to answer it with numbers instead — it is in the
+> **release** build on purpose, because `make deploy` builds release and a
+> `kDebugMode` probe would measure the one build nobody runs on the tablet.
+>
+> **WHAT THE NEXT SESSION SHOULD DO FIRST: run the probe.** Browse three pages
+> deep on the SM-X730 and read:
+>
+> ```sh
+> adb logcat -s flutter | grep tela.frames
+> ```
+>
+> Each line is JSON: `slow`, `slowTotal`, `worstBuildMs`, `worstRasterMs`,
+> `imagesCached`, `imageBytes`, `imagesLive`. **The number that decides it is
+> `imageBytes`** against `ImageCache`'s default 100MB budget — at or over it,
+> the wall is evicting and re-decoding what the user scrolls back over, and the
+> fix is the tile decode size. If `imageBytes` sits comfortably under and
+> `worstBuildMs` is the large one, it is the packing instead. Do not guess
+> between them; the line says which.
+>
+> Also still owed on the device from this pass: **O1 and O2 have not been on
+> hardware at all.** The reach is a feel judgement no test can make, and the tag
+> fix should be walked exactly the way it was reported — tag, then uploader,
+> then another tag.
+>
+> Everything below this block is unchanged and still true. Wave 4's three
+> product items (auto-rotate, collections, Omarchy sync) remain the standing
+> answer to "what next" once these are settled — see *Wave 4*, and the note
+> there that they are weeks apart in size and worth putting to the owner rather
+> than picking.
+>
+> ---
+>
+> **The previous START HERE — pass N is built, device-verified and merged. The
 > immersive viewer was the last thing open from the owner's original sentence,
 > and it is closed.** `feat/immersive-viewer` **merged as `b84f446`**
 > (2026-08-17), nine commits, through the gate: Dart **1414** (from 1396),
@@ -745,6 +818,163 @@ Updated: 2026-08-17
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## O — reach, the listing's own tag, and the background rebuild (**MERGED 2026-08-24**)
+
+Three complaints the owner named in one sentence each, all felt on the device.
+Nothing here was scoped from a guess.
+
+### O1 — the facts sheet is reachable
+
+*"the details button is kinda hit or miss on portrait i was thinking of making
+the action area a little bigger and also adding the swipe up gesture to open the
+details for everything."*
+
+`DetailEditorialBody.peekSheetHeight` **is** `sheetGripHeight`, so the grip's
+band was the entire hit area of the only control that opens the facts — 21dp of
+it. Both misses were loud, which is what made it feel worse than 21dp sounds:
+the apply button is glued directly below (they share one surface, by the owner's
+own 2026-08-15 decision) and since pass N the picture directly above enters
+fullscreen on a tap. Aim badly and you either set a wallpaper or lose the screen.
+
+- The band is now `kMinInteractiveDimension`. **This is not a number tela
+  picked**: Flutter constrains its own drag handle to exactly that, and this
+  sheet missed out only because `showDragHandle` applies to a *presented* modal
+  and this sheet is part of the page.
+- **Nothing looks different.** `surfaceAlphaAt` is 0 at the peek, so the sheet is
+  fully transparent there and what grew is an invisible target. The bar is
+  centred in the band, so growing it lifts the bar *away* from the apply button.
+- It shrinks back to `sheetGripSettledHeight` (21) as the panel solidifies,
+  driven by the `_surfaceAlpha` notifier that was already rebuilding that
+  subtree. The reach is a closed-sheet problem; an open sheet would just carry
+  48dp of blank above its first fact row.
+- `ShelfSwipe.onSwipeUp` is the throw. It costs **no recognizer**, which is the
+  whole reason that class exists — see its docstring, and note this is the
+  fourth gesture measured off the raw pointer stream for the same reason.
+  Disarmed while zoomed, where a vertical drag is a pan.
+- Tapping the handle opens or closes it. A throw is invisible to a screen
+  reader, so the sheet is never reachable only that way.
+
+**Two traps this turned up, both fixed here because both were already biting.**
+
+1. **`AmbientWallpaperTheme` returned its child bare when there was no tint.**
+   `fallbackSeed` arrives asynchronously (the Konachan path, which has no palette
+   in its JSON), so going from `child` to `AnimatedTheme > child` is not an
+   update — it is a **re-inflation of the entire screen below it**. It cost that
+   path its own crossfade, and it threw outright once Detail's sheet held a
+   `DraggableScrollableController`: the replacement sheet attaches in the same
+   frame the old one is still holding, which the framework asserts against. The
+   wrapper is unconditional now, and `TelaTheme.ambient` takes a **null seed**
+   for the untinted case so both branches come out of `_componentsOn` —
+   `ThemeData.lerp` refuses two text themes whose `inherit` disagree, so tweening
+   a raw ambient theme against a *localized* `Theme.of` result throws.
+2. **`DraggableScrollableController.animateTo` is silently cancellable.** Any
+   scroll activity beginning on the sheet cancels it, and the future it returns
+   then never completes. A Detail screen still arriving produces exactly those,
+   so — measured 2026-08-24 — **the first reveal after mount was swallowed every
+   time and the next one worked.** `moveSheet` puts the sheet where it was asked
+   to go if it has not moved *at all*; a sheet the user grabbed mid-flight has
+   moved, and yanking that would be the more annoying bug. The end-to-end test
+   deliberately does **not** settle first; add a `pumpAndSettle` there and it
+   stops testing the case that was broken.
+
+### O2 — a download files under the listing on screen
+
+*"when downloading images the tag that it uses its always the one i just entered
+so like if enter the pictures with tag flower, then check the user pictures then
+go to another tag like white minimalist whehn i try to download images from thew
+white minilaimist it just fixups on the flower tag."*
+
+Two bugs stacked, and the second is the one that would have caught a careless fix.
+
+1. **All three download paths read `browseQueryProvider`** — the detail button,
+   the wall's quick sheet, the batch chooser. A followed tag or uploader opens a
+   *pushed* `LinkedListingScreen` whose filters are its own local state and which
+   never touches that provider, so the answer was whatever was last typed into
+   the search box. Favorites and the download history got the same wrong answer
+   for the same reason, and now correctly suggest nothing.
+2. **The listing's query cannot always name itself.** `TagLink.narrow` sets the
+   term to `id:37` — Wallhaven's exact-tag operator, sent alone — and
+   `TagFolder.sanitize('id:37')` is a perfectly legal folder called **`id 37`**.
+   Threading the right query would have swapped one wrong answer for another.
+
+`ListingOrigin` (core/ui) carries both: the listing's filters, and the folder it
+names when the query cannot spell it. `WallpaperLink.folderName` is where that
+word comes from. Every shelf that is a listing publishes the scope; the detail
+screen **republishes** it, because a pushed route inherits nothing — the same
+reason `AmbientWallpaperTint` wraps Detail rather than being inherited from the
+wall. `SuggestTagFolders` now takes the searched folder rather than deriving it,
+so one place makes that decision.
+
+**Decided by the owner:** an uploader's listing files under their name — the
+"I am looking at Leo and I want these filed under it" case `suggestTagFolders`
+already argued a listing answers for free. A colour names nothing: its title is a
+swatch, and inventing a name would file downloads under a word nobody saw.
+
+### O3 — the background rebuild, and the half that is still open
+
+*"the application seems to be sluggish when downloading images on the background
+and looking up like 3 pages deep it just have poor perfomance."*
+
+**The background half was structural.** `TelaApp.build` watched
+`favoritedKeysProvider` and `downloadedKeysProvider` to publish the tile marks —
+and building `MaterialApp.router` reconstructs **both `ThemeData`s** from
+scratch. The drain settles three at a time, so a batch reran that at roughly
+three a second, on top of re-marking every tile. The three shelf scopes moved
+into `_ShelfScopes`, a `ConsumerWidget` inside `MaterialApp.builder`, i.e. below
+the app. A mark change now rebuilds the tiles that wear marks.
+
+The listing refresh is throttled to one read per `listingRefreshWindow` (500ms),
+leading-edge so a single download still refreshes at once, with a guaranteed
+trailing read. **Be honest about its size**: real downloads settle hundreds of
+milliseconds apart, so it collapses two or three reads into one, not thirty. What
+it does remove per settle is a native private-tier directory sweep on
+`ImageStoreChannel`'s single storage thread.
+
+**A test lesson worth not re-learning: the first cadence test was vacuous.**
+Downloads that all settle inside one microtask are coalesced by Riverpod before
+reaching this code, so it passed with the throttle deleted. It drains *serially*
+with time between settles now — which is also why `maxConcurrent: 1` is pinned
+there and is deliberately not what the app runs.
+
+**The deep-scroll half is instrumented, not fixed, and that was the owner's
+call.** Two plausible causes are visible in the code and neither was tuned on
+reasoning:
+
+- `WallpaperTile` decodes at a hardcoded **200dp** (`wallpaper_tile.dart:293`)
+  while `JustifiedWallpaperGrid` hands `itemBuilder` the row's real width and
+  height — which `wallpaper_grid.dart:331` discards with `double _, double _`.
+  At *Large* density that means a 320dp tile drawn from a 200dp decode; at
+  *Small* it means decoding nearly twice the pixels a 150dp tile shows. Neither
+  is obviously *the* cost.
+- `justifiedRows` re-packs the entire loaded list on every rebuild of
+  `JustifiedWallpaperGrid`, including a fresh `List<double>.generate` over every
+  item.
+
+`SlowFrameLog` answers it with numbers. **It is in the release build on
+purpose** — `make deploy` builds release, so a `kDebugMode` probe would measure
+the one build nobody runs on the tablet — and costs one comparison per frame
+while nothing is late, writing one JSON line per 30 slow frames.
+
+```sh
+adb logcat -s flutter | grep tela.frames
+```
+
+**How to read it.** `imageBytes` against `ImageCache`'s default **100MB**
+budget is the number that decides it: at or over, the wall is evicting and
+re-decoding what the user scrolls back over, and the tile decode size is the
+fix. Comfortably under, with `worstBuildMs` the large one, points at the
+packing instead. `imagesLive` near `imagesCached` means nothing *can* be evicted
+without a re-decode. Do not guess between the two — the line says which.
+
+### Still owed on the device from this pass
+
+- **O1 has not been on hardware.** Whether 48dp and the throw actually end "hit
+  or miss" is a feel judgement no test makes.
+- **O2 has not been on hardware.** Walk it exactly as reported: a tag, then an
+  uploader, then a different tag, downloading from each.
+- **O3's deep-scroll reading**, above. That is the one with a next action
+  attached.
 
 ## N — the immersive viewer, scoped, built, device-verified and **MERGED 2026-08-17** (`b84f446`)
 
