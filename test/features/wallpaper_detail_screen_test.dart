@@ -96,7 +96,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(_detailScheme(tester), same(_untintedScheme(tester)));
+    expect(_detailScheme(tester), _untintedScheme(tester));
   });
 
   testWidgets('keeps the fullscreen button clear of the floating bar', (
@@ -210,7 +210,7 @@ void main() {
     // Asserted as "inside equals outside" rather than "no AnimatedTheme
     // below": Material scatters its own 200ms ones through buttons and cards,
     // so counting them measures the framework, not this widget.
-    expect(_detailScheme(tester), same(_untintedScheme(tester)));
+    expect(_detailScheme(tester), _untintedScheme(tester));
   });
 
   testWidgets(
@@ -901,6 +901,27 @@ void main() {
     expect(find.text("Couldn't open the link."), findsOneWidget);
   });
 
+  testWidgets('throwing the wallpaper up raises the facts sheet', (
+    WidgetTester tester,
+  ) async {
+    // The whole point of the gesture is that it is wired end to end: the throw
+    // is measured on the pager, and the sheet it has to move lives inside the
+    // body the pager is merely handed. Nothing below the screen can prove that
+    // seam, because the screen is the only thing holding both.
+    // Deliberately **not** settled first. The screen is still arriving here,
+    // which is when a controller animation on the sheet gets cancelled out
+    // from under itself — see `DetailEditorialBody.moveSheet`. Add a
+    // `pumpAndSettle` above and this stops testing the case that was broken.
+    await _pumpDetail(tester, _details());
+    final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
+    final double closed = tester.getTopLeft(sheet).dy;
+
+    await tester.drag(find.byType(PageView), const Offset(0, -200));
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(sheet).dy, lessThan(closed));
+  });
+
   testWidgets('swiping the preview selects the next wallpaper', (
     WidgetTester tester,
   ) async {
@@ -1486,5 +1507,11 @@ ColorScheme _detailScheme(WidgetTester tester) => Theme.of(
 
 /// The theme the screen would have worn with no wallpaper to tint it — read
 /// from just *above* the wrapper, which is the only place it survives.
+///
+/// Compared by value and no longer by identity. `AmbientWallpaperTheme` passes
+/// the untinted case through its own `AnimatedTheme` rather than short-cutting
+/// around it — see that widget's `build` for the re-inflation that shortcut
+/// caused — so the scheme below the wrapper is now an equal instance rather
+/// than the same one. Equality is what "untinted" ever meant here.
 ColorScheme _untintedScheme(WidgetTester tester) =>
     Theme.of(tester.element(find.byType(AmbientWallpaperTheme))).colorScheme;

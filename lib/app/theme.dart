@@ -97,10 +97,21 @@ abstract final class TelaTheme {
   /// Built through the same [_componentsOn] as every other theme, so a card
   /// radius or a nav height added there cannot go missing on a tinted screen.
   ///
+  /// **A null [seed] is the untinted theme, and it is not a convenience.** It
+  /// is what lets `AmbientWallpaperTheme` keep one `AnimatedTheme` in the tree
+  /// whether or not there is a colour to wear — the shape stability that
+  /// widget's `build` explains — and it has to come out of [_componentsOn] to
+  /// do it: `ThemeData.lerp` refuses two text themes whose `inherit` disagree,
+  /// so tweening a raw ambient theme against a *localized* `Theme.of` result
+  /// throws. Rebuilding [base] here gives the tween two themes of the same
+  /// make, which is the only kind it can interpolate.
+  ///
   /// ```dart
   /// TelaTheme.ambient(Theme.of(context).colorScheme, const Color(0xFF660000));
+  /// TelaTheme.ambient(Theme.of(context).colorScheme, null); // no tint
   /// ```
-  static ThemeData ambient(ColorScheme base, Color seed) {
+  static ThemeData ambient(ColorScheme base, Color? seed) {
+    if (seed == null) return _componentsOn(base);
     final ColorScheme tinted = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: base.brightness,

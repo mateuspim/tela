@@ -16,7 +16,8 @@ import 'package:tela/domain/models/wallpaper_color.dart';
 /// A wallpaper with nothing to seed from — every colour achromatic, or a source
 /// that reports none at all — renders [child] under the app's ordinary theme
 /// rather than under a grey one, which is why the tint is *absent* on Konachan
-/// instead of broken there.
+/// instead of broken there. Absent, but still through the same wrapper — see
+/// [build] for why the untinted case may not take a shortcut.
 ///
 /// What it does **not** repaint is the error roles: the download affordance
 /// warns in `ColorScheme.error` for a not-safe wallpaper, and a red wallpaper
@@ -62,14 +63,31 @@ class AmbientWallpaperTheme extends StatelessWidget {
   /// that snaps draws the eye off the image it exists to serve.
   static const Duration transition = Duration(milliseconds: 450);
 
+  /// Always an [AnimatedTheme], **including when there is no tint at all.**
+  ///
+  /// It used to return [child] bare in that case, and the shape of the tree
+  /// was the bug. [fallbackSeed] arrives asynchronously, so a Konachan screen
+  /// builds untinted first and tinted a beat later — and going from `child` to
+  /// `AnimatedTheme > child` is not an update, it is a *re-inflation*: every
+  /// element below here is torn down and rebuilt from scratch, losing its
+  /// State. It cost the tint its own crossfade on exactly the path that needs
+  /// one, and on 2026-08-24 it started throwing, when Detail's facts sheet
+  /// gained a `DraggableScrollableController` — the replacement sheet attaches
+  /// in the same frame the old one is still holding, which the framework
+  /// asserts against.
+  ///
+  /// The untinted case therefore goes through [TelaTheme.ambient] too, with a
+  /// null seed — see there for why it may not simply hand back `Theme.of`. The
+  /// scheme it resolves to is the ancestor's own, so nothing about an untinted
+  /// screen's colours changes; only the instance does.
   @override
   Widget build(BuildContext context) {
+    final ThemeData ordinary = Theme.of(context);
     final WallpaperColor? seed = ambientSeed(colors) ?? fallbackSeed;
-    if (seed == null) return child;
     return AnimatedTheme(
       data: TelaTheme.ambient(
-        Theme.of(context).colorScheme,
-        Color(0xFF000000 | seed.rgb),
+        ordinary.colorScheme,
+        seed == null ? null : Color(0xFF000000 | seed.rgb),
       ),
       // A colour animation is the whole feature, so reduce-motion gets the
       // destination with no journey — the same collapse-to-a-cut the gallery

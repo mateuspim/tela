@@ -92,6 +92,12 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   late final GallerySessionController<Wallpaper> _gallery;
   late final bool _ownsGallery;
 
+  /// The handle on the facts sheet, held here because two widgets this screen
+  /// builds need it and neither can reach the other: the sheet lives inside
+  /// [DetailEditorialBody], and the upward throw that opens it is measured on
+  /// [DetailPreviewPager], which that body is merely handed.
+  final DraggableScrollableController _sheet = DraggableScrollableController();
+
   Wallpaper get _wallpaper => _gallery.selectedItem;
 
   @override
@@ -121,6 +127,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   void dispose() {
     _gallery.removeListener(_selectionChanged);
     if (_ownsGallery) _gallery.dispose();
+    _sheet.dispose();
     super.dispose();
   }
 
@@ -264,6 +271,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       preview: _preview(),
       metadata: _metadata(details, l10n, sourceName),
       applyButton: DetailApplyButton(wallpaper: _wallpaper),
+      sheetController: _sheet,
     );
   }
 
@@ -272,6 +280,22 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       gallery: _gallery,
       systemUi: widget.immersiveSystemUi,
       onHoldImage: _copyToClipboard,
+      onRevealDetails: _revealDetails,
+    );
+  }
+
+  /// Raises the facts sheet, for a finger that threw the wallpaper upward.
+  ///
+  /// The gesture reaches the whole picture, which is the point: the grip is a
+  /// 48dp band at the very foot of the screen and the wallpaper above it is
+  /// everything else. The sheet's own handle stays — a throw is invisible to a
+  /// screen reader, so it is never the only way in.
+  void _revealDetails() {
+    unawaited(
+      DetailEditorialBody.revealSheet(
+        _sheet,
+        animate: !MediaQuery.disableAnimationsOf(context),
+      ),
     );
   }
 
