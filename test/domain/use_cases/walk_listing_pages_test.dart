@@ -98,6 +98,50 @@ void main() {
     expect(source.receivedQueries, hasLength(4));
   });
 
+  test('resumes after a page the caller already holds', () async {
+    // The confirmation has to fetch page 1 to know how big the listing is.
+    // Re-fetching it spends a second request off a 45/min budget to learn what
+    // is already in hand — and on a random listing re-rolls the shuffle.
+    final FakeWallpaperSource source = FakeWallpaperSource(
+      pagesByNumber: <int, WallpaperPage>{
+        2: _page(<String>['c'], currentPage: 2, lastPage: 2),
+      },
+    );
+    final WallpaperPage first = _page(
+      <String>['a', 'b'],
+      currentPage: 1,
+      lastPage: 2,
+    );
+    final List<String> seen = <String>[];
+
+    final int walked = await _walk(source)(
+      const SearchQuery(),
+      after: first,
+      onPage: (List<Wallpaper> page) async {
+        seen.addAll(page.map((Wallpaper w) => w.id));
+      },
+    );
+
+    expect(seen, <String>['c'], reason: "page 1 was the caller's to enqueue");
+    expect(walked, 1);
+    expect(source.receivedQueries.single.page, 2);
+  });
+
+  test('a listing whose only page the caller holds asks for nothing', () async {
+    // `hasMore: false` on the page already in hand means the walk has no work.
+    // Asking for page 2 of a one-page listing burns a request to be told so.
+    final FakeWallpaperSource source = FakeWallpaperSource();
+
+    final int walked = await _walk(source)(
+      const SearchQuery(),
+      after: _page(<String>['a'], currentPage: 1, lastPage: 1),
+      onPage: _ignore,
+    );
+
+    expect(walked, 0);
+    expect(source.receivedQueries, isEmpty);
+  });
+
   test('carries the shuffle seed so a random listing cannot repeat', () async {
     // The same trap `nextPageAfter` exists for: a `random` listing re-rolls
     // without its seed, so the walk would hand over wallpapers it had already

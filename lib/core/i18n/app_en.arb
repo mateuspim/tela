@@ -483,6 +483,63 @@
     "description": "Button that re-runs the failed request."
   },
 
+  "listingDownloadAll": "Download all",
+  "@listingDownloadAll": {
+    "description": "App-bar action on a tag or uploader listing that queues every wallpaper in it, without the user scrolling to select them."
+  },
+
+  "listingDownloadAllTitle": "Download all from {listing}?",
+  "@listingDownloadAllTitle": {
+    "description": "Title of the confirmation before a whole listing is queued.",
+    "placeholders": { "listing": { "type": "String", "example": "#anime" } }
+  },
+
+  "listingDownloadAllCounted": "{count, plural, =1{1 wallpaper} other{{count} wallpapers}}, roughly {size}",
+  "@listingDownloadAllCounted": {
+    "description": "How much a whole-listing download commits to. The size is an estimate extrapolated from the first page.",
+    "placeholders": {
+      "count": { "type": "int", "example": "12431" },
+      "size": { "type": "String", "example": "54.2 GB" }
+    }
+  },
+
+  "listingDownloadAllCountedOnly": "{count, plural, =1{1 wallpaper} other{{count} wallpapers}}",
+  "@listingDownloadAllCountedOnly": {
+    "description": "How many a whole-listing download commits to, where no size could be estimated.",
+    "placeholders": { "count": { "type": "int", "example": "412" } }
+  },
+
+  "listingDownloadAllUncounted": "This source does not say how many wallpapers this listing holds.",
+  "@listingDownloadAllUncounted": {
+    "description": "Shown instead of a count on a source that publishes no listing metadata, such as Konachan."
+  },
+
+  "listingDownloadAllEmpty": "This listing has no wallpapers to download.",
+  "@listingDownloadAllEmpty": {
+    "description": "Shown when a whole-listing download was asked for on an empty listing."
+  },
+
+  "listingDownloadAllConfirm": "Download",
+  "@listingDownloadAllConfirm": {
+    "description": "Button that commits to queueing the whole listing."
+  },
+
+  "listingDownloadAllStarted": "Queueing every wallpaper from {listing}",
+  "@listingDownloadAllStarted": {
+    "description": "Shown when a whole-listing download begins walking pages in the background.",
+    "placeholders": { "listing": { "type": "String", "example": "#anime" } }
+  },
+
+  "listingDownloadAllAlreadyRunning": "A listing is already being queued. Let it finish or stop it first.",
+  "@listingDownloadAllAlreadyRunning": {
+    "description": "Shown when a second whole-listing download is asked for while one is still walking."
+  },
+
+  "listingDownloadAllStop": "Stop",
+  "@listingDownloadAllStop": {
+    "description": "Cancels an in-progress walk of a listing. Whatever is already queued stays queued."
+  },
+
   "actionReload": "Reload",
   "@actionReload": {
     "description": "Button that asks a listing that came back empty for its wallpapers again."

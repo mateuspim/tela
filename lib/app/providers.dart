@@ -65,6 +65,7 @@ import 'package:tela/domain/use_cases/search_wallpapers.dart';
 import 'package:tela/domain/use_cases/share_wallpaper.dart';
 import 'package:tela/domain/use_cases/sync_account_defaults.dart';
 import 'package:tela/domain/use_cases/toggle_favorite.dart';
+import 'package:tela/domain/use_cases/walk_listing_pages.dart';
 
 /// The composition root: every port is bound to its adapter exactly once, here.
 ///
@@ -388,6 +389,13 @@ final Provider<SearchWallpapers> searchWallpapersProvider =
         secrets: ref.watch(secretStoreProvider),
         blocklist: ref.watch(tagBlocklistRepositoryProvider),
       ),
+    );
+
+/// Walks a whole listing page by page, for a bulk download.
+final Provider<WalkListingPages> walkListingPagesProvider =
+    Provider<WalkListingPages>(
+      (Ref ref) =>
+          WalkListingPages(search: ref.watch(searchWallpapersProvider)),
     );
 
 /// Pulls the Wallhaven account's browse defaults and stores them.
