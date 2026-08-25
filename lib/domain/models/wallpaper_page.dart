@@ -13,6 +13,7 @@ class WallpaperPage {
     required this.currentPage,
     required this.hasMore,
     this.lastPage,
+    this.total,
     this.seed,
   });
 
@@ -37,6 +38,15 @@ class WallpaperPage {
   /// Nothing paginates on it; it is here for a UI that wants to say how far a
   /// listing runs.
   final int? lastPage;
+
+  /// How many wallpapers the whole listing holds, where the source counts.
+  ///
+  /// Null is "this source does not count them", exactly as [lastPage] is —
+  /// Konachan returns a bare array with no metadata, so a listing's size there
+  /// can only be discovered by walking to the end of it. Nothing paginates on
+  /// this; it exists so a screen can say what downloading the whole listing
+  /// would commit to *before* it starts.
+  final int? total;
 
   /// The source's shuffle seed for `random` sortings. Carrying it into the next
   /// page request is what stops page 2 from re-rolling the shuffle and
