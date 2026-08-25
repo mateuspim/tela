@@ -47,7 +47,17 @@ Updated: 2026-08-24
 > **release** build on purpose, because `make deploy` builds release and a
 > `kDebugMode` probe would measure the one build nobody runs on the tablet.
 >
-> **THE OWNER HAS NAMED THE NEXT WORK (2026-08-24, after the device pass):
+> **THE OWNER NAMED A SECOND THING (2026-08-25): a blank wall needs a reload
+> button.** *"if the page im at like the latest doesnt show images we need to
+> show a button reload again"* — see `## An empty wall offers nothing to press`.
+> **This one is small and has no product fork.** The retry button already exists
+> for a *failed* fetch; it is the *succeeded-with-zero-items* branch that draws
+> no button, and `wallFirstPage` already holds the `onRetry` it would need. The
+> one thing to check first is whether an unfiltered `latest` should ever be
+> empty at all — if it should not, the empty branch is a symptom and the fix is
+> upstream in the error mapping.
+>
+> **AND THE WORK NAMED BEFORE IT (2026-08-24, after the device pass):
 > duplicate downloads.** *"a way to not download duplicate images or remove
 > duplicate from the albums ive already downloaded because i could on error
 > download the same image to two tags, i could just have both images set for
@@ -854,6 +864,74 @@ Updated: 2026-08-24
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## An empty wall offers nothing to press (asked 2026-08-25)
+
+**The owner's words:** *"if the page im at like the latest doesnt show images we
+need to show a button reload again"*
+
+### What is already there, and what is missing
+
+The retry button **exists and is wired** — for one of the two ways a wall ends up
+blank, and the owner has hit the other one.
+
+| The wall is blank because | What is drawn | Button? |
+|---|---|---|
+| the fetch **failed** | `wallFailure` → `WallpaperStatusView.failure` | **yes** — `l10n.actionRetry`, calls `_retry` |
+| the fetch **succeeded with zero items** | `WallpaperStatusView(icon: Icons.search_off, message: l10n.browseEmpty)` | **no** |
+
+`WallpaperStatusView`'s own docstring names the rule it is following: *"Without
+[onAction] it is a statement, not a prompt."* For a search with no matches that
+is right. For **latest**, it is not — an unfiltered listing that Wallhaven
+answers with nothing is not a statement anyone should have to accept.
+
+### Why this is a small change
+
+`wallFirstPage` **already takes `onRetry` and already has it in hand** — it is
+threaded from `_retry` in `wallpaper_grid.dart:283` and used by the failure
+branch only. The empty branch drops it on the floor. Passing `actionLabel` and
+`onAction` into that one `WallpaperStatusView` is the fix; no new callback, no
+new state, no plumbing.
+
+Two things to settle while doing it, both visible from the same three lines:
+
+1. **The sentence is wrong for this case.** `browseEmpty` is *"No wallpapers
+   match these filters."* — which on an unfiltered **latest** is a lie about why
+   the screen is blank. Either a second string for the unfiltered listing, or
+   one that does not claim filters are the cause.
+2. **Whether the button belongs on a genuinely empty search.** A reload on
+   `q=zxcvbn` is harmless but slightly silly. The alternative is to offer it only
+   when the listing carries no filters — which needs the query, and
+   `ListingOrigin` (pass O) already carries exactly that, so it is reachable.
+   Cheapest honest answer is probably to show it always and fix the sentence;
+   decide it rather than inheriting it.
+
+### The thing not to miss: a reload already works, invisibly
+
+`wallFirstPage` is kept scrollable **specifically so pull-to-refresh survives an
+empty listing** — its docstring says so: *"a listing that came back empty or
+failed is exactly when the user reaches for it, and `RefreshIndicator` ignores a
+non-scrolling child."* So the capability is not missing; the **affordance** is.
+That is worth stating plainly in the commit, because it means this is a
+discoverability fix, not a functional one, and it also means the button and the
+pull must both land on `_retry` rather than growing a second path.
+
+### Worth a moment before assuming it is only cosmetic
+
+An unfiltered **latest** coming back with zero wallpapers and no error is odd on
+its face — Wallhaven always has a latest page. Two readings, and they want
+different fixes:
+
+- The fetch really did return an empty page (a filter left set from an earlier
+  session, a purity the key cannot see, an off-by-one page number past the end).
+  Then the button is right and the sentence is the bug.
+- Something failed in a way that produced an empty list instead of a
+  `SourceFailure`. Then the button papers over a mapping gap in
+  `core/network`'s error handling, and the real fix is upstream.
+
+**Ask the owner which listing and which filters were on screen when they saw
+it**, or reproduce it on the tablet, before deciding the empty branch is the
+whole story. Cheap to check and it decides where the fix belongs.
 
 ## Duplicate downloads — the rule exists; the gaps are the work (asked 2026-08-24)
 
