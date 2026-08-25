@@ -286,6 +286,7 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
               l10n,
               state,
               sourceName: _sourceName,
+              carriesSearch: widget.query.carriesSearch,
               onRetry: _retry,
             )
           : _wall(context, l10n, state, fetchNextPage, loaded, _identity),

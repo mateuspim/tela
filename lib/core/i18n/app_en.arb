@@ -483,9 +483,19 @@
     "description": "Button that re-runs the failed request."
   },
 
+  "actionReload": "Reload",
+  "@actionReload": {
+    "description": "Button that asks a listing that came back empty for its wallpapers again."
+  },
+
   "browseEmpty": "No wallpapers match these filters.",
   "@browseEmpty": {
     "description": "Shown when a search returns zero results."
+  },
+
+  "browseEmptyListing": "This listing came back with no wallpapers.",
+  "@browseEmptyListing": {
+    "description": "Shown when an unfiltered listing such as Latest returns zero results, where there are no filters to blame."
   },
 
   "gridLoading": "Loading wallpapers",
