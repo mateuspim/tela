@@ -47,15 +47,16 @@ Updated: 2026-08-24
 > **release** build on purpose, because `make deploy` builds release and a
 > `kDebugMode` probe would measure the one build nobody runs on the tablet.
 >
-> **THE OWNER NAMED A SECOND THING (2026-08-25): a blank wall needs a reload
-> button.** *"if the page im at like the latest doesnt show images we need to
-> show a button reload again"* — see `## An empty wall offers nothing to press`.
-> **This one is small and has no product fork.** The retry button already exists
-> for a *failed* fetch; it is the *succeeded-with-zero-items* branch that draws
-> no button, and `wallFirstPage` already holds the `onRetry` it would need. The
-> one thing to check first is whether an unfiltered `latest` should ever be
-> empty at all — if it should not, the empty branch is a symptom and the fix is
-> upstream in the error mapping.
+> **BUILT 2026-08-25 — a blank wall now offers a reload** (`edf019c`), from
+> *"if the page im at like the latest doesnt show images we need to show a
+> button reload again"*. The retry button had existed all along on the *failed*
+> branch; the *succeeded-with-zero-items* branch drew no button, and Latest is
+> that branch. It now calls the same `_retry` the pull-to-refresh always has,
+> and the sentence no longer blames filters on a listing that has none. Dart
+> **1453**. **The question underneath it is still open:** an unfiltered Latest
+> arguably should never come back empty, and if it should not, this is the
+> affordance and the real bug is upstream in the error mapping — the button
+> makes that case survivable, not right. Watch for a recurrence on the device.
 >
 > **AND THE WORK NAMED BEFORE IT (2026-08-24, after the device pass):
 > duplicate downloads.** *"a way to not download duplicate images or remove
@@ -865,7 +866,7 @@ Updated: 2026-08-24
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
 
-## An empty wall offers nothing to press (asked 2026-08-25)
+## DONE — an empty wall now offers a reload (asked and built 2026-08-25, `edf019c`)
 
 **The owner's words:** *"if the page im at like the latest doesnt show images we
 need to show a button reload again"*
@@ -885,7 +886,34 @@ blank, and the owner has hit the other one.
 is right. For **latest**, it is not — an unfiltered listing that Wallhaven
 answers with nothing is not a statement anyone should have to accept.
 
-### Why this is a small change
+### What shipped
+
+`wallEmpty` in `wallpaper_wall_status.dart`. The empty branch now passes
+`actionLabel`/`onAction` into the `WallpaperStatusView` it was already building,
+calling **the same `_retry` the pull-to-refresh calls** — no second path. Both
+decisions in the "small change" list below were taken, not inherited:
+
+1. **The button shows on every empty listing**, search included. A search that
+   found nothing can still be worth asking again, and a listing that is empty
+   for a real reason loses nothing by having it.
+2. **The sentence splits**, on a new `SearchQuery.carriesSearch` — true when
+   `term`, `uploader`, `tags` or `color` name content, false for the standing
+   preferences (`resolution`, `ratios`, `categories`, `purity`) that ride along
+   on an untouched Latest. Counting those would make every query "a search" and
+   the distinction worthless. New string `browseEmptyListing`: *"This listing
+   came back with no wallpapers."*
+
+Dart **1453** (from 1447), analyze and format clean, Kotlin untouched.
+`test/features/browse_empty_reload_test.dart` pins the button, the refetch, and
+each sentence on its own listing; three cases in `search_query_test.dart` pin
+the predicate.
+
+**Still not answered, and it was the open question:** whether an unfiltered
+Latest should ever come back empty at all. See *Worth a moment* below — if it
+should not, this fix is the affordance and the real bug is upstream in the
+error mapping. The button makes that case survivable; it does not make it right.
+
+### Why it was a small change
 
 `wallFirstPage` **already takes `onRetry` and already has it in hand** — it is
 threaded from `_retry` in `wallpaper_grid.dart:283` and used by the failure
