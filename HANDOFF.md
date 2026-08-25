@@ -47,6 +47,17 @@ Updated: 2026-08-24
 > **release** build on purpose, because `make deploy` builds release and a
 > `kDebugMode` probe would measure the one build nobody runs on the tablet.
 >
+> **BUILT 2026-08-25 — a whole tag or uploader downloads without scrolling to
+> it** (`724fe2d`), from *"i can select all from user/tag to download so i dont
+> need to scroll all the way down"*. **It is deliberately not Select all.**
+> Widening that would have failed silently — a ticked id is resolved against the
+> *loaded* shelf, so ticks for unfetched pages are dropped at download time with
+> no error. **Download all** walks the listing into the durable queue instead,
+> one page at a time, behind a confirmation that names the count and an
+> estimated size. See `## DONE — a whole tag or uploader downloads without
+> scrolling to it`. Dart **1477**. **None of it has been on hardware** — walk a
+> big tag, and test Stop mid-walk.
+>
 > **BUILT 2026-08-25 — a blank wall now offers a reload** (`edf019c`), from
 > *"if the page im at like the latest doesnt show images we need to show a
 > button reload again"*. The retry button had existed all along on the *failed*
@@ -865,6 +876,91 @@ Updated: 2026-08-24
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## DONE — a whole tag or uploader downloads without scrolling to it (asked and built 2026-08-25, `724fe2d`)
+
+**The owner's words:** *"lets also create a button or rather extend the
+functionallity, of the download and select all so if i still didnt select all
+images from a user or tag, i can select all from user/tag to download so i dont
+need to scroll all the way down to select all"*
+
+### Why it is not an extension of Select all, though it was asked for as one
+
+*Select all* exists (`selection_shelf.dart`, `selection.addAll(itemIds)`) and
+already does what was asked — **as far as the user has scrolled**. Widening it
+was the obvious move and would have failed *silently*: a ticked id is resolved
+back against the wallpapers the shelf has loaded
+(`SelectableWallpaperShelf._selected`, and `_run`'s
+`itemIds.where(selection.contains)`), by a documented rule — *"the listing is
+the authority on what is on screen, so an id whose wallpaper has since gone is
+dropped instead of acted on as a stale copy."* Ticks for unfetched pages would
+be dropped at download time with no error and no download.
+
+So the shipped thing ticks nothing. **Download all** walks the listing and feeds
+the durable queue directly.
+
+### The shape
+
+| Piece | Where | What it does |
+|---|---|---|
+| `WallpaperPage.total` | domain model | Wallhaven's own count, not `last_page * per_page` (the last page is short) |
+| `ListingDownloadSize.of` | domain model | pure; sizes a listing from the first page alone |
+| `WalkListingPages` | domain use case | pages a query, hands each page over, keeps nothing |
+| `ListingDownloadWalk` | `app/` notifier | the one in-flight walk; outlives the pushed screen |
+| `queueListingDownload` | `app/` | confirm → destination → walk, in that order |
+| `confirmListingDownload` | `core/ui` | the count and estimated size, before anything is queued |
+
+**Page 1 is fetched once and does three jobs**: sizes the listing for the
+confirmation, is the sample the tag suggestion reads, and is the first page
+queued. `WalkListingPages` takes `after:` so it resumes from page 2 rather than
+re-fetching — which on a `random` listing would also re-roll the shuffle.
+
+**Memory is the whole reason for the shape.** The alternatives were loading
+every wallpaper into the wall so the existing selection could tick them — tens
+of thousands of tiles in the list that is already this app's memory pressure —
+or holding the listing in a variable, the same cost without the tiles. Handing
+each page straight to the queue costs one page at a time: a 12,000-wallpaper tag
+costs the memory of twenty-four.
+
+**The purities come from the query, not from page 1**, and this is a real trap
+avoided: a listing whose opening page is all safe can turn up a sketchy
+wallpaper forty pages in, and a folder grant decided on the sample would never
+have been asked for. `resolveDownloadDestination` and `ensureDownloadFolder` are
+now shared with the ticked-selection batch rather than copied, and take
+`purities` + `count` instead of deriving them from a wallpaper list.
+
+### What it deliberately does not do
+
+- **The walk is not durable.** What it enqueues survives the process; the walk
+  does not. A listing abandoned at page 9 of 18 has queued nine pages and
+  forgotten the rest. Documented on `WalkListingPages`. A resumable walk needs a
+  stored cursor nothing else yet wants.
+- **One walk at a time.** A second is refused, not queued: two interleave
+  through the same 45-req/min limiter so each takes twice as long, and the
+  progress line could only describe one of them.
+- **Stop does not undo.** It halts after the page in flight and leaves what is
+  queued — undoing would delete work the queue may already have downloaded, and
+  the queue's own screen is where entries are removed.
+- **`WalkListingPages.defaultMaxPages = 500`** is a runaway guard, not a product
+  limit: `hasMore` comes from the source, and a source answering true forever
+  would page until the rate limit died and then keep going.
+
+### Owed on the device, and it is the interesting part
+
+Nothing here has been on hardware. Two things worth walking deliberately:
+
+1. **A big tag.** The confirmation should name a five-figure count and a
+   plausible size; the queue should start filling while the walk continues.
+   Watch the rate limiter — 45 req/min means a 500-page listing is ~11 minutes
+   of paging, and the app should stay usable throughout.
+2. **Stop.** Tap it mid-walk and confirm the paging actually ceases rather than
+   running to the end of the listing.
+
+Also unverified: whether **Konachan** reaches the uncounted branch as expected.
+It publishes no metadata at all, so its listings should say so rather than show
+a number — that path has a unit test but has never met the real source.
+
+Dart **1477** (from 1453), analyze and format clean, Kotlin untouched.
 
 ## DONE — an empty wall now offers a reload (asked and built 2026-08-25, `edf019c`)
 
