@@ -945,9 +945,50 @@ now shared with the ticked-selection batch rather than copied, and take
   limit: `hasMore` comes from the source, and a source answering true forever
   would page until the rate limit died and then keep going.
 
-### Owed on the device, and it is the interesting part
+### Device pass, 2026-08-24 evening — the path works end to end
 
-Nothing here has been on hardware. Two things worth walking deliberately:
+Walked on the SM-X730 from a real wallpaper: Browse → tile → details sheet →
+uploader link → `@AntiStar`'s listing. The new action is in the app bar, and it
+produced:
+
+> **Download all from @AntiStar?**
+> 376 wallpapers, roughly 1.3 GB
+> *Cancel · Download*
+
+**Cancelled deliberately, so nothing was queued** — 1.3 GB is the owner's call,
+not a verification step. So what is proven is everything up to the commit: the
+action is reachable, the count is real, the estimate is plausible (376 × ~3.5MB),
+the wording reads correctly with an `@` handle, and Cancel dismisses without
+queueing.
+
+Confirmed on the way past: **O1's tap-to-open on the details sheet handle works**
+— it was the route to the uploader link, and it opened first try.
+
+Still unproven, and it is the half that spends bandwidth:
+
+- **The walk itself.** Nobody has pressed Download, so no listing has been paged
+  into the queue on hardware. Do it on a *small* uploader first.
+- **Stop mid-walk.** Untested on device.
+- **A five-figure tag.** 376 is a comfortable number; the interesting case is a
+  listing where the walk runs for minutes against the 45-req/min limiter.
+- **Konachan's uncounted branch**, which has a unit test and has never met the
+  real source.
+
+### Two things the device showed that were not the point
+
+1. **A cold launch failed to reach Wallhaven**, showing the failure state and
+   its Retry — while `adb shell ping wallhaven.cc` from the same device answered
+   in 200ms. Retry then loaded the wall immediately. So the first request after
+   a wake fires before the network is ready, and the user sees an error that
+   was never true by the time they read it. Worth a look: an opening fetch that
+   retried once on `NetworkFailure` would erase it. **This may also be the real
+   story behind the empty-Latest report** — see the reload-button entry.
+2. **`dumpsys gfxinfo` is useless on this app.** It reported *Total frames
+   rendered: 3* after a session of scrolling, because Impeller/Vulkan draws
+   outside HWUI's pipeline entirely. Do not reach for it as a jank cross-check;
+   `SlowFrameLog` and `queueBuffer` are the instruments that work.
+
+### Also owed, for whoever picks this up
 
 1. **A big tag.** The confirmation should name a five-figure count and a
    plausible size; the queue should start filling while the walk continues.
