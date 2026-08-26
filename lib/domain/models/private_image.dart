@@ -1,12 +1,14 @@
 import 'package:meta/meta.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 
 /// One image sitting in the app-private tier, as the private library sees it.
 ///
-/// [location] is a local path to a file that may be explicit. CLAUDE.md forbids
-/// logging NSFW paths, so [toString] deliberately omits it — printing one of
-/// these must not be the thing that leaks it into a crash report.
+/// [location] is a path to a file that may be explicit — a local one in the
+/// app-private tier, a SAF document in the vault. CLAUDE.md forbids logging
+/// NSFW paths, so [toString] deliberately omits it: printing one of these must
+/// not be the thing that leaks it into a crash report.
 @immutable
 class PrivateImage {
   /// Creates a listing entry for one app-private file.
@@ -19,6 +21,7 @@ class PrivateImage {
     required this.location,
     required this.savedAt,
     required this.sizeBytes,
+    this.tier = StorageTier.appPrivate,
     this.tag,
     this.width,
     this.height,
@@ -34,6 +37,19 @@ class PrivateImage {
 
   /// Local file URI. Never log this.
   final Uri location;
+
+  /// Which tier actually holds this file — **not always app-private**.
+  ///
+  /// The private library has two homes since the vault: the app-private tier,
+  /// and the hidden dot-folder on `filesOutsideGallery` that explicit downloads
+  /// land in once the destination points at a card. They render identically and
+  /// sit behind the same lock, but a delete and a retag **route by tier**, so a
+  /// vault document sent down the app-private path would be a file the delete
+  /// cannot find.
+  ///
+  /// Defaults to [StorageTier.appPrivate], which is what every row was before
+  /// the vault existed and what a fixture that does not care still means.
+  final StorageTier tier;
 
   /// When the file was written.
   final DateTime savedAt;
@@ -82,5 +98,5 @@ class PrivateImage {
   /// discloses. Printing one of these must not be the thing that leaks it into
   /// a crash report.
   @override
-  String toString() => 'PrivateImage($ref, $sizeBytes bytes)';
+  String toString() => 'PrivateImage($ref, ${tier.name}, $sizeBytes bytes)';
 }

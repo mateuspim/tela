@@ -42,13 +42,18 @@ private class ImageWrite(
  * it routes to. [TierDeleting] is its counterpart; the two are apart because a
  * write that succeeded and a delete that could not are different stories.
  *
+ * The gate has **two** consequences, not one, and both are here rather than in
+ * any caller: an explicit image can never reach the gallery, and on the files
+ * tier it lands in the hidden vault rather than the visible folder. See
+ * [rootFor].
+ *
  * ```
- * TierWriting(context).store(request, outsideGalleryTree)
+ * TierWriting(context).store(request, OutsideGalleryTarget(tree, "tela"))
  * ```
  */
 internal class TierWriting(private val context: Context) {
     /** Downloads [request]'s image from the network into its tier. */
-    fun store(request: ImageStoreRequest, outsideGalleryTree: String?): Map<String, Any> {
+    fun store(request: ImageStoreRequest, target: OutsideGalleryTarget): Map<String, Any> {
         return write(
             ImageWrite(
                 source = request.source,
@@ -59,7 +64,7 @@ internal class TierWriting(private val context: Context) {
                 tag = request.tag,
                 writeBytes = { output -> copyRemote(request.imageUrl, output) },
             ),
-            outsideGalleryTree,
+            target,
         )
     }
 
@@ -75,7 +80,7 @@ internal class TierWriting(private val context: Context) {
      * [PrivateTierListing] drops any file whose name does not parse, so a wrong
      * extension would make a moved image silently vanish.
      */
-    fun copy(request: ImageCopyRequest, outsideGalleryTree: String?): Map<String, Any> {
+    fun copy(request: ImageCopyRequest, target: OutsideGalleryTarget): Map<String, Any> {
         val from = Uri.parse(request.from)
         return write(
             ImageWrite(
@@ -87,7 +92,7 @@ internal class TierWriting(private val context: Context) {
                 tag = request.tag,
                 writeBytes = { output -> copyLocal(from, output) },
             ),
-            outsideGalleryTree,
+            target,
         )
     }
 
@@ -106,7 +111,20 @@ internal class TierWriting(private val context: Context) {
      * segment, and the three writers must never be the ones deciding whether it
      * was safe to be one.
      */
-    private fun write(request: ImageWrite, outsideGalleryTree: String?): Map<String, Any> {
+    private fun write(request: ImageWrite, target: OutsideGalleryTarget): Map<String, Any> {
+        val result = attempt(request, target)
+        // Every refusal, not just the thrown ones. Most of the ways this fails
+        // are an ordinary `return imageStoreFailure(...)` — a missing tree, a
+        // folder that could not be made — and logging only the exceptions left
+        // the common half of the failures as silent as before (owner,
+        // 2026-08-25).
+        if (result["success"] != true) {
+            TierWriteLog.refusal(request.tier, request.purity, result["errorCode"] as? String)
+        }
+        return result
+    }
+
+    private fun attempt(request: ImageWrite, target: OutsideGalleryTarget): Map<String, Any> {
         if (request.purity !in SUPPORTED_PURITIES || request.tier !in SUPPORTED_TIERS) {
             return imageStoreFailure("unavailable")
         }
@@ -118,11 +136,15 @@ internal class TierWriting(private val context: Context) {
         return try {
             when (request.tier) {
                 "sharedGallery" -> storeInGallery(request)
-                "filesOutsideGallery" -> storeOutsideGallery(request, outsideGalleryTree)
+                "filesOutsideGallery" -> storeOutsideGallery(request, target)
                 "appPrivate" -> storePrivately(request)
                 else -> imageStoreFailure("unavailable")
             }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            // Logged, not rethrown: a failed write is an ordinary outcome for
+            // the caller. What was missing was any way to tell *which* failure
+            // it was — see [TierWriteLog].
+            TierWriteLog.failure(request.tier, request.purity, error)
             imageStoreFailure("downloadFailed")
         }
     }
@@ -276,11 +298,37 @@ internal class TierWriting(private val context: Context) {
         return null
     }
 
+    /**
+     * Which root inside the granted tree this image belongs in: the visible
+     * `tela/`, or the hidden vault beside it.
+     *
+     * **Decided by purity, here, and not by any caller.** It is the same
+     * placement as the NSFW gate a few lines above and it lives in the same
+     * function's reach for the same reason CLAUDE.md gives about indexing: a
+     * rule about explicit content that a feature has to remember is a rule that
+     * one feature will forget. Every route into this tier — a fresh download
+     * after the destination was re-pointed at the card, the offload screen
+     * emptying the private library, a single move out of it — lands explicit
+     * images in the vault without knowing the vault exists.
+     *
+     * `sketchy` is **not** vaulted, matching `StorageSettings.bucketFor`: it
+     * follows the safe destination everywhere else in the app, and a folder that
+     * disagreed with the setting the user configured would be its own surprise.
+     */
+    private fun rootFor(
+        request: ImageWrite,
+        tree: Uri,
+        target: OutsideGalleryTarget,
+    ): Uri? {
+        if (request.purity != "nsfw") return SafDocuments.telaFolderIn(context, tree)
+        return SafDocuments.vaultFolderIn(context, tree, target)
+    }
+
     private fun storeOutsideGallery(
         request: ImageWrite,
-        outsideGalleryTree: String?,
+        target: OutsideGalleryTarget,
     ): Map<String, Any> {
-        val tree = outsideGalleryTree?.let(Uri::parse) ?: return imageStoreFailure("notConfigured")
+        val tree = target.tree?.let(Uri::parse) ?: return imageStoreFailure("notConfigured")
         // Before anything is created: this tier writes a `.nomedia`, and a tree
         // that resolves onto the gallery's folder would hide it whole. A tree
         // tela cannot even read is refused as well — "is this somebody else's
@@ -288,7 +336,7 @@ internal class TierWriting(private val context: Context) {
         if (TreeLocation.of(tree)?.overlapsGallery != false) {
             return imageStoreFailure("folderUnavailable")
         }
-        val telaFolder = SafDocuments.telaFolderIn(context, tree)
+        val telaFolder = rootFor(request, tree, target)
             ?: return imageStoreFailure("unavailable")
         if (!SafDocuments.ensureNoMediaMarker(context, telaFolder)) {
             return imageStoreFailure("unavailable")

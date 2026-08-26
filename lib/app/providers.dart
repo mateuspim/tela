@@ -67,6 +67,7 @@ import 'package:tela/domain/use_cases/retag_stored_images.dart';
 import 'package:tela/domain/use_cases/save_api_key.dart';
 import 'package:tela/domain/use_cases/search_wallpapers.dart';
 import 'package:tela/domain/use_cases/share_wallpaper.dart';
+import 'package:tela/domain/use_cases/survey_offload_groups.dart';
 import 'package:tela/domain/use_cases/sync_account_defaults.dart';
 import 'package:tela/domain/use_cases/toggle_favorite.dart';
 import 'package:tela/domain/use_cases/walk_listing_pages.dart';
@@ -300,6 +301,15 @@ final Provider<ConfiguredDownload> configuredDownloadProvider =
       ),
     );
 
+/// Moves already-downloaded images between storage tiers, without the network.
+final Provider<MoveStoredImages> moveStoredImagesProvider =
+    Provider<MoveStoredImages>(
+      (Ref ref) => MoveStoredImages(
+        imageStore: ref.watch(imageStoreProvider),
+        history: ref.watch(downloadHistoryProvider),
+      ),
+    );
+
 /// Whether a screen is in front of the user, for the one storage step that
 /// cannot happen without one.
 final Provider<AppVisibility> appVisibilityProvider = Provider<AppVisibility>(
@@ -310,10 +320,10 @@ final Provider<AppVisibility> appVisibilityProvider = Provider<AppVisibility>(
   },
 );
 
-/// Moves already-downloaded images between storage tiers, without the network.
-final Provider<MoveStoredImages> moveStoredImagesProvider =
-    Provider<MoveStoredImages>(
-      (Ref ref) => MoveStoredImages(
+/// Adds up what sits on built-in storage and could be moved to a card.
+final Provider<SurveyOffloadGroups> surveyOffloadGroupsProvider =
+    Provider<SurveyOffloadGroups>(
+      (Ref ref) => SurveyOffloadGroups(
         imageStore: ref.watch(imageStoreProvider),
         history: ref.watch(downloadHistoryProvider),
       ),

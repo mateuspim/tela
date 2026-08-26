@@ -51,7 +51,7 @@ class OutsideGalleryTreeTest {
             purity = "sfw",
             tier = "filesOutsideGallery",
         ),
-        tree(documentId),
+        OutsideGalleryTarget(tree(documentId)),
     )
 
     private fun overlapsGallery(documentId: String): Boolean =
@@ -125,7 +125,9 @@ class OutsideGalleryTreeTest {
                 purity = "sfw",
                 tier = "filesOutsideGallery",
             ),
-            "content://com.android.externalstorage.documents/document/primary%3APictures",
+            OutsideGalleryTarget(
+                "content://com.android.externalstorage.documents/document/primary%3APictures",
+            ),
         )
 
         assertEquals(false, result["success"])

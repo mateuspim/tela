@@ -12,6 +12,7 @@ import 'package:tela/domain/ports/image_store.dart';
 import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
+import 'package:tela/features/settings/offload_controller.dart';
 
 /// The two listings of what tela has already put on this device.
 ///
@@ -224,9 +225,17 @@ void refreshDownloadsFrom(Ref ref) => _downloadListings.forEach(ref.invalidate);
 
 /// Every listing a finished download can make stale. The single list both
 /// refreshes above read.
+///
+/// [offloadGroupsProvider] is in here for the same reason the other two are,
+/// and it was missed at first: it is autoDispose, so leaving the screen
+/// re-surveys — but a run that finishes while the screen is *still open* leaves
+/// the tick list drawn from figures taken before the move. The owner moved two
+/// images and watched the count stay at 2479 (2026-08-25). A landed download
+/// makes it stale in the same way: it is one more file that could be offloaded.
 final List<ProviderOrFamily> _downloadListings = <ProviderOrFamily>[
   recentDownloadsProvider,
   privateImagesProvider,
+  offloadGroupsProvider,
 ];
 
 /// The keys in [recentDownloadsProvider] whose downloaded file is gone.

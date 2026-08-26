@@ -6,30 +6,63 @@ import android.net.Uri
 import java.io.File
 
 /**
- * Reading back the app-private tier, newest first.
+ * Reading back the private library, newest first — **both of its homes**.
  *
- * Only this tier is listable: the other two land where the system gallery or a
- * file manager already shows them. These files are visible to nothing but tela,
- * so without this they can only be written, never seen.
+ * The app-private tier is one of them, and it is the reason this class exists:
+ * those files are visible to nothing but tela, so without a listing they could
+ * only be written, never seen. Since 2026-08-25 there is a second, and it needs
+ * the listing for the same reason and more urgently: the hidden vault on the
+ * files tier is a dot-prefixed folder no file manager shows by default, and
+ * MediaStore never indexes that tier at all. See [SafVaultListing].
+ *
+ * The gallery tier is still not listable and never will be — that one lands
+ * where Photos already shows it.
  *
  * ```
- * val images = PrivateTierListing(context).listPrivate()["images"]
+ * PrivateTierListing(context).listPrivate(target)["images"]
  * ```
  */
 internal class PrivateTierListing(private val context: Context) {
     /**
-     * Every private image, newest first, with the bounds the grid shapes tiles to.
+     * Every private image, newest first, with the bounds the grid shapes tiles
+     * to.
      *
      * Tagged images live one directory down, and the walk that finds them is
      * [TelaDirectories.privateFiles] rather than a listing of its own — it is
      * shared with the delete, which must never search shallower than this reads.
+     *
+     * **Sorted after the merge, not before.** Each half arrives newest-first on
+     * its own, and concatenating two sorted lists does not give a sorted one:
+     * the vault's newest would sit below the app-private tier's oldest, which
+     * on a device that has just offloaded is every image the user has.
      */
-    fun listPrivate(): Map<String, Any> {
-        val images = TelaDirectories.privateFiles(context)
-            .sortedByDescending { it.lastModified() }
-            .mapNotNull { file -> describe(file) }
-        return mapOf("success" to true, "images" to images)
+    fun listPrivate(target: OutsideGalleryTarget): Map<String, Any> {
+        val vault = SafVaultListing(context).list(target)
+        return answer(appPrivateRows() + vault)
     }
+
+    /**
+     * The app-private half alone — the vault is never opened.
+     *
+     * For the caller that wants what is still **on built-in storage**: the
+     * offload survey, which adds up what moving to a card would free and so has
+     * nothing to ask of files already on one. It used to call [listPrivate] and
+     * throw the vault half away, which cost a SAF walk and a header read per
+     * card file — on a device that had already offloaded once, over a thousand
+     * of them — to reach an answer none of them were part of. The screen got
+     * slower every time it was used successfully (owner, 2026-08-25).
+     *
+     * Rows are shaped exactly as [listPrivate]'s, bounds included: the two
+     * differ in which homes they read, never in what a row means.
+     */
+    fun listAppPrivate(): Map<String, Any> = answer(appPrivateRows())
+
+    private fun appPrivateRows(): List<Map<String, Any>> =
+        TelaDirectories.privateFiles(context).mapNotNull { file -> describe(file) }
+
+    /** Rows newest-first under the `success`/`images` shape both listings answer. */
+    private fun answer(rows: List<Map<String, Any>>): Map<String, Any> =
+        mapOf("success" to true, "images" to rows.sortedByDescending { it["savedAt"] as Long })
 
     /**
      * One image's row, or null for a file tela did not write.
@@ -48,6 +81,7 @@ internal class PrivateTierListing(private val context: Context) {
             "sizeBytes" to file.length(),
             "width" to width,
             "height" to height,
+            "tier" to "appPrivate",
         )
         // Absent rather than null for an untagged image: the tier root is where
         // every private file lived before tags, and a row that never mentions a

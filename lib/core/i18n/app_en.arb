@@ -1090,6 +1090,11 @@
     "description": "Confirms a dialog, storing what was entered."
   },
 
+  "actionDone": "Done",
+  "@actionDone": {
+    "description": "Dismisses a report the user has read — it performs nothing, unlike Cancel or Save."
+  },
+
   "actionCancel": "Cancel",
   "@actionCancel": {
     "description": "Dismisses a dialog without changing anything."
@@ -1742,6 +1747,298 @@
     "description": "Confirmation shown after the image cache is emptied."
   },
 
+  "settingsVaultTitle": "Hidden folder for explicit downloads",
+  "@settingsVaultTitle": {
+    "description": "Title of the settings row naming the dot-prefixed directory explicit downloads land in on the files tier."
+  },
+
+  "settingsVaultDetail": "Explicit downloads go to {folder}, hidden beside your tela folder.",
+  "@settingsVaultDetail": {
+    "description": "Subtitle of the vault row: the folder name and the one fact about it. What the dot does and does not buy is spelled out in the rename dialog instead, where the user is about to act on it — a settings row that argues with itself is a settings row nobody finishes reading.",
+    "placeholders": {
+      "folder": {
+        "type": "String",
+        "example": ".tela"
+      }
+    }
+  },
+
+  "settingsVaultEditTitle": "Name the hidden folder",
+  "@settingsVaultEditTitle": {
+    "description": "Title of the dialog that renames the vault."
+  },
+
+  "settingsVaultEditHelp": "A dot is added for you, so \"stash\" becomes \".stash\". Letters, digits, spaces, _ and - only.",
+  "@settingsVaultEditHelp": {
+    "description": "Helper text under the vault name field. Names the two rules a typed value can break, so an invalid entry is explainable before it is rejected."
+  },
+
+  "settingsVaultEditNote": "The dot keeps the folder out of a file manager's listing until hidden files are turned on. That is concealment, not a lock — a card reads in any other device. tela still shows these images in the private library, behind the app-lock.",
+  "@settingsVaultEditNote": {
+    "description": "The honest limit of the feature, said where the user is deciding about it. It must not be oversold: FLAG_SECURE and the app-lock are the real protections, and the reassurance that the images are still listed in-app is what stops 'hidden' reading as 'gone'."
+  },
+
+  "settingsVaultEditWarning": "Files already in the old folder stay there. tela keeps reading both, so nothing disappears — but a file manager will show two folders.",
+  "@settingsVaultEditWarning": {
+    "description": "The one surprise renaming holds, said before it happens: it is a setting, not a migration. Moving a folder full of images because a text field lost focus would be a migration that could half-fail."
+  },
+
+  "settingsVaultInvalid": "That cannot be a folder name.",
+  "@settingsVaultInvalid": {
+    "description": "Error under the vault field when what was typed cannot become a directory."
+  },
+
+  "settingsVaultSaveFailed": "Could not save the folder name.",
+  "@settingsVaultSaveFailed": {
+    "description": "Shown when the platform refused to store a label that was itself valid — a storage failure, not a typo, so there is nothing for the user to correct."
+  },
+
+  "offloadTitle": "Move downloads to SD card",
+  "@offloadTitle": {
+    "description": "Title of the screen, and of the settings tile that opens it, for moving already-downloaded wallpapers onto a removable card."
+  },
+
+  "settingsNotificationsTitle": "Notifications",
+  "@settingsNotificationsTitle": {
+    "description": "Settings row that reports whether tela may post notifications."
+  },
+  "settingsNotificationsOn": "On. Background downloads and moves show their progress.",
+  "@settingsNotificationsOn": {
+    "description": "Subtitle of the notifications row when notifications are permitted."
+  },
+  "settingsNotificationsOff": "Off. Background downloads and moves run with nothing on screen.",
+  "@settingsNotificationsOff": {
+    "description": "Subtitle of the notifications row when notifications are blocked."
+  },
+  "settingsNotificationsAction": "Change in Android settings",
+  "@settingsNotificationsAction": {
+    "description": "Hint on the notifications row explaining that the switch lives in Android."
+  },
+  "settingsNotificationsUnavailable": "Could not open Android's notification settings.",
+  "@settingsNotificationsUnavailable": {
+    "description": "Message shown when the system notification settings page will not open."
+  },
+  "offloadOpenDetail": "Free built-in storage by moving what you have already saved.",
+  "@offloadOpenDetail": {
+    "description": "Subtitle of the settings tile that opens the offload screen. Says what it is for rather than what it does, because 'move' alone reads as moving files around inside the app."
+  },
+
+  "offloadIntro": "Pick what to move. Each file is copied to the card and then removed from built-in storage — nothing is re-downloaded, so this works offline. New downloads will go to the card as well.",
+  "@offloadIntro": {
+    "description": "Explanation at the top of the offload screen. Names the three things a user cannot see: it is a copy-then-delete, it needs no network, and the destination setting changes too."
+  },
+
+  "offloadNothingToMove": "Nothing to move. Everything tela has downloaded is either on the card already or gone from this device.",
+  "@offloadNothingToMove": {
+    "description": "Shown when the survey found no group. Names both reasons, because 'nothing to move' on a device full of wallpapers reads as a bug."
+  },
+
+  "offloadNoCard": "No SD card found. Insert one and come back — a card is the only place tela can move downloads to.",
+  "@offloadNoCard": {
+    "description": "Shown when no removable card is mounted. The screen has nothing to offer without one."
+  },
+
+  "offloadGroupGallery": "In your gallery",
+  "@offloadGroupGallery": {
+    "description": "Label of the group holding downloads in Pictures/tela, which Photos and other gallery apps index."
+  },
+
+  "offloadGroupGalleryDetail": "{count, plural, =1{1 wallpaper in Pictures/tela. It leaves Photos and every other gallery app once it moves.} other{{count} wallpapers in Pictures/tela. They leave Photos and every other gallery app once they move.}}",
+  "@offloadGroupGalleryDetail": {
+    "description": "Subtitle of the gallery group. The disappearance from Photos is the one surprise this move holds, so it is said before the tick, not after.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "offloadGroupFiles": "In your downloads folder",
+  "@offloadGroupFiles": {
+    "description": "Label of the group holding files-outside-gallery downloads still on built-in storage."
+  },
+
+  "offloadGroupFilesDetail": "{count, plural, =1{1 file still on built-in storage. Nothing changes but the disk it sits on.} other{{count} files still on built-in storage. Nothing changes but the disk they sit on.}}",
+  "@offloadGroupFilesDetail": {
+    "description": "Subtitle of the files group — the one move with no consequence beyond the location, which is worth saying so the user can tick it without reading further.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "offloadGroupPrivate": "Private library",
+  "@offloadGroupPrivate": {
+    "description": "Label of the group holding the app-private tier."
+  },
+
+  "offloadGroupPrivateDetail": "{count, plural, =1{1 image. A card has no private storage, so it lands in a hidden folder beside your downloads: never in Photos, and out of a file manager's listing until hidden files are turned on. tela keeps showing it in the private library.} other{{count} images. A card has no private storage, so they land in a hidden folder beside your downloads: never in Photos, and out of a file manager's listing until hidden files are turned on. tela keeps showing them in the private library.}}",
+  "@offloadGroupPrivateDetail": {
+    "description": "Subtitle of the private group. Still the heaviest line on the screen, but it no longer says the images leave the app: since the vault they are listed back from the card, behind the same lock. What it must keep saying is the limit — a dot is concealment a file manager can switch off, not the app-lock.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "offloadFreed": "{size} freed",
+  "@offloadFreed": {
+    "description": "Trailing figure on a group row, and the running total under the list. Says 'freed' rather than 'size' because the number is a promise about built-in storage, not a property of the files.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "3.2 GB"
+      }
+    }
+  },
+
+  "offloadSelectedTotal": "{count, plural, =0{Nothing selected} =1{1 file · {size} freed} other{{count} files · {size} freed}}",
+  "@offloadSelectedTotal": {
+    "description": "The running tally above the action button: how many files are ticked and what they would free.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String",
+        "example": "3.2 GB"
+      }
+    }
+  },
+
+  "offloadCardFull": "The card has only {free} free — {needed} is needed. Free some space on it, or move fewer groups.",
+  "@offloadCardFull": {
+    "description": "Refusal shown when the card cannot hold the selection. Checked before anything is copied, because the alternative is a move that stops partway and leaves the library split across two disks.",
+    "placeholders": {
+      "free": {
+        "type": "String",
+        "example": "1.2 GB"
+      },
+      "needed": {
+        "type": "String",
+        "example": "3.2 GB"
+      }
+    }
+  },
+
+  "offloadAction": "Move to SD card",
+  "@offloadAction": {
+    "description": "Label of the button that performs the move."
+  },
+
+  "offloadConfirmTitle": "{count, plural, =1{Move 1 file to the SD card?} other{Move {count} files to the SD card?}}",
+  "@offloadConfirmTitle": {
+    "description": "Confirmation title, naming the count the user is about to commit to.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "offloadConfirmBody": "This frees about {size} on built-in storage. Copying that much takes a while — keep tela open until it finishes. Future downloads will go to the card too.",
+  "@offloadConfirmBody": {
+    "description": "Confirmation body. 'About' because a row whose file has since been deleted contributes nothing, and the tally is measured, not guaranteed. The duration warning is there because the move cannot resume if the app is killed halfway.",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "3.2 GB"
+      }
+    }
+  },
+
+  "offloadRunning": "Moving in the background",
+  "@offloadRunning": {
+    "description": "Heading of the progress panel on the offload screen. Says 'in the background' because that is the fact the user needs: they may leave this screen."
+  },
+
+  "offloadLeaveFreely": "You can leave this screen. tela keeps a notification up while it works.",
+  "@offloadLeaveFreely": {
+    "description": "The permission the panel exists to give. Without it a progress bar reads as 'do not touch anything', which is exactly what the modal this replaced enforced."
+  },
+
+  "offloadWaitingForScreen": "Copied. Come back to tela to finish removing the originals — Android asks you to confirm that, and only an open app can ask.",
+  "@offloadWaitingForScreen": {
+    "description": "Shown when copying finished while the app was backgrounded. The gallery delete goes through MediaStore.createDeleteRequest, which needs an Activity; without this the run would look stalled for a reason nobody could guess."
+  },
+
+  "offloadStop": "Stop",
+  "@offloadStop": {
+    "description": "Button that ends the copying. Not 'Cancel': what is already copied still completes its move."
+  },
+
+  "offloadStopping": "Finishing the file in flight…",
+  "@offloadStopping": {
+    "description": "Shown between the stop being asked for and the copy loop noticing. A half-written destination file is the one thing a stop must not produce, so it never interrupts a copy mid-way."
+  },
+
+  "offloadStopped": "Stopped. {moved} moved; the rest are still on built-in storage.",
+  "@offloadStopped": {
+    "description": "Reported after a stopped run. Names what was kept rather than what was abandoned — the files that made the trip are not undone.",
+    "placeholders": {
+      "moved": {
+        "type": "int"
+      }
+    }
+  },
+
+  "offloadProgress": "Moving {done} of {total}…",
+  "@offloadProgress": {
+    "description": "Progress line while files are being copied.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+
+  "offloadFinishing": "Removing the originals…",
+  "@offloadFinishing": {
+    "description": "Progress line for the delete pass, which reports nothing per file. Named rather than left as a stalled bar at 100%, because on Android 30+ this is where the system's own delete prompt appears."
+  },
+
+  "offloadDone": "{count, plural, =1{Moved to the SD card · {size} freed} other{Moved {count} to the SD card · {size} freed}}",
+  "@offloadDone": {
+    "description": "Confirmation once every ticked file moved.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String",
+        "example": "3.2 GB"
+      }
+    }
+  },
+
+  "offloadPartial": "Moved {moved} of {total}. The rest are still on built-in storage.",
+  "@offloadPartial": {
+    "description": "Reported when some files did not move — a failed copy, or a declined system delete prompt. No success tick: the user has to act on the remainder.",
+    "placeholders": {
+      "moved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+
+  "offloadDoneFutureDownloads": "New downloads will be saved here from now on.",
+  "@offloadDoneFutureDownloads": {
+    "description": "Shown once a run has moved at least one file, confirming what the pre-move copy already promised — the destination setting has actually been switched, not just the files that already moved."
+  },
+
+  "offloadDoneFutureDownloadsExplicit": "New downloads — including explicit ones — will be saved here from now on.",
+  "@offloadDoneFutureDownloadsExplicit": {
+    "description": "The same confirmation as offloadDoneFutureDownloads, said instead when the private library was part of what moved: explicit downloads are re-routed too, which is surprising enough on its own to name outright rather than leave folded into \"downloads\"."
+  },
+
   "settingsPrivacySection": "Privacy",
   "@settingsPrivacySection": {
     "description": "Heading for the group of privacy settings."
@@ -2158,26 +2455,5 @@
         "type": "int"
       }
     }
-  },
-
-  "settingsNotificationsTitle": "Notifications",
-  "@settingsNotificationsTitle": {
-    "description": "Settings row that reports whether tela may post notifications."
-  },
-  "settingsNotificationsOn": "On. Background downloads and moves show their progress.",
-  "@settingsNotificationsOn": {
-    "description": "Subtitle of the notifications row when notifications are permitted."
-  },
-  "settingsNotificationsOff": "Off. Background downloads and moves run with nothing on screen.",
-  "@settingsNotificationsOff": {
-    "description": "Subtitle of the notifications row when notifications are blocked."
-  },
-  "settingsNotificationsAction": "Change in Android settings",
-  "@settingsNotificationsAction": {
-    "description": "Hint on the notifications row explaining that the switch lives in Android."
-  },
-  "settingsNotificationsUnavailable": "Could not open Android's notification settings.",
-  "@settingsNotificationsUnavailable": {
-    "description": "Message shown when the system notification settings page will not open."
   }
 }

@@ -44,7 +44,7 @@ class TierWritingTest : ImageStorageTestCase() {
 
     @Test
     fun `nsfw is refused by the shared gallery tier`() {
-        val result = storage.store(request("nsfw", "sharedGallery"), null)
+        val result = storage.store(request("nsfw", "sharedGallery"), noVault)
 
         assertEquals(false, result["success"])
         assertEquals("restricted", errorCodeOf(result))
@@ -53,7 +53,7 @@ class TierWritingTest : ImageStorageTestCase() {
     @Test
     fun `the two non-indexed tiers accept nsfw`() {
         for (tier in listOf("filesOutsideGallery", "appPrivate")) {
-            val result = storage.store(request("nsfw", tier), null)
+            val result = storage.store(request("nsfw", tier), noVault)
 
             // They fail for their own reasons here — no SAF tree, no network —
             // but never as `restricted`, which is the purity gate talking.
@@ -64,15 +64,15 @@ class TierWritingTest : ImageStorageTestCase() {
     /** Only `nsfw` is gated; sketchy has always been gallery-eligible. */
     @Test
     fun `sketchy is not treated as nsfw by the gallery tier`() {
-        val result = storage.store(request("sketchy", "sharedGallery"), null)
+        val result = storage.store(request("sketchy", "sharedGallery"), noVault)
 
         assertNotEquals("restricted", errorCodeOf(result))
     }
 
     @Test
     fun `an unknown purity or tier is refused rather than guessed at`() {
-        val badPurity = storage.store(request("explicit", "appPrivate"), null)
-        val badTier = storage.store(request("sfw", "downloads"), null)
+        val badPurity = storage.store(request("explicit", "appPrivate"), noVault)
+        val badTier = storage.store(request("sfw", "downloads"), noVault)
 
         assertEquals("unavailable", errorCodeOf(badPurity))
         assertEquals("unavailable", errorCodeOf(badTier))
@@ -105,7 +105,7 @@ class TierWritingTest : ImageStorageTestCase() {
     fun `a traversing id cannot write outside the private tier`() {
         val escaped = File(context.filesDir, "tela.jpg")
 
-        val result = storage.store(request("sfw", "appPrivate", id = "../tela"), null)
+        val result = storage.store(request("sfw", "appPrivate", id = "../tela"), noVault)
 
         assertEquals(false, result["success"])
         assertFalse("a file was written outside the tier", escaped.exists())
@@ -118,7 +118,7 @@ class TierWritingTest : ImageStorageTestCase() {
 
         val result = storage.store(
             request("sfw", "appPrivate", id = "tela", source = "../"),
-            null,
+            noVault,
         )
 
         assertEquals(false, result["success"])
@@ -139,7 +139,7 @@ class TierWritingTest : ImageStorageTestCase() {
      */
     @Test
     fun `a download is named for the source that issued it`() {
-        storage.store(request("sfw", "appPrivate", id = "406484", source = "konachan"), null)
+        storage.store(request("sfw", "appPrivate", id = "406484", source = "konachan"), noVault)
 
         assertTrue(File(privateDirectory(), "konachan-406484.jpg").exists())
         assertFalse(
@@ -162,7 +162,7 @@ class TierWritingTest : ImageStorageTestCase() {
             writeText("pixels")
         }
 
-        val result = storage.copy(copyRequest(Uri.fromFile(origin)), null)
+        val result = storage.copy(copyRequest(Uri.fromFile(origin)), noVault)
 
         assertEquals(true, result["success"])
         val landed = File(privateDirectory(), "wallhaven-abc123.png")
@@ -170,7 +170,7 @@ class TierWritingTest : ImageStorageTestCase() {
         assertEquals("pixels", landed.readText())
         assertEquals(
             listOf("wallhaven-abc123"),
-            imagesFrom(storage.listPrivate()).map { it["ref"] },
+            imagesFrom(storage.listPrivate(noVault)).map { it["ref"] },
         )
     }
 
@@ -181,7 +181,7 @@ class TierWritingTest : ImageStorageTestCase() {
             writeText("pixels")
         }
 
-        storage.copy(copyRequest(Uri.fromFile(origin)), null)
+        storage.copy(copyRequest(Uri.fromFile(origin)), noVault)
 
         assertTrue("the source was consumed", origin.exists())
     }
@@ -202,7 +202,7 @@ class TierWritingTest : ImageStorageTestCase() {
 
         val result = storage.copy(
             copyRequest(Uri.fromFile(origin), purity = "nsfw", tier = "sharedGallery"),
-            null,
+            noVault,
         )
 
         assertEquals(false, result["success"])
@@ -214,7 +214,7 @@ class TierWritingTest : ImageStorageTestCase() {
     fun `copy fails safely when the source cannot be read`() {
         val missing = Uri.fromFile(File(context.cacheDir, "not-there.jpg"))
 
-        val result = storage.copy(copyRequest(missing), null)
+        val result = storage.copy(copyRequest(missing), noVault)
 
         assertEquals(false, result["success"])
         assertEquals("downloadFailed", errorCodeOf(result))
@@ -230,7 +230,7 @@ class TierWritingTest : ImageStorageTestCase() {
 
         val result = storage.copy(
             copyRequest(Uri.fromFile(origin), id = "../tela"),
-            null,
+            noVault,
         )
 
         assertEquals(false, result["success"])
@@ -264,7 +264,7 @@ class TierWritingTest : ImageStorageTestCase() {
     fun `a tagged copy lands in the tag's folder, not the tier root`() {
         val origin = File(context.cacheDir, "origin.jpg").apply { writeText("pixels") }
 
-        val result = storage.copy(copyRequest(Uri.fromFile(origin), tag = "anime"), null)
+        val result = storage.copy(copyRequest(Uri.fromFile(origin), tag = "anime"), noVault)
 
         assertEquals(true, result["success"])
         assertTrue(File(privateDirectory("anime"), "wallhaven-abc123.jpg").exists())
@@ -277,7 +277,7 @@ class TierWritingTest : ImageStorageTestCase() {
     fun `an untagged copy still lands in the tier root`() {
         val origin = File(context.cacheDir, "origin.jpg").apply { writeText("pixels") }
 
-        val result = storage.copy(copyRequest(Uri.fromFile(origin)), null)
+        val result = storage.copy(copyRequest(Uri.fromFile(origin)), noVault)
 
         assertEquals(true, result["success"])
         assertTrue(File(privateDirectory(), "wallhaven-abc123.jpg").exists())
@@ -292,7 +292,7 @@ class TierWritingTest : ImageStorageTestCase() {
 
         val result = storage.copy(
             copyRequest(Uri.fromFile(origin), tag = "../.."),
-            null,
+            noVault,
         )
 
         assertEquals(false, result["success"])
@@ -310,9 +310,9 @@ class TierWritingTest : ImageStorageTestCase() {
     @Test
     fun `a re-download under another tag moves the wallpaper rather than copying it`() {
         val origin = File(context.cacheDir, "origin.jpg").apply { writeText("pixels") }
-        storage.copy(copyRequest(Uri.fromFile(origin), tag = "anime"), null)
+        storage.copy(copyRequest(Uri.fromFile(origin), tag = "anime"), noVault)
 
-        storage.copy(copyRequest(Uri.fromFile(origin), tag = "minimal"), null)
+        storage.copy(copyRequest(Uri.fromFile(origin), tag = "minimal"), noVault)
 
         assertTrue(File(privateDirectory("minimal"), "wallhaven-abc123.jpg").exists())
         assertFalse(
@@ -327,7 +327,7 @@ class TierWritingTest : ImageStorageTestCase() {
     fun `a failed re-download leaves the existing tagged copy alone`() {
         val kept = writePrivateImage("wallhaven-abc123.jpg", tag = "anime")
 
-        val result = storage.store(request("sfw", "appPrivate", id = "abc123"), null)
+        val result = storage.store(request("sfw", "appPrivate", id = "abc123"), noVault)
 
         assertEquals(false, result["success"])
         assertTrue("the earlier copy was swept by a write that never landed", kept.exists())
@@ -339,8 +339,8 @@ class TierWritingTest : ImageStorageTestCase() {
     fun `a successful write answers with the tag it used`() {
         val origin = File(context.cacheDir, "origin.jpg").apply { writeText("pixels") }
 
-        val tagged = storage.copy(copyRequest(Uri.fromFile(origin), tag = "anime"), null)
-        val untagged = storage.copy(copyRequest(Uri.fromFile(origin), id = "def456"), null)
+        val tagged = storage.copy(copyRequest(Uri.fromFile(origin), tag = "anime"), noVault)
+        val untagged = storage.copy(copyRequest(Uri.fromFile(origin), id = "def456"), noVault)
 
         assertEquals("anime", tagged["tag"])
         assertFalse("an untagged write must not mention a tag", untagged.containsKey("tag"))
@@ -363,7 +363,7 @@ class TierWritingTest : ImageStorageTestCase() {
                 tier = "sharedGallery",
                 tag = "../..",
             ),
-            null,
+            noVault,
         )
 
         assertEquals("restricted", errorCodeOf(result))

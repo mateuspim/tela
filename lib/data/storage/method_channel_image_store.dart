@@ -9,7 +9,9 @@ import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/models/stored_image_size.dart';
 import 'package:tela/domain/models/tag_folder.dart';
+import 'package:tela/domain/models/vault_folder.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/image_store.dart';
 
@@ -110,12 +112,20 @@ class MethodChannelImageStore implements ImageStore {
   }
 
   @override
-  Future<List<PrivateImage>> privateImages() async {
+  Future<List<PrivateImage>> privateImages() => _listing('listPrivateImages');
+
+  @override
+  Future<List<PrivateImage>> appPrivateImages() =>
+      _listing('listAppPrivateImages');
+
+  /// Reads a private listing, whichever homes [method] walks.
+  ///
+  /// The two differ only in the name on the wire — same payload, same mapping,
+  /// same failure — so they share this rather than each keeping a copy of the
+  /// row parsing that a future field would have to be added to twice.
+  Future<List<PrivateImage>> _listing(String method) async {
     try {
-      final Object? raw = await _invokeMethod(
-        'listPrivateImages',
-        const <String, String>{},
-      );
+      final Object? raw = await _invokeMethod(method, const <String, String>{});
       return _privateImagesFrom(raw);
     } on PlatformException catch (error) {
       throw ImageStoreFailure(_problemFor(error.code));
@@ -233,6 +243,45 @@ class MethodChannelImageStore implements ImageStore {
     }
   }
 
+  @override
+  Future<List<StoredImageSize>> measureAll(List<Uri> locations) async {
+    if (locations.isEmpty) return const <StoredImageSize>[];
+    try {
+      final Object? raw = await _invokeMethod('measureImages', <String, Object>{
+        'locations': <String>[for (final Uri l in locations) l.toString()],
+      });
+      return _sizes(raw, locations.length);
+    } on PlatformException {
+      return List<StoredImageSize>.filled(
+        locations.length,
+        StoredImageSize.zero,
+      );
+    }
+  }
+
+  /// Zips the native `bytes` and `removable` lists, padding to [expected].
+  ///
+  /// Same index-pairing contract as [_readableFlags], and the same failure
+  /// mode it guards against: a short or malformed reply must read as "could not
+  /// measure", not silently attribute one row's size to another's.
+  List<StoredImageSize> _sizes(Object? raw, int expected) {
+    final List<Object?> bytes = _listOf(raw, 'bytes');
+    final List<Object?> removable = _listOf(raw, 'removable');
+    return <StoredImageSize>[
+      for (int i = 0; i < expected; i++)
+        StoredImageSize(
+          bytes: i < bytes.length && bytes[i] is int ? bytes[i]! as int : 0,
+          onRemovableVolume: i < removable.length && removable[i] == true,
+        ),
+    ];
+  }
+
+  List<Object?> _listOf(Object? raw, String key) {
+    if (raw is! Map<Object?, Object?>) return const <Object?>[];
+    final Object? value = raw[key];
+    return value is List<Object?> ? value : const <Object?>[];
+  }
+
   /// Reads the native answer, padding to [expected] if it is short.
   ///
   /// A truncated or malformed reply reads as "cannot open", never as an
@@ -288,7 +337,34 @@ class MethodChannelImageStore implements ImageStore {
     return DownloadLocation(
       folder: _downloadFolderFrom(raw['folder']),
       sdCardAvailable: raw['sdCardAvailable'] == true,
+      vault: _vaultFrom(raw['vaultLabel']),
     );
+  }
+
+  /// The vault the platform reports, or the standard one.
+  ///
+  /// Falls back rather than throwing for a label this side would refuse: the
+  /// native side applies the same allowlist before any path is built from it,
+  /// so a bad value costs the settings row its accuracy for one frame and
+  /// nothing else — where a throw would take the whole location row down.
+  VaultFolder _vaultFrom(Object? raw) {
+    if (raw is! String || !VaultFolder.isLegal(raw)) {
+      return VaultFolder.standard;
+    }
+    return VaultFolder(raw);
+  }
+
+  @override
+  Future<bool> setVaultFolder(VaultFolder vault) async {
+    try {
+      final Object? raw = await _invokeMethod(
+        'setVaultFolder',
+        <String, String>{'label': vault.label},
+      );
+      return raw is Map<Object?, Object?> && raw['success'] == true;
+    } on PlatformException {
+      return false;
+    }
   }
 
   DownloadFolder? _downloadFolderFrom(Object? raw) {
@@ -349,12 +425,27 @@ class MethodChannelImageStore implements ImageStore {
       location: Uri.parse(location),
       savedAt: DateTime.fromMillisecondsSinceEpoch(savedAt),
       sizeBytes: sizeBytes,
-      // Off the directory holding the file. This tier keeps no rows, so the
+      // Absent on a payload written before the vault existed, which is exactly
+      // when every row was app-private — so the fallback is the truth for it.
+      tier: _privateTierFrom(raw['tier']),
+      // Off the directory holding the file. Neither home keeps rows, so the
       // layout on disk is the only record of what an image is filed under.
       tag: _tagFrom(raw['tag']),
       width: _positiveOrNull(raw['width']),
       height: _positiveOrNull(raw['height']),
     );
+  }
+
+  /// Which home a private row came from.
+  ///
+  /// Only the two the private library has. A payload naming the gallery — which
+  /// nothing writes — reads as app-private rather than being trusted: this
+  /// value routes a **delete**, and the one tier that must never be reachable
+  /// that way is the indexed one.
+  StorageTier _privateTierFrom(Object? raw) {
+    return raw == StorageTier.filesOutsideGallery.name
+        ? StorageTier.filesOutsideGallery
+        : StorageTier.appPrivate;
   }
 
   /// A measurement the native side either read or could not, as int-or-null.

@@ -20,6 +20,7 @@ import 'package:tela/features/library/library_screen.dart';
 import 'package:tela/features/private_library/private_immersive_session.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
 import 'package:tela/features/settings/blocked_tags_screen.dart';
+import 'package:tela/features/settings/offload_screen.dart';
 import 'package:tela/features/settings/settings_screen.dart';
 
 /// The app's routes.
@@ -151,6 +152,11 @@ abstract final class TelaRouter {
           path: TelaRoutes.blockedTagsPath,
           name: TelaRoutes.blockedTagsName,
           builder: (_, _) => const BlockedTagsScreen(),
+        ),
+        GoRoute(
+          path: TelaRoutes.offloadPath,
+          name: TelaRoutes.offloadName,
+          builder: (_, _) => const OffloadScreen(),
         ),
         GoRoute(
           path: TelaRoutes.downloadViewerPath,

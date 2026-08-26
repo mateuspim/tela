@@ -42,10 +42,11 @@ data class ImageCopyRequest(
  *
  * The one door every caller comes through — `ImageStoreChannel`,
  * `DownloadDeleting` and the Kotlin suite all hold an `ImageStorage(context)`
- * — behind which the work is four collaborators with one story each:
+ * — behind which the work is five collaborators with one story each:
  * [TierWriting] puts an image into a tier, [TierDeleting] takes it out,
- * [PrivateTierListing] reads back the one tier nothing else can show, and
- * [StoredImageReading] gets at the bytes of a file tela did not just write.
+ * [PrivateTierListing] reads back the one tier nothing else can show,
+ * [StoredImageReading] gets at the bytes of a file tela did not just write, and
+ * [StoredImageMeasuring] says how big it is and which disk it is on.
  *
  * They are reached through this facade rather than directly so that the purity
  * gate, the traversal guards and the "already gone counts as deleted" rule each
@@ -53,17 +54,17 @@ data class ImageCopyRequest(
  * and why the pieces are not merely files.
  *
  * ```
- * ImageStorage(context).store(request, outsideGalleryTree)
+ * ImageStorage(context).store(request, OutsideGalleryTarget(tree, "tela"))
  * ```
  */
 class ImageStorage(private val context: Context) {
     /** Downloads [request]'s image into its tier. See [TierWriting.store]. */
-    fun store(request: ImageStoreRequest, outsideGalleryTree: String?): Map<String, Any> =
-        TierWriting(context).store(request, outsideGalleryTree)
+    fun store(request: ImageStoreRequest, target: OutsideGalleryTarget): Map<String, Any> =
+        TierWriting(context).store(request, target)
 
     /** Copies an image already on this device into [request]'s tier. */
-    fun copy(request: ImageCopyRequest, outsideGalleryTree: String?): Map<String, Any> =
-        TierWriting(context).copy(request, outsideGalleryTree)
+    fun copy(request: ImageCopyRequest, target: OutsideGalleryTarget): Map<String, Any> =
+        TierWriting(context).copy(request, target)
 
     /** Moves a stored image into another tag folder within its own tier. */
     fun retag(
@@ -74,8 +75,12 @@ class ImageStorage(private val context: Context) {
     ): Map<String, Any> =
         StoredImageRetagging(context).retag(tier, location, tag, outsideGalleryTree)
 
-    /** Lists the app-private tier, newest first. */
-    fun listPrivate(): Map<String, Any> = PrivateTierListing(context).listPrivate()
+    /** Lists the private library — app-private tier and vault — newest first. */
+    fun listPrivate(target: OutsideGalleryTarget): Map<String, Any> =
+        PrivateTierListing(context).listPrivate(target)
+
+    /** Lists the app-private tier alone. See [PrivateTierListing.listAppPrivate]. */
+    fun listAppPrivate(): Map<String, Any> = PrivateTierListing(context).listAppPrivate()
 
     /** Deletes one app-private image, named by its `source-id` [key]. */
     fun deletePrivate(key: String): Map<String, Any> = TierDeleting(context).deletePrivate(key)
@@ -89,6 +94,9 @@ class ImageStorage(private val context: Context) {
 
     /** Whether the file at [location] can still be opened. */
     fun canRead(location: Uri): Map<String, Any> = StoredImageReading(context).canRead(location)
+
+    /** Bytes on disk at [location], and whether that disk is a removable card. */
+    fun measure(location: Uri): Map<String, Any> = StoredImageMeasuring(context).measure(location)
 
     /** Copies a MediaStore or SAF image into a decodable cache file. */
     fun materialise(location: Uri): Map<String, Any> =

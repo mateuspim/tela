@@ -7,7 +7,9 @@ import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/models/stored_image_size.dart';
 import 'package:tela/domain/models/tag_folder.dart';
+import 'package:tela/domain/models/vault_folder.dart';
 
 /// Stores a remote wallpaper using a user-selected storage tier.
 ///
@@ -105,13 +107,25 @@ abstract interface class ImageStore {
     required TagFolder? tag,
   });
 
-  /// Everything in the app-private tier, most recently saved first.
+  /// The whole private library, most recently saved first — **both homes**.
   ///
-  /// Only this tier can be listed, and that is the point: the other two write
-  /// where the system gallery or a file manager already shows the result, while
-  /// app-private files are visible to nothing but tela. Without this they are
-  /// write-only, and uninstalling is the only way to get them back out.
+  /// The app-private tier and the hidden vault on the files tier. Neither is
+  /// visible to anything but tela — one is app-internal, the other a
+  /// dot-prefixed folder no file manager shows and no index reaches — so
+  /// without this they are write-only. Each row says which home it came from,
+  /// because that routes its delete.
+  ///
+  /// Costs a walk of both, which on a card is a per-file crossing. A caller
+  /// that only wants built-in storage should ask [appPrivateImages] instead.
   Future<List<PrivateImage>> privateImages();
+
+  /// The app-private tier alone, most recently saved first.
+  ///
+  /// Same rows as [privateImages], minus the vault — for the caller whose
+  /// question is *what is still on built-in storage*, which is one the files
+  /// already on a card cannot be part of the answer to. Reading them only to
+  /// drop them is what made the offload screen slower the more it had moved.
+  Future<List<PrivateImage>> appPrivateImages();
 
   /// Hard-deletes a downloaded file from its storage [tier] — the one action
   /// that reaches the file itself, not just an index of it.
@@ -187,6 +201,19 @@ abstract interface class ImageStore {
   /// every other answer in the batch.
   Future<List<bool>> canReadAll(List<Uri> locations);
 
+  /// How big each of [locations] is, and whether it already sits on a card.
+  ///
+  /// The sibling of [canReadAll], batched for the same reason and answered in
+  /// the same order, so a caller pairs the results with its rows by index. It
+  /// exists because a download row records no size: the wallpaper's *reported*
+  /// bytes come from the source's listing and describe the original file, not
+  /// the one on this disk, and a screen promising freed space has to weigh what
+  /// is actually there.
+  ///
+  /// A file that cannot be measured — deleted from Photos, a revoked grant —
+  /// is [StoredImageSize.zero], never an exception and never a shorter list.
+  Future<List<StoredImageSize>> measureAll(List<Uri> locations);
+
   /// Where files-outside-gallery writes, and whether a card is offered.
   ///
   /// Never throws for the ordinary "nothing chosen yet" state — that is a
@@ -194,6 +221,20 @@ abstract interface class ImageStore {
   /// is reported the same whether or not a folder exists, so the picker can
   /// offer it before anything is configured.
   Future<DownloadLocation> downloadLocation();
+
+  /// Renames the hidden folder explicit downloads land in, from now on.
+  ///
+  /// **Renames nothing on disk.** The old directory keeps what is in it and
+  /// the app keeps reading both, because moving a folder full of images
+  /// because a text field lost focus is not a rename — it is a migration, and
+  /// a failed one would strand the library across two directories with no
+  /// record of which half went where. The settings row says so in its own
+  /// words.
+  ///
+  /// Answers false when the platform refused the label. Callers validate with
+  /// [VaultFolder] first, so a false here is a storage failure rather than a
+  /// typo, and there is nothing for the user to correct.
+  Future<bool> setVaultFolder(VaultFolder vault);
 
   /// Opens the system folder picker pointed at [kind]'s volume and remembers
   /// what the user grants.

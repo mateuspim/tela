@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/download_record.dart';
@@ -173,6 +175,117 @@ void main() {
       },
     );
 
+    /// The regression for the rule that used to be "forget every cross-tier
+    /// move". Gallery to files is an ordinary download changing shelves — the
+    /// history may still hold it — and forgetting it would empty the download
+    /// history of wallpapers that are still on the device.
+    test('a gallery-to-files move keeps its row, re-pointed', () async {
+      final FakeDownloadHistory history = FakeDownloadHistory(
+        initial: <DownloadRecord>[_record('e7jvjd')],
+      );
+      final MoveStoredImages move = _move(
+        FakeImageStore(),
+        history: history,
+      );
+
+      await move(<StoredImageMove>[_toFiles('e7jvjd')]);
+
+      final DownloadRecord kept = (await history.downloads()).single;
+      expect(kept.tier, StorageTier.filesOutsideGallery);
+      expect(kept.location, Uri.parse('memory://e7jvjd-copy'));
+    });
+
+    test('reports each copy as it lands, attempts and all', () async {
+      final MoveStoredImages move = _move(
+        FakeImageStore(failingIds: <String>{'b'}),
+      );
+      final List<int> seen = <int>[];
+
+      await move(<StoredImageMove>[
+        _toPrivate('a'),
+        _toPrivate('b'),
+        _toPrivate('c'),
+      ], onCopied: (int copied, int _) => seen.add(copied));
+
+      // Three, not two: a bar that stalls on the one file that failed reads as
+      // a hung move.
+      expect(seen, <int>[1, 2, 3]);
+    });
+
+    group('stopping and the delete gate', () {
+      /// Stop ends the copying, not the move. Undoing the files that had
+      /// already made the trip is the opposite of what pressing stop means.
+      test('a stop keeps what was already copied', () async {
+        final FakeImageStore images = FakeImageStore();
+        bool stop = false;
+        final MoveStoredImages move = _move(images);
+
+        final Set<WallpaperRef> moved = await move(
+          <StoredImageMove>[_toFiles('a'), _toFiles('b'), _toFiles('c')],
+          onCopied: (int copied, int _) => stop = copied >= 1,
+          stopped: () => stop,
+        );
+
+        expect(moved, <WallpaperRef>{_ref('a')});
+        expect(images.copies, hasLength(1));
+        // The one that moved really moved: its original is gone too.
+        expect(images.deletedLocations, <Uri>[_locationOf('a')]);
+      });
+
+      test(
+        'a stop before the first copy moves nothing and deletes nothing',
+        () async {
+          final FakeImageStore images = FakeImageStore();
+
+          final Set<WallpaperRef> moved = await _move(images)(
+            <StoredImageMove>[_toFiles('a')],
+            stopped: () => true,
+          );
+
+          expect(moved, isEmpty);
+          expect(images.copies, isEmpty);
+          expect(images.batchSizes, isEmpty);
+        },
+      );
+
+      /// The seam a background move cannot do without: only an Activity can
+      /// raise the gallery's delete confirmation, so the copying runs freely
+      /// and the prompt waits for a screen.
+      test('the delete waits behind beforeDelete', () async {
+        final FakeImageStore images = FakeImageStore();
+        final Completer<void> gate = Completer<void>();
+        final Future<Set<WallpaperRef>> running = _move(images)(
+          <StoredImageMove>[_toFiles('a')],
+          beforeDelete: () => gate.future,
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(images.copies, hasLength(1), reason: 'copying went ahead');
+        expect(images.batchSizes, isEmpty, reason: 'the delete is held');
+
+        gate.complete();
+        expect(await running, <WallpaperRef>{_ref('a')});
+        expect(images.batchSizes, <int>[1]);
+      });
+
+      /// Nothing was copied, so there is nothing to delete and nothing to wait
+      /// for — holding a screen prompt over an empty batch would be a wait the
+      /// user could never satisfy.
+      test('beforeDelete is skipped when every copy failed', () async {
+        bool waited = false;
+        final FakeImageStore images = FakeImageStore(
+          failure: const ImageStoreFailure(ImageStoreProblem.unavailable),
+        );
+
+        await _move(images)(
+          <StoredImageMove>[_toFiles('a')],
+          beforeDelete: () async => waited = true,
+        );
+
+        expect(waited, isFalse);
+      });
+    });
+
     test('an empty list touches nothing', () async {
       final FakeImageStore images = FakeImageStore();
 
@@ -206,6 +319,14 @@ StoredImageMove _toPrivate(String id) => StoredImageMove(
   from: StorageTier.sharedGallery,
   location: _locationOf(id),
   to: StorageTier.appPrivate,
+);
+
+StoredImageMove _toFiles(String id) => StoredImageMove(
+  ref: _ref(id),
+  purity: Purity.sfw,
+  from: StorageTier.sharedGallery,
+  location: _locationOf(id),
+  to: StorageTier.filesOutsideGallery,
 );
 
 WallpaperRef _ref(String id) => WallpaperRef(SourceId.wallhaven, id);

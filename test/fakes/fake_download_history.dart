@@ -74,6 +74,34 @@ class FakeDownloadHistory implements DownloadHistory {
       );
   }
 
+  /// Re-points a row at a file that moved tier, dropping it when the new tier
+  /// is the private one.
+  ///
+  /// The one rule this fake does enforce, because it is the rule the port puts
+  /// on the *implementation*: a wallpaper moved into the private library must
+  /// leave no row behind. Everything else it still records verbatim.
+  @override
+  Future<void> relocate({
+    required WallpaperRef ref,
+    required StorageTier tier,
+    required Uri location,
+    TagFolder? tag,
+  }) async {
+    if (tier == StorageTier.appPrivate) return forget(ref);
+    final int at = _recorded.indexWhere(
+      (DownloadRecord d) => d.wallpaper.ref == ref,
+    );
+    if (at < 0) return;
+    final DownloadRecord old = _recorded[at];
+    _recorded[at] = DownloadRecord(
+      wallpaper: old.wallpaper,
+      tier: tier,
+      location: location,
+      downloadedAt: old.downloadedAt,
+      tag: tag,
+    );
+  }
+
   /// Re-points a row at a moved file, replacing location and tag together — a
   /// fake that let them diverge could not catch a caller that writes one
   /// without the other.

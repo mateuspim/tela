@@ -208,7 +208,14 @@ class _SettingsList extends StatelessWidget {
       icon: Icons.sd_storage_outlined,
       title: l10n.settingsStorageSection,
       description: l10n.settingsStorageDescription,
-      children: const <Widget>[ClearCacheTile()],
+      children: const <Widget>[
+        ClearCacheTile(),
+        Divider(),
+        // Under the cache row on purpose: emptying the cache is the free way to
+        // get space back, and someone who came here for room should be offered
+        // the one that costs nothing before the one that moves their library.
+        _OffloadTile(),
+      ],
     );
   }
 
@@ -230,6 +237,24 @@ class _SettingsList extends StatelessWidget {
         const Divider(),
         const AppLockSwitch(),
       ],
+    );
+  }
+}
+
+/// The way into the screen that moves downloads onto an SD card.
+class _OffloadTile extends StatelessWidget {
+  const _OffloadTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return ListTile(
+      key: const Key('settings-offload'),
+      leading: const Icon(Icons.drive_file_move_outlined),
+      title: Text(l10n.offloadTitle),
+      subtitle: Text(l10n.offloadOpenDetail),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => context.pushNamed(TelaRoutes.offloadName),
     );
   }
 }

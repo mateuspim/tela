@@ -18,20 +18,55 @@ import android.provider.DocumentsContract
  * ```
  */
 /** One entry of a SAF directory listing, as [SafDocuments] reads it back. */
-private data class SafChild(val id: String, val name: String, val mimeType: String?)
+private data class SafChild(
+    val id: String,
+    val name: String,
+    val mimeType: String?,
+    val sizeBytes: Long,
+    val modifiedAt: Long,
+)
+
+/** One file inside a granted tree, with the stats a listing reports. */
+data class SafFile(
+    val uri: Uri,
+    val name: String,
+    val sizeBytes: Long,
+    val modifiedAt: Long,
+)
 
 internal object SafDocuments {
     /** The provider a granted tree must belong to; anything else is refused. */
     private const val EXTERNAL_STORAGE_PROVIDER = "com.android.externalstorage.documents"
 
+    /** The marker this tier writes, and the one file a listing must never show. */
+    private const val NO_MEDIA_MARKER = ".nomedia"
+
     /** tela's own folder inside [tree], created on first use. */
-    fun telaFolderIn(context: Context, tree: Uri): Uri? {
+    fun telaFolderIn(context: Context, tree: Uri): Uri? =
+        folderIn(context, tree, TreeLocation.TELA_FOLDER)
+
+    /**
+     * The hidden folder explicit images go to inside [tree], created on first
+     * use, or null when [target] names no usable vault.
+     *
+     * A **sibling** of the visible `tela/`, not a child of it. Both are inside
+     * the tree the user granted, so a sync tool pointed at that tree still
+     * reaches both — what changes is what a file manager shows when it lists the
+     * granted folder, which is the whole point of the dot.
+     */
+    fun vaultFolderIn(context: Context, tree: Uri, target: OutsideGalleryTarget): Uri? {
+        val name = target.vaultDirectory ?: return null
+        return folderIn(context, tree, name)
+    }
+
+    /** A directly-named directory inside [tree], created on first use. */
+    private fun folderIn(context: Context, tree: Uri, name: String): Uri? {
         if (tree.authority != EXTERNAL_STORAGE_PROVIDER) return null
         val root = DocumentsContract.buildDocumentUriUsingTree(
             tree,
             DocumentsContract.getTreeDocumentId(tree),
         )
-        return findOrCreateDirectory(context, root, TreeLocation.TELA_FOLDER)
+        return findOrCreateDirectory(context, root, name)
     }
 
     /**
@@ -56,12 +91,12 @@ internal object SafDocuments {
      * index, unless one is already there.
      */
     fun ensureNoMediaMarker(context: Context, directory: Uri): Boolean {
-        if (findChild(context, directory, ".nomedia") != null) return true
+        if (findChild(context, directory, NO_MEDIA_MARKER) != null) return true
         return DocumentsContract.createDocument(
             context.contentResolver,
             directory,
             "application/octet-stream",
-            ".nomedia",
+            NO_MEDIA_MARKER,
         ) != null
     }
 
@@ -87,9 +122,27 @@ internal object SafDocuments {
         }
     }
 
-    /** The child of [parent] called [name], or null if it has none. */
+    /**
+     * The child of [parent] called [name], or null if it has none.
+     *
+     * **Case-insensitive**, on purpose: this queries removable storage, which is
+     * case-insensitive at the medium (exFAT/FAT32) even where the SAF layer
+     * above it is not. A case-sensitive `==` here — the original bug, found on
+     * device 2026-08-26 — let `tagFolderIn` ask for `"alcololi"`, miss an
+     * existing `"Alcololi"`, and create another folder; `DocumentsContract`
+     * renames the collision to `"alcololi (1)"` rather than refusing it, so
+     * every mismatched retry silently grew a new folder instead of failing
+     * loud. After 32 of those, Android's own uniquifier exhausts its retry
+     * budget and starts throwing `FileNotFoundException("Failed to create
+     * unique file")` — which is where this was actually noticed, as a stuck
+     * offload, not as a duplicate-folder problem. Matching case-insensitively
+     * finds the one real folder regardless of how a caller cased the name, so
+     * no new collision is ever manufactured in the first place.
+     */
     fun findChild(context: Context, parent: Uri, name: String): Uri? {
-        val match = childrenOf(context, parent).firstOrNull { it.name == name } ?: return null
+        val match =
+            childrenOf(context, parent).firstOrNull { it.name.equals(name, ignoreCase = true) }
+                ?: return null
         return DocumentsContract.buildDocumentUriUsingTree(parent, match.id)
     }
 
@@ -118,6 +171,44 @@ internal object SafDocuments {
         }
     }
 
+    /**
+     * The image files directly inside [parent], with the stats a listing needs.
+     *
+     * Directories and the `.nomedia` marker are dropped here rather than by the
+     * caller: every caller wants the same two gone, and a listing that leaked
+     * the marker would report a zero-byte image whose name parses as nothing.
+     */
+    fun filesIn(context: Context, parent: Uri): List<SafFile> {
+        return childrenOf(context, parent)
+            .filter { it.mimeType != DocumentsContract.Document.MIME_TYPE_DIR }
+            .filter { it.name != NO_MEDIA_MARKER }
+            .map { child ->
+                SafFile(
+                    uri = DocumentsContract.buildDocumentUriUsingTree(parent, child.id),
+                    name = child.name,
+                    sizeBytes = child.sizeBytes,
+                    modifiedAt = child.modifiedAt,
+                )
+            }
+    }
+
+    /** The subdirectories of [parent], as document URIs paired with their names. */
+    fun subdirectoriesOf(context: Context, parent: Uri): List<Pair<String, Uri>> {
+        return childrenOf(context, parent)
+            .filter { it.mimeType == DocumentsContract.Document.MIME_TYPE_DIR }
+            .map { it.name to DocumentsContract.buildDocumentUriUsingTree(parent, it.id) }
+    }
+
+    /** The child of [parent] called [name], **only if it already exists**. */
+    fun existingFolderIn(context: Context, tree: Uri, name: String): Uri? {
+        if (tree.authority != EXTERNAL_STORAGE_PROVIDER) return null
+        val root = DocumentsContract.buildDocumentUriUsingTree(
+            tree,
+            DocumentsContract.getTreeDocumentId(tree),
+        )
+        return findChild(context, root, name)
+    }
+
     /** The document ids directly inside [parent]. */
     private fun childIds(context: Context, parent: Uri): Set<String> =
         childrenOf(context, parent).mapTo(mutableSetOf()) { it.id }
@@ -140,6 +231,8 @@ internal object SafDocuments {
             DocumentsContract.Document.COLUMN_DOCUMENT_ID,
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
             DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_SIZE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
         )
         val children = mutableListOf<SafChild>()
         context.contentResolver
@@ -152,7 +245,18 @@ internal object SafDocuments {
         id = getString(getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)),
         name = getString(getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)),
         mimeType = getString(getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)),
+        // Both are optional columns a provider may leave null, and neither is
+        // worth dropping a row over: an unknown size sorts as zero and an
+        // unknown date sorts oldest, where a null would crash the walk.
+        sizeBytes = longOrZero(DocumentsContract.Document.COLUMN_SIZE),
+        modifiedAt = longOrZero(DocumentsContract.Document.COLUMN_LAST_MODIFIED),
     )
+
+    private fun android.database.Cursor.longOrZero(column: String): Long {
+        val at = getColumnIndex(column)
+        if (at < 0 || isNull(at)) return 0L
+        return getLong(at)
+    }
 
     private fun findOrCreateDirectory(context: Context, parent: Uri, name: String): Uri? {
         return findChild(context, parent, name) ?: DocumentsContract.createDocument(

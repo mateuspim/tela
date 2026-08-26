@@ -55,10 +55,41 @@ class MoveStoredImages {
   /// delete was declined — so the caller reports the honest tally rather than
   /// the count it asked for. Mirrors `DeleteDownloads`, which returns what it
   /// deleted for the same reason.
-  Future<Set<WallpaperRef>> call(List<StoredImageMove> moves) async {
+  ///
+  /// [onCopied] is called after each file is copied, with how many of
+  /// [moves] have been written so far. A whole library moving to a card is
+  /// minutes of copying, and an indeterminate spinner over it says nothing
+  /// about whether it is halfway or stuck. The delete that follows is a single
+  /// call and reports nothing, which is why this counts the copies and not the
+  /// moves that finally landed.
+  ///
+  /// [stopped] is asked before each copy. **Stopping ends the copying, not the
+  /// move**: everything already copied goes on to have its original deleted, so
+  /// a user who stops a long batch keeps the files that had already made the
+  /// trip rather than watching the work unwind. The answer is the honest
+  /// subset, exactly as it is for a failure.
+  ///
+  /// [beforeDelete] is awaited between the two phases, and it is the seam a
+  /// background move cannot do without. Only an Activity can raise the
+  /// gallery's system delete confirmation, so with the app backgrounded that
+  /// delete cannot happen — and a delete that did not happen reads here as a
+  /// declined one, which undoes every copy behind it. A caller running in the
+  /// background passes `AppVisibility.whenForeground` so the copying proceeds
+  /// freely and only the prompt waits for a screen.
+  Future<Set<WallpaperRef>> call(
+    List<StoredImageMove> moves, {
+    void Function(int copied, int total)? onCopied,
+    bool Function()? stopped,
+    Future<void> Function()? beforeDelete,
+  }) async {
     if (moves.isEmpty) return <WallpaperRef>{};
-    final Map<StoredImageMove, StoredImage> copied = await _copyAll(moves);
+    final Map<StoredImageMove, StoredImage> copied = await _copyAll(
+      moves,
+      onCopied,
+      stopped,
+    );
     if (copied.isEmpty) return <WallpaperRef>{};
+    if (beforeDelete != null) await beforeDelete();
     final Set<Uri> gone = await _imageStore.deleteDownloads(
       <({StorageTier tier, Uri location})>[
         for (final StoredImageMove move in copied.keys)
@@ -75,12 +106,21 @@ class MoveStoredImages {
   /// twenty-nine.
   Future<Map<StoredImageMove, StoredImage>> _copyAll(
     List<StoredImageMove> moves,
+    void Function(int copied, int total)? onCopied,
+    bool Function()? stopped,
   ) async {
     final Map<StoredImageMove, StoredImage> copied =
         <StoredImageMove, StoredImage>{};
-    for (final StoredImageMove move in moves) {
-      final StoredImage? made = await _copy(move);
-      if (made != null) copied[move] = made;
+    for (int i = 0; i < moves.length; i++) {
+      // Checked before the copy, never during: a half-written destination file
+      // is the one thing a stop must not be able to produce.
+      if (stopped?.call() ?? false) break;
+      final StoredImage? made = await _copy(moves[i]);
+      if (made != null) copied[moves[i]] = made;
+      // Counts every attempt, not every success: this drives a progress bar,
+      // and a bar that stalls on the one unreadable file in a hundred looks
+      // like the move hung.
+      onCopied?.call(i + 1, moves.length);
     }
     return copied;
   }
@@ -117,23 +157,25 @@ class MoveStoredImages {
     return moved;
   }
 
-  /// What the move means for the history row, which depends on whether the
-  /// tier changed.
+  /// What the move means for the history row, which depends on the
+  /// **destination** and not on whether the tier changed at all.
   ///
-  /// **Across tiers, the row is forgotten.** A move *into* the private library
-  /// must leave none behind: a private download is never recorded, and a row
-  /// outliving its file's move would be an ungated index of exactly what went
-  /// private. Moving *out* has no row to begin with, and `forget` is a
-  /// documented no-op for a wallpaper that was never recorded.
+  /// One call, because [DownloadHistory.relocate] already holds both outcomes:
+  /// a move into the private library drops the row — a private download is
+  /// never recorded, and a row outliving its file's move would be an ungated
+  /// index of exactly what went private — and every other destination re-points
+  /// it at the new tier, path and tag.
   ///
-  /// **Within one tier, the row is re-pointed instead.** That case is a retag
-  /// falling back to copy-and-delete, and the download is still an ordinary
-  /// one — forgetting it would delete the history for a file that is still
-  /// sitting in the gallery, which is the opposite of what the user asked for.
-  Future<void> _settleHistory(StoredImageMove move, StoredImage made) async {
-    if (move.from != move.to) return _history.forget(move.ref);
-    return _history.retag(
+  /// **It used to forget every cross-tier move**, which was right for the only
+  /// two directions that existed then (into the private library, and back out
+  /// of it, where there is no row to begin with) and silently wrong for the one
+  /// the offload screen added: moving the gallery into the files folder is an
+  /// ordinary download changing shelves, and forgetting it would empty the
+  /// download history of wallpapers that are still very much on the device.
+  Future<void> _settleHistory(StoredImageMove move, StoredImage made) {
+    return _history.relocate(
       ref: move.ref,
+      tier: made.tier,
       location: made.location,
       tag: made.tag,
     );

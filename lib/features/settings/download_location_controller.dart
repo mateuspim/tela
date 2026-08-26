@@ -3,6 +3,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
+import 'package:tela/domain/models/vault_folder.dart';
 import 'package:tela/domain/ports/image_store.dart';
 
 /// Where the files-outside-gallery tier writes, and the volumes on offer.
@@ -21,6 +22,22 @@ class DownloadLocationController extends AsyncNotifier<DownloadLocation> {
   @override
   Future<DownloadLocation> build() {
     return ref.watch(imageStoreProvider).downloadLocation();
+  }
+
+  /// Renames the hidden folder explicit downloads land in, from now on.
+  ///
+  /// Re-reads the location rather than patching the state it holds: the store
+  /// is what decides whether the label took, and a row updated from the value
+  /// that was *asked for* would show a folder the platform refused.
+  ///
+  /// Answers whether it stored, so the caller can report the one failure worth
+  /// reporting — see [ImageStore.setVaultFolder].
+  Future<bool> renameVault(VaultFolder vault) async {
+    final ImageStore store = ref.read(imageStoreProvider);
+    final bool saved = await store.setVaultFolder(vault);
+    if (!saved) return false;
+    state = await AsyncValue.guard<DownloadLocation>(store.downloadLocation);
+    return true;
   }
 
   /// Points downloads at [kind]'s volume, opening the picker to confirm it.
