@@ -224,32 +224,80 @@ Updated: 2026-08-26
 > that was really the tile-decode-size / `justifiedRows`-repacking pair the
 > same entry named as the untuned half.
 
-## NEXT SESSION STARTS HERE — all three of Wave 4's open features are built
+## NEXT SESSION STARTS HERE — Wave 4 is closed, merged and pushed
 
 **Owner, 2026-08-26: *"can we make deploy but silently? and make you work on the
 next big features?"*, then, asked which of Wave 4's three: *"lets do all however
 the omarchy sync but lets think of a better way for that giving the omarchy
 quattro and all we could build a qml widget or just use localsend to receive"*,
-and on ordering: collections → beam → auto-rotate.** Collections is done; the
-other two are not started.
+ordering collections → beam → auto-rotate; then *"lets plan to merge those"*
+and *"delete the branchs"*.**
 
-**State: `flutter analyze` clean, Dart **1664** (from 1585), Kotlin green,
-deployed. All three committed — nothing sitting uncommitted this time, by the
-owner's explicit instruction (*"branch + commit now"*).**
+**State: everything is on `master` (`975d375`), pushed to origin, working tree
+clean, all merged branches deleted.** `flutter analyze` clean, Dart **1677**
+(from 1585), Kotlin green, deployed and running on the device.
 
-- `feat/collections-browser` (`ac2909d`) — Wave 4's collections browser.
-- `feat/localsend-beam` (`a4574cd`) — the beam.
-- `962ff8d` — auto-rotate, sitting on the **same branch as the beam**.
+**Merged as ONE branch, not three, and that was a finding rather than
+laziness.** The commits interleave: the beam's four fixes land *after*
+auto-rotate in history, because the owner found them after rotation was already
+built. Splitting into three branches would have meant rebasing the exact
+commits that had just been verified on hardware, to buy nothing but tidier
+history. One `--no-ff` merge through the repo's own pre-merge-commit hook.
 
-**They are a chain, not three independent branches.** Each was branched off the
-last, so `feat/localsend-beam` contains collections *and* auto-rotate as
-ancestors — merging that one branch brings all three. Splitting them apart
-again would mean a rebase, and nothing so far has needed it.
+**Branch cleanup went wider than this session's two.** All **15** fully-merged
+local branches are gone, including the 13 that predated this session which the
+previous one had deliberately left alone ("cleaning those up was never asked
+for" — now it was). Every deleted tip was confirmed still reachable from
+`master` before and after. **`docs/one-layout-scope` survives because it is
+genuinely unmerged** — `git branch -d` refused it, which is exactly why that
+flag was used rather than `-D`.
 
-**Nothing is merged and nothing is pushed.** The owner was asked about
-committing, not about merging, so that is the open decision. Remember the snag
-that failed a merge last session: run `gen-l10n` fresh before *every* merge
-attempt, not just the first.
+**Four remote branches still exist and were NOT touched**, since deleting a
+remote ref is outward-facing and was not asked for: `origin/feat/nsfw-removable-
+warning`, `origin/feat/ui-pass-h`, `origin/image-viewer-ux`,
+`origin/ui-ux-polish`.
+
+### Verified on the device before merging
+
+Both features that had never been walked were walked first, at the owner's
+instruction (*"do the tests twitch is running in a small screen"*):
+
+- **Auto-rotate** — the switch turns on, the summary line renders, and all
+  three pickers appear on the right defaults (*Every day / Gallery downloads /
+  Home screen*). More usefully, Android **actually took the job**:
+  `JOB #WallpaperRotationWorker#@androidx.work.systemjobscheduler@cc.pym.tela`
+  with `TIME=+23h59m55s411ms` — the daily interval, confirming both the
+  schedule and that the WorkManager dependency now works at runtime after the
+  R8 fix.
+- **Collections** — the Settings rows render; My collections with no username
+  stored says *"Tell tela your Wallhaven username to see your collections"*
+  rather than a 404 (the whole point of `NoCollectionsUsernameFailure`); the
+  Collections button appears on an uploader's listing and only there, navigates,
+  reaches the live API and renders the empty state. Checked that the empty was
+  *real* rather than a swallowed error: `curl` confirms `/collections/PhilBrown`
+  answers `{"data":[]}` at HTTP 200.
+
+### Still owed, and it is one thing
+
+**Nobody has seen a rotation fire.** The job is scheduled and the plumbing is
+proven end to end up to that point, but whether `setStream` is actually
+permitted from a background worker on One UI is untested — and it is the single
+most likely place for an unpleasant surprise. It cannot be rushed: the shortest
+interval WorkManager honours is fifteen minutes, and the default plan is daily.
+
+**Beam discovery is also unproven**, though less worryingly: tela's multicast
+announcement never reached a receiver on this network (device on Wi-Fi,
+receiver wired — consumer routers commonly do not bridge multicast across
+that), so the hand-typed address carried both verified transfers. The multicast
+lock is *not* known to work; it is only known that discovery fails safely.
+Testing it needs a real LocalSend on a machine on the same Wi-Fi.
+
+### Left switched on, deliberately
+
+**Auto-rotate is ON on the owner's device** — daily, gallery downloads, home
+screen — because leaving it on is the only way the "does it ever fire" question
+answers itself. It will change the home wallpaper roughly 24h from
+2026-08-26 14:24. If a future session finds it off, the owner turned it off.
 
 ### What Wallhaven's collections API actually does — measured, not read
 
@@ -320,12 +368,21 @@ read 210. The bound is now the tallest card, which is the actual guarantee
 greedy shortest-column packing gives, so it stops re-failing every time a group
 grows.
 
-### Owed on the device
+### Walked on the device 2026-08-26 — most of it, before the merge
 
-The whole feature. Nothing here has been touched by a finger: whether an
-uploader's collections open, whether the hidden-by-purity notice reads right,
-whether the purity popup feels like enough of a filter, and whether the typed
-username is discoverable enough sitting under the API key.
+**Confirmed working:** the Settings rows render; My collections with nothing
+stored says *"Tell tela your Wallhaven username to see your collections"*
+rather than a 404; the Collections button appears on an uploader's listing and
+**only** there; it navigates, reaches the live API, and renders the empty state
+correctly — checked against `curl` that `/collections/PhilBrown` really is
+`{"data":[]}` at HTTP 200, so that was a true empty and not a swallowed error.
+
+**Still unseen, because no populated collection was opened:** whether the
+hidden-by-purity notice reads right on a real collection, whether the purity
+popup feels like enough of a filter, and whether the typed username is
+discoverable enough sitting under the API key. All three need a collection with
+something in it — the quickest route is to type a username into Settings and
+open *My collections*.
 
 ## The beam — built (`a4574cd`), and the plan changed on research
 
@@ -442,16 +499,18 @@ the preview cache and released after.
 receiver switched on *after* the sheet opened — the ordinary order — never
 heard anything to answer, and no amount of waiting would have found it.
 
-### Owed on the device — discovery, and auto-rotate
+### Still owed on the beam — discovery, and only discovery
 
+Everything else met hardware (see above). What did not:
 
-
-Nothing here has met hardware. In rough order of how likely it is to bite:
-**does discovery actually find a desktop LocalSend** (the multicast lock is the
-suspect if not); does the hand-typed path work where discovery does not; does a
-real desktop accept tela's `info` payload; and does a large batch stream
-without the phone running out of memory — uploads are streamed via
-`openRead()` precisely to avoid PLAN §15's OOM, but that is unproven at 6K.
+- **Does discovery ever find a real desktop LocalSend?** It found nothing here,
+  and the network is the likely reason rather than the code — but the multicast
+  lock is *not* proven, only proven to fail safely. Needs a receiver on the same
+  Wi-Fi, not a wired host.
+- **Does a large batch stream without running the phone out of memory?** The
+  two verified transfers were single files of 11MB and 6.5MB. Uploads use
+  `openRead()` precisely to avoid PLAN §15's OOM, but a forty-file batch of 6K
+  wallpapers has never been tried.
 
 ## Auto-rotate — built (`962ff8d`), the last of the three
 
@@ -532,25 +591,38 @@ drops it, and adds an explicit keep for `WorkDatabase_Impl`. Both are in
 process alive, `mCurrentFocus` on `cc.pym.tela/.MainActivity`, crash buffer
 empty, and a screenshot showing the browse wall drawing normally.
 
-### Owed on the device — everything, and this one is the hardest to observe
+### Scheduled on the device 2026-08-26 — but still never seen to fire
 
-**Nothing here has been seen to fire.** A periodic rotation is the least
-observable feature in the app: the shortest interval WorkManager will honour is
-fifteen minutes, so even confirming it works costs a quarter of an hour of not
-touching the phone. `adb shell dumpsys jobscheduler | grep tela` is the way to
-see the job is actually enqueued without waiting for it.
+**The UI and the scheduling are proven.** The switch turns on, the summary line
+renders, and the three pickers appear on the right defaults (*Every day /
+Gallery downloads / Home screen*). Android genuinely accepted the periodic job:
 
-Specific unknowns: whether the MediaStore query finds `Pictures/tela` on the
-owner's device; whether the SAF vault is still readable from a worker hours
-after the grant (it should be — the grant is persisted — but nothing has proven
-it); and whether `setStream` from a background worker is allowed at all on One
-UI, which is restrictive about what non-foreground processes may do.
+```
+JOB #WallpaperRotationWorker#@androidx.work.systemjobscheduler@cc.pym.tela
+  Service: cc.pym.tela/androidx.work.impl.background.systemjob.SystemJobService
+  TIME=+23h59m55s411ms
+```
+
+`+23h59m55s` is the daily interval, so `RotationSchedule.start` and the input
+data both landed. That also re-proves the WorkManager dependency works at
+runtime after the R8 fix. `adb shell dumpsys jobscheduler | grep -A3 cc.pym.tela`
+is the way to check this without waiting.
+
+**What is still completely unknown is what happens when it runs**, and this is
+the most likely place in the whole of Wave 4 for an unpleasant surprise:
+whether `setStream` is permitted at all from a background worker on One UI,
+which is restrictive about what non-foreground processes may do; whether the
+MediaStore query finds `Pictures/tela`; and whether the SAF vault is still
+readable hours after the grant (it should be — the grant is persisted — but
+nothing has proven it). **Auto-rotate was left switched on** precisely so this
+answers itself; see the top of this file.
 
 ### Wave 4 is now closed
 
 Crop (both halves), share sheet, collections, the beam, and auto-rotate are all
-built. **PLAN.md §12 still lists "Omarchy sync" as the open item and should be
-corrected** — it is superseded by the beam, for the reasons above.
+built, merged (`975d375`) and pushed. **PLAN.md §12 was corrected in the same
+pass** — it no longer lists "Omarchy sync" as open, and records why the beam
+supersedes it.
 
 **The QML half of the desktop story is deliberately not in this repo.** A
 `tela` plugin for Omarchy's Quickshell that presents what landed and sets it
