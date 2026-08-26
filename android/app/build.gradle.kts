@@ -143,6 +143,11 @@ tasks.matching { it.name.endsWith("UnitTestForUnitTest") }.configureEach {
 // Run them with `make kotlin-test`. `flutter test` does NOT reach these — it
 // runs the Dart suite only, so both commands are needed before a commit.
 dependencies {
+    // Auto-rotate. The platform's own scheduler, and the one PLAN.md names:
+    // it survives reboots and doze, which an AlarmManager loop does not
+    // without re-implementing both by hand.
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.16")
     testImplementation("androidx.test:core:1.7.0")

@@ -5,7 +5,6 @@ import android.content.IntentSender
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
-import android.app.WallpaperManager
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -88,6 +87,10 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
             flutterEngine.dartExecutor.binaryMessenger,
             BEAM_CHANNEL,
         ).setMethodCallHandler(::handleBeamCall)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            ROTATION_CHANNEL,
+        ).setMethodCallHandler(::handleRotationCall)
         TelaEngine.imageStore?.prompts = this
     }
 
@@ -106,7 +109,14 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
      */
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         val channels =
-            listOf(WALLPAPER_CHANNEL, SCREEN_CHANNEL, SHARE_CHANNEL, NOTIFICATIONS_CHANNEL, BEAM_CHANNEL)
+            listOf(
+                WALLPAPER_CHANNEL,
+                SCREEN_CHANNEL,
+                SHARE_CHANNEL,
+                NOTIFICATIONS_CHANNEL,
+                BEAM_CHANNEL,
+                ROTATION_CHANNEL,
+            )
         for (channel in channels) {
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
                 .setMethodCallHandler(null)
@@ -149,6 +159,36 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
      * it Android drops the very packets discovery listens for, and the chooser
      * is empty with nothing anywhere to say why. See [MulticastLease].
      */
+    /**
+     * Starts, stops and describes the auto-rotate schedule.
+     *
+     * The rotation itself runs in [WallpaperRotationWorker] with no Dart alive,
+     * so nothing here ever changes a wallpaper — this is only the schedule.
+     */
+    private fun handleRotationCall(call: MethodCall, result: MethodChannel.Result) {
+        when (call.method) {
+            "start" -> {
+                RotationSchedule.start(
+                    context = this,
+                    intervalMinutes = (call.argument<Number>("intervalMinutes") ?: 0).toLong(),
+                    tier = call.argument<String>("tier") ?: return result.error(
+                        "bad_arguments", "tier is required", null,
+                    ),
+                    target = call.argument<String>("target") ?: return result.error(
+                        "bad_arguments", "target is required", null,
+                    ),
+                )
+                result.success(null)
+            }
+            "stop" -> {
+                RotationSchedule.stop(this)
+                result.success(null)
+            }
+            "current" -> result.success(RotationSchedule.current(this))
+            else -> result.notImplemented()
+        }
+    }
+
     private fun handleBeamCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "acquireMulticastLock" -> result.success(MulticastLease.acquire(this))
@@ -468,27 +508,14 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
         }
     }
 
+    /**
+     * Delegates to [WallpaperSetting], which the rotation worker also uses.
+     *
+     * One path rather than two: the OEM sequential-write quirk lives there, and
+     * a second copy here would drift from it silently.
+     */
     private fun applyCachedWallpaper(cachedImage: File, target: String) {
-        val wallpaper = WallpaperManager.getInstance(this)
-        when (target) {
-            "home" -> setWallpaper(wallpaper, cachedImage, WallpaperManager.FLAG_SYSTEM)
-            "lock" -> setWallpaper(wallpaper, cachedImage, WallpaperManager.FLAG_LOCK)
-            "both" -> setBothWallpapers(wallpaper, cachedImage)
-            else -> throw IllegalArgumentException("target must be home|lock|both")
-        }
-    }
-
-    private fun setBothWallpapers(wallpaper: WallpaperManager, cachedImage: File) {
-        setWallpaper(wallpaper, cachedImage, WallpaperManager.FLAG_SYSTEM)
-        // Restrictive OEMs need distinct writes; a combined flag often changes only home.
-        Thread.sleep(BETWEEN_TARGETS_DELAY_MS)
-        setWallpaper(wallpaper, cachedImage, WallpaperManager.FLAG_LOCK)
-    }
-
-    private fun setWallpaper(wallpaper: WallpaperManager, image: File, flag: Int) {
-        image.inputStream().use { stream ->
-            wallpaper.setStream(stream, null, true, flag)
-        }
+        WallpaperSetting.apply(this, target) { cachedImage.inputStream() }
     }
 
     private fun failure(code: String): Map<String, Any> = mapOf(
@@ -502,8 +529,8 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
         const val SHARE_CHANNEL = "cc.pym.tela/share"
         const val NOTIFICATIONS_CHANNEL = "cc.pym.tela/notifications"
         const val BEAM_CHANNEL = "cc.pym.tela/beam"
+        const val ROTATION_CHANNEL = "cc.pym.tela/rotation"
         const val OUTSIDE_GALLERY_DIRECTORY_REQUEST = 401
         const val GALLERY_DELETE_REQUEST = 402
-        const val BETWEEN_TARGETS_DELAY_MS = 500L
     }
 }

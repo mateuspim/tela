@@ -162,6 +162,97 @@
     "description": "Explains why tapping the final selected purity chip cannot turn it off."
   },
 
+  "settingsWallpaperSection": "Wallpaper",
+  "@settingsWallpaperSection": {
+    "description": "Heading of the settings group about the device wallpaper itself \u2014 as distinct from Appearance, which is about how tela looks."
+  },
+
+  "settingsWallpaperDescription": "What tela puts on your screen when you are not looking.",
+  "@settingsWallpaperDescription": {
+    "description": "Subtitle of the wallpaper settings group."
+  },
+
+  "rotationTitle": "Change the wallpaper on a schedule",
+  "@rotationTitle": {
+    "description": "Label of the switch turning auto-rotate on."
+  },
+
+  "rotationOff": "Off",
+  "@rotationOff": {
+    "description": "Subtitle of the auto-rotate switch when nothing is scheduled."
+  },
+
+  "rotationSummary": "{interval}, from {source}, onto {target}",
+  "@rotationSummary": {
+    "description": "Subtitle of the auto-rotate switch when a schedule is running, naming all three choices at once.",
+    "placeholders": {
+      "interval": {
+        "type": "String"
+      },
+      "source": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+
+  "rotationInterval": "How often",
+  "@rotationInterval": {
+    "description": "Heading of the auto-rotate interval choice."
+  },
+
+  "rotationIntervalQuarterHour": "Every 15 minutes",
+  "@rotationIntervalQuarterHour": {
+    "description": "Auto-rotate interval. Fifteen minutes is the platform scheduler's own floor, which is why nothing shorter is offered."
+  },
+
+  "rotationIntervalHourly": "Every hour",
+  "@rotationIntervalHourly": {
+    "description": "Auto-rotate interval."
+  },
+
+  "rotationIntervalSixHourly": "Every 6 hours",
+  "@rotationIntervalSixHourly": {
+    "description": "Auto-rotate interval."
+  },
+
+  "rotationIntervalDaily": "Every day",
+  "@rotationIntervalDaily": {
+    "description": "Auto-rotate interval."
+  },
+
+  "rotationSource": "From",
+  "@rotationSource": {
+    "description": "Heading of the auto-rotate source choice."
+  },
+
+  "rotationSourceGallery": "Gallery downloads",
+  "@rotationSourceGallery": {
+    "description": "Auto-rotate source: the shared-gallery storage tier."
+  },
+
+  "rotationSourceFiles": "Files outside the gallery",
+  "@rotationSourceFiles": {
+    "description": "Auto-rotate source: the files-outside-gallery tier, including an SD card vault."
+  },
+
+  "rotationSourcePrivate": "Private library",
+  "@rotationSourcePrivate": {
+    "description": "Auto-rotate source: the private library. Its own option, never folded into an 'everything' choice, because a rotation puts its pick where anyone glancing at the phone sees it."
+  },
+
+  "rotationPrivateWarning": "Explicit wallpapers will appear on your home or lock screen.",
+  "@rotationPrivateWarning": {
+    "description": "Shown when the private library is chosen as the auto-rotate source, saying plainly what that means in a way the option's name does not."
+  },
+
+  "rotationTarget": "Onto",
+  "@rotationTarget": {
+    "description": "Heading of the auto-rotate surface choice \u2014 home, lock, or both."
+  },
+
   "beamTitle": "Beam to a computer",
   "@beamTitle": {
     "description": "Title of the sheet that sends wallpapers to a machine on the local network over LocalSend."

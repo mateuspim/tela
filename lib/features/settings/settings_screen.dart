@@ -25,6 +25,7 @@ import 'package:tela/features/settings/download_location_section.dart';
 import 'package:tela/features/settings/notifications_tile.dart';
 import 'package:tela/features/settings/nsfw_removable_guard.dart';
 import 'package:tela/features/settings/pinned_destination_notice.dart';
+import 'package:tela/features/settings/rotation_section.dart';
 import 'package:tela/features/settings/settings_section_label.dart';
 import 'package:tela/features/settings/tile_density_section.dart';
 
@@ -106,6 +107,7 @@ class _SettingsList extends StatelessWidget {
     return <Widget>[
       _accountGroup(l10n),
       _appearanceGroup(l10n),
+      _wallpaperGroup(l10n),
       _browseGroup(l10n),
       _downloadsGroup(l10n),
       _storageGroup(l10n),
@@ -128,6 +130,17 @@ class _SettingsList extends StatelessWidget {
       title: l10n.settingsAppearanceSection,
       description: l10n.settingsAppearanceDescription,
       children: const <Widget>[AccentColorSection(), TileDensitySection()],
+    );
+  }
+
+  /// The device wallpaper itself — distinct from Appearance, which is about
+  /// how tela looks rather than what it puts on the screen.
+  Widget _wallpaperGroup(AppLocalizations l10n) {
+    return _SettingsGroup(
+      icon: Icons.wallpaper_outlined,
+      title: l10n.settingsWallpaperSection,
+      description: l10n.settingsWallpaperDescription,
+      children: const <Widget>[RotationSection()],
     );
   }
 

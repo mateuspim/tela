@@ -460,10 +460,7 @@ class ImageStoreChannel(context: Context) {
         return if (DownloadFolderDescribing(context).isAvailable(tree)) null else "folderUnavailable"
     }
 
-    private fun outsideGalleryTree(): String? {
-        return context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-            .getString(OUTSIDE_GALLERY_TREE, null)
-    }
+    private fun outsideGalleryTree(): String? = StorageTargetStore.tree(context)
 
     /**
      * The vault label, falling back to the default for a missing **or unusable**
@@ -475,14 +472,7 @@ class ImageStoreChannel(context: Context) {
      * bad row from making explicit downloads impossible, and the allowlist is
      * applied again in [VaultFolders.directoryOf] before it becomes a path.
      */
-    private fun vaultLabel(): String {
-        val stored = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-            .getString(VAULT_LABEL, null)
-        if (stored == null || !VaultFolders.isValidLabel(stored)) {
-            return VaultFolders.DEFAULT_LABEL
-        }
-        return stored
-    }
+    private fun vaultLabel(): String = StorageTargetStore.vaultLabel(context)
 
     /** Where the files tier writes right now: the granted tree and the vault. */
     private fun outsideGalleryTarget(): OutsideGalleryTarget =

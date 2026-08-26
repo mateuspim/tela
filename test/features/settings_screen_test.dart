@@ -27,14 +27,17 @@ import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
-  testWidgets('groups related settings into six scannable sections', (
+  testWidgets('groups related settings into scannable sections', (
     WidgetTester tester,
   ) async {
     await _pumpSettings(tester, FakeSettingsRepository());
 
-    expect(find.byType(Card), findsNWidgets(6));
+    expect(find.byType(Card), findsNWidgets(7));
     expect(find.text('Wallhaven account'), findsWidgets);
     expect(find.text('Appearance'), findsOneWidget);
+    // Its own group, not a row under Appearance: that one is about how tela
+    // looks, this one is about what tela puts on the device's screen.
+    expect(find.text('Wallpaper'), findsOneWidget);
     expect(find.text('Browse defaults'), findsOneWidget);
     expect(find.text('Downloads'), findsOneWidget);
     // Its own section, not a line under Downloads: a download is a file the

@@ -27,6 +27,7 @@ import 'package:tela/data/tag_blocklist/drift_tag_blocklist_repository.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_source.dart';
 import 'package:tela/data/wallpaper/method_channel_system_wallpaper_editor.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
+import 'package:tela/data/wallpaper/method_channel_wallpaper_rotation.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_sharer.dart';
 import 'package:tela/data/wallpaper/url_launcher_external_link.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -52,6 +53,7 @@ import 'package:tela/domain/ports/system_wallpaper_editor.dart';
 import 'package:tela/domain/ports/tag_blocklist_repository.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
 import 'package:tela/domain/ports/wallpaper_beam.dart';
+import 'package:tela/domain/ports/wallpaper_rotation.dart';
 import 'package:tela/domain/ports/wallpaper_sharer.dart';
 import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/domain/use_cases/adjust_wallpaper.dart';
@@ -472,6 +474,15 @@ final Provider<WallpaperBeam> wallpaperBeamProvider = Provider<WallpaperBeam>((
     identity: ref.watch(beamIdentityStoreProvider).identity,
   );
 });
+
+/// Schedules the platform to change the wallpaper on its own.
+///
+/// Only ever starts, stops and describes: the rotation itself runs natively
+/// with no Dart alive (see `WallpaperRotationWorker`).
+final Provider<WallpaperRotation> wallpaperRotationProvider =
+    Provider<WallpaperRotation>(
+      (Ref ref) => const MethodChannelWallpaperRotation(),
+    );
 
 /// Resolves stored images into files a beam can read.
 ///
