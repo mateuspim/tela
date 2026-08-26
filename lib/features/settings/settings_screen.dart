@@ -20,6 +20,7 @@ import 'package:tela/features/settings/browse_defaults_section.dart';
 import 'package:tela/features/settings/clear_cache_tile.dart';
 import 'package:tela/features/settings/download_location_controller.dart';
 import 'package:tela/features/settings/download_location_section.dart';
+import 'package:tela/features/settings/notifications_tile.dart';
 import 'package:tela/features/settings/nsfw_removable_guard.dart';
 import 'package:tela/features/settings/pinned_destination_notice.dart';
 import 'package:tela/features/settings/settings_section_label.dart';
@@ -156,6 +157,11 @@ class _SettingsList extends StatelessWidget {
           subtitle: l10n.downloadHistoryOpenDetail,
           routeName: TelaRoutes.downloadHistoryName,
         ),
+        const Divider(),
+        // Beside the work it announces, rather than under Storage: the queue
+        // and the offload both run behind this notification, and with it off
+        // they run with nothing on screen to say they exist.
+        const NotificationsTile(),
         const Divider(),
         // Above the pickers, because while a pin is on those pickers do not
         // decide anything: the pin overrides them for every download.

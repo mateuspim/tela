@@ -62,14 +62,23 @@ Future<bool> queueBatchDownload({
   // shelf can be gone by the time the *View* action is tapped, and a GoRouter
   // outlives the widget that was asked for it.
   final GoRouter router = GoRouter.of(context);
+  final Set<Purity> purities = <Purity>{
+    for (final Wallpaper wallpaper in wallpapers) wallpaper.purity,
+  };
   final ({bool proceed, StorageTier? tier, TagFolder? tag}) destination =
-      await _resolveBatchDestination(context, ref, wallpapers);
+      await resolveDownloadDestination(
+        context: context,
+        ref: ref,
+        purities: purities,
+        count: wallpapers.length,
+        tagSample: wallpapers,
+      );
   if (!destination.proceed || !context.mounted) return false;
-  final bool ready = await _ensureDownloadFolder(
-    context,
-    ref,
-    wallpapers,
-    destination.tier,
+  final bool ready = await ensureDownloadFolder(
+    context: context,
+    ref: ref,
+    purities: purities,
+    tier: destination.tier,
   );
   if (!ready) return false;
 
@@ -93,13 +102,19 @@ Future<bool> queueBatchDownload({
 /// checked here and is not meant to be: that failure needs an attempt to
 /// discover, and the queue now has somewhere honest to report it, per entry,
 /// with a retry beside it.
-Future<bool> _ensureDownloadFolder(
-  BuildContext context,
-  WidgetRef ref,
-  List<Wallpaper> wallpapers,
-  StorageTier? tier,
-) async {
-  if (!await _landsOutsideGallery(ref, wallpapers, tier)) return true;
+///
+/// Takes [purities] rather than the wallpapers themselves so a whole-listing
+/// download can pass **what its query may return** instead of what its first
+/// page happened to hold. A sample is the wrong evidence there: a listing whose
+/// first page is all safe can still turn up a sketchy wallpaper forty pages in,
+/// and the folder it needs would then never have been granted.
+Future<bool> ensureDownloadFolder({
+  required BuildContext context,
+  required WidgetRef ref,
+  required Set<Purity> purities,
+  required StorageTier? tier,
+}) async {
+  if (!await _landsOutsideGallery(ref, purities, tier)) return true;
   if (!context.mounted) return false;
   return ref
       .read(configuredDownloadProvider)
@@ -109,8 +124,8 @@ Future<bool> _ensureDownloadFolder(
       );
 }
 
-/// Whether any wallpaper in this batch is headed for the tier that owns a
-/// folder.
+/// Whether anything with one of these purities is headed for the tier that owns
+/// a folder.
 ///
 /// A resolved [tier] answers it outright. A null one means "resolve per
 /// wallpaper when it runs", so the same rule the download itself will apply is
@@ -118,17 +133,16 @@ Future<bool> _ensureDownloadFolder(
 /// configured destination — rather than a second guess at it.
 Future<bool> _landsOutsideGallery(
   WidgetRef ref,
-  List<Wallpaper> wallpapers,
+  Set<Purity> purities,
   StorageTier? tier,
 ) async {
   if (tier != null) return tier == StorageTier.filesOutsideGallery;
   final SettingsRepository settings = ref.read(settingsRepositoryProvider);
   final StorageTier? pin = await ref.read(pinnedDownloadTierProvider.future);
   final StorageSettings storage = await settings.loadStorageSettings();
-  return wallpapers.any(
-    (Wallpaper wallpaper) =>
-        storage.tierWithPin(wallpaper.purity, pin) ==
-        StorageTier.filesOutsideGallery,
+  return purities.any(
+    (Purity purity) =>
+        storage.tierWithPin(purity, pin) == StorageTier.filesOutsideGallery,
   );
 }
 
@@ -158,9 +172,15 @@ void _sayQueued(
   );
 }
 
-/// Where a whole batch lands: the one destination the user picks from the
+/// Where a whole download lands: the one destination the user picks from the
 /// intersection chooser. A dismissed chooser answers `proceed: false` so the
-/// batch abandons and the selection stays.
+/// caller abandons and a selection stays as it was.
+///
+/// Shared by the ticked-selection batch and by a whole-listing download, which
+/// is why it takes [purities] and [count] rather than deriving them: a listing
+/// knows what it *may* return from its query long before it has fetched it.
+/// [tagSample] is only ever evidence for the tag suggestion — a listing passes
+/// its first page, which is representative enough for a name.
 ///
 /// **A batch always asks. Nothing silences it — not even the pin.**
 ///
@@ -185,18 +205,17 @@ void _sayQueued(
 /// is the same download it would have made silently — the difference is that
 /// the user can see what it is about to do, and change it.
 Future<({bool proceed, StorageTier? tier, TagFolder? tag})>
-_resolveBatchDestination(
-  BuildContext context,
-  WidgetRef ref,
-  List<Wallpaper> wallpapers,
-) async {
+resolveDownloadDestination({
+  required BuildContext context,
+  required WidgetRef ref,
+  required Set<Purity> purities,
+  required int count,
+  required List<Wallpaper> tagSample,
+}) async {
   // Read before the first await, while the context is certainly still the one
   // under the shelf that published it. See `ListingOrigin`.
   final TagFolder? searched = ListingOrigin.folderOf(context);
   final StorageTier? pin = await ref.read(pinnedDownloadTierProvider.future);
-  final Set<Purity> purities = wallpapers
-      .map((Wallpaper wallpaper) => wallpaper.purity)
-      .toSet();
   // The tag remembered for a *shared* destination, and the folders that already
   // exist there. A batch has no single tier until the user taps one, so the
   // private library's remembered tag and its folder names are deliberately not
@@ -220,14 +239,14 @@ _resolveBatchDestination(
     source: ref.read(activeWallpaperSourceProvider),
     listingTag: searched,
     known: known,
-    selection: wallpapers,
+    selection: tagSample,
   );
   if (!context.mounted) return (proceed: false, tier: null, tag: null);
   final DownloadDestinationChoice? choice =
       await chooseBatchDownloadDestination(
         context,
         purities: purities,
-        count: wallpapers.length,
+        count: count,
         pinnedTier: pin,
         suggestedTag: suggested,
         tagIsRemembered: searched == null && remembered != null,

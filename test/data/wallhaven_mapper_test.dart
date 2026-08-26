@@ -140,6 +140,34 @@ void main() {
       expect(page.wallpapers, isEmpty);
     });
 
+    test("carries Wallhaven's own total, not a page-count guess", () {
+      // `last_page * per_page` over-reports by up to a page, because the last
+      // page is short — and this number is what a user reads before committing
+      // to downloading the whole listing.
+      final WallpaperPage page = WallhavenMapper.toPage(<String, dynamic>{
+        'data': <dynamic>[],
+        'meta': <String, dynamic>{
+          'current_page': 1,
+          'last_page': 518,
+          'per_page': 24,
+          'total': 12431,
+        },
+      });
+
+      expect(page.total, 12431);
+    });
+
+    test('a source that publishes no total says null, not zero', () {
+      // Null is "this source does not count", which a screen must be able to
+      // tell from a listing genuinely holding nothing.
+      final WallpaperPage page = WallhavenMapper.toPage(<String, dynamic>{
+        'data': <dynamic>[],
+        'meta': <String, dynamic>{'current_page': 1, 'last_page': 1},
+      });
+
+      expect(page.total, isNull);
+    });
+
     test('fails soft on a payload shape Wallhaven never promised to keep', () {
       // The ToS reserves the right to change the API without notice, so a
       // surprise shape must be a typed failure, not a TypeError in the grid.

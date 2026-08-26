@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/listing_download_queueing.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
@@ -98,6 +101,11 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
         appBar: GradientAppBar(
           title: _title(context),
           actions: <Widget>[
+            IconButton(
+              icon: const Icon(Icons.download_for_offline_outlined),
+              tooltip: AppLocalizations.of(context).listingDownloadAll,
+              onPressed: () => unawaited(_downloadWholeListing(query)),
+            ),
             const SelectModeButton(),
             BrowseFilterButton(filters: _filters, scope: this),
             const SizedBox(width: 8),
@@ -113,6 +121,38 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
         ),
       ),
     );
+  }
+
+  /// Queues everything this listing holds, however many pages deep it runs.
+  ///
+  /// Beside *Select* rather than inside it, because it is not a selection:
+  /// ticking ids for wallpapers nobody has scrolled to would have them dropped
+  /// when the batch resolved them against the loaded shelf. See
+  /// [queueListingDownload].
+  Future<void> _downloadWholeListing(SearchQuery query) {
+    return queueListingDownload(
+      context: context,
+      ref: ref,
+      query: query,
+      listing: _listingName(),
+      // The query cannot spell this: a tag searches on `id:37`. Only the link
+      // still holds the word — see `WallpaperLink.folderName`.
+      folder: widget.link.folderName,
+      messenger: ScaffoldMessenger.of(context),
+      l10n: AppLocalizations.of(context),
+    );
+  }
+
+  /// What the confirmation calls this listing — the same words the title uses.
+  String _listingName() {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return switch (widget.link) {
+      TagLink(:final WallpaperTag tag) => tag.name,
+      UploaderLink(:final String username) => '@$username',
+      // A colour has no name to print, so the caption stands in for one — the
+      // same substitution the title makes with its swatch.
+      ColorLink() => l10n.listingColored,
+    };
   }
 
   /// Names the link, and then says what kind of listing this is.

@@ -224,6 +224,45 @@ void main() {
     });
   });
 
+  group('SearchQuery.carriesSearch', () {
+    test('an untouched browse is not a search', () {
+      // Latest, as it opens. If this ever reads true the empty state starts
+      // blaming filters the user never set.
+      expect(const SearchQuery().carriesSearch, isFalse);
+    });
+
+    test('the standing preferences on every listing do not make one', () {
+      // These ride along on Latest too — a screen-sized resolution and a
+      // portrait ratio are set for the user, not by them. Counting them would
+      // make every query a search and the distinction worthless.
+      expect(
+        const SearchQuery(
+          resolution: AtLeastResolution(Resolution(1600, 2560)),
+          ratios: <RatioChoice>[ExactRatio(16, 9)],
+          categories: CategoryFilter({Category.anime}),
+          purity: PurityFilter({Purity.sfw, Purity.sketchy}),
+          sorting: Sorting.toplist,
+        ).carriesSearch,
+        isFalse,
+      );
+    });
+
+    test('anything that names content makes one', () {
+      // Each alone, because the empty state's wording turns on this and a
+      // single field left out of the check is a wrong sentence on that listing.
+      expect(const SearchQuery(term: 'forest').carriesSearch, isTrue);
+      expect(const SearchQuery(uploader: 'ada').carriesSearch, isTrue);
+      expect(
+        const SearchQuery(tags: <SearchTag>[SearchTag('nature')]).carriesSearch,
+        isTrue,
+      );
+      expect(
+        SearchQuery(color: WallpaperColor('#ea4c88')).carriesSearch,
+        isTrue,
+      );
+    });
+  });
+
   group('Resolution', () {
     test("parses Wallhaven's WxH form", () {
       expect(Resolution.parse('1920x1080'), const Resolution(1920, 1080));

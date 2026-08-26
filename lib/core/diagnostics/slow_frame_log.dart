@@ -62,8 +62,18 @@ class ImageCacheLoad {
 /// adb logcat -s flutter | grep tela.frames
 /// ```
 ///
+/// **[reportWatching] is why that grep is readable.** A probe that only speaks
+/// when something is wrong cannot be told apart from a probe that is not
+/// running: the first capture off the tablet came back empty, and an empty
+/// capture was equally consistent with "no slow frames" and with "the line
+/// never reaches logcat". One line at startup settles it before any jank
+/// number is believed — `event: watching` and nothing after it means the wall
+/// was on time; nothing at all means the log is not arriving and the reading
+/// is worthless.
+///
 /// ```dart
-/// final SlowFrameLog frames = SlowFrameLog(write: debugPrint);
+/// final SlowFrameLog frames = SlowFrameLog(write: debugPrint)
+///   ..reportWatching();
 /// frames.observe(build: timing.buildDuration, raster: timing.rasterDuration);
 /// ```
 class SlowFrameLog {
@@ -116,27 +126,43 @@ class SlowFrameLog {
   int _atLeast(int worst, Duration span) =>
       span.inMilliseconds > worst ? span.inMilliseconds : worst;
 
-  /// Writes the gathered batch and starts a new one.
+  /// Writes the one line that proves the probe is running.
   ///
-  /// JSON, per the project's logging rule: this is an observability line, not
-  /// something a user reads. It carries no URL, no path and no key — only
-  /// counts and milliseconds.
+  /// Call it once, at startup. It carries the thresholds it will judge frames
+  /// by, so a later batch line can be read against the budget that produced it
+  /// rather than against whatever the source says today.
+  void reportWatching() =>
+      _writeLine(<String, Object>{'event': 'watching', 'batch': batch});
+
+  /// Writes the gathered batch and starts a new one.
   void _flush() {
+    _writeLine(<String, Object>{
+      'event': 'slow',
+      'slow': _slow,
+      'slowTotal': _totalSlow,
+      'worstBuildMs': _worstBuild,
+      'worstRasterMs': _worstRaster,
+    });
+    _slow = 0;
+    _worstBuild = 0;
+    _worstRaster = 0;
+  }
+
+  /// Writes one line, tagged and carrying the cache load at that moment.
+  ///
+  /// JSON, per the project's logging rule: these are observability lines, not
+  /// something a user reads. They carry no URL, no path and no key — only
+  /// counts and milliseconds.
+  void _writeLine(Map<String, Object> fields) {
     final ImageCacheLoad cache = load();
     write(
       'tela.frames ${jsonEncode(<String, Object>{
-        'slow': _slow,
-        'slowTotal': _totalSlow,
-        'worstBuildMs': _worstBuild,
-        'worstRasterMs': _worstRaster,
+        ...fields,
         'budgetMs': budget.inMilliseconds,
         'imagesCached': cache.images,
         'imageBytes': cache.bytes,
         'imagesLive': cache.live,
       })}',
     );
-    _slow = 0;
-    _worstBuild = 0;
-    _worstRaster = 0;
   }
 }

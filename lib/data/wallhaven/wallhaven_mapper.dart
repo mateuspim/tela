@@ -41,6 +41,10 @@ abstract final class WallhavenMapper {
       // rather than by a short page — the fallback a source without one needs.
       hasMore: currentPage < lastPage,
       lastPage: lastPage,
+      // Wallhaven's own count, not `lastPage * per_page`: the final page is
+      // short, so multiplying would over-report by up to a page and put a
+      // wrong number in front of a user deciding whether to commit to it.
+      total: _readOptionalInt(meta, 'total'),
       seed: meta['seed'] as String?,
     );
   }
@@ -202,6 +206,18 @@ abstract final class WallhavenMapper {
   static String _readOptionalString(Map<String, dynamic> raw, String key) {
     final Object? value = raw[key];
     return value is String ? value : '';
+  }
+
+  /// The count where the source published one, and null where it did not.
+  ///
+  /// Distinct from [_readInt]'s fallback on purpose: a missing `total` means
+  /// "this source does not count", which a screen must be able to tell from a
+  /// listing genuinely holding zero.
+  static int? _readOptionalInt(Map<String, dynamic> raw, String key) {
+    final Object? value = raw[key];
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
   }
 
   static int _readInt(

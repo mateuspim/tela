@@ -43,8 +43,13 @@ void main() {
 /// It is in release builds deliberately — see [SlowFrameLog] for why a
 /// debug-only probe would measure the one build nobody runs on the device — and
 /// costs one comparison per frame while nothing is late.
+///
+/// It announces itself before the first frame, so that a capture with nothing
+/// in it is a broken log rather than a quiet one. Start `adb logcat` *before*
+/// launching, or read the buffer back with `adb logcat -d`: the watching line
+/// is written in the first moments of the process and is not repeated.
 void _watchFrameTimes() {
-  final SlowFrameLog frames = SlowFrameLog(write: debugPrint);
+  final SlowFrameLog frames = SlowFrameLog(write: debugPrint)..reportWatching();
   SchedulerBinding.instance.addTimingsCallback((List<FrameTiming> timings) {
     for (final FrameTiming timing in timings) {
       frames.observe(

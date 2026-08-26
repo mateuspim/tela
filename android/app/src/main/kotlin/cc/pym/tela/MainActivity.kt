@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.IntentSender
 import android.graphics.Rect
 import android.net.Uri
+import android.os.Bundle
 import android.app.WallpaperManager
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -49,6 +50,22 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
      */
     override fun shouldDestroyEngineWithHost(): Boolean = false
 
+    /**
+     * Asks for the notification permission the background work runs behind.
+     *
+     * Here rather than at the moment a move starts, because the queue drains
+     * from the composition root with no screen of its own to ask from — and by
+     * the time there is background work to announce, an activity may be the one
+     * thing missing. Android stops showing the dialog once the user has refused
+     * twice, so a launch that is already answered costs nothing.
+     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (NotificationPermission.isMissing(this)) {
+            requestPermissions(arrayOf(NotificationPermission.NAME), NotificationPermission.REQUEST)
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(
@@ -63,6 +80,10 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
             flutterEngine.dartExecutor.binaryMessenger,
             SHARE_CHANNEL,
         ).setMethodCallHandler(::handleShareCall)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            NOTIFICATIONS_CHANNEL,
+        ).setMethodCallHandler(::handleNotificationsCall)
         TelaEngine.imageStore?.prompts = this
     }
 
@@ -80,7 +101,8 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
      * naming the channel is a better way to find it than a quiet failure code.
      */
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
-        for (channel in listOf(WALLPAPER_CHANNEL, SCREEN_CHANNEL, SHARE_CHANNEL)) {
+        val channels = listOf(WALLPAPER_CHANNEL, SCREEN_CHANNEL, SHARE_CHANNEL, NOTIFICATIONS_CHANNEL)
+        for (channel in channels) {
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
                 .setMethodCallHandler(null)
         }
@@ -107,6 +129,21 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         }
         result.success(null)
+    }
+
+    /**
+     * Answers the notification row in Settings, and takes it where it can act.
+     *
+     * `openSettings` rather than a setter: Android has no API for an app to
+     * enable or disable its own notifications. See [NotificationSettings].
+     */
+    private fun handleNotificationsCall(call: MethodCall, result: MethodChannel.Result) {
+        val notifications = NotificationSettings(this)
+        when (call.method) {
+            "areEnabled" -> result.success(mapOf("enabled" to notifications.areEnabled()))
+            "openSettings" -> result.success(mapOf("opened" to notifications.open()))
+            else -> result.notImplemented()
+        }
     }
 
     /**
@@ -440,6 +477,7 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
         const val WALLPAPER_CHANNEL = "cc.pym.tela/wallpaper"
         const val SCREEN_CHANNEL = "cc.pym.tela/screen"
         const val SHARE_CHANNEL = "cc.pym.tela/share"
+        const val NOTIFICATIONS_CHANNEL = "cc.pym.tela/notifications"
         const val OUTSIDE_GALLERY_DIRECTORY_REQUEST = 401
         const val GALLERY_DELETE_REQUEST = 402
         const val BETWEEN_TARGETS_DELAY_MS = 500L

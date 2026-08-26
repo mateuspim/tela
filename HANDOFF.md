@@ -47,7 +47,29 @@ Updated: 2026-08-24
 > **release** build on purpose, because `make deploy` builds release and a
 > `kDebugMode` probe would measure the one build nobody runs on the tablet.
 >
-> **THE OWNER HAS NAMED THE NEXT WORK (2026-08-24, after the device pass):
+> **BUILT 2026-08-25 — a whole tag or uploader downloads without scrolling to
+> it** (`724fe2d`), from *"i can select all from user/tag to download so i dont
+> need to scroll all the way down"*. **It is deliberately not Select all.**
+> Widening that would have failed silently — a ticked id is resolved against the
+> *loaded* shelf, so ticks for unfetched pages are dropped at download time with
+> no error. **Download all** walks the listing into the durable queue instead,
+> one page at a time, behind a confirmation that names the count and an
+> estimated size. See `## DONE — a whole tag or uploader downloads without
+> scrolling to it`. Dart **1477**. **None of it has been on hardware** — walk a
+> big tag, and test Stop mid-walk.
+>
+> **BUILT 2026-08-25 — a blank wall now offers a reload** (`edf019c`), from
+> *"if the page im at like the latest doesnt show images we need to show a
+> button reload again"*. The retry button had existed all along on the *failed*
+> branch; the *succeeded-with-zero-items* branch drew no button, and Latest is
+> that branch. It now calls the same `_retry` the pull-to-refresh always has,
+> and the sentence no longer blames filters on a listing that has none. Dart
+> **1453**. **The question underneath it is still open:** an unfiltered Latest
+> arguably should never come back empty, and if it should not, this is the
+> affordance and the real bug is upstream in the error mapping — the button
+> makes that case survivable, not right. Watch for a recurrence on the device.
+>
+> **AND THE WORK NAMED BEFORE IT (2026-08-24, after the device pass):
 > duplicate downloads.** *"a way to not download duplicate images or remove
 > duplicate from the albums ive already downloaded because i could on error
 > download the same image to two tags, i could just have both images set for
@@ -58,18 +80,30 @@ Updated: 2026-08-24
 > owner's: what they described is **not** the rule that shipped, and on the SAF
 > tier it may not be implementable at all.
 >
-> **The probe reading is still owed, and the first attempt produced nothing.**
-> `make deploy` ran on 2026-08-24 and the owner tested; a `adb logcat -s
-> flutter` capture over that session came back **empty**. That is *not* a
-> finding: a release Flutter build emits nothing else on that tag, so an empty
-> capture is equally consistent with "no slow frames" and with "the line never
-> reaches logcat". **Settle that first, and do not report a jank number until
-> you have.** The cheap way is to make `SlowFrameLog` write one line at startup
-> — or drop the budget to zero for one build — and confirm it appears. A signal
-> that definitely does reach logcat, and is worth grepping as a cross-check, is
-> the system's own: `adb logcat | grep "queueBuffer.*cc.pym.tela"` prints
-> `fps=` and `max=` per surface, and a bad `max=` there is jank whoever caused
-> it.
+> **The probe reading is still owed, and the ambiguity that blocked it is now
+> fixed in code — the device run is what is left.** `make deploy` ran on
+> 2026-08-24 and the owner tested; a `adb logcat -s flutter` capture over that
+> session came back **empty**, which was *not* a finding: a release Flutter
+> build emits nothing else on that tag, so an empty capture was equally
+> consistent with "no slow frames" and with "the line never reaches logcat".
+>
+> `SlowFrameLog.reportWatching()` now writes one line at startup (branch
+> `feat/frame-probe-announce`, `72656f9`; Dart **1447** from 1445, analyze and
+> format clean, Kotlin untouched). Both lines carry `event`, so **the capture
+> now reads itself**:
+>
+> | What the grep shows | What it means |
+> |---|---|
+> | nothing at all | the log is not arriving — the reading is worthless, **do not report a number** |
+> | `event: watching` and nothing after | the probe ran and the wall was on time |
+> | a `event: slow` line | jank, and the line says which kind |
+>
+> **Start `adb logcat` before launching**, or read the buffer back with `adb
+> logcat -d` — the watching line is written in the first moments of the process
+> and is not repeated. A signal that definitely does reach logcat, and is worth
+> grepping as a cross-check if even the watching line is missing, is the
+> system's own: `adb logcat | grep "queueBuffer.*cc.pym.tela"` prints `fps=`
+> and `max=` per surface, and a bad `max=` there is jank whoever caused it.
 >
 > **Then run the probe.** Browse three pages
 > deep on the SM-X730 and read:
@@ -842,6 +876,227 @@ Updated: 2026-08-24
 > `core/ui/wallpaper_source_labels_scope.dart`,
 > `test/core/ui/wallpaper_source_badge_test.dart`; edited `wallpaper_tile.dart`,
 > `app/app.dart`, the ARB, and the three shelves.
+
+## DONE — a whole tag or uploader downloads without scrolling to it (asked and built 2026-08-25, `724fe2d`)
+
+**The owner's words:** *"lets also create a button or rather extend the
+functionallity, of the download and select all so if i still didnt select all
+images from a user or tag, i can select all from user/tag to download so i dont
+need to scroll all the way down to select all"*
+
+### Why it is not an extension of Select all, though it was asked for as one
+
+*Select all* exists (`selection_shelf.dart`, `selection.addAll(itemIds)`) and
+already does what was asked — **as far as the user has scrolled**. Widening it
+was the obvious move and would have failed *silently*: a ticked id is resolved
+back against the wallpapers the shelf has loaded
+(`SelectableWallpaperShelf._selected`, and `_run`'s
+`itemIds.where(selection.contains)`), by a documented rule — *"the listing is
+the authority on what is on screen, so an id whose wallpaper has since gone is
+dropped instead of acted on as a stale copy."* Ticks for unfetched pages would
+be dropped at download time with no error and no download.
+
+So the shipped thing ticks nothing. **Download all** walks the listing and feeds
+the durable queue directly.
+
+### The shape
+
+| Piece | Where | What it does |
+|---|---|---|
+| `WallpaperPage.total` | domain model | Wallhaven's own count, not `last_page * per_page` (the last page is short) |
+| `ListingDownloadSize.of` | domain model | pure; sizes a listing from the first page alone |
+| `WalkListingPages` | domain use case | pages a query, hands each page over, keeps nothing |
+| `ListingDownloadWalk` | `app/` notifier | the one in-flight walk; outlives the pushed screen |
+| `queueListingDownload` | `app/` | confirm → destination → walk, in that order |
+| `confirmListingDownload` | `core/ui` | the count and estimated size, before anything is queued |
+
+**Page 1 is fetched once and does three jobs**: sizes the listing for the
+confirmation, is the sample the tag suggestion reads, and is the first page
+queued. `WalkListingPages` takes `after:` so it resumes from page 2 rather than
+re-fetching — which on a `random` listing would also re-roll the shuffle.
+
+**Memory is the whole reason for the shape.** The alternatives were loading
+every wallpaper into the wall so the existing selection could tick them — tens
+of thousands of tiles in the list that is already this app's memory pressure —
+or holding the listing in a variable, the same cost without the tiles. Handing
+each page straight to the queue costs one page at a time: a 12,000-wallpaper tag
+costs the memory of twenty-four.
+
+**The purities come from the query, not from page 1**, and this is a real trap
+avoided: a listing whose opening page is all safe can turn up a sketchy
+wallpaper forty pages in, and a folder grant decided on the sample would never
+have been asked for. `resolveDownloadDestination` and `ensureDownloadFolder` are
+now shared with the ticked-selection batch rather than copied, and take
+`purities` + `count` instead of deriving them from a wallpaper list.
+
+### What it deliberately does not do
+
+- **The walk is not durable.** What it enqueues survives the process; the walk
+  does not. A listing abandoned at page 9 of 18 has queued nine pages and
+  forgotten the rest. Documented on `WalkListingPages`. A resumable walk needs a
+  stored cursor nothing else yet wants.
+- **One walk at a time.** A second is refused, not queued: two interleave
+  through the same 45-req/min limiter so each takes twice as long, and the
+  progress line could only describe one of them.
+- **Stop does not undo.** It halts after the page in flight and leaves what is
+  queued — undoing would delete work the queue may already have downloaded, and
+  the queue's own screen is where entries are removed.
+- **`WalkListingPages.defaultMaxPages = 500`** is a runaway guard, not a product
+  limit: `hasMore` comes from the source, and a source answering true forever
+  would page until the rate limit died and then keep going.
+
+### Device pass, 2026-08-24 evening — the path works end to end
+
+Walked on the SM-X730 from a real wallpaper: Browse → tile → details sheet →
+uploader link → `@AntiStar`'s listing. The new action is in the app bar, and it
+produced:
+
+> **Download all from @AntiStar?**
+> 376 wallpapers, roughly 1.3 GB
+> *Cancel · Download*
+
+**Cancelled deliberately, so nothing was queued** — 1.3 GB is the owner's call,
+not a verification step. So what is proven is everything up to the commit: the
+action is reachable, the count is real, the estimate is plausible (376 × ~3.5MB),
+the wording reads correctly with an `@` handle, and Cancel dismisses without
+queueing.
+
+Confirmed on the way past: **O1's tap-to-open on the details sheet handle works**
+— it was the route to the uploader link, and it opened first try.
+
+Still unproven, and it is the half that spends bandwidth:
+
+- **The walk itself.** Nobody has pressed Download, so no listing has been paged
+  into the queue on hardware. Do it on a *small* uploader first.
+- **Stop mid-walk.** Untested on device.
+- **A five-figure tag.** 376 is a comfortable number; the interesting case is a
+  listing where the walk runs for minutes against the 45-req/min limiter.
+- **Konachan's uncounted branch**, which has a unit test and has never met the
+  real source.
+
+### Two things the device showed that were not the point
+
+1. **A cold launch failed to reach Wallhaven**, showing the failure state and
+   its Retry — while `adb shell ping wallhaven.cc` from the same device answered
+   in 200ms. Retry then loaded the wall immediately. So the first request after
+   a wake fires before the network is ready, and the user sees an error that
+   was never true by the time they read it. Worth a look: an opening fetch that
+   retried once on `NetworkFailure` would erase it. **This may also be the real
+   story behind the empty-Latest report** — see the reload-button entry.
+2. **`dumpsys gfxinfo` is useless on this app.** It reported *Total frames
+   rendered: 3* after a session of scrolling, because Impeller/Vulkan draws
+   outside HWUI's pipeline entirely. Do not reach for it as a jank cross-check;
+   `SlowFrameLog` and `queueBuffer` are the instruments that work.
+
+### Also owed, for whoever picks this up
+
+1. **A big tag.** The confirmation should name a five-figure count and a
+   plausible size; the queue should start filling while the walk continues.
+   Watch the rate limiter — 45 req/min means a 500-page listing is ~11 minutes
+   of paging, and the app should stay usable throughout.
+2. **Stop.** Tap it mid-walk and confirm the paging actually ceases rather than
+   running to the end of the listing.
+
+Also unverified: whether **Konachan** reaches the uncounted branch as expected.
+It publishes no metadata at all, so its listings should say so rather than show
+a number — that path has a unit test but has never met the real source.
+
+Dart **1477** (from 1453), analyze and format clean, Kotlin untouched.
+
+## DONE — an empty wall now offers a reload (asked and built 2026-08-25, `edf019c`)
+
+**The owner's words:** *"if the page im at like the latest doesnt show images we
+need to show a button reload again"*
+
+### What is already there, and what is missing
+
+The retry button **exists and is wired** — for one of the two ways a wall ends up
+blank, and the owner has hit the other one.
+
+| The wall is blank because | What is drawn | Button? |
+|---|---|---|
+| the fetch **failed** | `wallFailure` → `WallpaperStatusView.failure` | **yes** — `l10n.actionRetry`, calls `_retry` |
+| the fetch **succeeded with zero items** | `WallpaperStatusView(icon: Icons.search_off, message: l10n.browseEmpty)` | **no** |
+
+`WallpaperStatusView`'s own docstring names the rule it is following: *"Without
+[onAction] it is a statement, not a prompt."* For a search with no matches that
+is right. For **latest**, it is not — an unfiltered listing that Wallhaven
+answers with nothing is not a statement anyone should have to accept.
+
+### What shipped
+
+`wallEmpty` in `wallpaper_wall_status.dart`. The empty branch now passes
+`actionLabel`/`onAction` into the `WallpaperStatusView` it was already building,
+calling **the same `_retry` the pull-to-refresh calls** — no second path. Both
+decisions in the "small change" list below were taken, not inherited:
+
+1. **The button shows on every empty listing**, search included. A search that
+   found nothing can still be worth asking again, and a listing that is empty
+   for a real reason loses nothing by having it.
+2. **The sentence splits**, on a new `SearchQuery.carriesSearch` — true when
+   `term`, `uploader`, `tags` or `color` name content, false for the standing
+   preferences (`resolution`, `ratios`, `categories`, `purity`) that ride along
+   on an untouched Latest. Counting those would make every query "a search" and
+   the distinction worthless. New string `browseEmptyListing`: *"This listing
+   came back with no wallpapers."*
+
+Dart **1453** (from 1447), analyze and format clean, Kotlin untouched.
+`test/features/browse_empty_reload_test.dart` pins the button, the refetch, and
+each sentence on its own listing; three cases in `search_query_test.dart` pin
+the predicate.
+
+**Still not answered, and it was the open question:** whether an unfiltered
+Latest should ever come back empty at all. See *Worth a moment* below — if it
+should not, this fix is the affordance and the real bug is upstream in the
+error mapping. The button makes that case survivable; it does not make it right.
+
+### Why it was a small change
+
+`wallFirstPage` **already takes `onRetry` and already has it in hand** — it is
+threaded from `_retry` in `wallpaper_grid.dart:283` and used by the failure
+branch only. The empty branch drops it on the floor. Passing `actionLabel` and
+`onAction` into that one `WallpaperStatusView` is the fix; no new callback, no
+new state, no plumbing.
+
+Two things to settle while doing it, both visible from the same three lines:
+
+1. **The sentence is wrong for this case.** `browseEmpty` is *"No wallpapers
+   match these filters."* — which on an unfiltered **latest** is a lie about why
+   the screen is blank. Either a second string for the unfiltered listing, or
+   one that does not claim filters are the cause.
+2. **Whether the button belongs on a genuinely empty search.** A reload on
+   `q=zxcvbn` is harmless but slightly silly. The alternative is to offer it only
+   when the listing carries no filters — which needs the query, and
+   `ListingOrigin` (pass O) already carries exactly that, so it is reachable.
+   Cheapest honest answer is probably to show it always and fix the sentence;
+   decide it rather than inheriting it.
+
+### The thing not to miss: a reload already works, invisibly
+
+`wallFirstPage` is kept scrollable **specifically so pull-to-refresh survives an
+empty listing** — its docstring says so: *"a listing that came back empty or
+failed is exactly when the user reaches for it, and `RefreshIndicator` ignores a
+non-scrolling child."* So the capability is not missing; the **affordance** is.
+That is worth stating plainly in the commit, because it means this is a
+discoverability fix, not a functional one, and it also means the button and the
+pull must both land on `_retry` rather than growing a second path.
+
+### Worth a moment before assuming it is only cosmetic
+
+An unfiltered **latest** coming back with zero wallpapers and no error is odd on
+its face — Wallhaven always has a latest page. Two readings, and they want
+different fixes:
+
+- The fetch really did return an empty page (a filter left set from an earlier
+  session, a purity the key cannot see, an off-by-one page number past the end).
+  Then the button is right and the sentence is the bug.
+- Something failed in a way that produced an empty list instead of a
+  `SourceFailure`. Then the button papers over a mapping gap in
+  `core/network`'s error handling, and the real fix is upstream.
+
+**Ask the owner which listing and which filters were on screen when they saw
+it**, or reproduce it on the tablet, before deciding the empty branch is the
+whole story. Cheap to check and it decides where the fix belongs.
 
 ## Duplicate downloads — the rule exists; the gaps are the work (asked 2026-08-24)
 

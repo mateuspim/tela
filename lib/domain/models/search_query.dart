@@ -243,6 +243,28 @@ class SearchQuery {
     return copyWith(resolution: AtLeastResolution(screen));
   }
 
+  /// Whether this listing asks for something in particular, rather than being
+  /// a plain browse.
+  ///
+  /// Only the fields that *name content* count. [resolution], [ratios],
+  /// [categories] and [purity] are standing preferences carried by every
+  /// listing including an untouched Latest, so folding them in here would make
+  /// every query "a search" and the distinction worthless.
+  ///
+  /// Read by the empty-listing state: "no wallpapers match these filters" is
+  /// true of a search that found nothing and a lie about a Latest that came
+  /// back empty, which has no filters to blame.
+  ///
+  /// ```dart
+  /// const SearchQuery().carriesSearch; // false — this is Latest
+  /// const SearchQuery(term: 'forest').carriesSearch; // true
+  /// ```
+  bool get carriesSearch =>
+      term.isNotEmpty ||
+      uploader.isNotEmpty ||
+      tags.isNotEmpty ||
+      color != null;
+
   /// Returns a copy filtered by [color], or by no colour when it is null.
   ///
   /// Not a [copyWith] parameter, and that is the whole point: `copyWith` fills
