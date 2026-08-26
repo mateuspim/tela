@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:tela/domain/models/local_preview.dart';
+import 'package:tela/domain/models/vault_thumbnail.dart';
 import 'package:tela/domain/ports/local_preview_cache.dart';
 
 /// Signature of tela's native image method, shared with the image store.
@@ -54,6 +55,25 @@ class MethodChannelLocalPreviewCache implements LocalPreviewCache {
     }
   }
 
+  @override
+  Future<VaultThumbnail?> materializeThumbnail(
+    Uri location,
+    int maxDimensionPx,
+  ) async {
+    try {
+      final Object? raw = await _invokeMethod(
+        'materializeVaultThumbnail',
+        <String, String>{
+          'location': location.toString(),
+          'maxDimensionPx': maxDimensionPx.toString(),
+        },
+      );
+      return _thumbnailFrom(raw);
+    } on PlatformException {
+      return null;
+    }
+  }
+
   static Future<Object?> _invokeNativeMethod(
     String method,
     Map<String, String> arguments,
@@ -66,5 +86,15 @@ class MethodChannelLocalPreviewCache implements LocalPreviewCache {
     final Object? path = raw['path'];
     if (path is! String) return null;
     return LocalPreview(path: path, isTemporary: true);
+  }
+
+  VaultThumbnail? _thumbnailFrom(Object? raw) {
+    if (raw is! Map<Object?, Object?> || raw['success'] != true) return null;
+    final Object? path = raw['path'];
+    final Object? width = raw['width'];
+    final Object? height = raw['height'];
+    if (path is! String || width is! int || height is! int) return null;
+    if (width <= 0 || height <= 0) return null;
+    return VaultThumbnail(path: path, width: width, height: height);
   }
 }

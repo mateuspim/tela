@@ -1,4 +1,5 @@
 import 'package:tela/domain/models/local_preview.dart';
+import 'package:tela/domain/models/vault_thumbnail.dart';
 
 /// Materialises a downloaded image into a file Flutter can decode offline.
 ///
@@ -24,4 +25,22 @@ abstract interface class LocalPreviewCache {
   /// Releasing a [LocalPreview] whose `isTemporary` is false must do nothing —
   /// that path is the download's own file, not tela's to delete.
   Future<void> release(LocalPreview preview);
+
+  /// Decodes a downsampled [VaultThumbnail] for [location], or null.
+  ///
+  /// A grid tile for a vault (SAF) image cannot use [materialize]: that copies
+  /// the whole original file, which is the right cost once for a single
+  /// full-screen viewer but far too much paid per tile for a wall of dozens of
+  /// them scrolling past. This decodes at roughly [maxDimensionPx] instead, and
+  /// the native side caches the result by [location] so a tile scrolled past
+  /// and back costs no second decode — there is deliberately no matching
+  /// release: unlike [materialize]'s throwaway copy, this lives in the
+  /// platform's own cache directory for as long as the OS keeps it.
+  ///
+  /// Answers null for every reason the source cannot be read, the same as
+  /// [materialize].
+  Future<VaultThumbnail?> materializeThumbnail(
+    Uri location,
+    int maxDimensionPx,
+  );
 }

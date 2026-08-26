@@ -1,6 +1,8 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/data/storage/method_channel_local_preview_cache.dart';
 import 'package:tela/domain/models/local_preview.dart';
+import 'package:tela/domain/models/vault_thumbnail.dart';
 
 void main() {
   group("MethodChannelLocalPreviewCache resolves a download's location", () {
@@ -142,5 +144,69 @@ void main() {
         expect(calls, isEmpty);
       },
     );
+  });
+
+  group('MethodChannelLocalPreviewCache materializeThumbnail', () {
+    test('decodes a vault document into a small cached file', () async {
+      final List<Map<String, String>> calls = <Map<String, String>>[];
+      final MethodChannelLocalPreviewCache cache =
+          MethodChannelLocalPreviewCache(
+            invokeMethod: (String method, Map<String, String> arguments) async {
+              calls.add(<String, String>{'method': method, ...arguments});
+              return <Object?, Object?>{
+                'success': true,
+                'path': '/cache/previews/thumb-1',
+                'width': 3840,
+                'height': 2160,
+              };
+            },
+          );
+
+      final VaultThumbnail? thumbnail = await cache.materializeThumbnail(
+        Uri.parse(
+          'content://com.android.externalstorage.documents/tree/1234-5678%3ATela/document/1234-5678%3ATela%2Fwallhaven-e7jvjd.jpg',
+        ),
+        200,
+      );
+
+      expect(thumbnail, isNotNull);
+      expect(thumbnail!.path, '/cache/previews/thumb-1');
+      expect(thumbnail.width, 3840);
+      expect(thumbnail.height, 2160);
+      expect(calls.single['method'], 'materializeVaultThumbnail');
+      expect(calls.single['maxDimensionPx'], '200');
+    });
+
+    test('answers null when native cannot read the location', () async {
+      final MethodChannelLocalPreviewCache cache =
+          MethodChannelLocalPreviewCache(
+            invokeMethod:
+                (String method, Map<String, String> arguments) async =>
+                    <Object?, Object?>{'success': false},
+          );
+
+      final VaultThumbnail? thumbnail = await cache.materializeThumbnail(
+        Uri.parse('content://media/external/images/media/99'),
+        200,
+      );
+
+      expect(thumbnail, isNull);
+    });
+
+    test('answers null rather than throw when the channel fails', () async {
+      final MethodChannelLocalPreviewCache cache =
+          MethodChannelLocalPreviewCache(
+            invokeMethod: (String method, Map<String, String> arguments) {
+              throw PlatformException(code: 'unavailable');
+            },
+          );
+
+      final VaultThumbnail? thumbnail = await cache.materializeThumbnail(
+        Uri.parse('content://media/external/images/media/99'),
+        200,
+      );
+
+      expect(thumbnail, isNull);
+    });
   });
 }

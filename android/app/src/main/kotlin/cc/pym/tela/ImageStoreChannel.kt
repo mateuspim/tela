@@ -126,6 +126,7 @@ class ImageStoreChannel(context: Context) {
             "canReadImages" -> handleCanReadImages(call, result)
             "measureImages" -> handleMeasureImages(call, result)
             "materializeImage" -> handleMaterializeImage(call, result)
+            "materializeVaultThumbnail" -> handleMaterializeVaultThumbnail(call, result)
             "releasePreview" -> handleReleasePreview(call, result)
             "describeDownloadLocation" -> describeDownloadLocation(result)
             "chooseDownloadFolder" -> handleChooseDownloadFolder(call, result)
@@ -329,6 +330,18 @@ class ImageStoreChannel(context: Context) {
         onStorageThread(result) { ImageStorage(context).materialise(Uri.parse(location)) }
     }
 
+    private fun handleMaterializeVaultThumbnail(call: MethodCall, result: MethodChannel.Result) {
+        val location = call.argument<String>("location") ?: run {
+            result.success(mapOf("success" to false))
+            return
+        }
+        val maxDimensionPx = call.argument<String>("maxDimensionPx")?.toIntOrNull()
+            ?: DEFAULT_THUMBNAIL_MAX_DIMENSION_PX
+        onStorageThread(result) {
+            ImageStorage(context).materialiseThumbnail(Uri.parse(location), maxDimensionPx)
+        }
+    }
+
     private fun handleReleasePreview(call: MethodCall, result: MethodChannel.Result) {
         val path = call.argument<String>("path") ?: run {
             result.success(mapOf("success" to true))
@@ -523,6 +536,9 @@ class ImageStoreChannel(context: Context) {
                 Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
         const val PERSISTED_DIRECTORY_ACCESS_FLAGS =
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+
+        /** Used only if Dart's own tile-width argument is somehow missing. */
+        const val DEFAULT_THUMBNAIL_MAX_DIMENSION_PX = 200
     }
 }
 
