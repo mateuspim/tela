@@ -20,6 +20,19 @@ abstract interface class LocalPreviewCache {
   /// download the user deleted is an ordinary state of the world.
   Future<LocalPreview?> materialize(Uri location);
 
+  /// Downloads [imageUrl] into the same cache, for a wallpaper with no local
+  /// file yet.
+  ///
+  /// **The reason a beam is not limited to things you already downloaded.** A
+  /// beam sends bytes, and a wallpaper being browsed has none on the device —
+  /// so this fetches them once, into the same directory [materialize] uses, and
+  /// the result is released the same way. One cache, one release, no second
+  /// cleanup path to forget.
+  ///
+  /// Answers null for every reason the fetch can fail — offline, a rejected
+  /// request, a zero-byte reply — the same as [materialize].
+  Future<LocalPreview?> materializeRemote(Uri imageUrl);
+
   /// Deletes a throwaway preview; a no-op for a non-temporary one.
   ///
   /// Releasing a [LocalPreview] whose `isTemporary` is false must do nothing —

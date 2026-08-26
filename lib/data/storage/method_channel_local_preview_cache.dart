@@ -43,6 +43,21 @@ class MethodChannelLocalPreviewCache implements LocalPreviewCache {
   }
 
   @override
+  Future<LocalPreview?> materializeRemote(Uri imageUrl) async {
+    try {
+      final Object? raw = await _invokeMethod(
+        'materializeRemoteImage',
+        <String, String>{
+          'imageUrl': imageUrl.toString(),
+        },
+      );
+      return _previewFrom(raw);
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  @override
   Future<void> release(LocalPreview preview) async {
     if (!preview.isTemporary) return;
     try {

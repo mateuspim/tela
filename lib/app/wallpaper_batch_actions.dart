@@ -54,6 +54,10 @@ enum WallpaperBatchAction {
   /// beam freely, and `BeamWallpapers` refuses a batch holding an explicit one
   /// while the setting is off. Gating the action here too would have made the
   /// whole feature unreachable for the case it exists for.
+  ///
+  /// **Nor gated on having downloaded them.** One that is already on the disk
+  /// is sent from there; one that is not is fetched once on the way out, so a
+  /// browse selection can beam straight off the wall.
   beam,
 
   /// Refile every ticked download under another tag folder.
@@ -194,17 +198,27 @@ Future<bool> _beamAll(
 ) async {
   final List<DownloadRecord> records = await _recordsFor(ref, wallpapers);
   if (!context.mounted) return false;
+  // The downloaded file where there is one — no second trip over the network
+  // for bytes already on the disk — and the source's URL where there is not,
+  // which is what lets a browse selection beam at all.
+  final Map<String, DownloadRecord> byKey = <String, DownloadRecord>{
+    for (final DownloadRecord record in records)
+      record.wallpaper.ref.key: record,
+  };
   final ResolvedBeamFiles resolved = await ref
       .read(resolveBeamFilesProvider)
       .call(<BeamCandidate>[
-        for (final DownloadRecord record in records)
-          BeamCandidate.ofDownload(record),
+        for (final Wallpaper wallpaper in wallpapers)
+          if (byKey[wallpaper.ref.key] case final DownloadRecord record)
+            BeamCandidate.ofDownload(record)
+          else
+            BeamCandidate.ofWallpaper(wallpaper),
       ]);
   try {
     if (!context.mounted) return false;
-    // A beam sends bytes, so a favourite nobody downloaded — or a download
-    // whose file has since gone — has nothing to send. Said out loud, because
-    // a button that silently does nothing reads as broken.
+    // Every one of them failed to resolve — offline, or files that have since
+    // gone. Said out loud, because a button that silently does nothing reads
+    // as broken.
     if (resolved.files.isEmpty) {
       showTelaToast(messenger, l10n.beamNothingToSend(wallpapers.length));
       return false;

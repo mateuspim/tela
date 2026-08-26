@@ -98,6 +98,42 @@ internal class StoredImageReading(private val context: Context) {
      * Every failure answers `success=false` rather than throwing, the same
      * rule [materialise] follows.
      */
+    /**
+     * Downloads [imageUrl] into the preview cache, so a beam can send a
+     * wallpaper nobody has downloaded yet.
+     *
+     * Lands in the *same* directory [materialise] writes to, and answers the
+     * same shape — so `releasePreview` cleans it up and the caller needs no
+     * second release path for remote sources.
+     *
+     * Reuses [Downloads.fetch] rather than opening its own connection: that is
+     * the one place redirects and timeouts are handled, and a second copy would
+     * be free to disagree with it.
+     */
+    fun materialiseRemote(imageUrl: String): Map<String, Any> {
+        val directory = TelaDirectories.previews(context)
+        if (!TelaDirectories.ensure(directory)) return mapOf("success" to false)
+        val target = File(directory, "preview-${System.nanoTime()}")
+        return try {
+            Downloads.fetch(imageUrl, target)
+            // A zero-byte answer is a failed fetch that threw nothing — a
+            // captive portal, a 204. Treated as a miss rather than beamed as an
+            // empty file.
+            if (target.length() == 0L) {
+                target.delete()
+                mapOf("success" to false)
+            } else {
+                mapOf("success" to true, "path" to target.absolutePath, "temporary" to true)
+            }
+        } catch (_: Exception) {
+            // Deliberately not logging the URL: CLAUDE.md forbids logging a
+            // full image URL, and this one is reached for explicit wallpapers
+            // too.
+            target.delete()
+            mapOf("success" to false)
+        }
+    }
+
     fun materialiseThumbnail(location: Uri, maxDimensionPx: Int): Map<String, Any> {
         val directory = TelaDirectories.previews(context)
         if (!TelaDirectories.ensure(directory)) return mapOf("success" to false)

@@ -29,6 +29,10 @@ class FakeLocalPreviewCache implements LocalPreviewCache {
   /// Locations passed to [materialize], in order — proves local-first.
   final List<Uri> materialised = <Uri>[];
 
+  /// URLs fetched through [materializeRemote], in order — proves a wallpaper
+  /// with no local file is downloaded rather than silently skipped.
+  final List<Uri> fetched = <Uri>[];
+
   /// Previews handed back to [release], in order — proves cleanup.
   final List<LocalPreview> released = <LocalPreview>[];
 
@@ -43,6 +47,18 @@ class FakeLocalPreviewCache implements LocalPreviewCache {
     return LocalPreview(
       path: '/cache/preview-${location.hashCode}',
       isTemporary: location.scheme != 'file',
+    );
+  }
+
+  @override
+  Future<LocalPreview?> materializeRemote(Uri imageUrl) async {
+    fetched.add(imageUrl);
+    if (_unreadable.contains(imageUrl)) return null;
+    // Always temporary: a fetched wallpaper is tela's own copy, never a file
+    // the user downloaded, so it is always owed a release.
+    return LocalPreview(
+      path: '/cache/preview-${imageUrl.hashCode}',
+      isTemporary: true,
     );
   }
 

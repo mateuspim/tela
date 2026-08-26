@@ -367,9 +367,12 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
         _adjustButton(l10n),
         _shareButton(l10n),
         // Beside share, because they are siblings — both send this picture
-        // somewhere else — and only once there is a file: a beam sends bytes,
-        // so an undownloaded wallpaper has nothing to send.
-        if (downloaded != null) _beamButton(l10n, downloaded),
+        // somewhere else. **Not gated on having downloaded it**: a beam that
+        // could only send what was already on the device is not what "send
+        // this to my computer" means while you are looking at a wallpaper you
+        // have never downloaded (owner, 2026-08-26). An undownloaded one is
+        // fetched once on the way out.
+        _beamButton(l10n, downloaded),
         _downloadButton(l10n),
         if (downloaded != null) _moveToPrivateButton(l10n, downloaded),
         if (downloaded != null) _deleteButton(l10n, downloaded),
@@ -402,7 +405,7 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
   /// reaching this button is refused there, by name, rather than having the
   /// button withheld. The private library, where withholding *is* right, does
   /// that on its own shelf.
-  Widget _beamButton(AppLocalizations l10n, DownloadRecord downloaded) {
+  Widget _beamButton(AppLocalizations l10n, DownloadRecord? downloaded) {
     return IconButton(
       key: const Key('detail-beam'),
       onPressed: _isBeaming ? null : () => unawaited(_beam(downloaded)),
@@ -422,12 +425,18 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
   /// does: a vault download's location is a `content:` SAF URI that no Dart
   /// code can open, and the throwaway copy it makes is released however the
   /// sheet ends.
-  Future<void> _beam(DownloadRecord downloaded) async {
+  Future<void> _beam(DownloadRecord? downloaded) async {
     setState(() => _isBeaming = true);
     try {
+      // The downloaded file when there is one — no second trip over the
+      // network for bytes already on the disk — and the source's URL when
+      // there is not.
+      final BeamCandidate candidate = downloaded == null
+          ? BeamCandidate.ofWallpaper(_wallpaper)
+          : BeamCandidate.ofDownload(downloaded);
       final ResolvedBeamFiles resolved = await ref
           .read(resolveBeamFilesProvider)
-          .call(<BeamCandidate>[BeamCandidate.ofDownload(downloaded)]);
+          .call(<BeamCandidate>[candidate]);
       try {
         if (!mounted) return;
         if (resolved.files.isEmpty) {

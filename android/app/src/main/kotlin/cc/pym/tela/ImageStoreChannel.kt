@@ -126,6 +126,7 @@ class ImageStoreChannel(context: Context) {
             "canReadImages" -> handleCanReadImages(call, result)
             "measureImages" -> handleMeasureImages(call, result)
             "materializeImage" -> handleMaterializeImage(call, result)
+            "materializeRemoteImage" -> handleMaterializeRemoteImage(call, result)
             "materializeVaultThumbnail" -> handleMaterializeVaultThumbnail(call, result)
             "releasePreview" -> handleReleasePreview(call, result)
             "describeDownloadLocation" -> describeDownloadLocation(result)
@@ -328,6 +329,24 @@ class ImageStoreChannel(context: Context) {
             return
         }
         onStorageThread(result) { ImageStorage(context).materialise(Uri.parse(location)) }
+    }
+
+    /**
+     * Fetches a wallpaper nobody has downloaded, so a beam can still send it.
+     *
+     * On the *download* executor rather than the storage one: this is a network
+     * fetch of many megabytes, and queueing it behind the serial storage thread
+     * would stall every listing and badge probe while it ran.
+     */
+    private fun handleMaterializeRemoteImage(call: MethodCall, result: MethodChannel.Result) {
+        val imageUrl = call.argument<String>("imageUrl") ?: run {
+            result.success(mapOf("success" to false))
+            return
+        }
+        Downloads.executor.execute {
+            val response = ImageStorage(context).materialiseRemote(imageUrl)
+            onMainThread { result.success(response) }
+        }
     }
 
     private fun handleMaterializeVaultThumbnail(call: MethodCall, result: MethodChannel.Result) {

@@ -268,9 +268,9 @@
     "description": "Shown when discovery has been listening a while with no answer. Names both causes the user can act on rather than implying the network is broken."
   },
 
-  "beamNothingToSend": "{count, plural, one{That wallpaper isn't downloaded yet, so there is no file to send} other{None of those are downloaded yet, so there are no files to send}}",
+  "beamNothingToSend": "{count, plural, one{That wallpaper could not be read or fetched} other{None of those could be read or fetched}}",
   "@beamNothingToSend": {
-    "description": "Shown when a beam is asked for over wallpapers that have no local file \u2014 favourites that were never downloaded, or downloads whose files have since gone. A beam sends bytes, so there is nothing to do; saying so is better than a button that appears to do nothing.",
+    "description": "Shown when every wallpaper in a beam failed to resolve to bytes \u2014 offline while fetching an undownloaded one, or downloads whose files have since gone. Not 'not downloaded yet': an undownloaded wallpaper is fetched on the way out, so that is no longer a reason to fail.",
     "placeholders": {
       "count": {
         "type": "int"

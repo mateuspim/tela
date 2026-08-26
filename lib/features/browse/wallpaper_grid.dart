@@ -365,6 +365,9 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
         actions: const <WallpaperBatchAction>[
           WallpaperBatchAction.favorite,
           WallpaperBatchAction.download,
+          // Nothing on this wall is downloaded, and that is no longer a reason
+          // to withhold it: a beam fetches what it needs on the way out.
+          WallpaperBatchAction.beam,
         ],
         child: JustifiedWallpaperGrid(
           controller: _scroll,

@@ -64,10 +64,9 @@ class FavoritesGrid extends ConsumerWidget {
       // have not, are the two batches that mean something on a curated shelf.
       actions: const <WallpaperBatchAction>[
         WallpaperBatchAction.download,
-        // Offered even though a favourite need not be downloaded: the ones
-        // that are can go straight over, and the batch says plainly when none
-        // of them have a file yet rather than hiding the option on a shelf
-        // that usually does.
+        // A favourite need not be downloaded, and that no longer matters: the
+        // ones that are go straight over, and the rest are fetched once on the
+        // way out.
         WallpaperBatchAction.beam,
         WallpaperBatchAction.unfavorite,
       ],
