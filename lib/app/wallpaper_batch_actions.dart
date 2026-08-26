@@ -153,7 +153,7 @@ Future<bool> _perform(
     case WallpaperBatchAction.retag:
       return _retagAll(context, ref, wallpapers);
     case WallpaperBatchAction.beam:
-      return _beamAll(context, ref, wallpapers);
+      return _beamAll(context, ref, wallpapers, messenger, l10n);
   }
 }
 
@@ -189,6 +189,8 @@ Future<bool> _beamAll(
   BuildContext context,
   WidgetRef ref,
   List<Wallpaper> wallpapers,
+  ScaffoldMessengerState messenger,
+  AppLocalizations l10n,
 ) async {
   final List<DownloadRecord> records = await _recordsFor(ref, wallpapers);
   if (!context.mounted) return false;
@@ -199,7 +201,14 @@ Future<bool> _beamAll(
           BeamCandidate.ofDownload(record),
       ]);
   try {
-    if (!context.mounted || resolved.files.isEmpty) return false;
+    if (!context.mounted) return false;
+    // A beam sends bytes, so a favourite nobody downloaded — or a download
+    // whose file has since gone — has nothing to send. Said out loud, because
+    // a button that silently does nothing reads as broken.
+    if (resolved.files.isEmpty) {
+      showTelaToast(messenger, l10n.beamNothingToSend(wallpapers.length));
+      return false;
+    }
     await BeamSheet.open(context, files: resolved.files);
   } finally {
     // The copies are full-size duplicates of every file sent; a batch of forty

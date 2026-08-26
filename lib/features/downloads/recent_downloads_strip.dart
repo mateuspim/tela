@@ -57,6 +57,7 @@ class RecentDownloadsStrip extends ConsumerWidget {
       // the identical selection there, is the trip this exists to save.
       actions: const <WallpaperBatchAction>[
         WallpaperBatchAction.favorite,
+        WallpaperBatchAction.beam,
         WallpaperBatchAction.forget,
       ],
       // The band is a fixed height inside the hub's unbounded column, so the

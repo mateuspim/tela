@@ -268,6 +268,21 @@
     "description": "Shown when discovery has been listening a while with no answer. Names both causes the user can act on rather than implying the network is broken."
   },
 
+  "beamNothingToSend": "{count, plural, one{That wallpaper isn't downloaded yet, so there is no file to send} other{None of those are downloaded yet, so there are no files to send}}",
+  "@beamNothingToSend": {
+    "description": "Shown when a beam is asked for over wallpapers that have no local file \u2014 favourites that were never downloaded, or downloads whose files have since gone. A beam sends bytes, so there is nothing to do; saying so is better than a button that appears to do nothing.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "beamSearchAgain": "Search again",
+  "@beamSearchAgain": {
+    "description": "Restarts beam discovery. Needed because a receiver is usually switched on after the sheet is already open, and the multicast announcement is a one-shot \u2014 a receiver that started listening later never heard anything to answer."
+  },
+
   "beamEnterAddress": "Enter an address",
   "@beamEnterAddress": {
     "description": "Action that opens the manual host/port entry, for networks that do not carry multicast."

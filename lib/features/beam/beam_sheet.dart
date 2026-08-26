@@ -63,16 +63,37 @@ class _BeamSheetState extends ConsumerState<BeamSheet> {
     (int total, BeamFile file) => total + file.sizeBytes,
   );
 
+  /// The countdown to the empty state, cancelled when discovery restarts.
+  Timer? _quietTimer;
+
   @override
   void initState() {
     super.initState();
+    _listen();
+  }
+
+  /// Starts (or restarts) discovery from nothing.
+  ///
+  /// Restartable because a receiver is usually switched on *after* the sheet is
+  /// already open — you tap beam, then go and open LocalSend — and without this
+  /// the only way to look again was to close the sheet and reopen it. The
+  /// announcement is a one-shot shout at the multicast group, so a receiver
+  /// that started listening after it went out never hears anything to answer:
+  /// re-announcing is the entire point, not just a UI reset.
+  void _listen() {
+    unawaited(_discovery?.cancel());
+    _quietTimer?.cancel();
+    setState(() {
+      _found.clear();
+      _searchedLongEnough = false;
+    });
     _discovery = ref
         .read(beamWallpapersProvider)
         .discover()
         .listen(_onFound, onError: (_) {});
     // Discovery never "completes" — receivers appear as they are switched on —
     // so the empty state is timed rather than waiting for a stream to end.
-    Timer(const Duration(seconds: 4), () {
+    _quietTimer = Timer(const Duration(seconds: 4), () {
       if (mounted) setState(() => _searchedLongEnough = true);
     });
   }
@@ -87,6 +108,7 @@ class _BeamSheetState extends ConsumerState<BeamSheet> {
     // Cancelling is what gives the multicast lock back; leaving it costs
     // battery for the life of the app.
     unawaited(_discovery?.cancel());
+    _quietTimer?.cancel();
     super.dispose();
   }
 
@@ -144,13 +166,27 @@ class _BeamSheetState extends ConsumerState<BeamSheet> {
           ),
         ),
       const SizedBox(height: 8),
-      // Always offered, not only after discovery gives up: a network with
-      // client isolation or multicast filtering never answers, and waiting out
-      // the timer to be told so is time spent for nothing.
-      TextButton.icon(
-        icon: const Icon(Icons.keyboard_outlined),
-        label: Text(l10n.beamEnterAddress),
-        onPressed: () => unawaited(_enterAddress()),
+      Wrap(
+        alignment: WrapAlignment.center,
+        children: <Widget>[
+          // Offered once the search has gone quiet, which is the moment it is
+          // worth pressing: before that it would just restart a search that is
+          // already running.
+          if (_searchedLongEnough)
+            TextButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: Text(l10n.beamSearchAgain),
+              onPressed: _listen,
+            ),
+          // Always offered, not only after discovery gives up: a network with
+          // client isolation or multicast filtering never answers, and waiting
+          // out the timer to be told so is time spent for nothing.
+          TextButton.icon(
+            icon: const Icon(Icons.keyboard_outlined),
+            label: Text(l10n.beamEnterAddress),
+            onPressed: () => unawaited(_enterAddress()),
+          ),
+        ],
       ),
     ];
   }
