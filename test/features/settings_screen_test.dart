@@ -613,7 +613,7 @@ void main() {
       final FakeAppLock lock = FakeAppLock();
       await _pumpSettings(tester, settings, lock: lock);
 
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(_appLockSwitch);
       await tester.pumpAndSettle();
 
       expect(lock.prompts, 1);
@@ -632,7 +632,7 @@ void main() {
         lock: FakeAppLock(passes: false),
       );
 
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(_appLockSwitch);
       await tester.pumpAndSettle();
 
       expect(settings.lockSaved, isTrue);
@@ -657,7 +657,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(_appLockSwitch);
       await tester.pumpAndSettle();
 
       expect(settings.lockSaved, isTrue);
@@ -682,7 +682,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(_appLockSwitch);
       await tester.pumpAndSettle();
 
       expect(settings.lockSaved, isFalse);
@@ -697,7 +697,7 @@ void main() {
       final FakeAppLock lock = FakeAppLock();
       await _pumpSettings(tester, settings, lock: lock);
 
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(_appLockSwitch);
       await tester.pumpAndSettle();
 
       expect(lock.prompts, 0);
@@ -714,12 +714,60 @@ void main() {
         lock: FakeAppLock(available: false),
       );
 
-      expect(find.byType(SwitchListTile), findsNothing);
+      expect(_appLockSwitch, findsNothing);
       expect(
         find.textContaining('Needs a screen lock or fingerprint'),
         findsOneWidget,
       );
       expect(settings.lockSaved, isFalse);
+    });
+  });
+
+  group('the explicit beam gate', () {
+    testWidgets('is off on a fresh install', (WidgetTester tester) async {
+      // The single safeguard behind tela's one deliberate exception to
+      // "explicit pixels never leave the app". A default of on would make that
+      // exception the rule.
+      await _pumpSettings(tester, FakeSettingsRepository());
+
+      expect(
+        tester.widget<SwitchListTile>(_beamSwitch).value,
+        isFalse,
+      );
+    });
+
+    testWidgets('persists being turned on immediately', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository();
+      await _pumpSettings(tester, settings);
+
+      await tester.tap(_beamSwitch);
+      await tester.pumpAndSettle();
+
+      // Written before the switch moves: a gate that lit up but did not save is
+      // one the user believes is on until the next cold start says otherwise.
+      expect(settings.explicitBeamAllowed, isTrue);
+    });
+
+    testWidgets('opens on the stored value', (WidgetTester tester) async {
+      await _pumpSettings(
+        tester,
+        FakeSettingsRepository()..explicitBeamAllowed = true,
+      );
+
+      expect(tester.widget<SwitchListTile>(_beamSwitch).value, isTrue);
+    });
+
+    testWidgets('turns back off', (WidgetTester tester) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository()
+        ..explicitBeamAllowed = true;
+      await _pumpSettings(tester, settings);
+
+      await tester.tap(_beamSwitch);
+      await tester.pumpAndSettle();
+
+      expect(settings.explicitBeamAllowed, isFalse);
     });
   });
 }
@@ -780,6 +828,23 @@ TileDensity _selectedDensity(WidgetTester tester) {
       .selected
       .single;
 }
+
+/// The explicit-beam toggle specifically. See [_appLockSwitch].
+final Finder _beamSwitch = find.ancestor(
+  of: find.text('Beam explicit wallpapers'),
+  matching: find.byType(SwitchListTile),
+);
+
+/// The app-lock toggle specifically.
+///
+/// Was `find.byType(SwitchListTile)`, which stopped meaning one thing the
+/// moment Privacy grew a second switch (the explicit beam). Finding it by its
+/// own title says which switch the test is about, and cannot go ambiguous
+/// again.
+final Finder _appLockSwitch = find.ancestor(
+  of: find.text('Lock the private library'),
+  matching: find.byType(SwitchListTile),
+);
 
 Future<void> _pumpSettings(
   WidgetTester tester,

@@ -107,6 +107,12 @@ class DriftSettingsRepository implements SettingsRepository {
   /// `SettingsRepository.loadCollectionsUsername`.
   static const String _collectionsUsernameKey = 'collections.username';
 
+  /// `SettingsRepository.loadExplicitBeamAllowed`.
+  static const String _explicitBeamKey = 'beam.explicit';
+
+  /// `SettingsRepository.loadBeamFingerprint`.
+  static const String _beamFingerprintKey = 'beam.fingerprint';
+
   final TelaDatabase _db;
 
   @override
@@ -345,6 +351,30 @@ class DriftSettingsRepository implements SettingsRepository {
   Future<void> setDownloadTag(TagFolder? tag) {
     if (tag == null) return _db.deleteSettings(<String>[_downloadTagKey]);
     return _db.putSetting(_downloadTagKey, tag.name);
+  }
+
+  @override
+  Future<String?> loadBeamFingerprint() async {
+    final String? stored = await _db.settingValue(_beamFingerprintKey);
+    return (stored == null || stored.isEmpty) ? null : stored;
+  }
+
+  @override
+  Future<void> saveBeamFingerprint(String fingerprint) =>
+      _db.putSetting(_beamFingerprintKey, fingerprint);
+
+  @override
+  Future<bool> loadExplicitBeamAllowed() async {
+    // Anything but the exact stored "true" is off. Fails toward safe, the way
+    // every NSFW rule here does: a row written by a future build, or a
+    // half-finished write, must not read as permission.
+    return await _db.settingValue(_explicitBeamKey) == 'true';
+  }
+
+  @override
+  Future<void> setExplicitBeamAllowed({required bool allowed}) {
+    if (!allowed) return _db.deleteSettings(<String>[_explicitBeamKey]);
+    return _db.putSetting(_explicitBeamKey, 'true');
   }
 
   @override

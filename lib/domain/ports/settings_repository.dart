@@ -157,6 +157,29 @@ abstract interface class SettingsRepository {
   /// clears the pin when [tier] is null.
   Future<void> setPinnedDownloadTier(StorageTier? tier);
 
+  /// This install's stable LocalSend fingerprint, or null before one exists.
+  ///
+  /// Persisted rather than regenerated per launch so a receiver that has
+  /// accepted this phone once keeps recognising it — the protocol identifies a
+  /// device by this string, and a fresh one every launch reads as a new,
+  /// unknown sender each time.
+  Future<String?> loadBeamFingerprint();
+
+  /// Remembers the generated [fingerprint].
+  Future<void> saveBeamFingerprint(String fingerprint);
+
+  /// Whether explicit wallpapers may be beamed to a machine on the LAN.
+  ///
+  /// **False on a fresh install, and only ever true because someone turned it
+  /// on.** It is the single safeguard behind `mayBeamBitmap`, the one
+  /// deliberate exception to "explicit pixels never leave the app" — so it
+  /// fails toward safe like every other NSFW setting here, and an unreadable
+  /// row reads as off.
+  Future<bool> loadExplicitBeamAllowed();
+
+  /// Allows or forbids beaming explicit wallpapers.
+  Future<void> setExplicitBeamAllowed({required bool allowed});
+
   /// The source username whose collections are shown as "yours", or null.
   ///
   /// Stored rather than derived because no Wallhaven endpoint hands it back:

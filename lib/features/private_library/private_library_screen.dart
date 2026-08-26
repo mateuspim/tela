@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -27,7 +28,10 @@ import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/vault_thumbnail.dart';
+import 'package:tela/domain/use_cases/resolve_beam_files.dart';
+import 'package:tela/features/beam/beam_sheet.dart';
 import 'package:tela/features/private_library/private_secure_access.dart';
+import 'package:tela/features/settings/beam_explicit_switch.dart';
 
 /// The app-private tier, which nothing but tela can open.
 ///
@@ -194,6 +198,16 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
           label: l10n.retagAction,
           run: _retagSelected,
         ),
+        // Withheld entirely while the gate is off, rather than shown and
+        // refused: the domain refuses too (`BeamWallpapers`), but an action
+        // that is never offered cannot be reached by muscle memory, which is
+        // the whole point of the gate being opt-in.
+        if (ref.watch(explicitBeamProvider).value ?? false)
+          SelectionAction(
+            icon: Icons.wifi_tethering,
+            label: l10n.beamAction,
+            run: _beamSelected,
+          ),
         SelectionAction(
           icon: Icons.lock_open_outlined,
           label: l10n.moveOutOfPrivateAction,
@@ -315,6 +329,32 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     );
     if (moved) ref.invalidate(privateImagesProvider);
     return moved;
+  }
+
+  /// Sends the ticked images to a machine on the local network.
+  ///
+  /// Resolves through [ResolveBeamFiles] first, because a vault image's
+  /// location is a `content:` SAF URI no Dart code can open — and releases the
+  /// throwaway copies that resolution makes, however the beam ends.
+  ///
+  /// Answers false so the ticks survive: a beam takes nothing away and changes
+  /// nothing here, so there is no reason for the selection to clear.
+  Future<bool> _beamSelected(List<String> keys) async {
+    if (keys.isEmpty) return false;
+    final List<PrivateImage> selected = _imagesFor(keys);
+    if (selected.isEmpty || !mounted) return false;
+    final ResolvedBeamFiles resolved = await ref
+        .read(resolveBeamFilesProvider)
+        .call(selected);
+    try {
+      if (!mounted || resolved.files.isEmpty) return false;
+      await BeamSheet.open(context, files: resolved.files);
+    } finally {
+      // The copies are full-size duplicates of every file sent; a batch of
+      // forty left behind is forty wallpapers of cache.
+      await resolved.release();
+    }
+    return false;
   }
 
   /// The loaded images behind [keys], in the listing's order.

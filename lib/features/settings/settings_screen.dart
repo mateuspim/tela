@@ -16,6 +16,7 @@ import 'package:tela/features/library/library_destination_tile.dart';
 import 'package:tela/features/settings/accent_color_section.dart';
 import 'package:tela/features/settings/api_key_section.dart';
 import 'package:tela/features/settings/app_lock_switch.dart';
+import 'package:tela/features/settings/beam_explicit_switch.dart';
 import 'package:tela/features/settings/browse_defaults_section.dart';
 import 'package:tela/features/settings/clear_cache_tile.dart';
 import 'package:tela/features/settings/collections_section.dart';
@@ -237,6 +238,9 @@ class _SettingsList extends StatelessWidget {
         ),
         const Divider(),
         const AppLockSwitch(),
+        // Beside the app-lock deliberately: both govern what may leave the
+        // private library, and someone weighing one wants to see the other.
+        const BeamExplicitSwitch(),
       ],
     );
   }

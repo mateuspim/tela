@@ -162,6 +162,117 @@
     "description": "Explains why tapping the final selected purity chip cannot turn it off."
   },
 
+  "beamTitle": "Beam to a computer",
+  "@beamTitle": {
+    "description": "Title of the sheet that sends wallpapers to a machine on the local network over LocalSend."
+  },
+
+  "beamSearching": "Looking for receivers on your network\u2026",
+  "@beamSearching": {
+    "description": "Shown while beam discovery is listening and has found nothing yet."
+  },
+
+  "beamNoneFound": "No receivers found. Open LocalSend on your computer, or enter its address.",
+  "@beamNoneFound": {
+    "description": "Shown when discovery has been listening a while with no answer. Names both causes the user can act on rather than implying the network is broken."
+  },
+
+  "beamEnterAddress": "Enter an address",
+  "@beamEnterAddress": {
+    "description": "Action that opens the manual host/port entry, for networks that do not carry multicast."
+  },
+
+  "beamAddressHint": "192.168.1.20",
+  "@beamAddressHint": {
+    "description": "Placeholder in the manual address field, showing the shape of a local IP address."
+  },
+
+  "beamSending": "Sending {done} of {total}\u2026",
+  "@beamSending": {
+    "description": "Progress while a beam is in flight.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+
+  "beamSent": "{count, plural, one{Sent 1 wallpaper to {alias}} other{Sent {count} wallpapers to {alias}}}",
+  "@beamSent": {
+    "description": "Confirmation once a beam completes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "alias": {
+        "type": "String"
+      }
+    }
+  },
+
+  "beamDeclined": "{alias} declined the transfer.",
+  "@beamDeclined": {
+    "description": "Shown when the receiver refuses. Deliberately not phrased as an error: someone tapped decline, which is a normal answer.",
+    "placeholders": {
+      "alias": {
+        "type": "String"
+      }
+    }
+  },
+
+  "beamBusy": "{alias} is already receiving something.",
+  "@beamBusy": {
+    "description": "Shown when the receiver is mid-transfer (HTTP 409).",
+    "placeholders": {
+      "alias": {
+        "type": "String"
+      }
+    }
+  },
+
+  "beamPinRequired": "{alias} wants a PIN.",
+  "@beamPinRequired": {
+    "description": "Shown when the receiver asks for a PIN tela has not got.",
+    "placeholders": {
+      "alias": {
+        "type": "String"
+      }
+    }
+  },
+
+  "beamUnreachable": "Could not reach that computer.",
+  "@beamUnreachable": {
+    "description": "Shown when the receiver stops answering, or a typed address has nothing on it."
+  },
+
+  "beamFailed": "The transfer did not finish.",
+  "@beamFailed": {
+    "description": "Fallback for a beam failure with no more specific cause."
+  },
+
+  "beamExplicitRefused": "Turn on beaming explicit wallpapers in Settings first.",
+  "@beamExplicitRefused": {
+    "description": "Shown when a batch holding explicit wallpapers is beamed while the opt-in setting is off. Names the remedy rather than reading as a malfunction, and is the enforcement half of mayBeamBitmap."
+  },
+
+  "settingsBeamExplicit": "Beam explicit wallpapers",
+  "@settingsBeamExplicit": {
+    "description": "Settings switch allowing explicit wallpapers to be sent to a machine on the local network. Off on a fresh install; the single safeguard behind the one deliberate exception to 'explicit pixels never leave the app'."
+  },
+
+  "settingsBeamExplicitDescription": "Lets the private library be sent to your own computer over your network. Off by default.",
+  "@settingsBeamExplicitDescription": {
+    "description": "Subtitle of the explicit-beam switch, saying both what it enables and that it starts off."
+  },
+
+  "beamAction": "Beam",
+  "@beamAction": {
+    "description": "Action on a wallpaper or a selection that opens the beam sheet."
+  },
+
   "collectionsMine": "My collections",
   "@collectionsMine": {
     "description": "Title of the screen listing the signed-in user's own collections."

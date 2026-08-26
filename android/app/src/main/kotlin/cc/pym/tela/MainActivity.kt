@@ -84,6 +84,10 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
             flutterEngine.dartExecutor.binaryMessenger,
             NOTIFICATIONS_CHANNEL,
         ).setMethodCallHandler(::handleNotificationsCall)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            BEAM_CHANNEL,
+        ).setMethodCallHandler(::handleBeamCall)
         TelaEngine.imageStore?.prompts = this
     }
 
@@ -101,7 +105,8 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
      * naming the channel is a better way to find it than a quiet failure code.
      */
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
-        val channels = listOf(WALLPAPER_CHANNEL, SCREEN_CHANNEL, SHARE_CHANNEL, NOTIFICATIONS_CHANNEL)
+        val channels =
+            listOf(WALLPAPER_CHANNEL, SCREEN_CHANNEL, SHARE_CHANNEL, NOTIFICATIONS_CHANNEL, BEAM_CHANNEL)
         for (channel in channels) {
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
                 .setMethodCallHandler(null)
@@ -137,6 +142,24 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
      * `openSettings` rather than a setter: Android has no API for an app to
      * enable or disable its own notifications. See [NotificationSettings].
      */
+    /**
+     * Holds and drops the Wi-Fi multicast lock around a beam discovery.
+     *
+     * Only the lock lives natively — the protocol itself is plain Dart. Without
+     * it Android drops the very packets discovery listens for, and the chooser
+     * is empty with nothing anywhere to say why. See [MulticastLease].
+     */
+    private fun handleBeamCall(call: MethodCall, result: MethodChannel.Result) {
+        when (call.method) {
+            "acquireMulticastLock" -> result.success(MulticastLease.acquire(this))
+            "releaseMulticastLock" -> {
+                MulticastLease.release()
+                result.success(null)
+            }
+            else -> result.notImplemented()
+        }
+    }
+
     private fun handleNotificationsCall(call: MethodCall, result: MethodChannel.Result) {
         val notifications = NotificationSettings(this)
         when (call.method) {
@@ -478,6 +501,7 @@ class MainActivity : FlutterFragmentActivity(), StoragePrompts {
         const val SCREEN_CHANNEL = "cc.pym.tela/screen"
         const val SHARE_CHANNEL = "cc.pym.tela/share"
         const val NOTIFICATIONS_CHANNEL = "cc.pym.tela/notifications"
+        const val BEAM_CHANNEL = "cc.pym.tela/beam"
         const val OUTSIDE_GALLERY_DIRECTORY_REQUEST = 401
         const val GALLERY_DELETE_REQUEST = 402
         const val BETWEEN_TARGETS_DELAY_MS = 500L
