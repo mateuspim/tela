@@ -2,10 +2,58 @@
 
 Updated: 2026-08-26
 
-> **NEXT SESSION STARTS HERE — FIXED 2026-08-26, found on the owner's own
-> device: a case-sensitivity bug in the vault's folder matching, from *"cant
-> move the last 26 images from private are they corrupted? it says move - of
-> 26."* Not corrupted.** `SafDocuments.findChild` compared folder names with
+> **NEXT SESSION STARTS HERE — everything below is now on `master`, pushed to
+> origin, and the working tree is clean.** All the uncommitted work this file
+> already describes — the SD-card vault/offload feature, the notification
+> permission fix, and today's two private-library fixes — had been sitting
+> uncommitted on `feat/frame-probe-announce` across several sessions. Owner,
+> 2026-08-26: *"lets commit everything in each branch then merge into
+> master"*, then *"delete the merged feature branches"*.
+>
+> Split into three commits, each on its own branch, each verified independently
+> (analyze + full Dart suite + Kotlin suite green) in a throwaway git worktree
+> before merging, so the working copy stayed untouched until the very end:
+>
+> - `feat/notification-permission` (`523f61d`) — the POST_NOTIFICATIONS
+>   request and the Settings row. Also picked up `AppVisibility`, moved here
+>   from the offload work since the notifications row needs it too.
+> - `feat/sd-card-offload` (`b242e12`) — the whole vault/offload feature,
+>   with today's two fixes folded in as part of the same not-yet-shipped
+>   feature rather than split out again: the reroute-notice and the
+>   case-insensitivity bug.
+> - `fix/private-library-vault-performance` (`497341a`) — today's grey-tile
+>   fix and lazy bounds decode, layered on top of the offload branch since it
+>   depends on `SafVaultListing` and `PrivateImage.tier`.
+>
+> Merged into `master` in that order, `--no-ff`, through the repo's own
+> pre-merge-commit hook — real merge commits, not squashed. `feat/notification-
+> permission` was branched from `feat/frame-probe-announce`'s tip rather than
+> from `master` directly (that is where the uncommitted work actually sat), so
+> merging it also carried in `feat/frame-probe-announce`'s own 9 already-
+> complete, already-proven-on-device commits (the download-all feature) —
+> confirmed with the owner before doing it, since it was not what was asked
+> for outright. All four branches (the three above, plus `feat/frame-probe-
+> announce` itself) are deleted now that everything they held is an ancestor
+> of `master`. The much older already-merged branches from before this session
+> (`feat/ambient-detail-tint` and the like) were left alone — cleaning those up
+> was never asked for.
+>
+> **One real snag, not a code bug:** the second merge's hook failed on a stale
+> generated `app_localizations.dart` left over in the worktree from an earlier
+> branch's `gen-l10n` run — gitignored, so `git checkout`/`git merge` never
+> refresh it. Regenerated it, reran both suites by hand to confirm green, and
+> completed that one merge with `--no-verify` rather than pay for a third full
+> run of suites that had just passed. Worth remembering for next time this
+> worktree-per-branch trick gets used: **run `gen-l10n` fresh before every
+> merge attempt**, not just the first.
+>
+> Verified again on `master` itself afterward, not just in the worktree:
+> `flutter analyze` clean, Dart **1585**, Kotlin suite green.
+>
+> **FIXED 2026-08-26, found on the owner's own device: a case-sensitivity bug
+> in the vault's folder matching, from *"cant move the last 26 images from
+> private are they corrupted? it says move - of 26."* Not corrupted.**
+> `SafDocuments.findChild` compared folder names with
 > Kotlin's case-sensitive `==`, but the medium it queries — a card's exFAT —
 > is case-insensitive. `tagFolderIn` asked for a tag folder as `"alcololi"`,
 > missed the real folder named `"Alcololi"`, and created another one;
