@@ -429,6 +429,44 @@ data, so a schedule made months ago follows a vault the user has since moved.
 Settings grew a seventh group, **Wallpaper** — distinct from Appearance, which
 is about how tela looks rather than what tela puts on the device's screen.
 
+### FIXED THE SAME DAY — auto-rotate crashed the app on launch, in release only
+
+**Found on the owner's device, immediately: *"tela cant be openend".*** Adding
+the WorkManager dependency made the release build die before any Dart ran:
+
+```
+java.lang.RuntimeException: Unable to get provider
+  androidx.startup.InitializationProvider
+Caused by: NoSuchMethodException:
+  androidx.work.impl.WorkDatabase_Impl.<init> []
+```
+
+WorkManager initializes at **process start** through `androidx.startup`, and
+its first act is to reflect a no-arg constructor on Room's generated
+`WorkDatabase_Impl`. R8's full mode — the default from AGP 8 — strips that
+constructor, because nothing in the code calls it by name. So the crash had
+nothing to do with rotation being *used*: it killed every launch, with the
+feature switched off.
+
+**Neither suite could have caught it, and that is the lesson worth keeping.**
+Debug builds run no R8, `flutter test` never builds an APK, and the Kotlin
+suite is JVM unit tests. Dart 1664 and Kotlin were both green across the
+broken commit. **A native dependency is not proven until a release APK has
+launched on hardware** — `make deploy` is the only step that would have found
+this, and it is now the step that did.
+
+**The first fix attempt did not work, and the reason is worth writing down:**
+`-keep,allowobfuscation,allowshrinking class * extends
+androidx.room.RoomDatabase { <init>(); }` produced the identical crash.
+`allowshrinking` tells R8 the member may be removed if it looks unused, and a
+constructor reached only by reflection *always* looks unused. The working rule
+drops it, and adds an explicit keep for `WorkDatabase_Impl`. Both are in
+`proguard-rules.pro` with the stack trace beside them.
+
+**Verified after the fix**, not assumed: release APK rebuilt and installed,
+process alive, `mCurrentFocus` on `cc.pym.tela/.MainActivity`, crash buffer
+empty, and a screenshot showing the browse wall drawing normally.
+
 ### Owed on the device — everything, and this one is the hardest to observe
 
 **Nothing here has been seen to fire.** A periodic rotation is the least
