@@ -2,8 +2,10 @@
 
 Updated: 2026-08-26
 
-> **NEXT SESSION STARTS HERE — everything below is now on `master`, pushed to
-> origin, and the working tree is clean.** All the uncommitted work this file
+> **Superseded as the entry point — see "NEXT SESSION STARTS HERE" below, which
+> is newer. Still true, and still the account of how `master` got here:
+> everything below this block is on `master`, pushed to origin.** All the
+> uncommitted work this file
 > already describes — the SD-card vault/offload feature, the notification
 > permission fix, and today's two private-library fixes — had been sitting
 > uncommitted on `feat/frame-probe-announce` across several sessions. Owner,
@@ -222,7 +224,7 @@ Updated: 2026-08-26
 > that was really the tile-decode-size / `justifiedRows`-repacking pair the
 > same entry named as the untuned half.
 
-## NEXT SESSION STARTS HERE — Wave 4's collections browser is built (uncommitted)
+## NEXT SESSION STARTS HERE — collections and the beam are built and committed
 
 **Owner, 2026-08-26: *"can we make deploy but silently? and make you work on the
 next big features?"*, then, asked which of Wave 4's three: *"lets do all however
@@ -231,10 +233,20 @@ quattro and all we could build a qml widget or just use localsend to receive"*,
 and on ordering: collections → beam → auto-rotate.** Collections is done; the
 other two are not started.
 
-**State: `flutter analyze` clean, Dart 1617 (from 1585), Kotlin green,
-deployed to the device. Everything below is UNCOMMITTED on `master` — the
-owner has not yet been asked whether to branch and commit it.** Given this
-file's own history of uncommitted piles, that is the first thing to settle.
+**State: `flutter analyze` clean, Dart 1651 (from 1585), Kotlin green,
+deployed. Two features, two branches, both committed — nothing is sitting
+uncommitted this time, by the owner's explicit instruction (*"branch + commit
+now"*).**
+
+- `feat/collections-browser` (`ac2909d`) — Wave 4's collections browser.
+- `feat/localsend-beam` (`a4574cd`) — the beam, branched off collections
+  because it builds on nothing of it but was written after; **it therefore
+  contains collections as an ancestor.** Merging the beam alone brings both.
+
+**Neither branch is merged and neither is pushed.** The owner was asked about
+committing, not about merging, so that is the open decision. Remember the
+snag that failed a merge last session: run `gen-l10n` fresh before *every*
+merge attempt, not just the first.
 
 ### What Wallhaven's collections API actually does — measured, not read
 
@@ -312,33 +324,77 @@ uploader's collections open, whether the hidden-by-purity notice reads right,
 whether the purity popup feels like enough of a filter, and whether the typed
 username is discoverable enough sitting under the API key.
 
-### Next, in the owner's chosen order
+## The beam — built (`a4574cd`), and the plan changed on research
 
-**The beam (was "Omarchy sync"), and the plan changed on research.** Omarchy
-4.0 "Quattro" shipped 2026-08-14 and rewrote the whole shell in Quickshell/QML
-with a documented plugin contract (`~/.config/omarchy/plugins/<id>/` +
-`manifest.json` + a QML entry) and its own wallpaper/theme switchers. So
-PLAN.md's original item — export `favorites.json` for Aether, sync over USB —
-is aiming at a target Omarchy has partly absorbed, and it only ever moved
-*links*, meaning the desktop re-downloads every image including the explicit
-ones. **Decided instead: tela implements a LocalSend sender.** Protocol v2.2
-needs three things — a multicast announce on `224.0.0.167:53317`,
-`POST /prepare-upload` for metadata → session + per-file tokens, then
-`POST /upload`. **Only the receiver runs an HTTP server**, so tela-as-sender
-needs an HTTP client (Dio, already here) and a UDP socket (`RawDatagramSocket`,
-`dart:io`) — a new port plus a `data/localsend/` adapter and **zero new
-packages**. Receiver is stock LocalSend, packaged for Arch. The QML plugin is
-the *other* half and belongs in its own repo, not here.
+**The Wave 4 item was "Omarchy sync"; it is superseded, and PLAN.md should be
+updated to say so.** Omarchy 4.0 "Quattro" shipped **2026-08-14** and rewrote
+the entire desktop shell in Quickshell/QML, with a documented plugin contract
+(`~/.config/omarchy/plugins/<id>/` + `manifest.json` + a QML entry) and its own
+theme and wallpaper switchers. So exporting `favorites.json` for Aether now
+aims at a target Omarchy has partly absorbed — and that export only ever moved
+*links*, meaning the desktop re-downloads every image, explicit ones included.
 
-**The NSFW call is made, by the owner, 2026-08-26: relax `mayExportBitmap` for
-the beam, opt-in, off by default.** Beam is a different threat model than the
-share sheet — your own LAN, your own machine, no third-party app's wallpaper
-history — so the private library gets a beam button, gated behind an explicit
-setting that starts off, so it can never happen by muscle memory. This is the
-first deliberate exception to "explicit pixels never leave the app"; it needs
-its own home beside `mayExportBitmap` rather than a hole punched through it.
+**tela now sends the real files, over LocalSend v2.2.** Measured off the
+published protocol: only the **receiver** runs an HTTP server, so tela is a
+sender only — no listening socket, nothing another device can reach — and the
+whole implementation is Dio plus `dart:io` with **zero new packages**. Three
+calls: a multicast announce on `224.0.0.167:53317`, `POST /prepare-upload`
+(files as a **map keyed by id**; v2 changed this from v1's list and a v2
+receiver silently rejects a list), then `POST /upload` per file with its token.
 
-**Then daily auto-rotate** (WorkManager), untouched and unscoped.
+**The one thing that could not be plain Dart, and the one most likely to be
+the device-pass surprise:** Android's Wi-Fi stack drops multicast not addressed
+to the device. Without `CHANGE_WIFI_MULTICAST_STATE` and a held
+`WifiManager.MulticastLock`, discovery joins its group, opens its socket and
+receives **nothing**, with no error and no log to notice. `MulticastLease`
+(Kotlin, reference-counted, unit-tested) holds it only while a chooser is open,
+because it costs battery. If discovery comes up empty on hardware, that lock is
+the first thing to check — and the hand-typed address is the fallback that
+works regardless, since multicast does not survive a guest VLAN, an AP with
+client isolation, or a router filtering `224.0.0.0/24`.
+
+**The explicit gate — the first deliberate exception to "explicit pixels never
+leave the app", and it did not touch the old rule.** `mayExportBitmap` is
+unchanged: it refuses to hand explicit pixels to another app *on this device*,
+because that app keeps its own wallpaper history — the ungated index the
+private tier exists to prevent. A beam has no such index, so `mayBeamBitmap`
+sits **beside** it rather than relaxing it, gated on a setting false on a fresh
+install (owner's call, 2026-08-26: *"relax it for beam, opt-in"*). Enforced
+twice as usual: `BeamWallpapers` refuses before a byte leaves, and the private
+library withholds the action entirely while the gate is off. **A mixed batch is
+refused whole**, never sent minus the explicit files — silently dropping one of
+forty is a transfer the user believes completed and finds out about much later.
+
+`ResolveBeamFiles` exists because of the vault: an app-private image's location
+is a plain `file:` path, but a vault image's is a `content:` SAF URI, and
+`File.fromUri` throws synchronously on one — the same bug that turned every
+vault tile grey. Only a materialized local path reaches a `BeamFile`, and the
+throwaway copies are released however the beam ends.
+
+**The protocol suite runs against a real `HttpServer`, not a faked transport.**
+The bugs a wire protocol has live below Dio's API and would be invisible to a
+recorded `RequestOptions`. 13 tests cover accept, partial accept, decline,
+busy, PIN, unreachable and the hand-typed path.
+
+### Owed on the device — the whole beam, and discovery most of all
+
+Nothing here has met hardware. In rough order of how likely it is to bite:
+**does discovery actually find a desktop LocalSend** (the multicast lock is the
+suspect if not); does the hand-typed path work where discovery does not; does a
+real desktop accept tela's `info` payload; and does a large batch stream
+without the phone running out of memory — uploads are streamed via
+`openRead()` precisely to avoid PLAN §15's OOM, but that is unproven at 6K.
+
+### Still open in Wave 4
+
+**Daily auto-rotate** (WorkManager) — untouched, unscoped, and the last of the
+three the owner named on 2026-08-26.
+
+**The QML half of the desktop story is deliberately not in this repo.** A
+`tela` plugin for Omarchy's shell that presents what landed and sets it would
+be a real thing to build, but CLAUDE.md scopes this project as the Android app
+and Quattro's plugins live in `~/.config/omarchy/plugins/`. It wants its own
+repo.
 
 **Pass O, 2026-08-24 — built and merged: three things the owner named that
 day, all of them things they had actually felt on the device.**
