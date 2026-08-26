@@ -115,19 +115,35 @@ class ImageStoreChannel(context: Context) {
             "storeImage" -> handleStoreImage(call, result)
             "copyStoredImage" -> handleCopyStoredImage(call, result)
             "retagStoredImage" -> handleRetagStoredImage(call, result)
-            "listPrivateImages" -> onStorageThread(result) { ImageStorage(context).listPrivate() }
+            "listPrivateImages" -> handleListPrivateImages(result)
+            "listAppPrivateImages" ->
+                onStorageThread(result) { ImageStorage(context).listAppPrivate() }
             "deleteDownload" -> deleting.deleteOne(call, result)
             "deleteDownloads" -> deleting.deleteBatch(call, result)
             "galleryDeleteConfirmedBySystem" ->
                 result.success(mapOf("confirmed" to systemConfirmsGalleryDelete()))
             "canReadImage" -> handleCanReadImage(call, result)
             "canReadImages" -> handleCanReadImages(call, result)
+            "measureImages" -> handleMeasureImages(call, result)
             "materializeImage" -> handleMaterializeImage(call, result)
             "releasePreview" -> handleReleasePreview(call, result)
             "describeDownloadLocation" -> describeDownloadLocation(result)
             "chooseDownloadFolder" -> handleChooseDownloadFolder(call, result)
+            "setVaultFolder" -> handleSetVaultFolder(call, result)
             else -> result.notImplemented()
         }
+    }
+
+    /**
+     * Lists both homes of the private library.
+     *
+     * The target is read on the calling thread and handed over, not read inside
+     * the worker: [outsideGalleryTarget] touches SharedPreferences, and the
+     * point of [onStorageThread] is the file walk that follows it.
+     */
+    private fun handleListPrivateImages(result: MethodChannel.Result) {
+        val target = outsideGalleryTarget()
+        onStorageThread(result) { ImageStorage(context).listPrivate(target) }
     }
 
     private fun handleStoreImage(call: MethodCall, result: MethodChannel.Result) {
@@ -158,9 +174,9 @@ class ImageStoreChannel(context: Context) {
      */
     private fun storeImage(request: ImageStoreRequest, result: MethodChannel.Result) {
         val storage = ImageStorage(context)
-        val folder = outsideGalleryTree()
+        val target = outsideGalleryTarget()
         Downloads.executor.execute {
-            val response = storage.store(request, folder)
+            val response = storage.store(request, target)
             onMainThread { result.success(response) }
         }
     }
@@ -187,9 +203,9 @@ class ImageStoreChannel(context: Context) {
         // bulk file I/O, and a selection of thirty would otherwise queue behind
         // the serial storage thread that listing and deleting share.
         val storage = ImageStorage(context)
-        val folder = outsideGalleryTree()
+        val target = outsideGalleryTarget()
         Downloads.executor.execute {
-            val response = storage.copy(request, folder)
+            val response = storage.copy(request, target)
             onMainThread { result.success(response) }
         }
     }
@@ -252,6 +268,50 @@ class ImageStoreChannel(context: Context) {
             onMainThread { result.success(mapOf("success" to true, "readable" to readable)) }
         }
     }
+
+    /**
+     * Sizes a whole listing in one crossing, on [Downloads.executor].
+     *
+     * Same shape and the same reasoning as [handleCanReadImages]: the offload
+     * screen measures every recorded download, and one round trip per row is
+     * what made the missing badges look broken in 2026-07-28. Bulk read-only
+     * I/O with no ordering to preserve, so it stays off the serial thread.
+     *
+     * A location that cannot be measured contributes a zero rather than an
+     * error. The tally is a promise about space, and one unreadable file must
+     * not cost the user every other number in the batch.
+     */
+    private fun handleMeasureImages(call: MethodCall, result: MethodChannel.Result) {
+        val locations = call.argument<List<String>>("locations") ?: run {
+            result.success(emptyAnswer())
+            return
+        }
+        val storage = ImageStorage(context)
+        Downloads.executor.execute {
+            val measured = locations.map { location ->
+                try {
+                    storage.measure(Uri.parse(location))
+                } catch (_: Exception) {
+                    mapOf<String, Any>("bytes" to 0L, "removable" to false)
+                }
+            }
+            onMainThread {
+                result.success(
+                    mapOf(
+                        "success" to true,
+                        "bytes" to measured.map { it["bytes"] as Long },
+                        "removable" to measured.map { it["removable"] as Boolean },
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun emptyAnswer(): Map<String, Any> = mapOf(
+        "success" to true,
+        "bytes" to emptyList<Long>(),
+        "removable" to emptyList<Boolean>(),
+    )
 
     private fun handleCanReadImage(call: MethodCall, result: MethodChannel.Result) {
         val location = call.argument<String>("location") ?: run {
@@ -343,8 +403,35 @@ class ImageStoreChannel(context: Context) {
     /** Describes the location off the UI thread; it does filesystem stats. */
     private fun describeDownloadLocation(result: MethodChannel.Result) {
         onStorageThread(result) {
-            DownloadFolderDescribing(context).describe(outsideGalleryTree())
+            DownloadFolderDescribing(context).describe(outsideGalleryTree()) +
+                mapOf("vaultLabel" to vaultLabel())
         }
+    }
+
+    /**
+     * Renames the hidden folder explicit images go to, from now on.
+     *
+     * **Renames nothing on disk**, and the settings row says so: the old
+     * directory keeps whatever is in it, and the app keeps listing both — see
+     * [SafVaultListing]. Moving a folder full of images because a text field
+     * lost focus is not a rename, it is a migration, and a failed one would
+     * strand the library in two places with no record of which half went where.
+     *
+     * Refuses a label that could not be a directory, answering false rather than
+     * repairing it: the caller has a field to mark invalid, and a silently
+     * corrected name is a folder the user did not choose.
+     */
+    private fun handleSetVaultFolder(call: MethodCall, result: MethodChannel.Result) {
+        val label = call.argument<String>("label")
+        if (label == null || !VaultFolders.isValidLabel(label)) {
+            result.success(mapOf("success" to false))
+            return
+        }
+        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .putString(VAULT_LABEL, label)
+            .apply()
+        result.success(mapOf("success" to true, "vaultLabel" to label))
     }
 
     /**
@@ -364,6 +451,29 @@ class ImageStoreChannel(context: Context) {
         return context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
             .getString(OUTSIDE_GALLERY_TREE, null)
     }
+
+    /**
+     * The vault label, falling back to the default for a missing **or unusable**
+     * one.
+     *
+     * The second half matters: a preferences file is editable on a rooted device
+     * and survives a downgrade, so the value read here is not necessarily one
+     * [handleSetVaultFolder] wrote. Falling back rather than failing keeps a
+     * bad row from making explicit downloads impossible, and the allowlist is
+     * applied again in [VaultFolders.directoryOf] before it becomes a path.
+     */
+    private fun vaultLabel(): String {
+        val stored = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            .getString(VAULT_LABEL, null)
+        if (stored == null || !VaultFolders.isValidLabel(stored)) {
+            return VaultFolders.DEFAULT_LABEL
+        }
+        return stored
+    }
+
+    /** Where the files tier writes right now: the granted tree and the vault. */
+    private fun outsideGalleryTarget(): OutsideGalleryTarget =
+        OutsideGalleryTarget(outsideGalleryTree(), vaultLabel())
 
     private fun imageCopyRequest(call: MethodCall): ImageCopyRequest? {
         val source = call.argument<String>("source") ?: return null
@@ -404,6 +514,7 @@ class ImageStoreChannel(context: Context) {
         const val CHANNEL = "cc.pym.tela/images"
         const val PREFERENCES = "tela.storage"
         const val OUTSIDE_GALLERY_TREE = "outsideGalleryTree"
+        const val VAULT_LABEL = "vaultLabel"
         const val EXTERNAL_STORAGE_PROVIDER = "com.android.externalstorage.documents"
         const val DIRECTORY_ACCESS_FLAGS =
             Intent.FLAG_GRANT_READ_URI_PERMISSION or

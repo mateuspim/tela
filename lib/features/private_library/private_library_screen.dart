@@ -305,37 +305,48 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   /// "deleted 3 of 5" and "deleted 5" are different facts about the device.
   ///
   /// Routes through [deleteDownloadProvider] — the same hard-delete path the
-  /// download history and detail screen use (J). For the app-private tier that
-  /// is a file delete plus a history `forget` that no-ops, since nothing
-  /// private is ever recorded there.
+  /// download history and detail screen use (J). For either of the library's
+  /// homes that is a file delete plus a history `forget` that no-ops, since
+  /// nothing private is ever recorded.
   Future<int> _deleteAll(List<String> keys) async {
-    final Map<String, Uri> locations = _locationsFor(keys);
+    final Map<String, ({StorageTier tier, Uri location})> at = _locationsFor(
+      keys,
+    );
     int deleted = 0;
     for (final String key in keys) {
-      final Uri? location = locations[key];
-      if (location != null && await _deleteOne(location)) deleted++;
+      final ({StorageTier tier, Uri location})? found = at[key];
+      if (found != null && await _deleteOne(found)) deleted++;
     }
     return deleted;
   }
 
-  /// The on-disk location of each selected key, from the loaded listing.
-  Map<String, Uri> _locationsFor(List<String> keys) {
+  /// Where each selected key sits, and in which tier, from the loaded listing.
+  ///
+  /// **The tier travels with the location**, because the library has two homes:
+  /// an app-private file and a vault document delete down entirely different
+  /// paths, and a document sent to the app-private delete is a file it cannot
+  /// find. See [PrivateImage.tier].
+  Map<String, ({StorageTier tier, Uri location})> _locationsFor(
+    List<String> keys,
+  ) {
     final List<PrivateImage> stored =
         ref.read(privateImagesProvider).value ?? const <PrivateImage>[];
     final Set<String> wanted = keys.toSet();
-    return <String, Uri>{
+    return <String, ({StorageTier tier, Uri location})>{
       for (final PrivateImage image in stored)
-        if (wanted.contains(image.ref.key)) image.ref.key: image.location,
+        if (wanted.contains(image.ref.key))
+          image.ref.key: (tier: image.tier, location: image.location),
     };
   }
 
-  Future<bool> _deleteOne(Uri location) async {
+  Future<bool> _deleteOne(({StorageTier tier, Uri location}) at) async {
     try {
       await ref.read(deleteDownloadProvider)(
-        // An app-private image has no history row, by design.
+        // Neither home records a row: the app-private tier never does, and an
+        // explicit wallpaper is refused by the history whatever tier it is in.
         ref: null,
-        tier: StorageTier.appPrivate,
-        location: location,
+        tier: at.tier,
+        location: at.location,
       );
       return true;
     } on ImageStoreFailure {

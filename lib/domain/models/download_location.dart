@@ -1,6 +1,7 @@
 import 'package:meta/meta.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
+import 'package:tela/domain/models/vault_folder.dart';
 
 /// Everything the location picker needs: where downloads go now, and whether a
 /// card is even an option.
@@ -19,6 +20,7 @@ class DownloadLocation {
   const DownloadLocation({
     required this.folder,
     required this.sdCardAvailable,
+    this.vault = VaultFolder.standard,
   });
 
   /// The folder currently granted, or null when none has been.
@@ -26,6 +28,14 @@ class DownloadLocation {
 
   /// Whether a removable card is mounted right now, card chosen or not.
   final bool sdCardAvailable;
+
+  /// The hidden folder inside [folder] that explicit downloads land in.
+  ///
+  /// Here rather than in `StorageSettings` because it is a property of *where
+  /// this tier writes*, not of which purity routes to it — the same reason the
+  /// granted folder is here. It is reported whether or not a folder exists, so
+  /// the settings row can name it before anything is configured.
+  final VaultFolder vault;
 
   /// The volume downloads currently write to, or null when none is set.
   StorageVolumeKind? get currentKind => folder?.kind;
@@ -41,9 +51,10 @@ class DownloadLocation {
   bool operator ==(Object other) {
     return other is DownloadLocation &&
         other.folder == folder &&
-        other.sdCardAvailable == sdCardAvailable;
+        other.sdCardAvailable == sdCardAvailable &&
+        other.vault == vault;
   }
 
   @override
-  int get hashCode => Object.hash(folder, sdCardAvailable);
+  int get hashCode => Object.hash(folder, sdCardAvailable, vault);
 }

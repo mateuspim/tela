@@ -184,6 +184,29 @@ class TelaDatabase extends _$TelaDatabase {
     );
   }
 
+  /// Re-points [ref]'s row at a file now in [tier], at [location], under [tag].
+  ///
+  /// [retagDownload] plus the tier, in one statement for the same reason those
+  /// two are: a delete routes by the tier column, so a row carrying the new
+  /// path beside the old tier describes a file nothing can reach.
+  Future<void> relocateDownload(
+    WallpaperRef ref,
+    String tier,
+    String location,
+    String? tag,
+  ) {
+    final UpdateStatement<$DownloadedWallpapersTable, DownloadRow> statement =
+        update(downloadedWallpapers)
+          ..where(($DownloadedWallpapersTable row) => _matches(row, ref));
+    return statement.write(
+      DownloadedWallpapersCompanion(
+        tier: Value<String>(tier),
+        location: Value<String>(location),
+        tag: Value<String?>(tag),
+      ),
+    );
+  }
+
   /// Drops the download row for [ref]. The file it points at is not touched.
   Future<void> deleteDownload(WallpaperRef ref) {
     final DeleteStatement<$DownloadedWallpapersTable, DownloadRow> statement =

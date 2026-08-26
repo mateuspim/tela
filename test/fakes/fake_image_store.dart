@@ -8,7 +8,9 @@ import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/models/stored_image_size.dart';
 import 'package:tela/domain/models/tag_folder.dart';
+import 'package:tela/domain/models/vault_folder.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/image_store.dart';
 
@@ -56,6 +58,13 @@ class FakeImageStore implements ImageStore {
 
   /// What the app-private tier currently holds, newest first.
   final List<PrivateImage> _privateLibrary;
+
+  /// How many times [privateImages] — the listing that opens the vault — ran.
+  ///
+  /// Asserted at zero by the offload survey's tests. On a card that walk is a
+  /// crossing per file, so *which* listing a caller reaches for is a fact worth
+  /// pinning, not an implementation detail.
+  int vaultListings = 0;
 
   /// Refs of private images passed to [deleteDownload], oldest first.
   final List<WallpaperRef> deletedRefs = <WallpaperRef>[];
@@ -191,9 +200,21 @@ class FakeImageStore implements ImageStore {
 
   @override
   Future<List<PrivateImage>> privateImages() async {
+    vaultListings++;
     final ImageStoreFailure? toThrow = failure;
     if (toThrow != null) throw toThrow;
     return List<PrivateImage>.unmodifiable(_privateLibrary);
+  }
+
+  /// The app-private rows only, as the native listing of that name answers.
+  @override
+  Future<List<PrivateImage>> appPrivateImages() async {
+    final ImageStoreFailure? toThrow = failure;
+    if (toThrow != null) throw toThrow;
+    return List<PrivateImage>.unmodifiable(<PrivateImage>[
+      for (final PrivateImage image in _privateLibrary)
+        if (image.tier == StorageTier.appPrivate) image,
+    ]);
   }
 
   @override
@@ -254,6 +275,29 @@ class FakeImageStore implements ImageStore {
     return <bool>[for (final Uri l in locations) !_unreadable.contains(l)];
   }
 
+  /// Sizes [measureAll] answers for, by location; anything absent is zero.
+  ///
+  /// Keyed rather than positional so a test names the file it means, and so
+  /// adding a row to a fixture cannot silently shift every other size by one.
+  Map<Uri, StoredImageSize> sizes = <Uri, StoredImageSize>{};
+
+  /// Counts its calls, for the same reason [canReadAllCalls] does: the survey
+  /// measures a whole history and must do it in one crossing.
+  int measureAllCalls = 0;
+
+  /// Every location handed to [measureAll], flattened across its calls — so a
+  /// test can say what was *not* measured, which a call count cannot.
+  final List<Uri> measured = <Uri>[];
+
+  @override
+  Future<List<StoredImageSize>> measureAll(List<Uri> locations) async {
+    measureAllCalls++;
+    measured.addAll(locations);
+    return <StoredImageSize>[
+      for (final Uri l in locations) sizes[l] ?? StoredImageSize.zero,
+    ];
+  }
+
   /// The folder already granted, or null for a tier nobody has configured.
   final DownloadFolder? folder;
 
@@ -269,10 +313,24 @@ class FakeImageStore implements ImageStore {
   /// The volume kinds passed to [chooseDownloadFolder], in order.
   final List<StorageVolumeKind> chosenKinds = <StorageVolumeKind>[];
 
+  /// The vault in force, as [setVaultFolder] last left it.
+  VaultFolder vault = VaultFolder.standard;
+
+  /// Whether [setVaultFolder] refuses — the platform failure, not a bad label.
+  bool vaultWriteFails = false;
+
+  @override
+  Future<bool> setVaultFolder(VaultFolder folder) async {
+    if (vaultWriteFails) return false;
+    vault = folder;
+    return true;
+  }
+
   @override
   Future<DownloadLocation> downloadLocation() async => DownloadLocation(
     folder: _granted ?? folder,
     sdCardAvailable: sdCardAvailable,
+    vault: vault,
   );
 
   @override

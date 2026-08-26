@@ -59,6 +59,16 @@ abstract class ImageStorageTestCase {
         return File(directory, name).apply { writeText(contents) }
     }
 
+    /**
+     * A files-tier target with no granted tree, which is what every test that
+     * is not about the tree itself wants.
+     *
+     * Named for what it *is* rather than what it lacks: it carries the default
+     * vault label, so a test that reaches the vault routing at all gets the
+     * shipped folder name rather than one the test invented.
+     */
+    protected val noVault: OutsideGalleryTarget = OutsideGalleryTarget(null)
+
     protected fun errorCodeOf(result: Map<String, Any>): String? = result["errorCode"] as String?
 
     @Suppress("UNCHECKED_CAST")

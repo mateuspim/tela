@@ -5,7 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:tela/app/app.dart';
-import 'package:tela/app/download_queue_notice.dart';
+import 'package:tela/app/background_notice.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/diagnostics/slow_frame_log.dart';
 
@@ -30,7 +30,7 @@ void main() {
   // starts the queue controller, which demotes whatever a killed process left
   // mid-flight; a queue that only woke when its own tab was opened would leave
   // a batch the user closed the app on waiting to be found.
-  anchorOwedDownloads(container);
+  anchorBackgroundWork(container);
   runApp(
     UncontrolledProviderScope(container: container, child: const TelaApp()),
   );

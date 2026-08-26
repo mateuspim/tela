@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Riverpod 3 keeps `Override` out of the default export surface.
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tela/app/background_notice.dart';
 import 'package:tela/app/download_queue_controller.dart';
-import 'package:tela/app/download_queue_notice.dart';
+import 'package:tela/app/offload_run.dart';
+import 'package:tela/app/offload_run_controller.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
@@ -23,6 +25,7 @@ import '../fakes/fake_download_queue_anchor.dart';
 import '../fakes/fake_image_store.dart';
 
 void main() {
+  _offloadTests();
   group('the notice rule', () {
     test('an owed queue anchors the process, naming the count', () async {
       final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
@@ -171,9 +174,95 @@ Future<ProviderContainer> _start(
     ],
   );
   addTearDown(container.dispose);
-  anchorOwedDownloads(container);
+  anchorBackgroundWork(container);
   await _settle();
   return container;
+}
+
+/// The offload's own claim on the same anchor.
+///
+/// One notification, one service, so the two kinds of background work cannot
+/// each hold it: the offload wins while it runs, and the queue takes the shade
+/// back when it is over.
+void _offloadTests() {
+  group('the offload shares the anchor', () {
+    test('a running offload takes the shade from the queue', () async {
+      final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
+      final ProviderContainer container = await _start(
+        _queueOf(<String>['a', 'b', 'c']),
+        anchor,
+      );
+      expect(anchor.holds.last, 'Downloading wallpapers|3 left');
+
+      await _publish(container, OffloadPhase.copying, total: 4, copied: 1);
+
+      expect(anchor.holds.last, 'Move downloads to SD card|Moving 1 of 4…');
+    });
+
+    /// The phase where the shade is the only place left to say anything: the
+    /// copy is done, the app is away, and the OS delete prompt needs a screen.
+    test('a run waiting for a screen says so in the shade', () async {
+      final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
+      final ProviderContainer container = await _start(
+        FakeDownloadQueue(),
+        anchor,
+      );
+
+      await _publish(
+        container,
+        OffloadPhase.waitingForScreen,
+        total: 4,
+        copied: 4,
+      );
+
+      expect(anchor.holds.last, contains('Come back to tela'));
+    });
+
+    test('a finished run hands the shade back to the queue', () async {
+      final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
+      final ProviderContainer container = await _start(
+        _queueOf(<String>['a']),
+        anchor,
+      );
+      await _publish(container, OffloadPhase.copying);
+      await _publish(container, OffloadPhase.done);
+
+      expect(anchor.holds.last, 'Downloading wallpapers|1 left');
+    });
+
+    test('a finished run with nothing queued drops the anchor', () async {
+      final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
+      final ProviderContainer container = await _start(
+        FakeDownloadQueue(),
+        anchor,
+      );
+      await _publish(container, OffloadPhase.copying);
+      expect(anchor.held, isTrue);
+
+      await _publish(container, OffloadPhase.done);
+
+      expect(anchor.held, isFalse);
+    });
+  });
+}
+
+/// Publishes a run in [phase] and lets the shade catch up.
+///
+/// The controller's own `start` is not used here: these tests are about what
+/// the *notice* makes of a run, and driving a real move through them would put
+/// a storage fake between the assertion and the thing being asserted.
+Future<void> _publish(
+  ProviderContainer container,
+  OffloadPhase phase, {
+  int total = 1,
+  int copied = 0,
+}) async {
+  container.read(offloadRunProvider.notifier).state = OffloadRun(
+    phase: phase,
+    total: total,
+    copied: copied,
+  );
+  await _settle();
 }
 
 /// Lets the queue's own futures and Riverpod's refresh timer run.

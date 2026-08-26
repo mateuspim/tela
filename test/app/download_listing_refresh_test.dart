@@ -16,6 +16,7 @@ import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/use_cases/drain_download_queue.dart';
+import 'package:tela/features/settings/offload_controller.dart';
 
 import '../fakes/fake_download_history.dart';
 import '../fakes/fake_download_queue.dart';
@@ -29,6 +30,39 @@ import '../fakes/fake_image_store.dart';
 /// per settled entry, three at a time — "the application seems to be sluggish
 /// when downloading images on the background" (the owner, 2026-08-24).
 void main() {
+  /// The offload screen's survey is a listing like the others, and it was left
+  /// out of the refresh at first: a run that finished while the screen was
+  /// still open redrew the tick list from figures taken before the move, so two
+  /// images moved and the count stayed where it was (owner, 2026-08-25).
+  testWidgets('the offload survey is re-read like any other listing', (
+    WidgetTester tester,
+  ) async {
+    final FakeDownloadHistory history = FakeDownloadHistory();
+    late WidgetRef captured;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          downloadHistoryProvider.overrideWithValue(history),
+          imageStoreProvider.overrideWithValue(FakeImageStore()),
+        ],
+        child: Consumer(
+          builder: (BuildContext context, WidgetRef ref, Widget? child) {
+            captured = ref;
+            ref.watch(offloadGroupsProvider);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final int surveyed = history.reads;
+
+    refreshDownloads(captured);
+    await tester.pumpAndSettle();
+
+    expect(history.reads, greaterThan(surveyed));
+  });
+
   testWidgets('a single download refreshes the listings at once', (
     WidgetTester tester,
   ) async {

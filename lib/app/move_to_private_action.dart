@@ -91,17 +91,33 @@ Future<bool> moveToPrivate({
 /// Grants the destination folder **before** anything is copied: that tier needs
 /// a user-granted folder, and finding that out after copying nothing is a wall
 /// with no explanation. A backed-out chooser moves nothing and answers false.
+///
+/// Images already in the vault are **dropped from the selection**, because for
+/// them this move has no destination to go to: they are on the files tier
+/// already, and asking to move them there again would have the copy overwrite
+/// the document it is reading and the delete then remove it. An all-vault
+/// selection answers false without asking anything.
 Future<bool> confirmAndMoveOutOfPrivate({
   required BuildContext context,
   required WidgetRef ref,
   required List<PrivateImage> images,
 }) async {
-  if (images.isEmpty) return false;
+  // **Vault images are already out**, and letting one through here would not
+  // merely be a no-op: it is `filesOutsideGallery` to `filesOutsideGallery` at
+  // `nsfw`, so the copy resolves to the very document it is reading, overwrites
+  // it in place, and the delete that follows then removes the file it just
+  // wrote. Filtered rather than refused whole, so a mixed selection still moves
+  // the app-private half it really can. See `PrivateImage.tier`.
+  final List<PrivateImage> movable = <PrivateImage>[
+    for (final PrivateImage image in images)
+      if (image.tier == StorageTier.appPrivate) image,
+  ];
+  if (movable.isEmpty) return false;
   final AppLocalizations l10n = AppLocalizations.of(context);
   final bool confirmed = await _confirm(
     context,
-    title: l10n.moveOutOfPrivateTitle(images.length),
-    body: l10n.moveOutOfPrivateBody(images.length),
+    title: l10n.moveOutOfPrivateTitle(movable.length),
+    body: l10n.moveOutOfPrivateBody(movable.length),
     action: l10n.moveOutOfPrivateAction,
   );
   if (!confirmed || !context.mounted) return false;
@@ -118,7 +134,7 @@ Future<bool> confirmAndMoveOutOfPrivate({
     messenger,
     l10n,
     moves: <StoredImageMove>[
-      for (final PrivateImage image in images)
+      for (final PrivateImage image in movable)
         StoredImageMove(
           ref: image.ref,
           // Not a claim that it is explicit — a refusal to claim it is not.

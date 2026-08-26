@@ -8,6 +8,7 @@ import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 
@@ -170,6 +171,52 @@ void main() {
         (await history.downloads()).map((DownloadRecord d) => d.wallpaper.id),
         <String>['7j1mzo'],
       );
+    });
+
+    test('relocate re-points tier, path and tag together', () async {
+      await _record(history, _wallpaper('e7jvjd'));
+
+      await history.relocate(
+        ref: _ref('e7jvjd'),
+        tier: StorageTier.filesOutsideGallery,
+        location: Uri.parse('content://tree/card/wallhaven-e7jvjd.jpg'),
+        tag: TagFolder('anime'),
+      );
+
+      final DownloadRecord moved = (await history.downloads()).single;
+      expect(moved.tier, StorageTier.filesOutsideGallery);
+      expect(
+        moved.location,
+        Uri.parse('content://tree/card/wallhaven-e7jvjd.jpg'),
+      );
+      expect(moved.tag, TagFolder('anime'));
+    });
+
+    // The same refusal `record` makes, arriving by the other door: a wallpaper
+    // moved into the private library must leave no row behind, or the list is
+    // an ungated index of exactly what went private.
+    test('relocate into the private tier drops the row instead', () async {
+      await _record(history, _wallpaper('e7jvjd'));
+
+      await history.relocate(
+        ref: _ref('e7jvjd'),
+        tier: StorageTier.appPrivate,
+        location: Uri.parse('file:///data/wallhaven-e7jvjd.jpg'),
+      );
+
+      expect(await history.downloads(), isEmpty);
+    });
+
+    test('relocating a row that is not there is not an error', () async {
+      await _record(history, _wallpaper('e7jvjd'));
+
+      await history.relocate(
+        ref: _ref('nothere'),
+        tier: StorageTier.filesOutsideGallery,
+        location: Uri.parse('content://tree/card/nothere.jpg'),
+      );
+
+      expect(await history.downloads(), hasLength(1));
     });
 
     test('forgetting a row that is not there is not an error', () async {

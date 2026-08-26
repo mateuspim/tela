@@ -59,6 +59,29 @@ abstract interface class DownloadHistory {
     required TagFolder? tag,
   });
 
+  /// Re-points [ref]'s row at a file that has moved to another **tier**.
+  ///
+  /// [retag]'s wider sibling, and the field it adds is the load-bearing one:
+  /// a delete routes by the tier on the row, so a wallpaper moved from the
+  /// gallery to the files folder whose row still says `sharedGallery` names a
+  /// MediaStore image that is not there.
+  ///
+  /// **Moving into a tier this list may not hold drops the row instead**,
+  /// which is why this is one call and not "update, then remember to forget".
+  /// The two exclusions in this port's docstring are the destination's
+  /// property, so an implementation applies them here exactly as [record] does
+  /// — a caller must not have to remember which tiers keep rows.
+  ///
+  /// A no-op for a wallpaper that is not recorded, as [retag] and [forget] are:
+  /// a move *out of* the private library has no row to re-point, and it does
+  /// not gain one here.
+  Future<void> relocate({
+    required WallpaperRef ref,
+    required StorageTier tier,
+    required Uri location,
+    TagFolder? tag,
+  });
+
   /// Forgets the row for [ref]. **Does not touch the downloaded file.**
   ///
   /// The history is an index, not a folder, and this is the only honest thing

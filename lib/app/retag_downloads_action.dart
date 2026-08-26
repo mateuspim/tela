@@ -8,7 +8,6 @@ import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
-import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/use_cases/retag_stored_images.dart';
@@ -77,7 +76,9 @@ Future<bool> retagPrivateImages({
         StoredImageRetag(
           ref: image.ref,
           purity: Purity.nsfw,
-          tier: StorageTier.appPrivate,
+          // The image's own home, not a constant: the library lists two tiers
+          // and a retag moves a file within whichever one holds it.
+          tier: image.tier,
           location: image.location,
           to: chosen,
         ),

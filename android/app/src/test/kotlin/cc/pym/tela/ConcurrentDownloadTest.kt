@@ -74,7 +74,7 @@ class ConcurrentDownloadTest {
 
         for (id in ids) {
             pool.execute {
-                storage.store(request(id), null)
+                storage.store(request(id), OutsideGalleryTarget(null))
                 ready.countDown()
             }
         }
@@ -102,7 +102,7 @@ class ConcurrentDownloadTest {
 
         repeat(2) {
             pool.execute {
-                storage.store(request("aaa111"), null)
+                storage.store(request("aaa111"), OutsideGalleryTarget(null))
                 ready.countDown()
             }
         }

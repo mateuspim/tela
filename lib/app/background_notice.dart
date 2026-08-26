@@ -5,6 +5,8 @@ import 'package:flutter/widgets.dart'
     show BuildContext, basicLocaleListResolution;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/download_queue_controller.dart';
+import 'package:tela/app/offload_run.dart';
+import 'package:tela/app/offload_run_controller.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/queued_download.dart';
@@ -30,7 +32,46 @@ final Provider<int?> owedDownloadNoticeProvider = Provider<int?>((Ref ref) {
   return owed == 0 ? null : owed;
 });
 
-/// Raises the queue's process anchor while downloads are owed, and drops it
+/// What the shade should say about work in flight, or null for silence.
+///
+/// **One notice, because there is one notification.** The anchor is a single
+/// foreground service with a single id, so two independent holders would fight
+/// over its words and its lifetime — the offload releasing it would kill the
+/// queue's, and the queue re-holding it would relabel the offload's.
+///
+/// The offload wins a tie. It is the one the user started by hand seconds ago
+/// and is waiting on; a queue draining behind it is the ambient case, and it
+/// keeps the process alive either way, which is what the anchor is actually
+/// for.
+final Provider<({String title, String body})?> shadeNoticeProvider =
+    Provider<({String title, String body})?>((Ref ref) {
+      final AppLocalizations l10n = shadeWords();
+      final OffloadRun? run = ref.watch(offloadRunProvider);
+      if (run != null && !run.isDone) {
+        return (title: l10n.offloadTitle, body: _offloadLine(l10n, run));
+      }
+      final int? owed = ref.watch(owedDownloadNoticeProvider);
+      if (owed == null) return null;
+      return (
+        title: l10n.downloadQueueNoticeTitle,
+        body: l10n.downloadQueueNoticeBody(owed),
+      );
+    });
+
+/// The offload's own line, which is a different fact in each phase — and in one
+/// of them it is an instruction, not a status: a copy that finished while the
+/// app was away cannot remove its originals until there is a screen to raise
+/// the OS prompt on, and the shade is the only place left to say so.
+String _offloadLine(AppLocalizations l10n, OffloadRun run) {
+  return switch (run.phase) {
+    OffloadPhase.copying => l10n.offloadProgress(run.copied, run.total),
+    OffloadPhase.waitingForScreen => l10n.offloadWaitingForScreen,
+    OffloadPhase.removing => l10n.offloadFinishing,
+    OffloadPhase.done => l10n.offloadFinishing,
+  };
+}
+
+/// Raises the process anchor while background work is in flight, and drops it
 /// after.
 ///
 /// **Started from `main`, on the container, and deliberately not from a
@@ -48,15 +89,18 @@ final Provider<int?> owedDownloadNoticeProvider = Provider<int?>((Ref ref) {
 /// reads the ARB, so adding a locale stays a translation file (CLAUDE.md).
 ///
 /// ```dart
-/// anchorOwedDownloads(container); // in main, once
+/// anchorBackgroundWork(container); // in main, once
 /// ```
-void anchorOwedDownloads(ProviderContainer container) {
+void anchorBackgroundWork(ProviderContainer container) {
   final DownloadQueueAnchor anchor = container.read(
     downloadQueueAnchorProvider,
   );
-  container.listen<int?>(
-    owedDownloadNoticeProvider,
-    (int? previous, int? owed) => _announce(anchor, owed),
+  container.listen<({String title, String body})?>(
+    shadeNoticeProvider,
+    (
+      ({String title, String body})? previous,
+      ({String title, String body})? now,
+    ) => _announce(anchor, now),
     // The queue a killed session left behind is already owed before anything
     // else runs, and there is no change to wait for: it is the state we start
     // in. Announcing it immediately is what re-raises the anchor for a batch
@@ -80,19 +124,13 @@ AppLocalizations shadeWords() {
   );
 }
 
-/// Tells [anchor] about [owed]. Fire-and-forget on purpose: the shade catching
-/// up a frame late costs nothing, and awaiting a platform channel here would
-/// put the queue's own progress behind a notification.
-void _announce(DownloadQueueAnchor anchor, int? owed) {
-  if (owed == null) {
+/// Tells [anchor] what to say, or to go away. Fire-and-forget on purpose: the
+/// shade catching up a frame late costs nothing, and awaiting a platform
+/// channel here would put the work's own progress behind a notification.
+void _announce(DownloadQueueAnchor anchor, ({String title, String body})? now) {
+  if (now == null) {
     unawaited(anchor.release());
     return;
   }
-  final AppLocalizations l10n = shadeWords();
-  unawaited(
-    anchor.hold(
-      title: l10n.downloadQueueNoticeTitle,
-      body: l10n.downloadQueueNoticeBody(owed),
-    ),
-  );
+  unawaited(anchor.hold(title: now.title, body: now.body));
 }

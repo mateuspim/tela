@@ -75,6 +75,24 @@ class DriftDownloadHistory implements DownloadHistory {
     required TagFolder? tag,
   }) => _db.retagDownload(ref, location.toString(), tag?.name);
 
+  /// Re-points the row at a file that has moved tier, or drops it when the new
+  /// tier is one this list may not hold. See [DownloadHistory.relocate].
+  ///
+  /// The `appPrivate` branch is the same refusal [record] makes, arriving by
+  /// the other door: a wallpaper moved into the private library must leave no
+  /// row behind, and putting that rule here rather than in the use case is what
+  /// keeps it true for every caller.
+  @override
+  Future<void> relocate({
+    required WallpaperRef ref,
+    required StorageTier tier,
+    required Uri location,
+    TagFolder? tag,
+  }) {
+    if (tier == StorageTier.appPrivate) return _db.deleteDownload(ref);
+    return _db.relocateDownload(ref, tier.name, location.toString(), tag?.name);
+  }
+
   /// Drops the row and nothing else — the downloaded file is not tela's to
   /// delete from here. See [DownloadHistory.forget].
   @override

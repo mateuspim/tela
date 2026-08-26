@@ -48,6 +48,12 @@ abstract final class TelaRoutes {
   /// Download history route name.
   static const String downloadHistoryName = 'download-history';
 
+  /// Path of the screen that moves already-downloaded images onto a card.
+  static const String offloadPath = '/offload';
+
+  /// Offload route name.
+  static const String offloadName = 'offload';
+
   /// Blocked-tags management path.
   static const String blockedTagsPath = '/blocked-tags';
 

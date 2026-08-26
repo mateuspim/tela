@@ -15,6 +15,7 @@ import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/features/settings/download_location_controller.dart';
 import 'package:tela/features/settings/nsfw_removable_guard.dart';
 import 'package:tela/features/settings/settings_section_label.dart';
+import 'package:tela/features/settings/vault_folder_section.dart';
 
 /// Picks which volume the files-outside-gallery tier writes to: device or card.
 ///
@@ -101,7 +102,21 @@ class DownloadLocationSection extends ConsumerWidget {
         ),
       ),
       _status(context, location.folder),
+      // Only once explicit downloads actually route here. Until then the vault
+      // is a folder nothing writes to, and a settings row for it would be a
+      // dead control describing a directory that does not exist — the same
+      // argument that keeps this whole panel hidden until the tier is in use.
+      if (_vaultInUse(ref)) ...<Widget>[
+        const Divider(height: 1),
+        const VaultFolderSection(),
+      ],
     ];
+  }
+
+  /// Whether explicit downloads land in this tier, and so in its vault.
+  bool _vaultInUse(WidgetRef ref) {
+    final StorageSettings? settings = ref.watch(storageSettingsProvider).value;
+    return settings?.nsfwTier == StorageTier.filesOutsideGallery;
   }
 
   Widget _tile(BuildContext context, StorageVolumeKind kind) {
