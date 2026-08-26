@@ -1,13 +1,179 @@
 # tela handoff
 
-Updated: 2026-08-24
+Updated: 2026-08-26
 
-> **NEXT SESSION STARTS HERE — pass O is built and merged: three things the
-> owner named on 2026-08-24, all of them things they had actually felt on the
-> device.** `feat/reach-tag-refresh` **merged as `3d439ab`** (2026-08-24), four commits,
-> through the gate: Dart **1445** (from 1414), Kotlin **136** untouched,
-> analyze and format clean. Full write-up in *O* below.
+> **NEXT SESSION STARTS HERE — FIXED 2026-08-26, found on the owner's own
+> device: a case-sensitivity bug in the vault's folder matching, from *"cant
+> move the last 26 images from private are they corrupted? it says move - of
+> 26."* Not corrupted.** `SafDocuments.findChild` compared folder names with
+> Kotlin's case-sensitive `==`, but the medium it queries — a card's exFAT —
+> is case-insensitive. `tagFolderIn` asked for a tag folder as `"alcololi"`,
+> missed the real folder named `"Alcololi"`, and created another one;
+> `DocumentsContract.createDocument` doesn't refuse a same-name collision, it
+> **renames** it — `alcololi (1)`. Every mismatched retry after that grew one
+> more folder the same way. After 32 of them, Android's own uniquifier
+> (`FileUtils.buildUniqueFile`) exhausted its retry budget and started
+> throwing `FileNotFoundException: Failed to create unique file` for every
+> further write to that tag — which is what the offload actually hit, logged
+> faithfully by `TierWriteLog` as `{"tier":"filesOutsideGallery","purity":
+> "nsfw","error":"java.io.FileNotFoundException"}`. Confirmed directly on the
+> device (`adb shell find`): `Alcololi` (70 files) sitting beside `alcololi
+> (1)` through `alcololi (32)` (one file each), each also carrying its own
+> `.nomedia` marker from `ensureNoMediaMarker`.
 >
+> **Worse than just stuck: those 32 files had gone invisible.** A folder name
+> with `(` and `)` fails `TagFolder`'s own legality regex, so
+> `SafVaultListing.tagged()`'s `TagFolders.isValid` filter skipped every one of
+> those folders whole — the images were still physically on the card, present
+> in no listing tela ever showed. Not a corruption; a silent disappearance,
+> which is arguably the worse of the two things the owner asked about.
+>
+> **Fix:** `SafDocuments.findChild` now matches with `.equals(name, ignoreCase
+> = true)`. One function, shared by every folder- and file-lookup in that
+> class, so the tag-folder collision this was actually found through and the
+> same class of bug for a re-downloaded file's name are both closed by the one
+> change. Not unit-tested — consistent with this file's own standing decision
+> not to fake SAF/`DocumentsContract` behaviour into a green suite that proves
+> nothing (see the SD-card slice below); verified instead by the cleanup that
+> follows. Kotlin suite still green, no new failures.
+>
+> **Checked whether this happened anywhere else — it did not.** `find` over
+> the whole vault for any other case-differing directory pair, and for any
+> `(N)`-suffixed file or folder at all, turned up nothing outside `alcololi`.
+> One tag, one bad run of retries.
+>
+> **The 32 orphaned files were merged back on the device, with the owner's
+> explicit go-ahead**, since this environment has adb access to the connected
+> hardware: each single file moved from its `alcololi (N)` folder into the
+> real `Alcololi`, its stray `.nomedia` deleted, then the empty folder
+> removed. `Alcololi` now holds all 102 (70 + 32); no `(N)` folders remain
+> anywhere in the vault. This was a direct, real modification of the owner's
+> own device content — worth flagging in case anyone re-reads this file
+> without having seen it happen live.
+>
+> **Owed next:** redeploy this build and retry offloading the remaining 26
+> `Alcololi` images — they were failing only because the tag folder's
+> collision budget was exhausted, and the fix removes the collision entirely
+> rather than raising the budget, so they should now resolve straight to the
+> real folder. Not yet re-verified after the redeploy.
+>
+> **Superseded below only in ordering, not in relevance** — the SD-card
+> offload's auto-reroute question from earlier today, 2026-08-26. Short
+> answer:
+> **not a bug.** `OffloadRunController._reroute` already switches future
+> downloads to the card after a successful move — safe content always, and
+> explicit content too when the private library was part of what moved — and
+> it is tested (`offload_run_controller_test.dart`, "re-routing after a
+> move"). The screen already says so **before** the move, twice: the intro
+> ("New downloads will go to the card as well") and the confirm dialog
+> ("Future downloads will go to the card too"). None of this offload/reroute
+> work — which is substantial and already tested — was written up anywhere in
+> this file before now, which is worth noting on its own: it means the owner
+> may be testing a build older than what is actually in the tree.
+> `make deploy` before assuming anything else here is stale.
+>
+> **What was actually missing, and is now built:** a confirmation *after* the
+> move, not just before it. `OffloadRun` gained `includesPrivateLibrary`
+> (carried from the ticked groups at `start()`, through every `at()`), and
+> `OffloadProgressPanel`'s finished state now shows *"New downloads will be
+> saved here from now on"* — or, when the private library was part of the
+> move, *"New downloads — including explicit ones — will be saved here from
+> now on."* Gated on `run.moved > 0`, the same condition `_reroute` itself
+> uses, so it can never claim a switch that did not happen. `_reroute` was
+> also simplified while this was in there: it used to recompute
+> `groups.any(kind == privateLibrary)` itself; it now just reads
+> `state?.includesPrivateLibrary`, the same value the panel reads, so the two
+> can no longer disagree about what "the private library moved" meant.
+>
+> Two new ARB strings (`offloadDoneFutureDownloads`,
+> `offloadDoneFutureDownloadsExplicit`), one new test pinning the no-notice
+> case (a run that moves nothing), and the two existing end-to-end offload
+> tests extended to check the new text. Dart **1585** (from 1584), analyze and
+> format clean. Not run on hardware — no device in this environment, same as
+> everything below.
+>
+> **Superseded below, but built and still correct** — the private library's
+> "slow to show its images" scope: both the grey vault tiles and the eager
+> whole-vault bounds read are fixed. Not yet run on hardware. Dart **1584**
+> (from 1445),
+> Kotlin unit suite green (new `ThumbnailSamplingTest`), analyze and format
+> clean.
+>
+> **Found while scoping the performance work: every vault tile was rendering
+> as a bare grey box, unrelated to the SAF cost already documented below.**
+> `_PrivateTile._thumbnail` called `Image.file(File.fromUri(image.location))`
+> unconditionally. That reads a plain `file:` app-private path fine, but a
+> vault (SD-card) image's `location` is a `content:` SAF document URI, and
+> `File.fromUri` calls `Uri.toFilePath()`, which throws synchronously for
+> anything but `file:`. In a release build — which is what `make deploy`
+> ships — a widget that throws in `build()` renders as Flutter's default
+> `ErrorWidget`: a plain grey box, no text. Every vault tile, always. The
+> fullscreen viewer never had this bug; it already resolves a `content:`
+> location through `LocalPreviewCache.materialize` before decoding. The grid
+> tile just never got the same treatment — and *couldn't* reuse it as-is: that
+> call copies the whole original file, which is fine once for a single
+> full-screen image and far too much I/O paid per tile for a wall of dozens
+> scrolling past.
+>
+> **The fix is a second, thumbnail-shaped decode, not a reuse of the full
+> copy.** `LocalPreviewCache` gained `materializeThumbnail(location,
+> maxDimensionPx)`, answering a new `VaultThumbnail(path, width, height)`.
+> Natively, `StoredImageReading.materialiseThumbnail` (`StoredImageReading.kt`)
+> decodes bounds, computes a power-of-two `inSampleSize` via the new pure
+> `sampleSizeFor` (`ThumbnailSampling.kt`, unit-tested with no Robolectric
+> needed), decodes downsampled, and writes a small JPEG under
+> `TelaDirectories.previews`, named by a hash of the location — so a tile
+> scrolled past and back finds the same small file already there (bounds read
+> off *its* header, a cheap local decode) rather than paying for a second
+> SAF crossing. Wired through a new `materializeVaultThumbnail` channel
+> method. There is deliberately no `release()` for this one: unlike
+> `materialize`'s throwaway copy, it lives in the app's own cache directory
+> for as long as Android keeps it, the same as any other app cache.
+>
+> **`SafVaultListing.describe` no longer decodes bounds at all** — this was
+> option 1 from the three below ("lazy bounds, per tile"), chosen over a
+> filename convention or a Drift cache because it needed no new index of
+> what's in the vault and no file renaming. `width`/`height` are simply absent
+> from every row now; Dart's mapper already reads a missing dimension as
+> unknown; nothing on the Dart side needed to change for that half. The
+> `PrivateLibraryScreen` state now keeps a `Map<String, VaultThumbnail>`
+> resolved lazily as each tile is actually built — `_PrivateTile` branches on
+> `image.tier`, and a vault tile's picture is the new `_VaultThumbnailImage`,
+> which resolves once (`initState`, gated on a null `cachedThumbnail`) and
+> reports the real aspect ratio back up through a callback so the justified
+> grid repacks with it on the next frame. A never-resolved or corrupt vault
+> tile falls back square, the same reading a corrupt app-private file already
+> got.
+>
+> **Accepted trade-off, matching what the previous entry already flagged as
+> unavoidable:** every vault tile starts life as a square placeholder and
+> reflows once its own decode answers, so the first paint of a vault-heavy
+> library will visibly resettle row heights for a moment. This is the
+> documented cost of laziness over the old eager-and-slow read, not a new
+> regression.
+>
+> **Not done in this pass, and still open:** the two neighbours the previous
+> entry named alongside this — `SafDocuments.dropFromOtherFolders` re-listing
+> every tag folder per file during an offload, and `refreshDownloads`
+> invalidating `privateImagesProvider` (and so re-walking both homes) after
+> *every* landed download, not just an offload. Neither was touched here; both
+> are still exactly as expensive as described below.
+>
+> **Owed on the device, same as everything else in this file lately:** whether
+> a real vault thumbnail actually decodes and looks right, whether the reflow
+> reads as janky or as unnoticeable on a real scroll, and whether the cache
+> hit path (`boundsOfFile`) actually pays off across a session of scrolling
+> back and forth. `SlowFrameLog` (mentioned below) would be the way to measure
+> whether this closes the "looking up like 3 pages deep" complaint or whether
+> that was really the tile-decode-size / `justifiedRows`-repacking pair the
+> same entry named as the untuned half.
+
+**Pass O, 2026-08-24 — built and merged: three things the owner named that
+day, all of them things they had actually felt on the device.**
+`feat/reach-tag-refresh` **merged as `3d439ab`** (2026-08-24), four commits,
+through the gate: Dart **1445** (from 1414), Kotlin **136** untouched, analyze
+and format clean.
+
 > **O1 — "the details button is kinda hit or miss on portrait."** The peek *is*
 > the grip, so the grip's band was the entire hit area of the only control that
 > opens the facts: 21dp, with the apply button glued below it and, since pass N,
@@ -47,7 +213,364 @@ Updated: 2026-08-24
 > **release** build on purpose, because `make deploy` builds release and a
 > `kDebugMode` probe would measure the one build nobody runs on the tablet.
 >
-> **BUILT 2026-08-25 — a whole tag or uploader downloads without scrolling to
+> **FIXED 2026-08-25 — tela had never once been allowed to post a notification**,
+> found while chasing the offload. `POST_NOTIFICATIONS` was declared in the
+> manifest and **requested nowhere**, which on Android 13+ means every post is
+> dropped in silence: `granted=false`, `userSet=false` — the owner never
+> refused, tela never asked — and 588 posts, 588 blocked. The cost is not the
+> missing text. That notification is the *foreground service's*, so the offload
+> built to outlive its screen was running with nothing on screen to say it
+> existed and no way to stop it from the shade. `NotificationPermission` plus a
+> request in `MainActivity.onCreate` fixes the asking.
+>
+> The owner then asked for a control: **a `NotificationsTile` in Settings →
+> Storage**, above the cache row. It is a **row, not a toggle**, and that is the
+> whole design note — Android gives an app no API to turn its own notifications
+> on *or* off, so a `Switch` could be dragged into a position tela cannot
+> deliver. It reports the state and opens Android's own page, then re-reads on
+> return via `AppVisibility.whenForeground` (the state changes in another app
+> entirely, so a cached answer would outlive the switch they just flipped). Both
+> the port's reads fail closed: unknown reads as **off**, which still offers the
+> fix, and an unopenable page says so rather than leaving the user waiting.
+>
+> **FIXED 2026-08-25 — the offload count did not drop after a run**, from *"it
+> still shows all the 2479 files and not 2477"*. `OffloadRunController._finish`
+> called `refreshDownloadsFrom`, which invalidates the history and the private
+> library but **not `offloadGroupsProvider`**. That provider is autoDispose, so
+> *leaving* the screen re-surveys — which is exactly why this never showed in
+> testing. Finish a run with the screen still open and the tick list redraws
+> from figures taken before the move. It is in `_downloadListings` now, which
+> also fixes the same staleness after a landed download.
+>
+> **CORRECTED 2026-08-25 — the offload was working the whole time.** The
+> session spent an hour on "it writes nothing", and that finding was a
+> measurement error, mine: every "nothing modified in N hours" check used
+> `find -newermt`, which this device's `find` rejects, under `2>/dev/null` — so
+> a refused command printed zero lines and read as zero files. Checked with
+> `-mmin` the same vault showed **625 files written in the last hour**, and the
+> run went on to take it from 1332 files to 2936. The corroborating evidence was
+> consistent with success too: copies **overwrite** same-named vault documents
+> (`rewriteDocument`), so neither the file count nor `df` moves. **Use `-mmin`
+> on this device**, and never suppress stderr on a probe whose zero you intend
+> to believe.
+>
+> The one real fault in that area was the staleness above, which the owner found
+> by reading a number. `TierWriteLog` stays: it earned its place by being silent
+> across ~1600 successful writes, which is what finally ruled the write path out.
+>
+> **FIXED 2026-08-25 — "it's stuck in the last 26 images"**, which was not the
+> move at all. The run had finished — the shade notice drops only on `isDone`,
+> and the service was gone — and what followed was `_finish`'s refresh
+> re-reading the private library across **both** homes: 2936 vault files, one
+> SAF stream open and header decode each, measured at ~11/second. Four and a
+> half minutes with nothing on screen. Those reads wait on binder round trips
+> rather than on the card, so they parallelise: `SafVaultListing` now reads 8
+> headers at once through `mapInParallel`, extracted precisely so the dangerous
+> half could be tested — collecting rows as they *finish* would reshuffle the
+> shelf on every read, so `ParallelMappingTest` pins that the slowest item still
+> comes back first.
+>
+> **BUILT 2026-08-25 — see the top of this file for the write-up.** Left
+> exactly as written below for the measurements and the three options it
+> weighed; option 1 is what got built.
+>
+> **SCOPED, NOT BUILT (superseded above) — the private library is slow to show
+> its images, every time.** Owner, 2026-08-25: *"its slow to show the images in
+> the private library everytime i think its because its on sdcard, but lets
+> put this on the handoff so we fix and make this better."*
+>
+> **It is not the card, and that matters because it changes the fix.** Measured
+> on the device: 1150 image headers read straight off that same card take
+> **1.5 seconds** (`adb`, ~1.3ms each). The same files through
+> `ExternalStorageProvider` ran at **~11 per second** before parallelising and
+> **~66 per second** after — two orders of magnitude off the disk. The cost is
+> the **binder round trip per file**, not the SD card. Moving the library back
+> to internal storage would not fix it; opening fewer files would.
+>
+> **Where the cost comes from.** `SafVaultListing.describe` opens *every* file
+> to read its pixel bounds, because the grid shapes each tile to its image's
+> aspect ratio. Everything else a row needs — name, size, modified time —
+> already arrives free in the one `filesIn` query per folder. So a 2936-image
+> vault costs 2936 stream opens to draw a list whose other four fields cost
+> twelve queries in total.
+>
+> **What is already done:** eight at a time via `mapInParallel`, which took the
+> wait from ~4.5 minutes to ~40 seconds. That divides the cost; it does not
+> remove it, and it grows with the library.
+>
+> **Three ways to actually remove it, and the constraint that rules on them:**
+>
+> 1. **Lazy bounds, per tile.** The listing returns rows with no dimensions and
+>    the grid asks for them as tiles scroll in. Standard, bounded by what is on
+>    screen, and needs a placeholder aspect until each answers. Most likely the
+>    right one.
+> 2. **Dimensions in the file name** (`wallhaven-abc123-1080x2400.jpg`), read
+>    off the name the way `ImageFileNaming.keyOf` already reads the ref. Zero
+>    extra I/O, no database, and it survives a reinstall — but it renames files
+>    in a folder the user can reach, and needs a decode fallback for every image
+>    written before it.
+> 3. **A bounds cache in Drift**, keyed by ref. Fastest to write and **the one
+>    to think hardest about**: the private library deliberately keeps no rows —
+>    `DownloadHistory.relocate` drops the row when a file moves into it, because
+>    "a row outliving its file's move would be an ungated index of exactly what
+>    went private". A ref→dimensions table is a smaller index than that, but it
+>    is still a list of what is in the vault, sitting in a database with no
+>    app-lock in front of it. Do not reach for this without deciding that
+>    question first.
+>
+> **Two neighbours worth fixing in the same pass:**
+>
+> - `SafDocuments.dropFromOtherFolders` re-lists **every** tag folder on **every
+>   single copy** — twelve children queries per file on this vault — to find a
+>   duplicate that almost never exists. That is most of the ~2s per image the
+>   offload spends, and hoisting the listing out of the per-file loop should be
+>   worth several times the throughput.
+> - The refresh fires after **every landed download**, not just after an
+>   offload: `refreshDownloads` invalidates `privateImagesProvider`, so the full
+>   walk is paid again each time. Whatever fix lands should make that cheap
+>   rather than rare.
+>
+> **WAS OPEN, NOW EXPLAINED — the offload writes nothing on the owner's device.** Measured,
+> not inferred: the card is byte-identical across a run, nothing on either
+> volume has been modified in 24h, and tela reads ~3.3MB per ~2s tick — one
+> whole source file read per attempt, then no write. The SAF grant is intact
+> (`tree/20FF-21F4:Pictures/Tela`, mode 0x3, persisted) and `overlapsGallery` is
+> false for a card, so neither is the gate. **The progress bar cannot show
+> this**: `_copyAll` counts every *attempt*, failures included, so a run that
+> fails 100% looks exactly like one that works — which is why it read as "I sent
+> some". `TierWriteLog` was added to answer it: `TierWriting.write` ended in a
+> bare `catch (_: Exception)` and there was **no Kotlin logging in the project
+> at all**. First attempt logged only thrown exceptions and caught nothing —
+> most failures on this path are an ordinary `return imageStoreFailure(...)`,
+> seven of them — so it now logs every non-success result with its error code.
+> It names no path, file name or URL: it runs for NSFW writes too. Read it with
+> `adb logcat -s tela | grep tela.write`. **The device still owes that one
+> line.**
+>
+> **FIXED 2026-08-25 — the offload screen got slower every time it worked**,
+> from *"it takes too long now to show the screen to start the process"*. The
+> survey behind that screen asked `ImageStore.privateImages()`, which since the
+> vault landed lists **both** homes of the private library — and then threw the
+> vault half away, because images already on the card are exactly what an
+> offload has nothing to offer. On the owner's device that was **1332 files on
+> the card**, each costing a SAF `openInputStream` and a header decode to reach
+> an answer none of them were part of. The screen was paying for its own past
+> successes: every image it moved made the next visit slower.
+>
+> The fix is a narrower listing — `listAppPrivateImages` on the channel,
+> `ImageStore.appPrivateImages()` in the port — that walks the app-private tier
+> and never opens the vault. Rows are shaped identically, bounds included; the
+> two listings differ in which homes they read, never in what a row means. The
+> tier filter in `SurveyOffloadGroups` **stays** as well: it guards a copy that
+> deletes its source, and that is worth keeping even once the value reaching it
+> is meant to be impossible. `FakeImageStore.vaultListings` counts the expensive
+> call so the survey's test can assert zero.
+>
+> **The card was never the bottleneck** — 1150 header reads straight off it take
+> 1.5s (`adb`, measured). The cost was the SAF crossing per file, and the survey
+> now makes none of them.
+>
+> **Still open, same root cause, not fixed here:** the private library screen
+> itself legitimately reads both homes, so *it* still pays ~1332 SAF opens —
+> once per process, and again after every download that lands, because
+> `refreshDownloads` invalidates `privateImagesProvider`. It needs either a
+> parallel bounds read or bounds fetched lazily per tile. Nobody has complained
+> about it yet; they will.
+>
+> **BUILT 2026-08-25 — the offload runs in the background**, from *"can we make
+> the move be on background?"*. The modal that could not be dismissed is gone;
+> `OffloadRunController` lives at the composition root and the move outlives the
+> screen that started it, anchored by the **same foreground service the download
+> queue uses**. Dart **1561** (from 1538), Kotlin **159** untouched.
+> **None of it has been on hardware.**
+>
+> **The constraint that shaped all of it, and it is not obvious: one step of a
+> move cannot happen in the background at all.** From API 30 a gallery delete
+> goes through `MediaStore.createDeleteRequest` — the OS's own confirmation —
+> and only an Activity can launch it. `DownloadDeleting` already answers
+> honestly that nothing was deleted when no screen is attached, and
+> `MoveStoredImages` reads a delete that did not happen as a **declined** one
+> and undoes every copy behind it. So a naive background offload would copy for
+> four minutes and then silently unwind itself the moment the user switched
+> apps. That is the bug this pass exists to not ship.
+>
+> The answer is `AppVisibility` (new port, `FlutterAppVisibility` over
+> `AppLifecycleListener`) and `MoveStoredImages`' new `beforeDelete` gate:
+> **copying runs freely in the background, and only the prompt waits for a
+> screen.** The run publishes `OffloadPhase.waitingForScreen` while it does, and
+> the shade says *"Come back to tela to finish removing the originals"* — the
+> shade being the only surface left to say it.
+>
+> **Stop is not cancel, deliberately.** `stopped` is asked *before* each copy,
+> never during (a half-written destination file is the one thing a stop must not
+> produce), and everything already copied still completes its move. Throwing
+> away the minutes of work the user is impatient about is the opposite of what
+> pressing stop means.
+>
+> **One anchor, one notification, one notice.** `download_queue_notice.dart` is
+> now `background_notice.dart` and `anchorOwedDownloads` is
+> `anchorBackgroundWork`; `shadeNoticeProvider` decides the words for both kinds
+> of work. Two independent holders would have fought over a single service id —
+> the offload releasing it would kill the queue's, and the queue re-holding it
+> would relabel the offload's. **The offload wins a tie**: it is the thing the
+> user started by hand and is waiting on.
+>
+> **Deliberately not durable, unlike the download queue.** A queued download can
+> be re-fetched if the process dies, so a durable work list costs nothing to
+> replay; a half-finished move has already written bytes. What makes that safe
+> is that every intermediate state already is: copies land, originals stay, and
+> a history row is re-pointed only for a file that completed the trip — so a
+> killed process leaves **duplicates the next offload simply moves again, never
+> a loss**. If this is ever revisited, that is the argument to re-examine, not
+> the absence of a table.
+>
+> Two traps worth not re-deriving. An indeterminate `LinearProgressIndicator`
+> never lets `pumpAndSettle` return, so a finished run draws a **determinate**
+> bar at 1.0 (which is also the honest reading: a finished run is not working).
+> And the screen shows the run panel *instead of* the group list, because the
+> survey's figures were taken before the move started — ticks over files that
+> have since moved would be offering what is no longer there.
+>
+> **What the device owes this pass:** start a big offload, leave Settings, and
+> browse — the copy should keep going with a notification up. Then **background
+> tela mid-copy** and confirm the run parks at "waiting for a screen" rather
+> than unwinding, and finishes when you return. Then Stop mid-run and confirm
+> the files already copied stayed moved.
+>
+> > **BUILT 2026-08-25 — explicit downloads on the card land in a hidden vault**,
+> from *"lets put on a hidden folder if its private so it doesnt show on files
+> right away, lets put on a default folder and let the user choose another"*.
+> The files tier now has **two roots inside the granted tree**: the visible
+> `tela/` for safe downloads, and a dot-prefixed sibling — `.tela` by default,
+> renameable — for explicit ones. Dart **1538** (from 1506), Kotlin **159**
+> (from 142), analyze and format clean, the whole gate green.
+> **None of it has been on hardware.**
+>
+> **The rule is applied by purity in `TierWriting.rootFor`, not by any caller**,
+> which is the same placement CLAUDE.md demands for the indexing rule and for
+> the same reason. Every route into the tier gets it for free: a fresh download
+> after the destination is pointed at a card, the offload screen emptying the
+> private library, a single move out of it. `sketchy` is deliberately **not**
+> vaulted — it follows the safe destination everywhere else, and a folder that
+> disagreed with the configured setting would be its own surprise.
+>
+> **`VaultFolder` is a label, not a path, and that is the whole guard.** The
+> caller names `tela`; the dot is composed in `directoryName`. So the allowlist
+> stays exactly `TagFolder`'s — no `.`, therefore no `..`, no `.nomedia`, no
+> second hidden directory — instead of growing an exception for the one
+> character the feature needs. `sanitize` strips a leading dot before repairing,
+> because someone typing `.stash` is naming the folder they can see.
+>
+> **The half that was not asked for and is not optional: the vault is listed
+> back.** A hidden folder tela cannot show is a place photos go to disappear,
+> and a dot-folder in a `.nomedia` tree is invisible to Photos, to file managers
+> and to the app at once. `SafVaultListing` reads it into the private library
+> beside the app-private tier, so the library now has **two homes** and
+> `PrivateImage.tier` says which. That field is load-bearing: delete, retag and
+> move-out all route by it.
+>
+> **The trap that found, and what it would have done.** "Move out of the private
+> library" on a vault image is `filesOutsideGallery` → `filesOutsideGallery` at
+> `nsfw`: the copy resolves onto the very document it is reading, overwrites it
+> in place, and the delete that follows removes the file it just wrote. **The
+> image would be gone.** `confirmAndMoveOutOfPrivate` now filters vault images
+> out of the selection (a mixed one still moves its app-private half), and
+> `SurveyOffloadGroups` drops them for the same reason. Both are pinned by tests
+> — `vault_private_routing_test.dart` is the one to read first if this area is
+> touched.
+>
+> **Settings placement changed once, on evidence.** The vault row started in the
+> Privacy group beside the app-lock, and that broke
+> `settings_screen_test.dart`'s two-column balance (414dp of drift against a
+> 200dp bound — `BalancedColumns` packs greedily in source order, so the last
+> group placed sets the imbalance). It is inside `DownloadLocationSection` now,
+> shown **only when `nsfwTier == filesOutsideGallery`** — which is both better
+> layout and the more correct rule: until something routes there the vault is a
+> folder nothing writes to.
+>
+> **What it does not do, said in the UI as well as here:** a dot is concealment
+> a file manager can switch off, and a card reads in any other device.
+> `FLAG_SECURE` and the app-lock are the protections; the rename dialog says so
+> rather than the settings row, which just names the folder. **Renaming moves
+> nothing on disk** — that would be a migration that could half-fail — so the
+> old directory keeps what is in it. The listing reads the *current* vault only,
+> which means **images in a previously-named vault stop being listed**; that is
+> the known gap, and the dialog's warning is what stands in for fixing it.
+>
+> **Considered and rejected: `Android/data/cc.pym.tela/` on the card.** Android
+> 11+ blocks file managers from browsing it, so it is strictly more hidden than
+> a dot and needs no SAF grant at all. It loses because **uninstalling tela
+> would wipe the private library off the card**, and this project has already
+> been through one reinstall (see the 2026-08-11 note in `TierWriting`).
+>
+> **What the device owes this pass:** route NSFW to files, download one explicit
+> wallpaper, and confirm `.tela` appears beside `tela/` and *not* in the file
+> manager's default listing. Then check the private library shows it, that
+> deleting it from there actually removes the document, and that renaming the
+> vault leaves the old folder alone while new downloads go to the new one.
+>
+> > **BUILT 2026-08-25 — one button moves the library onto the SD card**, from
+> *"lets create a button to move every photo to sdcard so we save on space"*,
+> scoped by two answers the owner gave when asked: **the piles are tickable and
+> each says how much it frees**, and the button **also re-routes future
+> downloads** so internal storage does not simply refill. Settings → Storage →
+> *Move downloads to SD card*. Dart **1506**, Kotlin **142** (from 136),
+> analyze and format clean. **None of it has been on hardware.**
+>
+> **The screen is three groups, and only one of them is a plain relocation.**
+> *In your gallery* (`Pictures/tela`) leaves Photos and every gallery app when
+> it moves. *In your downloads folder* changes nothing but the disk. *Private
+> library* is the one that trades privacy for space, and its row says so: **a
+> card has no app-private tier**, so those files land in the downloads folder —
+> never gallery-indexed, so the hard NSFW rule holds, but reachable by any file
+> manager, no longer behind the app-lock, and gone from every tela screen. That
+> is the same thing `confirmAndMoveOutOfPrivate` has always done; this is the
+> first place it is offered in bulk. **The obvious better answer was scoped out
+> deliberately** — `getExternalFilesDirs()` gives an app-private directory *on
+> the card*, which would buy the space without the privacy — because it is a
+> fourth storage location, a migration and a two-rooted listing, not a button.
+> It is the first thing to consider if the owner dislikes the trade.
+>
+> **Two defects were found on the way and both are fixed; neither was in the
+> new code.** `MoveStoredImages` forgot the history row of **every** cross-tier
+> move, which was right for the only two directions that existed (into the
+> private library, and out of it, where there is no row) and silently wrong for
+> gallery→files: the whole download history would have emptied itself of
+> wallpapers still sitting on the device. `DownloadHistory.relocate` is the new
+> port method that re-points tier, path and tag together, and drops the row when
+> the destination is `appPrivate` — the exclusion now lives in the adapter,
+> beside `record`'s, rather than in a use case's `if`. And
+> `StorageSettingsController.route` **ignores a route asked of it while its own
+> load is still in flight**, so the re-route silently did nothing until the
+> action awaited `storageSettingsProvider.future` first. Caught by the widget
+> test; it would have looked exactly like the feature working.
+>
+> **What is measured and what is refused.** A new native
+> `StoredImageMeasuring` answers bytes-and-removability per file in one
+> crossing (`measureImages`, on `Downloads.executor`, the same shape and the
+> same reasoning as `canReadImages`). The survey **drops** two kinds of row: one
+> already on a card frees nothing, and one measuring zero bytes is a file that
+> could not be opened and would fail the copy anyway. The card's own free space
+> is checked **before** the confirmation — a copy that runs it out of room does
+> not fail cleanly, it reports "moved 40 of 300" and leaves the library split
+> across two disks.
+>
+> **One judgement call worth re-examining on device:** moving the private group
+> re-routes explicit downloads to the card **without** raising
+> `confirmExplicitOnRemovable`. The group's own row already states the
+> consequence and the confirmation follows it, and a third dialog is how a user
+> learns to dismiss the one that matters — but that warning exists for exactly
+> this arrangement, so it is a call, not a fact.
+>
+> **What the device owes this pass:** walk a real library. The copy is minutes
+> long and cannot resume, so **kill tela mid-move and see what state it leaves**
+> (the design says: copies landed, originals still there, history re-pointed
+> only for what finished). Then check the gallery group's single system delete
+> prompt on Android 30+, that Photos really loses the moved wallpapers, and that
+> tag folders survive the trip — the moves carry `tag`, deliberately, so a
+> library filed for months is not flattened into one folder on the card.
+>
+> > **BUILT 2026-08-25 — a whole tag or uploader downloads without scrolling to
 > it** (`724fe2d`), from *"i can select all from user/tag to download so i dont
 > need to scroll all the way down"*. **It is deliberately not Select all.**
 > Widening that would have failed silently — a ticked id is resolved against the

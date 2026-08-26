@@ -20,6 +20,7 @@ import 'package:tela/features/private_library/private_library_screen.dart';
 import '../fakes/fake_app_lock.dart';
 import '../fakes/fake_download_history.dart';
 import '../fakes/fake_image_store.dart';
+import '../fakes/fake_local_preview_cache.dart';
 import '../fakes/fake_screen_guard.dart';
 import '../fakes/fake_settings_repository.dart';
 
@@ -303,6 +304,90 @@ void main() {
     });
   });
 
+  group('vault tiles', () {
+    // Regression: a vault (SAF) location is a `content:` URI, and Image.file
+    // cannot decode one directly — `File.fromUri` throws before the frame is
+    // even built, which in a release build renders as a bare grey box. These
+    // pin that a vault tile instead resolves its own thumbnail and draws it.
+    testWidgets('resolves and draws a thumbnail for a vault image', (
+      WidgetTester tester,
+    ) async {
+      final PrivateImage vault = _vaultImage('e7jvjd');
+      final FakeLocalPreviewCache previews = FakeLocalPreviewCache(
+        bounds: <Uri, ({int width, int height})>{
+          vault.location: (width: 1080, height: 2400),
+        },
+      );
+
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[vault]),
+        previews: previews,
+      );
+
+      expect(previews.thumbnailsRequested, <Uri>[vault.location]);
+      expect(find.bySemanticsLabel('Private wallpaper e7jvjd'), findsOneWidget);
+      // The fixture's path is not a real file, so the decode itself is out of
+      // scope here (see private_immersive_session_test.dart for the same
+      // choice) — what this pins is that resolving one never crashes the tile.
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('draws a broken-image state rather than crash', (
+      WidgetTester tester,
+    ) async {
+      // No bounds fixture for this location, so the fake answers null — the
+      // same reading a corrupt or unreadable file gets on device.
+      final PrivateImage vault = _vaultImage('e7jvjd');
+
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[vault]),
+        previews: FakeLocalPreviewCache(),
+      );
+
+      expect(find.byIcon(Icons.broken_image_outlined), findsOneWidget);
+    });
+
+    testWidgets('asks for a thumbnail at most once per image', (
+      WidgetTester tester,
+    ) async {
+      final PrivateImage vault = _vaultImage('e7jvjd');
+      final FakeLocalPreviewCache previews = FakeLocalPreviewCache(
+        bounds: <Uri, ({int width, int height})>{
+          vault.location: (width: 1080, height: 2400),
+        },
+      );
+
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[vault]),
+        previews: previews,
+      );
+      // The resolved thumbnail's aspect ratio feeds back into the grid, which
+      // repacks and rebuilds this tile again — a second request here would be
+      // the whole point of caching by location silently regressing.
+      await tester.longPress(find.bySemanticsLabel('Private wallpaper e7jvjd'));
+      await tester.pumpAndSettle();
+
+      expect(previews.thumbnailsRequested, <Uri>[vault.location]);
+    });
+
+    testWidgets('an app-private tile never asks the preview cache at all', (
+      WidgetTester tester,
+    ) async {
+      final FakeLocalPreviewCache previews = FakeLocalPreviewCache();
+
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[_image('e7jvjd')]),
+        previews: previews,
+      );
+
+      expect(previews.thumbnailsRequested, isEmpty);
+    });
+  });
+
   group('source badge', () {
     testWidgets('a private tile names the source its file came from', (
       WidgetTester tester,
@@ -395,6 +480,7 @@ Future<void> _pump(
   FakeAppLock? lock,
   bool locked = false,
   Map<String, String>? labels,
+  FakeLocalPreviewCache? previews,
 }) async {
   const Widget screen = PrivateLibraryScreen();
   await tester.pumpWidget(
@@ -406,6 +492,9 @@ Future<void> _pump(
         appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
         settingsRepositoryProvider.overrideWithValue(
           FakeSettingsRepository(privateLibraryLocked: locked),
+        ),
+        localPreviewCacheProvider.overrideWithValue(
+          previews ?? FakeLocalPreviewCache(),
         ),
       ],
       child: MaterialApp(
@@ -432,6 +521,20 @@ PrivateImage _image(String id, {SourceId source = SourceId.wallhaven}) =>
       ),
       savedAt: DateTime.utc(2026, 7, 14),
       sizeBytes: 2048,
+    );
+
+/// A file the offload moved onto the card — a SAF document, not a plain path,
+/// and the case the app-private fixture above cannot stand in for.
+PrivateImage _vaultImage(String id, {SourceId source = SourceId.wallhaven}) =>
+    PrivateImage(
+      ref: WallpaperRef(source, id),
+      location: Uri.parse(
+        'content://com.android.externalstorage.documents/tree/'
+        '1234-5678%3ATela/document/1234-5678%3ATela%2F${source.value}-$id.jpg',
+      ),
+      savedAt: DateTime.utc(2026, 7, 14),
+      sizeBytes: 2048,
+      tier: StorageTier.filesOutsideGallery,
     );
 
 /// Long-presses the private tile into selection, then asks to delete it.

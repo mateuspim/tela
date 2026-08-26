@@ -1,6 +1,8 @@
 package cc.pym.tela
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import java.io.File
 
@@ -77,6 +79,88 @@ internal class StoredImageReading(private val context: Context) {
     }
 
     /**
+     * Decodes a small, downsampled thumbnail for a grid tile, with the
+     * source's real pixel bounds alongside it.
+     *
+     * [SafVaultListing] no longer decodes bounds for the whole vault up
+     * front — see its own docs for why that got expensive — so a grid tile
+     * asks for its own aspect ratio here, exactly once, the first time it is
+     * actually on screen. [materialise] would technically work too, but it
+     * copies the *whole* original: fine once for a single full-screen viewer,
+     * far too much paid per tile for a wall of dozens of them.
+     *
+     * Cached by [location] under [TelaDirectories.previews], keyed by its own
+     * hash rather than a counter: a tile scrolled past and back must find the
+     * same small file already there, not pay for a second decode. A cache hit
+     * reads its bounds off that small file's own header — cheap, local, no
+     * SAF crossing — rather than reopening the original.
+     *
+     * Every failure answers `success=false` rather than throwing, the same
+     * rule [materialise] follows.
+     */
+    fun materialiseThumbnail(location: Uri, maxDimensionPx: Int): Map<String, Any> {
+        val directory = TelaDirectories.previews(context)
+        if (!TelaDirectories.ensure(directory)) return mapOf("success" to false)
+        val target = File(directory, "thumb-${location.toString().hashCode()}")
+        if (target.isFile) {
+            boundsOfFile(target)?.let { (width, height) ->
+                return thumbnailResult(target, width, height)
+            }
+        }
+        return try {
+            val (sourceWidth, sourceHeight) = boundsOf(location)
+                ?: return mapOf("success" to false)
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = sampleSizeFor(sourceWidth, sourceHeight, maxDimensionPx)
+            }
+            val bitmap = context.contentResolver.openInputStream(location)?.use { input ->
+                BitmapFactory.decodeStream(input, null, options)
+            } ?: return mapOf("success" to false)
+            target.outputStream().use { output ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, THUMBNAIL_QUALITY, output)
+            }
+            bitmap.recycle()
+            thumbnailResult(target, sourceWidth, sourceHeight)
+        } catch (_: Exception) {
+            target.delete()
+            mapOf("success" to false)
+        }
+    }
+
+    private fun thumbnailResult(target: File, width: Int, height: Int): Map<String, Any> =
+        mapOf(
+            "success" to true,
+            "path" to target.absolutePath,
+            "width" to width,
+            "height" to height,
+        )
+
+    /** A document's real pixel bounds, read through the resolver. */
+    private fun boundsOf(location: Uri): Pair<Int, Int>? {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        return try {
+            context.contentResolver.openInputStream(location)?.use { input ->
+                BitmapFactory.decodeStream(input, null, options)
+            } ?: return null
+            validBounds(options)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** The same read, off an already-downsampled local cache file. */
+    private fun boundsOfFile(file: File): Pair<Int, Int>? {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, options)
+        return validBounds(options)
+    }
+
+    private fun validBounds(options: BitmapFactory.Options): Pair<Int, Int>? {
+        if (options.outWidth <= 0 || options.outHeight <= 0) return null
+        return options.outWidth to options.outHeight
+    }
+
+    /**
      * Deletes a throwaway preview, refusing any path outside the cache folder.
      *
      * The path arrives back over a method channel, so it is confined to
@@ -94,5 +178,10 @@ internal class StoredImageReading(private val context: Context) {
         }
         if (within && file.isFile) file.delete()
         return mapOf("success" to true)
+    }
+
+    private companion object {
+        /** High enough that a grid tile shows no visible banding. */
+        const val THUMBNAIL_QUALITY = 85
     }
 }

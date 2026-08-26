@@ -1,7 +1,6 @@
 package cc.pym.tela
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.net.Uri
 
 /**
@@ -33,7 +32,8 @@ internal class SafVaultListing(private val context: Context) {
      */
     fun list(target: OutsideGalleryTarget): List<Map<String, Any>> {
         val vault = vaultIn(target) ?: return emptyList()
-        return describeAll(untagged(vault) + tagged(vault))
+        return (untagged(vault) + tagged(vault))
+            .mapNotNull { (file, tag) -> describe(file, tag) }
             .sortedByDescending { row -> row["savedAt"] as Long }
     }
 
@@ -69,42 +69,31 @@ internal class SafVaultListing(private val context: Context) {
     }
 
     /**
-     * Describes every file, reading their headers **several at a time**.
-     *
-     * Each row costs a SAF stream open and a header decode, and both are spent
-     * waiting on a binder round trip rather than on the card — 1150 header
-     * reads straight off the disk take 1.5s, where the same files through the
-     * provider ran at about eleven a second. Serially that is minutes for a
-     * vault of a few thousand, paid on every refresh, and the offload's whole
-     * job is to make the vault bigger: the listing got slower exactly as the
-     * feature succeeded (owner, 2026-08-25).
-     *
-     * Waiting is what parallelises, so the pool is sized for latency and not
-     * for cores. It is created per call and shut down with it — this runs on
-     * the storage thread a few times a session, never in a loop.
-     */
-    private fun describeAll(files: List<Pair<SafFile, String?>>): List<Map<String, Any>> {
-        return mapInParallel(files, BOUNDS_READERS) { (file, tag) -> describe(file, tag) }
-    }
-
-    /**
      * One image's row, or null for a file tela did not write.
      *
      * The name is the identity, exactly as it is in the app-private tier: a
      * file whose name does not parse has no source and no id to report, and
      * this is a folder inside the user's own tree where anything at all may
      * have been dropped.
+     *
+     * **Carries no pixel bounds.** This used to open every file to decode its
+     * header — 1150 header reads straight off the disk take 1.5s, but the same
+     * files through this provider ran at about eleven a second even eight at a
+     * time, because the cost is the binder round trip per file, not the card.
+     * On a vault of a few thousand that was tens of seconds of nothing on
+     * screen, paid again on every refresh. `width`/`height` are simply absent
+     * now — Dart's mapper already reads a missing one as unknown, the same
+     * reading it gives a corrupt file — and a grid tile asks for its own bounds
+     * lazily instead, through `LocalPreviewCache.materializeThumbnail`, only
+     * once it is actually on screen.
      */
     private fun describe(file: SafFile, tag: String?): Map<String, Any>? {
         val key = ImageFileNaming.keyOf(file.name) ?: return null
-        val (width, height) = pixelBounds(file.uri)
         val row = mutableMapOf<String, Any>(
             "ref" to key,
             "location" to file.uri.toString(),
             "savedAt" to file.modifiedAt,
             "sizeBytes" to file.sizeBytes,
-            "width" to width,
-            "height" to height,
             // The one field [PrivateTierListing] never has to send: its rows are
             // always app-private, and these are always the files tier. Dart
             // routes deletes and retags by it, so an absent tier here would send
@@ -113,33 +102,5 @@ internal class SafVaultListing(private val context: Context) {
         )
         if (tag != null) row["tag"] = tag
         return row
-    }
-
-    /**
-     * Reads a document's pixel dimensions without decoding its pixels.
-     *
-     * The stream twin of [PrivateTierListing.pixelBounds]: a SAF document has no
-     * path for `decodeFile` to take, so the header is read through the resolver
-     * instead. A corrupt or unreachable file answers -1, which Dart renders as a
-     * safe broken-image state rather than dividing by an unknown dimension.
-     */
-    private fun pixelBounds(document: Uri): Pair<Int, Int> {
-        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        return try {
-            context.contentResolver.openInputStream(document)?.use { input ->
-                BitmapFactory.decodeStream(input, null, options)
-            }
-            options.outWidth to options.outHeight
-        } catch (_: Exception) {
-            -1 to -1
-        }
-    }
-
-    private companion object {
-        /**
-         * How many headers are read at once. Eight covers the binder latency
-         * without asking the provider for more parallelism than it gives.
-         */
-        const val BOUNDS_READERS = 8
     }
 }
