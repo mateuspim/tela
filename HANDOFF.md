@@ -379,7 +379,72 @@ The bugs a wire protocol has live below Dio's API and would be invisible to a
 recorded `RequestOptions`. 13 tests cover accept, partial accept, decline,
 busy, PIN, unreachable and the hand-typed path.
 
-### Owed on the device — the whole beam, and discovery most of all
+### PROVEN ON HARDWARE — a real transfer, against a real receiver
+
+**The beam works end to end, and it was tested rather than reasoned about.** A
+minimal LocalSend v2 receiver was stood up on the same LAN
+(`192.168.50.25:53317`, script in the session scratchpad) and tela sent to it
+from the device twice:
+
+- a **downloaded** wallpaper — 11,247,770 bytes, arriving as a complete valid
+  JPEG (7008×4672, correct `ffd9` EOI);
+- a wallpaper that had **never been downloaded** — fetched on the way out,
+  6,547,151 bytes, a complete valid PNG (3840×2160, correct `IEND`), named
+  `wallhaven-5y3vy8.png` with `image/png`, the extension correctly read off the
+  URL rather than defaulted to jpg.
+
+`register`, `prepare-upload` (files as a map keyed by id) and `upload` with the
+session and per-file token all behaved exactly as the protocol suite predicted.
+
+**Discovery found nothing on this network, and that is probably the network.**
+tela's announcement never reached a receiver sitting on the same subnet — the
+device is on Wi-Fi and the receiver on wired, and consumer routers commonly do
+not bridge multicast across that. It is *not* proven that the multicast lock
+works; it is only proven that discovery fails safely and the hand-typed address
+carries the whole feature. **This is the one thing still owed on hardware:** try
+it with a real LocalSend on a machine on the same Wi-Fi.
+
+### Four bugs the device found that neither suite could
+
+Worth reading before adding anything else here, because all four were invisible
+to `flutter test` and `make kotlin-test`, both green throughout:
+
+1. **The release build would not launch at all** — WorkManager initializes at
+   process start and R8 stripped the constructor its Room database is
+   reflected through. Debug builds run no R8, so nothing short of installing a
+   release APK could see it. Also: `-keep,...,allowshrinking` does **not** fix
+   it — that flag says the member may go if it looks unused, and a
+   reflection-only constructor always looks unused.
+2. **The beam had no reachable entry point.** Its only home was the private
+   library's selection bar, itself gated on the explicit-beam setting — so a
+   default install could beam nothing, and a *safe* wallpaper could not be
+   beamed by any route. The gate governs explicit content, not the feature.
+3. **A vault image beamed past the gate.** Purity was read off the storage
+   tier, but the private library has two homes and the second is the hidden
+   folder on `filesOutsideGallery` where explicit downloads land once the
+   destination is a card. Every one of those was marked safe. Purity is now
+   decided by the caller, which is the only place it is knowable.
+4. **The receiver was getting `preview-221123410085484`, with no extension.**
+   The file name came from the *resolved* path, which for anything behind SAF
+   or MediaStore is a cache copy with a generated name. An 11MB transfer landed
+   on the desktop as a file nothing could recognise.
+
+### Where the beam is offered now
+
+Download history, the Library hub's recent-downloads strip, favourites, the
+browse wall's selection, the browse long-press quick sheet, a wallpaper's
+detail bar, and the private library (that one still gated, correctly — it is
+all explicit). **None of them require the wallpaper to have been downloaded**:
+one already on disk is sent from there, one that is not is fetched once into
+the preview cache and released after.
+
+"Search again" exists because the multicast announcement is a one-shot shout: a
+receiver switched on *after* the sheet opened — the ordinary order — never
+heard anything to answer, and no amount of waiting would have found it.
+
+### Owed on the device — discovery, and auto-rotate
+
+
 
 Nothing here has met hardware. In rough order of how likely it is to bite:
 **does discovery actually find a desktop LocalSend** (the multicast lock is the
