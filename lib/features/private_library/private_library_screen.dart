@@ -343,9 +343,12 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     if (keys.isEmpty) return false;
     final List<PrivateImage> selected = _imagesFor(keys);
     if (selected.isEmpty || !mounted) return false;
-    final ResolvedBeamFiles resolved = await ref
-        .read(resolveBeamFilesProvider)
-        .call(selected);
+    final ResolvedBeamFiles
+    resolved = await ref.read(resolveBeamFilesProvider).call(<BeamCandidate>[
+      // Explicit whichever home it sits in — the vault is the private
+      // library's other disk, not a safer tier. See BeamCandidate.
+      for (final PrivateImage image in selected) BeamCandidate.ofPrivate(image),
+    ]);
     try {
       if (!mounted || resolved.files.isEmpty) return false;
       await BeamSheet.open(context, files: resolved.files);

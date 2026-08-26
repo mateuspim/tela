@@ -401,6 +401,26 @@ void main() {
       );
     });
   });
+
+  group('beaming from the history', () {
+    testWidgets('is offered with no setting turned on', (
+      WidgetTester tester,
+    ) async {
+      // The regression: the beam's only entry point used to be the private
+      // library, gated on the explicit-beam setting — so a default install had
+      // no way to beam anything, safe wallpapers included.
+      await _pump(
+        tester,
+        FakeDownloadHistory(
+          initial: <DownloadRecord>[_download('sunset')],
+        ),
+      );
+
+      await _openSelection(tester);
+
+      expect(find.byIcon(Icons.wifi_tethering), findsOneWidget);
+    });
+  });
 }
 
 /// Boots the real screen over [history], behind a router so a tap can open the
@@ -500,6 +520,17 @@ DownloadRecord _landscapeDownload(String id) => DownloadRecord(
 /// what to do with the dialog. Extracted because all three forget tests walk
 /// the identical two steps to reach it, and D4 is what made that walk long
 /// enough to be worth naming.
+/// The beam action is offered on a selection, without any setting turned on.
+///
+/// Shipped wrong once: the only beam entry point was in the private library
+/// *and* gated on the explicit-beam setting, so with a default install the
+/// feature had no reachable entry point at all and a safe wallpaper could not
+/// be beamed by any route. The gate governs explicit content, not the feature.
+Future<void> _openSelection(WidgetTester tester) async {
+  await tester.longPress(find.byType(WallpaperTile).first);
+  await tester.pumpAndSettle();
+}
+
 Future<void> _forgetSelected(WidgetTester tester) async {
   await tester.longPress(find.byType(WallpaperTile).first);
   await tester.pumpAndSettle();

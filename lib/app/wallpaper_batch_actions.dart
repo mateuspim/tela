@@ -13,6 +13,8 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/use_cases/delete_downloads.dart';
+import 'package:tela/domain/use_cases/resolve_beam_files.dart';
+import 'package:tela/features/beam/beam_sheet.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 
 /// What a shelf can do to every ticked wallpaper at once.
@@ -44,6 +46,15 @@ enum WallpaperBatchAction {
   /// Move every ticked download into the private library. Confirms first: the
   /// file leaves Photos, and tela cannot put it back there afterwards.
   moveToPrivate,
+
+  /// Send every ticked download to a machine on the local network.
+  ///
+  /// **Not gated, unlike the private library's beam.** The gate is about
+  /// *explicit* content, not about the feature: safe and sketchy wallpapers
+  /// beam freely, and `BeamWallpapers` refuses a batch holding an explicit one
+  /// while the setting is off. Gating the action here too would have made the
+  /// whole feature unreachable for the case it exists for.
+  beam,
 
   /// Refile every ticked download under another tag folder.
   ///
@@ -141,6 +152,8 @@ Future<bool> _perform(
       return _moveAllToPrivate(context, ref, wallpapers);
     case WallpaperBatchAction.retag:
       return _retagAll(context, ref, wallpapers);
+    case WallpaperBatchAction.beam:
+      return _beamAll(context, ref, wallpapers);
   }
 }
 
@@ -161,6 +174,39 @@ Future<bool> _moveAllToPrivate(
   if (!context.mounted) return true;
   await moveToPrivate(context: context, ref: ref, records: records);
   return true;
+}
+
+/// Sends every ticked download to a machine on the local network.
+///
+/// Reads the records for the same reason [_moveAllToPrivate] does: a beam needs
+/// each file's location, not just its id — and it resolves them through
+/// [ResolveBeamFiles] first, because a vault download's location is a
+/// `content:` SAF URI no Dart code can open.
+///
+/// Answers false so the ticks survive: a beam takes nothing away and changes
+/// nothing on this device, so there is no reason for the selection to clear.
+Future<bool> _beamAll(
+  BuildContext context,
+  WidgetRef ref,
+  List<Wallpaper> wallpapers,
+) async {
+  final List<DownloadRecord> records = await _recordsFor(ref, wallpapers);
+  if (!context.mounted) return false;
+  final ResolvedBeamFiles resolved = await ref
+      .read(resolveBeamFilesProvider)
+      .call(<BeamCandidate>[
+        for (final DownloadRecord record in records)
+          BeamCandidate.ofDownload(record),
+      ]);
+  try {
+    if (!context.mounted || resolved.files.isEmpty) return false;
+    await BeamSheet.open(context, files: resolved.files);
+  } finally {
+    // The copies are full-size duplicates of every file sent; a batch of forty
+    // left behind is forty wallpapers of cache.
+    await resolved.release();
+  }
+  return false;
 }
 
 /// Refiles every ticked download under a tag the user names.

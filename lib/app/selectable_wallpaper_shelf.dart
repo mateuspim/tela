@@ -99,6 +99,7 @@ class SelectableWallpaperShelf extends ConsumerWidget {
     WallpaperBatchAction.delete => Icons.delete_outline,
     WallpaperBatchAction.moveToPrivate => Icons.lock_outline,
     WallpaperBatchAction.retag => Icons.folder_outlined,
+    WallpaperBatchAction.beam => Icons.wifi_tethering,
   };
 
   String _labelOf(AppLocalizations l10n, WallpaperBatchAction action) =>
@@ -110,5 +111,6 @@ class SelectableWallpaperShelf extends ConsumerWidget {
         WallpaperBatchAction.delete => l10n.downloadDeleteMenu,
         WallpaperBatchAction.moveToPrivate => l10n.moveToPrivateAction,
         WallpaperBatchAction.retag => l10n.retagAction,
+        WallpaperBatchAction.beam => l10n.beamAction,
       };
 }

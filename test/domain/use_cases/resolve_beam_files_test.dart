@@ -22,6 +22,10 @@ PrivateImage _image(
   );
 }
 
+List<BeamCandidate> _private(List<PrivateImage> images) => <BeamCandidate>[
+  for (final PrivateImage image in images) BeamCandidate.ofPrivate(image),
+];
+
 final Uri _appPrivate = Uri.parse('file:///data/tela/wallhaven-aaaaaa.jpg');
 final Uri _vault = Uri.parse('content://com.android.externalstorage/doc/1');
 
@@ -35,7 +39,7 @@ void main() {
 
       final ResolvedBeamFiles resolved = await ResolveBeamFiles(
         previews,
-      ).call(<PrivateImage>[_image('aaaaaa', location: _vault)]);
+      ).call(_private(<PrivateImage>[_image('aaaaaa', location: _vault)]));
 
       expect(previews.materialised, <Uri>[_vault]);
       expect(resolved.files.single.path, startsWith('/cache/preview-'));
@@ -49,36 +53,61 @@ void main() {
       );
 
       final ResolvedBeamFiles resolved = await ResolveBeamFiles(previews).call(
-        <PrivateImage>[
+        _private(<PrivateImage>[
           _image('aaaaaa', location: _vault),
           _image('bbbbbb', location: _appPrivate),
-        ],
+        ]),
       );
 
       expect(resolved.files, hasLength(1));
       expect(resolved.files.single.id, 'wallhaven-bbbbbb');
     });
 
-    test('marks an app-private image explicit, so the gate applies', () async {
-      // The private tier is where NSFW downloads land, and its files carry no
-      // purity of their own — this is what makes the beam gate reach them.
-      final ResolvedBeamFiles resolved = await ResolveBeamFiles(
-        FakeLocalPreviewCache(),
-      ).call(<PrivateImage>[_image('aaaaaa', location: _appPrivate)]);
-
-      expect(resolved.files.single.purity, Purity.nsfw);
-    });
-
     test(
       'keys a file by source and id, so two sources cannot collide',
       () async {
-        final ResolvedBeamFiles resolved = await ResolveBeamFiles(
-          FakeLocalPreviewCache(),
-        ).call(<PrivateImage>[_image('aaaaaa', location: _appPrivate)]);
+        final ResolvedBeamFiles resolved =
+            await ResolveBeamFiles(
+              FakeLocalPreviewCache(),
+            ).call(
+              _private(<PrivateImage>[_image('aaaaaa', location: _appPrivate)]),
+            );
 
         expect(resolved.files.single.id, 'wallhaven-aaaaaa');
       },
     );
+  });
+
+  group('the private library is explicit at both of its homes', () {
+    test('an app-private image is explicit', () async {
+      final ResolvedBeamFiles resolved = await ResolveBeamFiles(
+        FakeLocalPreviewCache(),
+      ).call(_private(<PrivateImage>[_image('aaaaaa', location: _appPrivate)]));
+
+      expect(resolved.files.single.purity, Purity.nsfw);
+    });
+
+    test('a vault image is explicit too — regression', () async {
+      // Shipped wrong once: purity was read off the tier, which marked every
+      // vault image safe. The vault is the private library's *other disk* —
+      // where explicit downloads land once the destination points at a card —
+      // not a safer tier, so that would have beamed explicit files straight
+      // past the opt-in gate.
+      final ResolvedBeamFiles resolved =
+          await ResolveBeamFiles(
+            FakeLocalPreviewCache(),
+          ).call(
+            _private(<PrivateImage>[
+              _image(
+                'aaaaaa',
+                location: _vault,
+                tier: StorageTier.filesOutsideGallery,
+              ),
+            ]),
+          );
+
+      expect(resolved.files.single.purity, Purity.nsfw);
+    });
   });
 
   group('the throwaway copies', () {
@@ -87,7 +116,7 @@ void main() {
       // forty left unreleased is forty duplicated wallpapers in the cache.
       final FakeLocalPreviewCache previews = FakeLocalPreviewCache();
       final ResolvedBeamFiles resolved = await ResolveBeamFiles(previews).call(
-        <PrivateImage>[_image('aaaaaa', location: _vault)],
+        _private(<PrivateImage>[_image('aaaaaa', location: _vault)]),
       );
 
       await resolved.release();
@@ -100,7 +129,7 @@ void main() {
       // it would delete the wallpaper.
       final FakeLocalPreviewCache previews = FakeLocalPreviewCache();
       final ResolvedBeamFiles resolved = await ResolveBeamFiles(previews).call(
-        <PrivateImage>[_image('aaaaaa', location: _appPrivate)],
+        _private(<PrivateImage>[_image('aaaaaa', location: _appPrivate)]),
       );
 
       await resolved.release();
@@ -111,7 +140,7 @@ void main() {
     test('is safe to release twice', () async {
       final FakeLocalPreviewCache previews = FakeLocalPreviewCache();
       final ResolvedBeamFiles resolved = await ResolveBeamFiles(previews).call(
-        <PrivateImage>[_image('aaaaaa', location: _vault)],
+        _private(<PrivateImage>[_image('aaaaaa', location: _vault)]),
       );
 
       await resolved.release();

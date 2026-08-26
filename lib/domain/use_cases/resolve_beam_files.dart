@@ -1,8 +1,10 @@
+import 'package:meta/meta.dart';
 import 'package:tela/domain/models/beam_file.dart';
+import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/local_preview.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
-import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/local_preview_cache.dart';
 
 /// Turns stored images into files a beam can actually read.
@@ -25,25 +27,86 @@ import 'package:tela/domain/ports/local_preview_cache.dart';
 /// try { await beam(files: resolved.files); }
 /// finally { await resolved.release(); }
 /// ```
+/// One image a beam has been asked to send, before its bytes are reachable.
+///
+/// The two shelves that can beam hold different types — the private library
+/// has [PrivateImage], the download history has [DownloadRecord] — and only
+/// this much of either matters. Naming it keeps [ResolveBeamFiles] from
+/// knowing about both, and keeps the purity rule at the two call sites where
+/// it is actually decidable.
+@immutable
+class BeamCandidate {
+  /// Creates a candidate.
+  const BeamCandidate({
+    required this.ref,
+    required this.location,
+    required this.sizeBytes,
+    required this.purity,
+  });
+
+  /// Everything in the private library, at **either** of its two homes.
+  ///
+  /// **Always explicit, and never read off the tier.** The private library has
+  /// two homes since the vault — the app-private tier, and the hidden folder on
+  /// `filesOutsideGallery` that explicit downloads land in once the destination
+  /// points at a card. They render identically and sit behind the same lock, so
+  /// deciding purity from the tier would mark every vault image safe and beam
+  /// it straight past the opt-in gate. The library *is* the explicit tier;
+  /// which disk it happens to be on says nothing about the picture.
+  factory BeamCandidate.ofPrivate(PrivateImage image) => BeamCandidate(
+    ref: image.ref,
+    location: image.location,
+    sizeBytes: image.sizeBytes,
+    purity: Purity.nsfw,
+  );
+
+  /// One downloaded wallpaper, carrying the purity the source published.
+  ///
+  /// Unlike the private library this is a real per-file answer, so a history
+  /// holding a mix beams the safe ones and is refused for the explicit ones
+  /// exactly as `BeamWallpapers` describes.
+  factory BeamCandidate.ofDownload(DownloadRecord record) => BeamCandidate(
+    ref: record.wallpaper.ref,
+    location: record.location,
+    sizeBytes: record.wallpaper.fileSizeBytes,
+    purity: record.wallpaper.purity,
+  );
+
+  /// Which source issued it and under what id.
+  final WallpaperRef ref;
+
+  /// Where the bytes are — a `file:` path or a `content:` SAF document URI.
+  final Uri location;
+
+  /// How many bytes the receiver should expect.
+  final int sizeBytes;
+
+  /// How explicit it is, so the beam gate can be applied per file.
+  final Purity purity;
+}
+
+/// Turns beam candidates into files a beam can actually read.
 class ResolveBeamFiles {
   /// Creates the use case. Every collaborator is injected (CLAUDE.md).
   const ResolveBeamFiles(this._previews);
 
   final LocalPreviewCache _previews;
 
-  /// Resolves [images], skipping any that cannot be read.
+  /// Resolves [candidates], skipping any that cannot be read.
   ///
   /// A file that will not materialize is dropped rather than failing the
   /// batch: one unreadable image out of forty should cost itself, not the
   /// other thirty-nine, and the sheet reports how many are actually going.
-  Future<ResolvedBeamFiles> call(List<PrivateImage> images) async {
+  Future<ResolvedBeamFiles> call(List<BeamCandidate> candidates) async {
     final List<BeamFile> files = <BeamFile>[];
     final List<LocalPreview> temporary = <LocalPreview>[];
-    for (final PrivateImage image in images) {
-      final LocalPreview? preview = await _previews.materialize(image.location);
+    for (final BeamCandidate candidate in candidates) {
+      final LocalPreview? preview = await _previews.materialize(
+        candidate.location,
+      );
       if (preview == null) continue;
       if (preview.isTemporary) temporary.add(preview);
-      files.add(_fileFor(image, preview));
+      files.add(_fileFor(candidate, preview));
     }
     return ResolvedBeamFiles(
       files: files,
@@ -52,18 +115,17 @@ class ResolveBeamFiles {
     );
   }
 
-  BeamFile _fileFor(PrivateImage image, LocalPreview preview) {
+  BeamFile _fileFor(BeamCandidate candidate, LocalPreview preview) {
     final String name = preview.path.split('/').last;
     return BeamFile(
-      id: '${image.ref.source.value}-${image.ref.id}',
+      id: '${candidate.ref.source.value}-${candidate.ref.id}',
       fileName: name,
       path: preview.path,
-      sizeBytes: image.sizeBytes,
-      // The private library is explicit by definition — it is where NSFW
-      // downloads land — so this is what makes the beam gate apply to it. A
-      // safe image reaching here from elsewhere is still declared honestly.
+      sizeBytes: candidate.sizeBytes,
       mimeType: _mimeFor(name),
-      purity: image.tier == StorageTier.appPrivate ? Purity.nsfw : Purity.sfw,
+      // Decided by the caller, never re-derived here: only the shelf knows
+      // whether it is showing the explicit library or a mixed history.
+      purity: candidate.purity,
     );
   }
 
