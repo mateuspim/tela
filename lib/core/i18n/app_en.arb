@@ -2158,5 +2158,26 @@
         "type": "int"
       }
     }
+  },
+
+  "settingsNotificationsTitle": "Notifications",
+  "@settingsNotificationsTitle": {
+    "description": "Settings row that reports whether tela may post notifications."
+  },
+  "settingsNotificationsOn": "On. Background downloads and moves show their progress.",
+  "@settingsNotificationsOn": {
+    "description": "Subtitle of the notifications row when notifications are permitted."
+  },
+  "settingsNotificationsOff": "Off. Background downloads and moves run with nothing on screen.",
+  "@settingsNotificationsOff": {
+    "description": "Subtitle of the notifications row when notifications are blocked."
+  },
+  "settingsNotificationsAction": "Change in Android settings",
+  "@settingsNotificationsAction": {
+    "description": "Hint on the notifications row explaining that the switch lives in Android."
+  },
+  "settingsNotificationsUnavailable": "Could not open Android's notification settings.",
+  "@settingsNotificationsUnavailable": {
+    "description": "Message shown when the system notification settings page will not open."
   }
 }

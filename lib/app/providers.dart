@@ -4,6 +4,7 @@ import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/network/konachan_client.dart';
 import 'package:tela/core/network/wallhaven_client.dart';
+import 'package:tela/data/app/flutter_app_visibility.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/downloads/drift_download_history.dart';
 import 'package:tela/data/downloads/drift_download_queue.dart';
@@ -12,6 +13,7 @@ import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/images/cache_manager_fetched_image_cache.dart';
 import 'package:tela/data/images/decoded_dominant_color.dart';
 import 'package:tela/data/konachan/dio_konachan_source.dart';
+import 'package:tela/data/notifications/method_channel_notification_access.dart';
 import 'package:tela/data/secrets/secure_secret_store.dart';
 import 'package:tela/data/security/local_auth_app_lock.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
@@ -28,6 +30,7 @@ import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/ports/app_lock.dart';
+import 'package:tela/domain/ports/app_visibility.dart';
 import 'package:tela/domain/ports/dominant_color.dart';
 import 'package:tela/domain/ports/download_history.dart';
 import 'package:tela/domain/ports/download_queue.dart';
@@ -37,6 +40,7 @@ import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/fetched_image_cache.dart';
 import 'package:tela/domain/ports/image_store.dart';
 import 'package:tela/domain/ports/local_preview_cache.dart';
+import 'package:tela/domain/ports/notification_access.dart';
 import 'package:tela/domain/ports/screen_guard.dart';
 import 'package:tela/domain/ports/secret_store.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
@@ -156,6 +160,22 @@ final Provider<DominantColor> dominantColorProvider = Provider<DominantColor>(
 final Provider<ScreenGuard> screenGuardProvider = Provider<ScreenGuard>(
   (Ref ref) => MethodChannelScreenGuard(),
 );
+
+/// The notification-permission port, bound to Android's own settings page.
+final Provider<NotificationAccess> notificationAccessProvider =
+    Provider<NotificationAccess>(
+      (Ref ref) => MethodChannelNotificationAccess(),
+    );
+
+/// Whether tela's notifications are on right now.
+///
+/// autoDispose, because the answer changes **outside this app**: the user
+/// leaves for Android's settings page and comes back, and a cached "off" would
+/// outlive the switch they just flipped. Re-read whenever the row is rebuilt.
+final FutureProvider<bool> notificationsEnabledProvider =
+    FutureProvider.autoDispose<bool>(
+      (Ref ref) => ref.watch(notificationAccessProvider).areEnabled(),
+    );
 
 /// The app-lock port, bound to Android's BiometricPrompt.
 final Provider<AppLock> appLockProvider = Provider<AppLock>(
@@ -279,6 +299,16 @@ final Provider<ConfiguredDownload> configuredDownloadProvider =
         imageStore: ref.watch(imageStoreProvider),
       ),
     );
+
+/// Whether a screen is in front of the user, for the one storage step that
+/// cannot happen without one.
+final Provider<AppVisibility> appVisibilityProvider = Provider<AppVisibility>(
+  (Ref ref) {
+    final FlutterAppVisibility visibility = FlutterAppVisibility();
+    ref.onDispose(visibility.dispose);
+    return visibility;
+  },
+);
 
 /// Moves already-downloaded images between storage tiers, without the network.
 final Provider<MoveStoredImages> moveStoredImagesProvider =
