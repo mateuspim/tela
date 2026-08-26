@@ -7,6 +7,7 @@ import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_capabilities.dart';
 import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/wallpaper_collection.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/ports/wallpaper_source.dart';
@@ -60,6 +61,7 @@ class DioWallhavenSource implements WallpaperSource {
     // backs off exponentially rather than trusting any Retry-After blindly.
     requestsPerMinute: 45,
     syncsAccountDefaults: true,
+    browsesCollections: true,
   );
 
   @override
@@ -136,6 +138,60 @@ class DioWallhavenSource implements WallpaperSource {
   String? wallpaperIdIn(String text) {
     final String candidate = text.trim().toLowerCase();
     return _idShape.hasMatch(candidate) ? candidate : null;
+  }
+
+  /// `GET /collections/{username}` — the one route, for anybody's lists.
+  ///
+  /// Keyless for a stranger's public collections (measured live 2026-08-26);
+  /// with the stored key on your own username it returns your private ones
+  /// too, which is the whole reason there is no separate "mine" call.
+  ///
+  /// **Every miss is the same 404 body** — `{"error":"Nothing here"}` for an
+  /// unknown username and for a real account with nothing public alike
+  /// (measured live) — so this reports [NotFoundFailure] against the username
+  /// actually asked for rather than inventing a distinction the API does not
+  /// make.
+  @override
+  Future<List<WallpaperCollection>> collectionsOf(String username) async {
+    try {
+      final Response<Map<String, dynamic>> response = await _dio
+          .get<Map<String, dynamic>>('/collections/$username');
+      return _mapped(
+        response.data,
+        (Map<String, dynamic> body) =>
+            WallhavenMapper.toCollections(body, owner: username),
+      );
+    } on DioException catch (error) {
+      throw _toFailure(error, notFoundId: username);
+    }
+  }
+
+  /// Only `purity` and `page` are sent, because they are the only two this
+  /// endpoint honours — see [WallpaperSource.collectionPage] for the
+  /// measurement. Sending the rest would not be harmless: it would let a
+  /// filter sheet look like it applied.
+  @override
+  Future<WallpaperPage> collectionPage(
+    CollectionRef collection, {
+    required int page,
+    required PurityFilter purity,
+  }) async {
+    try {
+      final Response<Map<String, dynamic>> response = await _dio
+          .get<Map<String, dynamic>>(
+            '/collections/${collection.owner}/${collection.id}',
+            queryParameters: <String, String>{
+              'purity': wallhavenPurityBits(purity),
+              'page': '$page',
+            },
+          );
+      // The payload is byte-for-byte a `/search` page — same wallpaper fields,
+      // same `meta` counters (verified live 2026-08-26) — so it maps through
+      // the same function rather than a near-copy that could drift from it.
+      return _mapped(response.data, WallhavenMapper.toPage);
+    } on DioException catch (error) {
+      throw _toFailure(error, notFoundId: collection.key);
+    }
   }
 
   @override

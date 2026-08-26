@@ -2,7 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tela/app/listing_download_queueing.dart';
+import 'package:tela/app/providers.dart';
+import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
@@ -15,6 +18,7 @@ import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/features/browse/browse_filter_button.dart';
 import 'package:tela/features/browse/browse_filter_scope.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
+import 'package:tela/features/browse/collections_args.dart';
 import 'package:tela/features/browse/wallpaper_grid.dart';
 
 /// The listing behind a link followed from a wallpaper — a tag, or an uploader.
@@ -85,6 +89,19 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
     _filters = ref.read(browseQueryProvider.notifier).defaultQuery;
   });
 
+  /// The account whose collections this listing can offer, or null.
+  ///
+  /// Null for a tag and a colour — neither is an account — and null on a source
+  /// with no collections at all, so the button never appears where tapping it
+  /// would throw.
+  String? get _collectionsOwner {
+    if (!ref.read(browseCollectionsProvider).isSupported) return null;
+    return switch (widget.link) {
+      UploaderLink(:final String username) => username,
+      TagLink() || ColorLink() => null,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final String identity = _galleryIdentity;
@@ -106,6 +123,18 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
               tooltip: AppLocalizations.of(context).listingDownloadAll,
               onPressed: () => unawaited(_downloadWholeListing(query)),
             ),
+            // Only an uploader has collections to offer; a tag and a colour
+            // are not accounts. Gated on the source too — a booru has no such
+            // thing (`SourceCapabilities.browsesCollections`).
+            if (_collectionsOwner case final String owner)
+              IconButton(
+                icon: const Icon(Icons.collections_bookmark_outlined),
+                tooltip: AppLocalizations.of(context).collectionsOpen,
+                onPressed: () => context.pushNamed(
+                  TelaRoutes.collectionsName,
+                  extra: CollectionsArgs(username: owner, seed: _filters),
+                ),
+              ),
             const SelectModeButton(),
             BrowseFilterButton(filters: _filters, scope: this),
             const SizedBox(width: 8),

@@ -1,8 +1,10 @@
 import 'package:tela/domain/models/account_settings.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_capabilities.dart';
 import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/wallpaper_collection.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 
@@ -95,6 +97,50 @@ abstract interface class WallpaperSource {
   /// final String? id = source.wallpaperIdIn(' Je9ldp '); // 'je9ldp'
   /// ```
   String? wallpaperIdIn(String text);
+
+  /// The collections [username] publishes.
+  ///
+  /// Only meaningful where [SourceCapabilities.browsesCollections] is true; a
+  /// source without collections throws [UnsupportedError], the same contract
+  /// [accountSettings] has for a source without accounts.
+  ///
+  /// **Always addressed by username, including your own** — there is no
+  /// "mine" route worth having. Wallhaven does publish a bare `/collections`
+  /// for the authenticated user, but neither it nor `/settings` returns the
+  /// username (confirmed against the published API reference, 2026-08-26), and
+  /// the contents endpoint is addressed as `/collections/{username}/{id}` — so
+  /// that route hands back ids it gives you no way to open. Asking by name
+  /// instead costs one stored setting and answers both cases with one request:
+  /// a stranger's public lists keylessly, and *all* of your own, private ones
+  /// included, once the stored key makes it your account being read.
+  ///
+  /// Throws [NotFoundFailure] naming [username] when the source has no such
+  /// account, and the same safe failures as [search] otherwise.
+  ///
+  /// ```dart
+  /// final List<WallpaperCollection> theirs =
+  ///     await source.collectionsOf('jrmnt');
+  /// ```
+  Future<List<WallpaperCollection>> collectionsOf(String username);
+
+  /// Fetches one page of the wallpapers inside [collection].
+  ///
+  /// **[purity] is the only filter this honours, and the rest are not merely
+  /// ignored — they are silently ignored**, which is the failure mode
+  /// [SourceFilter] exists to design out. Measured live on 2026-08-26 against
+  /// Wallhaven collection `jrmnt/585550` (447 wallpapers): `categories`,
+  /// `atleast`, `ratios`, `sorting` and `order` each left the total at 447 and
+  /// the order untouched. A collection is a hand-ordered list, so its order is
+  /// its own and there is nothing to sort by. Callers must therefore offer
+  /// purity alone — see `CollectionListingScreen`.
+  ///
+  /// Throws [NotFoundFailure] naming the collection when the source has no such
+  /// list, and the same safe failures as [search] otherwise.
+  Future<WallpaperPage> collectionPage(
+    CollectionRef collection, {
+    required int page,
+    required PurityFilter purity,
+  });
 
   /// Fetches the browse defaults of the account the stored key belongs to.
   ///

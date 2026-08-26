@@ -1,0 +1,25 @@
+{
+    "data": [
+        {
+            "id": 585550,
+            "label": "Default",
+            "views": 26938,
+            "public": 1,
+            "count": 479
+        },
+        {
+            "id": 1651328,
+            "label": "Girls",
+            "views": 16584,
+            "public": 1,
+            "count": 82
+        },
+        {
+            "id": 1797738,
+            "label": "Interiors",
+            "views": 5201,
+            "public": 1,
+            "count": 49
+        }
+    ]
+}

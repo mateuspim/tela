@@ -31,6 +31,25 @@ class InvalidApiKeyFailure extends SourceFailure {
   String get kind => 'invalid_api_key';
 }
 
+/// The user's own collections were asked for without tela knowing which
+/// account is theirs.
+///
+/// Its own case rather than a [NotFoundFailure] because the remedy is
+/// different — type a username into Settings, not "no such account" — and the
+/// source cannot tell the two apart on tela's behalf: Wallhaven answers an
+/// unknown username, an account with nothing public, and a keyless read with
+/// the same 404 body (measured live 2026-08-26). The distinction only exists
+/// on this side of the call, so it is drawn before the call.
+class NoCollectionsUsernameFailure extends SourceFailure {
+  /// Creates the failure.
+  const NoCollectionsUsernameFailure([
+    super.message = 'no collections username is stored for this source',
+  ]);
+
+  @override
+  String get kind => 'no_collections_username';
+}
+
 /// The source's request ceiling was hit (HTTP 429).
 ///
 /// [retryAfter] is the server's hint when it sends one; the client backs off

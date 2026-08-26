@@ -10,6 +10,10 @@ import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_link.dart';
 import 'package:tela/features/browse/browse_screen.dart';
+import 'package:tela/features/browse/collection_listing_args.dart';
+import 'package:tela/features/browse/collection_listing_screen.dart';
+import 'package:tela/features/browse/collections_args.dart';
+import 'package:tela/features/browse/collections_screen.dart';
 import 'package:tela/features/browse/linked_listing_args.dart';
 import 'package:tela/features/browse/linked_listing_screen.dart';
 import 'package:tela/features/detail/wallpaper_detail_args.dart';
@@ -112,6 +116,41 @@ abstract final class TelaRouter {
               child: LinkedListingScreen(
                 link: args?.link ?? extra as WallpaperLink,
                 seed: args?.seed,
+              ),
+            );
+          },
+        ),
+        GoRoute(
+          path: TelaRoutes.collectionsPath,
+          name: TelaRoutes.collectionsName,
+          builder: (_, GoRouterState state) {
+            // `extra` is optional here, unlike the listing below: no argument
+            // at all is the legitimate "my collections" case.
+            final Object? extra = state.extra;
+            final CollectionsArgs? args = extra is CollectionsArgs
+                ? extra
+                : null;
+            return CollectionsScreen(
+              username: args?.username,
+              seed: args?.seed,
+            );
+          },
+        ),
+        GoRoute(
+          path: TelaRoutes.collectionListingPath,
+          name: TelaRoutes.collectionListingName,
+          redirect: (_, GoRouterState state) =>
+              state.extra is CollectionListingArgs
+              ? null
+              : TelaRoutes.browsePath,
+          pageBuilder: (BuildContext context, GoRouterState state) {
+            final CollectionListingArgs args =
+                state.extra! as CollectionListingArgs;
+            return fadeGalleryPage<void>(
+              context: context,
+              child: CollectionListingScreen(
+                collection: args.collection,
+                seed: args.seed,
               ),
             );
           },

@@ -48,6 +48,18 @@ abstract final class TelaRoutes {
   /// Download history route name.
   static const String downloadHistoryName = 'download-history';
 
+  /// Path of the screen listing one account's collections.
+  static const String collectionsPath = '/collections';
+
+  /// Route name of the collections list.
+  static const String collectionsName = 'collections';
+
+  /// Path of one collection's wallpapers.
+  static const String collectionListingPath = '/collections/listing';
+
+  /// Route name of one collection's wallpapers.
+  static const String collectionListingName = 'collection-listing';
+
   /// Path of the screen that moves already-downloaded images onto a card.
   static const String offloadPath = '/offload';
 

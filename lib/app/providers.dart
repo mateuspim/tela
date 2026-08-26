@@ -54,6 +54,7 @@ import 'package:tela/domain/use_cases/apply_cropped_wallpaper.dart';
 import 'package:tela/domain/use_cases/apply_download.dart';
 import 'package:tela/domain/use_cases/apply_private_image.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
+import 'package:tela/domain/use_cases/browse_collections.dart';
 import 'package:tela/domain/use_cases/confirm_nsfw_on_removable.dart';
 import 'package:tela/domain/use_cases/delete_download.dart';
 import 'package:tela/domain/use_cases/delete_downloads.dart';
@@ -428,6 +429,20 @@ final Provider<SearchWallpapers> searchWallpapersProvider =
         source: ref.watch(activeWallpaperSourceProvider),
         secrets: ref.watch(secretStoreProvider),
         blocklist: ref.watch(tagBlocklistRepositoryProvider),
+      ),
+    );
+
+/// Reads collections on the active source.
+///
+/// Bound to the active source like [searchWallpapersProvider], not pinned to
+/// Wallhaven: collections are a capability any source may grow, and the use
+/// case refuses on one that has not (`SourceCapabilities.browsesCollections`).
+final Provider<BrowseCollections> browseCollectionsProvider =
+    Provider<BrowseCollections>(
+      (Ref ref) => BrowseCollections(
+        source: ref.watch(activeWallpaperSourceProvider),
+        secrets: ref.watch(secretStoreProvider),
+        settings: ref.watch(settingsRepositoryProvider),
       ),
     );
 

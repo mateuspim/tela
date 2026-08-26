@@ -192,6 +192,19 @@ class FakeSettingsRepository implements SettingsRepository {
     _downloadTag = tag;
   }
 
+  @override
+  Future<String?> loadCollectionsUsername() async => collectionsUsername;
+
+  @override
+  Future<void> setCollectionsUsername(String? username) async {
+    final String trimmed = username?.trim() ?? '';
+    collectionsUsername = trimmed.isEmpty ? null : trimmed;
+  }
+
+  /// The stored collections username, readable directly so a test can arrange
+  /// "already told tela who I am" without going through the setter.
+  String? collectionsUsername;
+
   /// The remembered tag, which only ever holds a shared-tier one — the private
   /// library's is deliberately never persisted. See `RememberedDownloadTag`.
   TagFolder? _downloadTag;

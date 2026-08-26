@@ -1,11 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_capabilities.dart';
 import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_collection.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/ports/wallpaper_source.dart';
@@ -176,6 +178,18 @@ class KeyCheckingWallpaperSource implements WallpaperSource {
 
   @override
   SourceId get id => SourceId.wallhaven;
+
+  /// Nothing here is about collections either; same reason as tags.
+  @override
+  Future<List<WallpaperCollection>> collectionsOf(String username) async =>
+      const <WallpaperCollection>[];
+
+  @override
+  Future<WallpaperPage> collectionPage(
+    CollectionRef collection, {
+    required int page,
+    required PurityFilter purity,
+  }) async => throw UnimplementedError();
 
   /// Nothing here is about tags; this source exists to police the key.
   @override

@@ -29,6 +29,15 @@ import 'package:tela/features/browse/wallpaper_wall_status.dart';
 import 'package:tela/features/detail/wallpaper_gallery_session.dart';
 import 'package:tela/features/settings/blocked_tags_providers.dart';
 
+/// Fetches page [page] of a listing that is not a search.
+///
+/// Injected by a shelf whose pages come from somewhere other than
+/// `SearchWallpapers` — a collection, which is addressed by owner and id and
+/// honours no query at all beyond purity. Returning the whole [WallpaperPage]
+/// rather than its wallpapers is what lets the grid keep stopping at the last
+/// page.
+typedef WallpaperPageFetch = Future<WallpaperPage> Function(int page);
+
 /// An infinite wall of wallpapers for one [query], in justified rows.
 ///
 /// Owns its paging state, so each browse tab scrolls independently and keeps
@@ -39,11 +48,24 @@ class WallpaperGrid extends ConsumerStatefulWidget {
     required this.query,
     this.galleryIdentity = 'browse',
     this.listingFolder,
+    this.pageFetch,
     super.key,
   });
 
   /// The listing to show. Page number is managed by the grid, not the caller.
+  ///
+  /// Still required with a [pageFetch] set, because it is not only the request:
+  /// it is what [ListingOrigin] publishes to the download buttons below, and
+  /// half of this shelf's identity. A collection supplies a purity-only query
+  /// there — the only filter its endpoint honours.
   final SearchQuery query;
+
+  /// Where pages come from, when they do not come from a search.
+  ///
+  /// Null — the ordinary case — means `SearchWallpapers`, with the shuffle
+  /// seed carried between pages. Set, it replaces that entirely: the fetch is
+  /// the caller's, and so is any paging state it needs.
+  final WallpaperPageFetch? pageFetch;
 
   /// Stable shelf kind used to distinguish Browse from linked listings.
   final String galleryIdentity;
@@ -132,6 +154,10 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
   /// Delegates to the use case rather than building the next query here, so the
   /// `random` seed is carried by the one piece of code that is tested to do it.
   Future<WallpaperPage> _requestPage(int pageKey) {
+    final WallpaperPageFetch? fetch = widget.pageFetch;
+    // A supplied fetch owns paging outright — there is no seed to carry and no
+    // query to rebuild, because the listing is addressed rather than searched.
+    if (fetch != null) return fetch(pageKey);
     final search = ref.read(searchWallpapersProvider);
     final WallpaperPage? previous = _lastPage;
     if (pageKey == 1 || previous == null) {
@@ -241,6 +267,13 @@ class _WallpaperGridState extends ConsumerState<WallpaperGrid> {
   /// jump. A page the user hasn't scrolled to yet already gets the current
   /// blocklist for free, since every fetch reads it fresh.
   Future<void> _reapplyBlocklist() async {
+    // A non-search shelf has no blocklist to re-apply and no query to re-apply
+    // it with. On a collection this is not a shortcut but the truth:
+    // Wallhaven's contents endpoint honours only `purity` and its wallpapers
+    // carry no tags,
+    // so there is nothing to exclude server-side and nothing to strain out
+    // locally. See `BrowseCollections`, which states the same hole.
+    if (widget.pageFetch != null) return;
     final List<int>? keys = _paging.value.keys;
     if (keys == null || keys.isEmpty) return;
     final int generation = _generation;

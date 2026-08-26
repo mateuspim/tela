@@ -157,6 +157,18 @@ abstract interface class SettingsRepository {
   /// clears the pin when [tier] is null.
   Future<void> setPinnedDownloadTier(StorageTier? tier);
 
+  /// The source username whose collections are shown as "yours", or null.
+  ///
+  /// Stored rather than derived because no Wallhaven endpoint hands it back:
+  /// neither `/settings` nor the authenticated `/collections` carries a
+  /// username, while the contents route is addressed `/collections/{username}/
+  /// {id}` (API reference, checked 2026-08-26). One typed name is what turns
+  /// the stored API key into access to your *private* collections.
+  Future<String?> loadCollectionsUsername();
+
+  /// Remembers [username], or forgets it when null.
+  Future<void> setCollectionsUsername(String? username);
+
   /// The tag the chooser offers first, remembered from the last download that
   /// used one — or null when the last download was untagged.
   ///

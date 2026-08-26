@@ -162,6 +162,51 @@
     "description": "Explains why tapping the final selected purity chip cannot turn it off."
   },
 
+  "collectionsMine": "My collections",
+  "@collectionsMine": {
+    "description": "Title of the screen listing the signed-in user's own collections."
+  },
+
+  "collectionsNone": "No collections here.",
+  "@collectionsNone": {
+    "description": "Shown when an account publishes no collections. Deliberately not 'no public collections' \u2014 the same empty answer arrives for an account with only private ones, and tela cannot tell the two apart."
+  },
+
+  "collectionsOpen": "Collections",
+  "@collectionsOpen": {
+    "description": "Action on an uploader's listing that opens the collections that uploader publishes."
+  },
+
+  "collectionCount": "{count, plural, one{1 wallpaper} other{{count} wallpapers}}",
+  "@collectionCount": {
+    "description": "Subtitle of a collection row: how many wallpapers its owner put in it, before any purity filter narrows what this user can see.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "settingsCollectionsUsername": "Wallhaven username",
+  "@settingsCollectionsUsername": {
+    "description": "Settings row where the user types the account name whose collections are shown as theirs. Needed because no Wallhaven endpoint returns the username, while the collection contents route is addressed by it."
+  },
+
+  "settingsCollectionsUsernameHint": "Needed to open your own collections",
+  "@settingsCollectionsUsernameHint": {
+    "description": "Subtitle of the collections-username settings row when nothing is stored yet."
+  },
+
+  "collectionHiddenByPurity": "{count, plural, one{1 wallpaper hidden by your purity filter} other{{count} wallpapers hidden by your purity filter}}",
+  "@collectionHiddenByPurity": {
+    "description": "Shown above a collection's grid when the collection holds more wallpapers than the current purity filter and API key allow tela to show. Without it the grid can be empty under a collection row that promised dozens, with nothing explaining the gap.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
   "filterRatio": "Shape",
   "@filterRatio": {
     "description": "Heading of the aspect-ratio choice in the filter sheet."
@@ -467,6 +512,16 @@
       "id": {
         "type": "String"
       },
+      "sourceName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "errorNoCollectionsUsername": "Tell tela your {sourceName} username to see your collections.",
+  "@errorNoCollectionsUsername": {
+    "description": "Shown when the user's own collections are opened but no username is stored. Its own string rather than errorNotFound because the remedy is an action the user can take in Settings, and the source answers a missing username and a mistyped one identically.",
+    "placeholders": {
       "sourceName": {
         "type": "String"
       }

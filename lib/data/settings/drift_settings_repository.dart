@@ -104,6 +104,9 @@ class DriftSettingsRepository implements SettingsRepository {
   /// `SettingsRepository.loadDownloadTag`.
   static const String _downloadTagKey = 'downloads.tag';
 
+  /// `SettingsRepository.loadCollectionsUsername`.
+  static const String _collectionsUsernameKey = 'collections.username';
+
   final TelaDatabase _db;
 
   @override
@@ -342,6 +345,24 @@ class DriftSettingsRepository implements SettingsRepository {
   Future<void> setDownloadTag(TagFolder? tag) {
     if (tag == null) return _db.deleteSettings(<String>[_downloadTagKey]);
     return _db.putSetting(_downloadTagKey, tag.name);
+  }
+
+  @override
+  Future<String?> loadCollectionsUsername() async {
+    final String? stored = await _db.settingValue(_collectionsUsernameKey);
+    // An empty row and an absent one mean the same thing — no username — and
+    // an empty one would otherwise build the URL `/collections/`, which is a
+    // different endpoint entirely.
+    return (stored == null || stored.isEmpty) ? null : stored;
+  }
+
+  @override
+  Future<void> setCollectionsUsername(String? username) {
+    final String trimmed = username?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      return _db.deleteSettings(<String>[_collectionsUsernameKey]);
+    }
+    return _db.putSetting(_collectionsUsernameKey, trimmed);
   }
 
   /// The row a [purity]'s streak lives in, bucketed exactly as its tier is.

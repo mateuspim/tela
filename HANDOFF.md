@@ -99,11 +99,17 @@ Updated: 2026-08-26
 > own device content — worth flagging in case anyone re-reads this file
 > without having seen it happen live.
 >
-> **Owed next:** redeploy this build and retry offloading the remaining 26
-> `Alcololi` images — they were failing only because the tag folder's
-> collision budget was exhausted, and the fix removes the collision entirely
-> rather than raising the budget, so they should now resolve straight to the
-> real folder. Not yet re-verified after the redeploy.
+> **~~Owed next:~~ DONE — confirmed on the device 2026-08-26.** The redeploy
+> happened and the remaining 26 `Alcololi` images offloaded cleanly. Verified
+> by `adb shell` against the card, not by trusting the UI: the vault's
+> `Alcololi` folder now holds **128** files — the 102 from the orphan
+> merge-back plus exactly those 26 — and a `find` for `*(*)*` across the whole
+> vault returns nothing, so no new collision folder was created on the way.
+> The case-insensitive `findChild` did what it was meant to: the retries
+> resolved straight to the real folder instead of growing another `alcololi
+> (N)` beside it. Recorded here late — the fix and the retry both happened
+> before this was written down, which is why the paragraph above spent a
+> session claiming it was still owed.
 >
 > **Superseded below only in ordering, not in relevance** — the SD-card
 > offload's auto-reroute question from earlier today, 2026-08-26. Short
@@ -215,6 +221,124 @@ Updated: 2026-08-26
 > whether this closes the "looking up like 3 pages deep" complaint or whether
 > that was really the tile-decode-size / `justifiedRows`-repacking pair the
 > same entry named as the untuned half.
+
+## NEXT SESSION STARTS HERE — Wave 4's collections browser is built (uncommitted)
+
+**Owner, 2026-08-26: *"can we make deploy but silently? and make you work on the
+next big features?"*, then, asked which of Wave 4's three: *"lets do all however
+the omarchy sync but lets think of a better way for that giving the omarchy
+quattro and all we could build a qml widget or just use localsend to receive"*,
+and on ordering: collections → beam → auto-rotate.** Collections is done; the
+other two are not started.
+
+**State: `flutter analyze` clean, Dart 1617 (from 1585), Kotlin green,
+deployed to the device. Everything below is UNCOMMITTED on `master` — the
+owner has not yet been asked whether to branch and commit it.** Given this
+file's own history of uncommitted piles, that is the first thing to settle.
+
+### What Wallhaven's collections API actually does — measured, not read
+
+Probed live 2026-08-26 before any of it was designed against, per this
+project's standing rule, then cross-checked against the published API
+reference (which agrees on every point):
+
+- `GET /collections/{username}` — **keyless** for anyone's public collections.
+  Rows are `{id:int, label, views, public:0|1, count:int}` and carry **no
+  username**; it is only ever in the request URL.
+- `GET /collections/{username}/{id}` — the contents, and the payload is
+  **byte-for-byte a `/search` page**: same wallpaper fields, same
+  `meta{current_page,last_page,per_page,total}`. `WallhavenMapper.toPage` maps
+  it unchanged, which is why there is no second page mapper.
+- **`purity` is the ONLY filter it honours.** `categories`, `atleast`,
+  `ratios`, `sorting` and `order` are each accepted and *silently ignored* —
+  measured against `jrmnt/585550` (447 wallpapers), where every one of them
+  left the total at 447 and the order untouched. Wallhaven's own reference says
+  the same in one line: "only the 'purity' filter will be available".
+- **`count` and a page's `total` are different numbers, and the gap is the
+  feature.** `jrmnt/1651328` reports `count: 82` and answers `total: 0` under
+  the default purity — every wallpaper in it is sketchy or explicit. At
+  `purity=111` with no key it answers 22: the explicit ones are dropped
+  **silently**, not refused. So a collection row can promise 82 and render an
+  empty grid.
+- **Every miss is the same 404 body** — `{"error":"Nothing here"}` for an
+  unknown username, an account with nothing public, and a keyless
+  `/collections` alike. The status cannot tell them apart.
+
+### The one design decision worth not re-litigating: the username is typed
+
+Wallhaven publishes a bare `/collections` for the authenticated user — but
+**neither it nor `/settings` returns a username**, while the contents route is
+addressed by one. So that endpoint hands back ids it gives you no way to open.
+There is one route in the adapter, `/collections/{username}`, used for
+everybody: keyless it returns a stranger's public lists, and with the stored
+key on your own name it returns *all* of yours, private ones included. The cost
+is one typed setting (`collections.username`, Settings → Wallhaven account).
+
+### Built
+
+- Domain: `WallpaperCollection` + `CollectionRef` (`source:owner:id`, string id
+  so a future source may use a slug), `SourceCapabilities.browsesCollections`,
+  two port methods, `NoCollectionsUsernameFailure` in the sealed family.
+- Data: `WallhavenMapper.toCollections`, both adapter methods, Konachan throws
+  `UnsupportedError` from both (Moebooru has *pools*, which are site-curated,
+  not a user's lists — mapping one onto the other would be a lie).
+- `BrowseCollections` use case: capability guard, stored-username guard, and
+  the same keyless-explicit guard `SearchWallpapers` applies.
+- UI: `CollectionsScreen` (rows with real counts, a lock on the private ones),
+  `CollectionListingScreen`, `CollectionPurityButton`, `CollectionsSection` in
+  Settings. Two ways in — an uploader's listing offers *their* collections
+  (needs nothing configured), Settings offers your own.
+- `WallpaperGrid` grew an optional `pageFetch`; null keeps the existing search
+  path untouched, so no existing call site changed.
+
+**`_reapplyBlocklist` deliberately no-ops on a collection, and it is a real
+hole rather than a shortcut:** the endpoint ignores tag filters and its
+wallpapers carry no tags, so a blocked tag *can* appear inside a collection and
+there is nothing to filter it with short of one `/w/{id}` per wallpaper — 24
+requests a page against a 45/min ceiling. Stated in `BrowseCollections`'s
+docstring and in the grid.
+
+**A pre-existing test was corrected rather than re-tuned.** The settings
+two-column balance test asserted drift `< 200`, a constant calibrated to the
+old block heights; the collections rows made the account group taller and it
+read 210. The bound is now the tallest card, which is the actual guarantee
+greedy shortest-column packing gives, so it stops re-failing every time a group
+grows.
+
+### Owed on the device
+
+The whole feature. Nothing here has been touched by a finger: whether an
+uploader's collections open, whether the hidden-by-purity notice reads right,
+whether the purity popup feels like enough of a filter, and whether the typed
+username is discoverable enough sitting under the API key.
+
+### Next, in the owner's chosen order
+
+**The beam (was "Omarchy sync"), and the plan changed on research.** Omarchy
+4.0 "Quattro" shipped 2026-08-14 and rewrote the whole shell in Quickshell/QML
+with a documented plugin contract (`~/.config/omarchy/plugins/<id>/` +
+`manifest.json` + a QML entry) and its own wallpaper/theme switchers. So
+PLAN.md's original item — export `favorites.json` for Aether, sync over USB —
+is aiming at a target Omarchy has partly absorbed, and it only ever moved
+*links*, meaning the desktop re-downloads every image including the explicit
+ones. **Decided instead: tela implements a LocalSend sender.** Protocol v2.2
+needs three things — a multicast announce on `224.0.0.167:53317`,
+`POST /prepare-upload` for metadata → session + per-file tokens, then
+`POST /upload`. **Only the receiver runs an HTTP server**, so tela-as-sender
+needs an HTTP client (Dio, already here) and a UDP socket (`RawDatagramSocket`,
+`dart:io`) — a new port plus a `data/localsend/` adapter and **zero new
+packages**. Receiver is stock LocalSend, packaged for Arch. The QML plugin is
+the *other* half and belongs in its own repo, not here.
+
+**The NSFW call is made, by the owner, 2026-08-26: relax `mayExportBitmap` for
+the beam, opt-in, off by default.** Beam is a different threat model than the
+share sheet — your own LAN, your own machine, no third-party app's wallpaper
+history — so the private library gets a beam button, gated behind an explicit
+setting that starts off, so it can never happen by muscle memory. This is the
+first deliberate exception to "explicit pixels never leave the app"; it needs
+its own home beside `mayExportBitmap` rather than a hole punched through it.
+
+**Then daily auto-rotate** (WorkManager), untouched and unscoped.
 
 **Pass O, 2026-08-24 — built and merged: three things the owner named that
 day, all of them things they had actually felt on the device.**

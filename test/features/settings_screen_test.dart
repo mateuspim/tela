@@ -70,9 +70,17 @@ void main() {
               .reduce(math.max),
         )
         .toList();
-    // A group is ~200dip tall, so anything under one group's worth of drift is
-    // as balanced as discrete blocks can be. The static split was ~2x apart.
-    expect((bottoms.first - bottoms.last).abs(), lessThan(200));
+    // Measured against the tallest group rather than a constant, because that
+    // is the actual bound: dropping each block into the shortest column can
+    // never leave the columns further apart than the last block placed, so
+    // "under one group's worth of drift" *is* as balanced as discrete blocks
+    // can be. Hardcoding the number instead made this test re-fail every time
+    // a group grew a row — it did, when the collections rows landed in the
+    // account group — while proving nothing more. The static split was ~2x.
+    final double tallest = cards
+        .map((Rect card) => card.height)
+        .reduce(math.max);
+    expect((bottoms.first - bottoms.last).abs(), lessThan(tallest));
   });
 
   testWidgets('pads its last group clear of the bottom system bar', (

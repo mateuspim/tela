@@ -6,6 +6,7 @@ import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_collection.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 
@@ -46,6 +47,55 @@ abstract final class WallhavenMapper {
       // wrong number in front of a user deciding whether to commit to it.
       total: _readOptionalInt(meta, 'total'),
       seed: meta['seed'] as String?,
+    );
+  }
+
+  /// Maps a `/collections/{username}` response body to collection rows.
+  ///
+  /// [owner] is passed in rather than read from the payload because the
+  /// payload has no owner field — the username is only ever in the request
+  /// URL, and a [CollectionRef] without it cannot address the contents
+  /// endpoint that follows.
+  ///
+  /// ```dart
+  /// WallhavenMapper.toCollections(response.data, owner: 'jrmnt');
+  /// ```
+  static List<WallpaperCollection> toCollections(
+    Map<String, dynamic> body, {
+    required String owner,
+  }) {
+    final Object? data = body['data'];
+    if (data is! List) {
+      throw UnexpectedResponseFailure(
+        'expected "data" to be a list of collections, got ${data.runtimeType}',
+      );
+    }
+    return data.map((Object? row) => _toCollection(row, owner: owner)).toList();
+  }
+
+  static WallpaperCollection _toCollection(
+    Object? row, {
+    required String owner,
+  }) {
+    if (row is! Map<String, dynamic>) {
+      throw UnexpectedResponseFailure(
+        'expected a collection object, got ${row.runtimeType}',
+      );
+    }
+    return WallpaperCollection(
+      ref: CollectionRef(
+        source: SourceId.wallhaven,
+        owner: owner,
+        // Wallhaven issues an integer id; the domain keys collections by
+        // string so a future source may use a slug. Stringified at the
+        // boundary, which is the only place that knows it was ever a number.
+        id: '${_readInt(row, 'id', fallback: 0)}',
+      ),
+      label: row['label'] as String? ?? '',
+      count: _readInt(row, 'count', fallback: 0),
+      // `public` is Wallhaven's 0/1 int, not a JSON bool.
+      isPublic: _readInt(row, 'public', fallback: 0) == 1,
+      views: _readOptionalInt(row, 'views'),
     );
   }
 

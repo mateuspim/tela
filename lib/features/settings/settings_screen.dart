@@ -18,6 +18,7 @@ import 'package:tela/features/settings/api_key_section.dart';
 import 'package:tela/features/settings/app_lock_switch.dart';
 import 'package:tela/features/settings/browse_defaults_section.dart';
 import 'package:tela/features/settings/clear_cache_tile.dart';
+import 'package:tela/features/settings/collections_section.dart';
 import 'package:tela/features/settings/download_location_controller.dart';
 import 'package:tela/features/settings/download_location_section.dart';
 import 'package:tela/features/settings/notifications_tile.dart';
@@ -116,7 +117,7 @@ class _SettingsList extends StatelessWidget {
       icon: Icons.key_outlined,
       title: l10n.settingsAccountSection,
       description: l10n.settingsAccountDescription,
-      children: const <Widget>[ApiKeySection()],
+      children: const <Widget>[ApiKeySection(), CollectionsSection()],
     );
   }
 
