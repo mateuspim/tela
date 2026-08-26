@@ -224,7 +224,7 @@ Updated: 2026-08-26
 > that was really the tile-decode-size / `justifiedRows`-repacking pair the
 > same entry named as the untuned half.
 
-## NEXT SESSION STARTS HERE — collections and the beam are built and committed
+## NEXT SESSION STARTS HERE — all three of Wave 4's open features are built
 
 **Owner, 2026-08-26: *"can we make deploy but silently? and make you work on the
 next big features?"*, then, asked which of Wave 4's three: *"lets do all however
@@ -233,20 +233,23 @@ quattro and all we could build a qml widget or just use localsend to receive"*,
 and on ordering: collections → beam → auto-rotate.** Collections is done; the
 other two are not started.
 
-**State: `flutter analyze` clean, Dart 1651 (from 1585), Kotlin green,
-deployed. Two features, two branches, both committed — nothing is sitting
-uncommitted this time, by the owner's explicit instruction (*"branch + commit
-now"*).**
+**State: `flutter analyze` clean, Dart **1664** (from 1585), Kotlin green,
+deployed. All three committed — nothing sitting uncommitted this time, by the
+owner's explicit instruction (*"branch + commit now"*).**
 
 - `feat/collections-browser` (`ac2909d`) — Wave 4's collections browser.
-- `feat/localsend-beam` (`a4574cd`) — the beam, branched off collections
-  because it builds on nothing of it but was written after; **it therefore
-  contains collections as an ancestor.** Merging the beam alone brings both.
+- `feat/localsend-beam` (`a4574cd`) — the beam.
+- `962ff8d` — auto-rotate, sitting on the **same branch as the beam**.
 
-**Neither branch is merged and neither is pushed.** The owner was asked about
-committing, not about merging, so that is the open decision. Remember the
-snag that failed a merge last session: run `gen-l10n` fresh before *every*
-merge attempt, not just the first.
+**They are a chain, not three independent branches.** Each was branched off the
+last, so `feat/localsend-beam` contains collections *and* auto-rotate as
+ancestors — merging that one branch brings all three. Splitting them apart
+again would mean a rebase, and nothing so far has needed it.
+
+**Nothing is merged and nothing is pushed.** The owner was asked about
+committing, not about merging, so that is the open decision. Remember the snag
+that failed a merge last session: run `gen-l10n` fresh before *every* merge
+attempt, not just the first.
 
 ### What Wallhaven's collections API actually does — measured, not read
 
@@ -385,16 +388,72 @@ real desktop accept tela's `info` payload; and does a large batch stream
 without the phone running out of memory — uploads are streamed via
 `openRead()` precisely to avoid PLAN §15's OOM, but that is unproven at 6K.
 
-### Still open in Wave 4
+## Auto-rotate — built (`962ff8d`), the last of the three
 
-**Daily auto-rotate** (WorkManager) — untouched, unscoped, and the last of the
-three the owner named on 2026-08-26.
+WorkManager, as PLAN.md names it: it survives reboots and doze without either
+being re-implemented by hand.
+
+**The work is entirely native, with no Dart alive.** A rotation lists a
+directory, picks a file and hands it to `WallpaperManager` — three things the
+platform does alone. Starting a Flutter engine every fifteen minutes to reach
+them would cost the battery a schedule is meant to be cheap about, and would
+fail whenever the engine could not start. Everything decidable without a device
+is in `RotationPicking`, unit-tested with no Robolectric: running off the end,
+a cursor left stale by files deleted between runs, a list of one.
+
+**Candidates are already-downloaded files, never a live listing** — a schedule
+that searched would spend the 45/min ceiling in the background, need a network
+at whatever hour it fires, and could put a wallpaper nobody has ever seen on
+the screen.
+
+**The private library is its own source, never folded into an "everything"
+option**, and the screen says plainly what choosing it means. Same shape as the
+beam's gate and for the same reason: a rotation puts its pick where anyone
+glancing at the phone sees it. Default plan is daily / gallery / home screen.
+
+The schedule's *existence* is read back from WorkManager rather than tela's
+settings, so the switch cannot claim a rotation the platform does not have.
+`WorkInfo` does not return a request's input data, so the plan's *shape* is
+stored alongside in the same call; a schedule that cannot be described is
+cancelled rather than reported as half a plan.
+
+**Two extractions, both load-bearing rather than tidying.** `WallpaperSetting`
+now owns the apply path `MainActivity` had inline, **including the OEM
+sequential-write quirk found on hardware** — a second copy in the worker would
+have drifted silently, and the symptom (a scheduled rotation that only changes
+the home screen on a Samsung) would have read as a scheduling bug.
+`StorageTargetStore` now owns the granted SAF tree and vault label, and the
+worker reads them **at run time** rather than carrying copies in its input
+data, so a schedule made months ago follows a vault the user has since moved.
+
+Settings grew a seventh group, **Wallpaper** — distinct from Appearance, which
+is about how tela looks rather than what tela puts on the device's screen.
+
+### Owed on the device — everything, and this one is the hardest to observe
+
+**Nothing here has been seen to fire.** A periodic rotation is the least
+observable feature in the app: the shortest interval WorkManager will honour is
+fifteen minutes, so even confirming it works costs a quarter of an hour of not
+touching the phone. `adb shell dumpsys jobscheduler | grep tela` is the way to
+see the job is actually enqueued without waiting for it.
+
+Specific unknowns: whether the MediaStore query finds `Pictures/tela` on the
+owner's device; whether the SAF vault is still readable from a worker hours
+after the grant (it should be — the grant is persisted — but nothing has proven
+it); and whether `setStream` from a background worker is allowed at all on One
+UI, which is restrictive about what non-foreground processes may do.
+
+### Wave 4 is now closed
+
+Crop (both halves), share sheet, collections, the beam, and auto-rotate are all
+built. **PLAN.md §12 still lists "Omarchy sync" as the open item and should be
+corrected** — it is superseded by the beam, for the reasons above.
 
 **The QML half of the desktop story is deliberately not in this repo.** A
-`tela` plugin for Omarchy's shell that presents what landed and sets it would
-be a real thing to build, but CLAUDE.md scopes this project as the Android app
-and Quattro's plugins live in `~/.config/omarchy/plugins/`. It wants its own
-repo.
+`tela` plugin for Omarchy's Quickshell that presents what landed and sets it
+would be a real thing to build, but CLAUDE.md scopes this project as the
+Android app and Quattro's plugins live in `~/.config/omarchy/plugins/`. It
+wants its own repo.
 
 **Pass O, 2026-08-24 — built and merged: three things the owner named that
 day, all of them things they had actually felt on the device.**

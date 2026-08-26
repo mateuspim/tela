@@ -52,7 +52,7 @@ No color extraction, no theming engine, no image editor. Those stay on the deskt
 | Platform | Android only | wallpaper-setting is the core feature; iOS can't do it |
 | NSFW / API key | **In the MVP** (Wave 1) | you want it from the start |
 | Download storage | **Three tiers, configurable per purity**, with per-download override (§8) | fits your desktop-sync workflow + privacy |
-| Omarchy sync | Wave 3 | parked, not blocking |
+| Desktop sync | Wave 4 | **built as a LocalSend beam**, not an Aether config export — see §12 |
 | Language | English UI, **i18n-ready day 1** | more locales later = translation file, not refactor |
 
 ## 5. Stack
@@ -236,7 +236,55 @@ The filters Wave 2 named but did not finish, plus the two ways *into* a listing 
 *Exit:* the filter sheet answers everything wallhaven.cc's own filter bar does, and a wallpaper is a place you can navigate *from* — its tags and its uploader lead somewhere. **Met** (`7510500`, 2026-07-16). Both halves of the contract are proven: Wallhaven's side by `curl` (the evidence lives in `ratio_choice.dart` and `resolution_filter.dart`'s docstrings, dated, with the totals), and **tela's side on the wire** — `dio_wallhaven_api_test.dart` fakes Dio's `HttpClientAdapter`, *below* query serialization, and asserts on the literal URI. That seam is the one `FakeWallhavenApi` structurally cannot see: it records a `SearchQuery`, so it sits above the encoding. The two were joined by curling the exact URIs the test captures — a phone's cold-launch URI answers with 2575 wallpapers, all at ratio 0.56, none below the screen.
 
 **Wave 4 — Nice-to-haves** — *share sheet built and verified on hardware*
-Crop/reposition editor before apply (**system-editor half built and verified on hardware** — see below), daily auto-rotate (WorkManager), collections browser, ~~share sheet~~ **built**, **Omarchy sync** (export favorites to an Aether-consumable format — closes the desktop↔mobile loop).
+~~Crop/reposition editor before apply~~ **built, both halves** (see below), ~~daily auto-rotate (WorkManager)~~ **built** (`962ff8d`), ~~collections browser~~ **built** (`ac2909d`), ~~share sheet~~ **built**, ~~Omarchy sync~~ **superseded and built as the beam** (`a4574cd`).
+
+- ~~**Collections browser.**~~ **Built** (`ac2909d`, 2026-08-26). Wallhaven's
+  collections API was probed live first, and it constrains the feature: the
+  contents endpoint honours **only `purity`** — `categories`, `atleast`,
+  `ratios`, `sorting` and `order` are accepted and silently ignored (measured
+  against a 447-wallpaper collection; Wallhaven's own reference says the same).
+  So a collection listing gets a purity-only control, never the filter sheet.
+  A collection's `count` and a page's `total` are also different numbers — one
+  reporting 82 answers 0 under the default purity — so the screen says what it
+  is withholding rather than rendering an empty grid under a promise of 82.
+  The username is a stored setting because neither `/settings` nor the
+  authenticated `/collections` returns one, while the contents route is
+  addressed by it.
+- ~~**Daily auto-rotate.**~~ **Built** (`962ff8d`, 2026-08-26). WorkManager, and
+  the work is **entirely native with no Dart alive**: a rotation lists a
+  directory, picks a file and calls `WallpaperManager`, none of which needs an
+  engine started every fifteen minutes. Candidates are already-downloaded files
+  rather than a live search, so the schedule spends no rate ceiling and needs no
+  network at whatever hour it fires. The private library is its own source,
+  never folded into an "everything" option — a rotation puts its pick where
+  anyone glancing at the phone sees it.
+- **Omarchy sync is superseded, and the reason is dated.** The plan was to
+  export favorites to Aether's `~/.config/aether/favorites.json` and carry it
+  over USB. **Omarchy 4.0 "Quattro" shipped 2026-08-14** and rewrote the whole
+  desktop shell in Quickshell/QML, with a documented plugin contract and its own
+  theme and wallpaper switchers — so a config file written for Aether now aims
+  at a target Omarchy has partly absorbed. That export also only ever moved
+  *links*: the desktop re-downloads every image, explicit ones included.
+- ~~**Omarchy sync.**~~ **Replaced by the beam** (`a4574cd`, 2026-08-26): tela
+  sends the actual files over **LocalSend v2.2**. The protocol needs only one
+  party to run an HTTP server and that party is the receiver, so tela is a
+  sender only — no listening socket — and the whole thing is Dio plus `dart:io`
+  with **no new packages**. The one native piece is the Wi-Fi multicast lock,
+  without which Android drops the very packets discovery listens for and the
+  chooser is silently, permanently empty.
+- **The beam is the one deliberate exception to "explicit pixels never leave
+  the app", and it did not touch the old rule.** `mayExportBitmap` still refuses
+  to hand explicit pixels to another app *on this device*, because that app
+  keeps its own wallpaper history — the ungated index the private tier exists to
+  prevent. A beam has no such index, so `mayBeamBitmap` sits **beside** it,
+  gated on a setting that is false on a fresh install (owner's call,
+  2026-08-26). Enforced twice, as every NSFW rule here is: the use case refuses
+  before a byte leaves, and the private library withholds the action entirely.
+  A mixed batch is refused whole rather than sent minus the explicit files.
+- **The desktop half is deliberately out of scope for this repo.** A `tela`
+  plugin for Omarchy's Quickshell — presenting what landed, setting it — is a
+  real thing to build, but this project is the Android app and Quattro's plugins
+  live in `~/.config/omarchy/plugins/`. It wants its own repo.
 - **Crop/reposition, the SFW half: built and verified on the SM-X730** (2026-07-17).
   Detail's *Adjust & set* hands the image to Android's own crop-and-set editor —
   on the tablet, Samsung's "Wallpaper and style" picker, opened on the right
