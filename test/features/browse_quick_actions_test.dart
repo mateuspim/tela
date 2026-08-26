@@ -33,7 +33,7 @@ import '../fakes/fake_wallpaper_source.dart';
 /// wallpaper without the round trip through the detail screen that collecting
 /// used to cost on every tile.
 void main() {
-  testWidgets('a long press offers the five quick actions', (
+  testWidgets('a long press offers every quick action', (
     WidgetTester tester,
   ) async {
     await _pumpWall(tester);
@@ -44,6 +44,10 @@ void main() {
     expect(find.text('Download'), findsOneWidget);
     expect(find.text('Set wallpaper'), findsOneWidget);
     expect(find.text('Copy image'), findsOneWidget);
+    // Offered on a wallpaper nobody has downloaded — the whole wall is
+    // undownloaded by definition — because a beam fetches what it needs on the
+    // way out. Withholding it here was the bug (owner, 2026-08-26).
+    expect(find.text('Beam'), findsOneWidget);
     expect(find.text('Open details'), findsOneWidget);
     // The sheet names the wallpaper: a long press that landed on the wrong tile
     // of a dense wall should be obvious before anything has been done to it.
@@ -54,8 +58,9 @@ void main() {
     WidgetTester tester,
   ) async {
     // A phone in landscape. A modal sheet is capped at a fraction of the screen
-    // height, and five rows do not fit that cap — the first cut overflowed by
-    // 31px, which is an action the user can see but not reach.
+    // height, and the rows do not fit that cap — the first cut overflowed by
+    // 31px, which is an action the user can see but not reach. One more row
+    // (the beam) only makes that cap bite sooner.
     await _pumpWall(tester, size: const Size(2400, 1080));
 
     await _longPressTile(tester);

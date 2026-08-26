@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/configured_download.dart';
@@ -31,8 +32,10 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_adjust_failure.dart';
 import 'package:tela/domain/models/wallpaper_share_failure.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
+import 'package:tela/domain/use_cases/resolve_beam_files.dart';
 import 'package:tela/domain/use_cases/share_wallpaper.dart';
 import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
+import 'package:tela/features/beam/beam_sheet.dart';
 import 'package:tela/features/detail/crop_wallpaper_screen.dart';
 import 'package:tela/features/favorites/favorite_button.dart';
 
@@ -66,6 +69,10 @@ class DetailActionBar extends ConsumerStatefulWidget {
 class _DetailActionBarState extends ConsumerState<DetailActionBar> {
   bool _isDownloading = false;
   bool _isSharing = false;
+
+  /// True while the file is being resolved, so a second tap cannot stack a
+  /// second chooser on top of the first.
+  bool _isBeaming = false;
   bool _isAdjusting = false;
   bool _isDeleting = false;
   bool _isMoving = false;
@@ -359,6 +366,13 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
         FavoriteButton(wallpaper: _wallpaper),
         _adjustButton(l10n),
         _shareButton(l10n),
+        // Beside share, because they are siblings — both send this picture
+        // somewhere else. **Not gated on having downloaded it**: a beam that
+        // could only send what was already on the device is not what "send
+        // this to my computer" means while you are looking at a wallpaper you
+        // have never downloaded (owner, 2026-08-26). An undownloaded one is
+        // fetched once on the way out.
+        _beamButton(l10n, downloaded),
         _downloadButton(l10n),
         if (downloaded != null) _moveToPrivateButton(l10n, downloaded),
         if (downloaded != null) _deleteButton(l10n, downloaded),
@@ -381,6 +395,64 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
             )
           : const Icon(Icons.crop_outlined),
     );
+  }
+
+  /// Sends this one wallpaper to a machine on the local network.
+  ///
+  /// **No purity gate here, unlike [_shareButton]'s menu.** The beam has its
+  /// own rule (`mayBeamBitmap`) and its own opt-in setting, and it is enforced
+  /// in `BeamWallpapers` before a byte leaves — so an explicit wallpaper
+  /// reaching this button is refused there, by name, rather than having the
+  /// button withheld. The private library, where withholding *is* right, does
+  /// that on its own shelf.
+  Widget _beamButton(AppLocalizations l10n, DownloadRecord? downloaded) {
+    return IconButton(
+      key: const Key('detail-beam'),
+      onPressed: _isBeaming ? null : () => unawaited(_beam(downloaded)),
+      tooltip: l10n.beamAction,
+      icon: _isBeaming
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.wifi_tethering),
+    );
+  }
+
+  /// Resolves the file and opens the chooser.
+  ///
+  /// Resolves through `ResolveBeamFiles` for the same reason every other beam
+  /// does: a vault download's location is a `content:` SAF URI that no Dart
+  /// code can open, and the throwaway copy it makes is released however the
+  /// sheet ends.
+  Future<void> _beam(DownloadRecord? downloaded) async {
+    setState(() => _isBeaming = true);
+    try {
+      // The downloaded file when there is one — no second trip over the
+      // network for bytes already on the disk — and the source's URL when
+      // there is not.
+      final BeamCandidate candidate = downloaded == null
+          ? BeamCandidate.ofWallpaper(_wallpaper)
+          : BeamCandidate.ofDownload(downloaded);
+      final ResolvedBeamFiles resolved = await ref
+          .read(resolveBeamFilesProvider)
+          .call(<BeamCandidate>[candidate]);
+      try {
+        if (!mounted) return;
+        if (resolved.files.isEmpty) {
+          showTelaToast(
+            ScaffoldMessenger.of(context),
+            AppLocalizations.of(context).beamNothingToSend(1),
+          );
+          return;
+        }
+        await BeamSheet.open(context, files: resolved.files);
+      } finally {
+        await resolved.release();
+      }
+    } finally {
+      if (mounted) setState(() => _isBeaming = false);
+    }
   }
 
   Widget _shareButton(AppLocalizations l10n) {

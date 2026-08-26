@@ -140,6 +140,9 @@ class WallpaperStatusView extends StatelessWidget {
       RateLimitedFailure() => Icons.hourglass_empty,
       NetworkFailure() => Icons.cloud_off_outlined,
       NotFoundFailure() => Icons.search_off_outlined,
+      // A person-shaped icon, not the generic error one: the fix is naming an
+      // account, and the icon is the first hint of that.
+      NoCollectionsUsernameFailure() => Icons.person_search_outlined,
       UnexpectedResponseFailure() => Icons.error_outline,
     };
   }

@@ -64,6 +64,10 @@ class FavoritesGrid extends ConsumerWidget {
       // have not, are the two batches that mean something on a curated shelf.
       actions: const <WallpaperBatchAction>[
         WallpaperBatchAction.download,
+        // A favourite need not be downloaded, and that no longer matters: the
+        // ones that are go straight over, and the rest are fetched once on the
+        // way out.
+        WallpaperBatchAction.beam,
         WallpaperBatchAction.unfavorite,
       ],
       child: JustifiedWallpaperGrid(

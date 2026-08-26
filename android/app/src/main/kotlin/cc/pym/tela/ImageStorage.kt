@@ -102,6 +102,10 @@ class ImageStorage(private val context: Context) {
     fun materialise(location: Uri): Map<String, Any> =
         StoredImageReading(context).materialise(location)
 
+    /** Downloads a not-yet-downloaded wallpaper into the same cache folder. */
+    fun materialiseRemote(imageUrl: String): Map<String, Any> =
+        StoredImageReading(context).materialiseRemote(imageUrl)
+
     /** Decodes a downsampled grid thumbnail, with the source's pixel bounds. */
     fun materialiseThumbnail(location: Uri, maxDimensionPx: Int): Map<String, Any> =
         StoredImageReading(context).materialiseThumbnail(location, maxDimensionPx)

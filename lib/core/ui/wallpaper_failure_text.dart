@@ -29,6 +29,9 @@ String localizedFailure(
     RateLimitedFailure() => l10n.errorRateLimited(sourceName),
     NetworkFailure() => l10n.errorOffline(sourceName),
     NotFoundFailure(:final String id) => l10n.errorNotFound(id, sourceName),
+    NoCollectionsUsernameFailure() => l10n.errorNoCollectionsUsername(
+      sourceName,
+    ),
     UnexpectedResponseFailure() => l10n.errorUnexpected,
   };
 }

@@ -150,6 +150,12 @@ class DownloadHistoryScreen extends ConsumerWidget {
       // confirms, in its own words, through `runWallpaperBatchAction`.
       actions: const <WallpaperBatchAction>[
         WallpaperBatchAction.favorite,
+        // Beside favorite because it is the other batch that takes nothing
+        // away: a beam copies to another machine and leaves everything here
+        // exactly as it was. Ungated — the explicit-beam setting governs
+        // explicit *content*, not the feature, and a batch holding one is
+        // refused whole by `BeamWallpapers`.
+        WallpaperBatchAction.beam,
         // Before the three that take something away: refiling is the
         // non-destructive answer to "this is in the wrong place", and it is the
         // one a user reaches for most while tidying.

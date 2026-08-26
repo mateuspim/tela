@@ -67,6 +67,7 @@ class SourceCapabilities {
     required this.credentials,
     required this.requestsPerMinute,
     required this.syncsAccountDefaults,
+    required this.browsesCollections,
   });
 
   /// The filter groups the source can honour.
@@ -92,6 +93,15 @@ class SourceCapabilities {
   /// Whether the source can hand back the account's own browse defaults —
   /// Wallhaven's `/settings`. A source without an account has none to sync.
   final bool syncsAccountDefaults;
+
+  /// Whether the source publishes user-assembled collections to browse.
+  ///
+  /// Gates `WallpaperSource.collectionsOf` and
+  /// `WallpaperSource.collectionPage` the same way [syncsAccountDefaults]
+  /// gates `accountSettings()`: a source without collections throws
+  /// `UnsupportedError` from both, and reaching them without asking here first
+  /// is a programming error rather than a runtime one.
+  final bool browsesCollections;
 
   /// Whether [filter] is one this source can honour.
   bool supports(SourceFilter filter) => filters.contains(filter);

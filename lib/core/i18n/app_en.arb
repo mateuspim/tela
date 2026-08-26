@@ -162,6 +162,268 @@
     "description": "Explains why tapping the final selected purity chip cannot turn it off."
   },
 
+  "settingsWallpaperSection": "Wallpaper",
+  "@settingsWallpaperSection": {
+    "description": "Heading of the settings group about the device wallpaper itself \u2014 as distinct from Appearance, which is about how tela looks."
+  },
+
+  "settingsWallpaperDescription": "What tela puts on your screen when you are not looking.",
+  "@settingsWallpaperDescription": {
+    "description": "Subtitle of the wallpaper settings group."
+  },
+
+  "rotationTitle": "Change the wallpaper on a schedule",
+  "@rotationTitle": {
+    "description": "Label of the switch turning auto-rotate on."
+  },
+
+  "rotationOff": "Off",
+  "@rotationOff": {
+    "description": "Subtitle of the auto-rotate switch when nothing is scheduled."
+  },
+
+  "rotationSummary": "{interval}, from {source}, onto {target}",
+  "@rotationSummary": {
+    "description": "Subtitle of the auto-rotate switch when a schedule is running, naming all three choices at once.",
+    "placeholders": {
+      "interval": {
+        "type": "String"
+      },
+      "source": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+
+  "rotationInterval": "How often",
+  "@rotationInterval": {
+    "description": "Heading of the auto-rotate interval choice."
+  },
+
+  "rotationIntervalQuarterHour": "Every 15 minutes",
+  "@rotationIntervalQuarterHour": {
+    "description": "Auto-rotate interval. Fifteen minutes is the platform scheduler's own floor, which is why nothing shorter is offered."
+  },
+
+  "rotationIntervalHourly": "Every hour",
+  "@rotationIntervalHourly": {
+    "description": "Auto-rotate interval."
+  },
+
+  "rotationIntervalSixHourly": "Every 6 hours",
+  "@rotationIntervalSixHourly": {
+    "description": "Auto-rotate interval."
+  },
+
+  "rotationIntervalDaily": "Every day",
+  "@rotationIntervalDaily": {
+    "description": "Auto-rotate interval."
+  },
+
+  "rotationSource": "From",
+  "@rotationSource": {
+    "description": "Heading of the auto-rotate source choice."
+  },
+
+  "rotationSourceGallery": "Gallery downloads",
+  "@rotationSourceGallery": {
+    "description": "Auto-rotate source: the shared-gallery storage tier."
+  },
+
+  "rotationSourceFiles": "Files outside the gallery",
+  "@rotationSourceFiles": {
+    "description": "Auto-rotate source: the files-outside-gallery tier, including an SD card vault."
+  },
+
+  "rotationSourcePrivate": "Private library",
+  "@rotationSourcePrivate": {
+    "description": "Auto-rotate source: the private library. Its own option, never folded into an 'everything' choice, because a rotation puts its pick where anyone glancing at the phone sees it."
+  },
+
+  "rotationPrivateWarning": "Explicit wallpapers will appear on your home or lock screen.",
+  "@rotationPrivateWarning": {
+    "description": "Shown when the private library is chosen as the auto-rotate source, saying plainly what that means in a way the option's name does not."
+  },
+
+  "rotationTarget": "Onto",
+  "@rotationTarget": {
+    "description": "Heading of the auto-rotate surface choice \u2014 home, lock, or both."
+  },
+
+  "beamTitle": "Beam to a computer",
+  "@beamTitle": {
+    "description": "Title of the sheet that sends wallpapers to a machine on the local network over LocalSend."
+  },
+
+  "beamSearching": "Looking for receivers on your network\u2026",
+  "@beamSearching": {
+    "description": "Shown while beam discovery is listening and has found nothing yet."
+  },
+
+  "beamNoneFound": "No receivers found. Open LocalSend on your computer, or enter its address.",
+  "@beamNoneFound": {
+    "description": "Shown when discovery has been listening a while with no answer. Names both causes the user can act on rather than implying the network is broken."
+  },
+
+  "beamNothingToSend": "{count, plural, one{That wallpaper could not be read or fetched} other{None of those could be read or fetched}}",
+  "@beamNothingToSend": {
+    "description": "Shown when every wallpaper in a beam failed to resolve to bytes \u2014 offline while fetching an undownloaded one, or downloads whose files have since gone. Not 'not downloaded yet': an undownloaded wallpaper is fetched on the way out, so that is no longer a reason to fail.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "beamSearchAgain": "Search again",
+  "@beamSearchAgain": {
+    "description": "Restarts beam discovery. Needed because a receiver is usually switched on after the sheet is already open, and the multicast announcement is a one-shot \u2014 a receiver that started listening later never heard anything to answer."
+  },
+
+  "beamEnterAddress": "Enter an address",
+  "@beamEnterAddress": {
+    "description": "Action that opens the manual host/port entry, for networks that do not carry multicast."
+  },
+
+  "beamAddressHint": "192.168.1.20",
+  "@beamAddressHint": {
+    "description": "Placeholder in the manual address field, showing the shape of a local IP address."
+  },
+
+  "beamSending": "Sending {done} of {total}\u2026",
+  "@beamSending": {
+    "description": "Progress while a beam is in flight.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+
+  "beamSent": "{count, plural, one{Sent 1 wallpaper to {alias}} other{Sent {count} wallpapers to {alias}}}",
+  "@beamSent": {
+    "description": "Confirmation once a beam completes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "alias": {
+        "type": "String"
+      }
+    }
+  },
+
+  "beamDeclined": "{alias} declined the transfer.",
+  "@beamDeclined": {
+    "description": "Shown when the receiver refuses. Deliberately not phrased as an error: someone tapped decline, which is a normal answer.",
+    "placeholders": {
+      "alias": {
+        "type": "String"
+      }
+    }
+  },
+
+  "beamBusy": "{alias} is already receiving something.",
+  "@beamBusy": {
+    "description": "Shown when the receiver is mid-transfer (HTTP 409).",
+    "placeholders": {
+      "alias": {
+        "type": "String"
+      }
+    }
+  },
+
+  "beamPinRequired": "{alias} wants a PIN.",
+  "@beamPinRequired": {
+    "description": "Shown when the receiver asks for a PIN tela has not got.",
+    "placeholders": {
+      "alias": {
+        "type": "String"
+      }
+    }
+  },
+
+  "beamUnreachable": "Could not reach that computer.",
+  "@beamUnreachable": {
+    "description": "Shown when the receiver stops answering, or a typed address has nothing on it."
+  },
+
+  "beamFailed": "The transfer did not finish.",
+  "@beamFailed": {
+    "description": "Fallback for a beam failure with no more specific cause."
+  },
+
+  "beamExplicitRefused": "Turn on beaming explicit wallpapers in Settings first.",
+  "@beamExplicitRefused": {
+    "description": "Shown when a batch holding explicit wallpapers is beamed while the opt-in setting is off. Names the remedy rather than reading as a malfunction, and is the enforcement half of mayBeamBitmap."
+  },
+
+  "settingsBeamExplicit": "Beam explicit wallpapers",
+  "@settingsBeamExplicit": {
+    "description": "Settings switch allowing explicit wallpapers to be sent to a machine on the local network. Off on a fresh install; the single safeguard behind the one deliberate exception to 'explicit pixels never leave the app'."
+  },
+
+  "settingsBeamExplicitDescription": "Lets the private library be sent to your own computer over your network. Off by default.",
+  "@settingsBeamExplicitDescription": {
+    "description": "Subtitle of the explicit-beam switch, saying both what it enables and that it starts off."
+  },
+
+  "beamAction": "Beam",
+  "@beamAction": {
+    "description": "Action on a wallpaper or a selection that opens the beam sheet."
+  },
+
+  "collectionsMine": "My collections",
+  "@collectionsMine": {
+    "description": "Title of the screen listing the signed-in user's own collections."
+  },
+
+  "collectionsNone": "No collections here.",
+  "@collectionsNone": {
+    "description": "Shown when an account publishes no collections. Deliberately not 'no public collections' \u2014 the same empty answer arrives for an account with only private ones, and tela cannot tell the two apart."
+  },
+
+  "collectionsOpen": "Collections",
+  "@collectionsOpen": {
+    "description": "Action on an uploader's listing that opens the collections that uploader publishes."
+  },
+
+  "collectionCount": "{count, plural, one{1 wallpaper} other{{count} wallpapers}}",
+  "@collectionCount": {
+    "description": "Subtitle of a collection row: how many wallpapers its owner put in it, before any purity filter narrows what this user can see.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "settingsCollectionsUsername": "Wallhaven username",
+  "@settingsCollectionsUsername": {
+    "description": "Settings row where the user types the account name whose collections are shown as theirs. Needed because no Wallhaven endpoint returns the username, while the collection contents route is addressed by it."
+  },
+
+  "settingsCollectionsUsernameHint": "Needed to open your own collections",
+  "@settingsCollectionsUsernameHint": {
+    "description": "Subtitle of the collections-username settings row when nothing is stored yet."
+  },
+
+  "collectionHiddenByPurity": "{count, plural, one{1 wallpaper hidden by your purity filter} other{{count} wallpapers hidden by your purity filter}}",
+  "@collectionHiddenByPurity": {
+    "description": "Shown above a collection's grid when the collection holds more wallpapers than the current purity filter and API key allow tela to show. Without it the grid can be empty under a collection row that promised dozens, with nothing explaining the gap.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
   "filterRatio": "Shape",
   "@filterRatio": {
     "description": "Heading of the aspect-ratio choice in the filter sheet."
@@ -467,6 +729,16 @@
       "id": {
         "type": "String"
       },
+      "sourceName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "errorNoCollectionsUsername": "Tell tela your {sourceName} username to see your collections.",
+  "@errorNoCollectionsUsername": {
+    "description": "Shown when the user's own collections are opened but no username is stored. Its own string rather than errorNotFound because the remedy is an action the user can take in Settings, and the source answers a missing username and a mistyped one identically.",
+    "placeholders": {
       "sourceName": {
         "type": "String"
       }

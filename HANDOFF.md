@@ -2,8 +2,10 @@
 
 Updated: 2026-08-26
 
-> **NEXT SESSION STARTS HERE — everything below is now on `master`, pushed to
-> origin, and the working tree is clean.** All the uncommitted work this file
+> **Superseded as the entry point — see "NEXT SESSION STARTS HERE" below, which
+> is newer. Still true, and still the account of how `master` got here:
+> everything below this block is on `master`, pushed to origin.** All the
+> uncommitted work this file
 > already describes — the SD-card vault/offload feature, the notification
 > permission fix, and today's two private-library fixes — had been sitting
 > uncommitted on `feat/frame-probe-announce` across several sessions. Owner,
@@ -99,11 +101,17 @@ Updated: 2026-08-26
 > own device content — worth flagging in case anyone re-reads this file
 > without having seen it happen live.
 >
-> **Owed next:** redeploy this build and retry offloading the remaining 26
-> `Alcololi` images — they were failing only because the tag folder's
-> collision budget was exhausted, and the fix removes the collision entirely
-> rather than raising the budget, so they should now resolve straight to the
-> real folder. Not yet re-verified after the redeploy.
+> **~~Owed next:~~ DONE — confirmed on the device 2026-08-26.** The redeploy
+> happened and the remaining 26 `Alcololi` images offloaded cleanly. Verified
+> by `adb shell` against the card, not by trusting the UI: the vault's
+> `Alcololi` folder now holds **128** files — the 102 from the orphan
+> merge-back plus exactly those 26 — and a `find` for `*(*)*` across the whole
+> vault returns nothing, so no new collision folder was created on the way.
+> The case-insensitive `findChild` did what it was meant to: the retries
+> resolved straight to the real folder instead of growing another `alcololi
+> (N)` beside it. Recorded here late — the fix and the retry both happened
+> before this was written down, which is why the paragraph above spent a
+> session claiming it was still owed.
 >
 > **Superseded below only in ordering, not in relevance** — the SD-card
 > offload's auto-reroute question from earlier today, 2026-08-26. Short
@@ -215,6 +223,340 @@ Updated: 2026-08-26
 > whether this closes the "looking up like 3 pages deep" complaint or whether
 > that was really the tile-decode-size / `justifiedRows`-repacking pair the
 > same entry named as the untuned half.
+
+## NEXT SESSION STARTS HERE — all three of Wave 4's open features are built
+
+**Owner, 2026-08-26: *"can we make deploy but silently? and make you work on the
+next big features?"*, then, asked which of Wave 4's three: *"lets do all however
+the omarchy sync but lets think of a better way for that giving the omarchy
+quattro and all we could build a qml widget or just use localsend to receive"*,
+and on ordering: collections → beam → auto-rotate.** Collections is done; the
+other two are not started.
+
+**State: `flutter analyze` clean, Dart **1664** (from 1585), Kotlin green,
+deployed. All three committed — nothing sitting uncommitted this time, by the
+owner's explicit instruction (*"branch + commit now"*).**
+
+- `feat/collections-browser` (`ac2909d`) — Wave 4's collections browser.
+- `feat/localsend-beam` (`a4574cd`) — the beam.
+- `962ff8d` — auto-rotate, sitting on the **same branch as the beam**.
+
+**They are a chain, not three independent branches.** Each was branched off the
+last, so `feat/localsend-beam` contains collections *and* auto-rotate as
+ancestors — merging that one branch brings all three. Splitting them apart
+again would mean a rebase, and nothing so far has needed it.
+
+**Nothing is merged and nothing is pushed.** The owner was asked about
+committing, not about merging, so that is the open decision. Remember the snag
+that failed a merge last session: run `gen-l10n` fresh before *every* merge
+attempt, not just the first.
+
+### What Wallhaven's collections API actually does — measured, not read
+
+Probed live 2026-08-26 before any of it was designed against, per this
+project's standing rule, then cross-checked against the published API
+reference (which agrees on every point):
+
+- `GET /collections/{username}` — **keyless** for anyone's public collections.
+  Rows are `{id:int, label, views, public:0|1, count:int}` and carry **no
+  username**; it is only ever in the request URL.
+- `GET /collections/{username}/{id}` — the contents, and the payload is
+  **byte-for-byte a `/search` page**: same wallpaper fields, same
+  `meta{current_page,last_page,per_page,total}`. `WallhavenMapper.toPage` maps
+  it unchanged, which is why there is no second page mapper.
+- **`purity` is the ONLY filter it honours.** `categories`, `atleast`,
+  `ratios`, `sorting` and `order` are each accepted and *silently ignored* —
+  measured against `jrmnt/585550` (447 wallpapers), where every one of them
+  left the total at 447 and the order untouched. Wallhaven's own reference says
+  the same in one line: "only the 'purity' filter will be available".
+- **`count` and a page's `total` are different numbers, and the gap is the
+  feature.** `jrmnt/1651328` reports `count: 82` and answers `total: 0` under
+  the default purity — every wallpaper in it is sketchy or explicit. At
+  `purity=111` with no key it answers 22: the explicit ones are dropped
+  **silently**, not refused. So a collection row can promise 82 and render an
+  empty grid.
+- **Every miss is the same 404 body** — `{"error":"Nothing here"}` for an
+  unknown username, an account with nothing public, and a keyless
+  `/collections` alike. The status cannot tell them apart.
+
+### The one design decision worth not re-litigating: the username is typed
+
+Wallhaven publishes a bare `/collections` for the authenticated user — but
+**neither it nor `/settings` returns a username**, while the contents route is
+addressed by one. So that endpoint hands back ids it gives you no way to open.
+There is one route in the adapter, `/collections/{username}`, used for
+everybody: keyless it returns a stranger's public lists, and with the stored
+key on your own name it returns *all* of yours, private ones included. The cost
+is one typed setting (`collections.username`, Settings → Wallhaven account).
+
+### Built
+
+- Domain: `WallpaperCollection` + `CollectionRef` (`source:owner:id`, string id
+  so a future source may use a slug), `SourceCapabilities.browsesCollections`,
+  two port methods, `NoCollectionsUsernameFailure` in the sealed family.
+- Data: `WallhavenMapper.toCollections`, both adapter methods, Konachan throws
+  `UnsupportedError` from both (Moebooru has *pools*, which are site-curated,
+  not a user's lists — mapping one onto the other would be a lie).
+- `BrowseCollections` use case: capability guard, stored-username guard, and
+  the same keyless-explicit guard `SearchWallpapers` applies.
+- UI: `CollectionsScreen` (rows with real counts, a lock on the private ones),
+  `CollectionListingScreen`, `CollectionPurityButton`, `CollectionsSection` in
+  Settings. Two ways in — an uploader's listing offers *their* collections
+  (needs nothing configured), Settings offers your own.
+- `WallpaperGrid` grew an optional `pageFetch`; null keeps the existing search
+  path untouched, so no existing call site changed.
+
+**`_reapplyBlocklist` deliberately no-ops on a collection, and it is a real
+hole rather than a shortcut:** the endpoint ignores tag filters and its
+wallpapers carry no tags, so a blocked tag *can* appear inside a collection and
+there is nothing to filter it with short of one `/w/{id}` per wallpaper — 24
+requests a page against a 45/min ceiling. Stated in `BrowseCollections`'s
+docstring and in the grid.
+
+**A pre-existing test was corrected rather than re-tuned.** The settings
+two-column balance test asserted drift `< 200`, a constant calibrated to the
+old block heights; the collections rows made the account group taller and it
+read 210. The bound is now the tallest card, which is the actual guarantee
+greedy shortest-column packing gives, so it stops re-failing every time a group
+grows.
+
+### Owed on the device
+
+The whole feature. Nothing here has been touched by a finger: whether an
+uploader's collections open, whether the hidden-by-purity notice reads right,
+whether the purity popup feels like enough of a filter, and whether the typed
+username is discoverable enough sitting under the API key.
+
+## The beam — built (`a4574cd`), and the plan changed on research
+
+**The Wave 4 item was "Omarchy sync"; it is superseded, and PLAN.md should be
+updated to say so.** Omarchy 4.0 "Quattro" shipped **2026-08-14** and rewrote
+the entire desktop shell in Quickshell/QML, with a documented plugin contract
+(`~/.config/omarchy/plugins/<id>/` + `manifest.json` + a QML entry) and its own
+theme and wallpaper switchers. So exporting `favorites.json` for Aether now
+aims at a target Omarchy has partly absorbed — and that export only ever moved
+*links*, meaning the desktop re-downloads every image, explicit ones included.
+
+**tela now sends the real files, over LocalSend v2.2.** Measured off the
+published protocol: only the **receiver** runs an HTTP server, so tela is a
+sender only — no listening socket, nothing another device can reach — and the
+whole implementation is Dio plus `dart:io` with **zero new packages**. Three
+calls: a multicast announce on `224.0.0.167:53317`, `POST /prepare-upload`
+(files as a **map keyed by id**; v2 changed this from v1's list and a v2
+receiver silently rejects a list), then `POST /upload` per file with its token.
+
+**The one thing that could not be plain Dart, and the one most likely to be
+the device-pass surprise:** Android's Wi-Fi stack drops multicast not addressed
+to the device. Without `CHANGE_WIFI_MULTICAST_STATE` and a held
+`WifiManager.MulticastLock`, discovery joins its group, opens its socket and
+receives **nothing**, with no error and no log to notice. `MulticastLease`
+(Kotlin, reference-counted, unit-tested) holds it only while a chooser is open,
+because it costs battery. If discovery comes up empty on hardware, that lock is
+the first thing to check — and the hand-typed address is the fallback that
+works regardless, since multicast does not survive a guest VLAN, an AP with
+client isolation, or a router filtering `224.0.0.0/24`.
+
+**The explicit gate — the first deliberate exception to "explicit pixels never
+leave the app", and it did not touch the old rule.** `mayExportBitmap` is
+unchanged: it refuses to hand explicit pixels to another app *on this device*,
+because that app keeps its own wallpaper history — the ungated index the
+private tier exists to prevent. A beam has no such index, so `mayBeamBitmap`
+sits **beside** it rather than relaxing it, gated on a setting false on a fresh
+install (owner's call, 2026-08-26: *"relax it for beam, opt-in"*). Enforced
+twice as usual: `BeamWallpapers` refuses before a byte leaves, and the private
+library withholds the action entirely while the gate is off. **A mixed batch is
+refused whole**, never sent minus the explicit files — silently dropping one of
+forty is a transfer the user believes completed and finds out about much later.
+
+`ResolveBeamFiles` exists because of the vault: an app-private image's location
+is a plain `file:` path, but a vault image's is a `content:` SAF URI, and
+`File.fromUri` throws synchronously on one — the same bug that turned every
+vault tile grey. Only a materialized local path reaches a `BeamFile`, and the
+throwaway copies are released however the beam ends.
+
+**The protocol suite runs against a real `HttpServer`, not a faked transport.**
+The bugs a wire protocol has live below Dio's API and would be invisible to a
+recorded `RequestOptions`. 13 tests cover accept, partial accept, decline,
+busy, PIN, unreachable and the hand-typed path.
+
+### PROVEN ON HARDWARE — a real transfer, against a real receiver
+
+**The beam works end to end, and it was tested rather than reasoned about.** A
+minimal LocalSend v2 receiver was stood up on the same LAN
+(`192.168.50.25:53317`, script in the session scratchpad) and tela sent to it
+from the device twice:
+
+- a **downloaded** wallpaper — 11,247,770 bytes, arriving as a complete valid
+  JPEG (7008×4672, correct `ffd9` EOI);
+- a wallpaper that had **never been downloaded** — fetched on the way out,
+  6,547,151 bytes, a complete valid PNG (3840×2160, correct `IEND`), named
+  `wallhaven-5y3vy8.png` with `image/png`, the extension correctly read off the
+  URL rather than defaulted to jpg.
+
+`register`, `prepare-upload` (files as a map keyed by id) and `upload` with the
+session and per-file token all behaved exactly as the protocol suite predicted.
+
+**Discovery found nothing on this network, and that is probably the network.**
+tela's announcement never reached a receiver sitting on the same subnet — the
+device is on Wi-Fi and the receiver on wired, and consumer routers commonly do
+not bridge multicast across that. It is *not* proven that the multicast lock
+works; it is only proven that discovery fails safely and the hand-typed address
+carries the whole feature. **This is the one thing still owed on hardware:** try
+it with a real LocalSend on a machine on the same Wi-Fi.
+
+### Four bugs the device found that neither suite could
+
+Worth reading before adding anything else here, because all four were invisible
+to `flutter test` and `make kotlin-test`, both green throughout:
+
+1. **The release build would not launch at all** — WorkManager initializes at
+   process start and R8 stripped the constructor its Room database is
+   reflected through. Debug builds run no R8, so nothing short of installing a
+   release APK could see it. Also: `-keep,...,allowshrinking` does **not** fix
+   it — that flag says the member may go if it looks unused, and a
+   reflection-only constructor always looks unused.
+2. **The beam had no reachable entry point.** Its only home was the private
+   library's selection bar, itself gated on the explicit-beam setting — so a
+   default install could beam nothing, and a *safe* wallpaper could not be
+   beamed by any route. The gate governs explicit content, not the feature.
+3. **A vault image beamed past the gate.** Purity was read off the storage
+   tier, but the private library has two homes and the second is the hidden
+   folder on `filesOutsideGallery` where explicit downloads land once the
+   destination is a card. Every one of those was marked safe. Purity is now
+   decided by the caller, which is the only place it is knowable.
+4. **The receiver was getting `preview-221123410085484`, with no extension.**
+   The file name came from the *resolved* path, which for anything behind SAF
+   or MediaStore is a cache copy with a generated name. An 11MB transfer landed
+   on the desktop as a file nothing could recognise.
+
+### Where the beam is offered now
+
+Download history, the Library hub's recent-downloads strip, favourites, the
+browse wall's selection, the browse long-press quick sheet, a wallpaper's
+detail bar, and the private library (that one still gated, correctly — it is
+all explicit). **None of them require the wallpaper to have been downloaded**:
+one already on disk is sent from there, one that is not is fetched once into
+the preview cache and released after.
+
+"Search again" exists because the multicast announcement is a one-shot shout: a
+receiver switched on *after* the sheet opened — the ordinary order — never
+heard anything to answer, and no amount of waiting would have found it.
+
+### Owed on the device — discovery, and auto-rotate
+
+
+
+Nothing here has met hardware. In rough order of how likely it is to bite:
+**does discovery actually find a desktop LocalSend** (the multicast lock is the
+suspect if not); does the hand-typed path work where discovery does not; does a
+real desktop accept tela's `info` payload; and does a large batch stream
+without the phone running out of memory — uploads are streamed via
+`openRead()` precisely to avoid PLAN §15's OOM, but that is unproven at 6K.
+
+## Auto-rotate — built (`962ff8d`), the last of the three
+
+WorkManager, as PLAN.md names it: it survives reboots and doze without either
+being re-implemented by hand.
+
+**The work is entirely native, with no Dart alive.** A rotation lists a
+directory, picks a file and hands it to `WallpaperManager` — three things the
+platform does alone. Starting a Flutter engine every fifteen minutes to reach
+them would cost the battery a schedule is meant to be cheap about, and would
+fail whenever the engine could not start. Everything decidable without a device
+is in `RotationPicking`, unit-tested with no Robolectric: running off the end,
+a cursor left stale by files deleted between runs, a list of one.
+
+**Candidates are already-downloaded files, never a live listing** — a schedule
+that searched would spend the 45/min ceiling in the background, need a network
+at whatever hour it fires, and could put a wallpaper nobody has ever seen on
+the screen.
+
+**The private library is its own source, never folded into an "everything"
+option**, and the screen says plainly what choosing it means. Same shape as the
+beam's gate and for the same reason: a rotation puts its pick where anyone
+glancing at the phone sees it. Default plan is daily / gallery / home screen.
+
+The schedule's *existence* is read back from WorkManager rather than tela's
+settings, so the switch cannot claim a rotation the platform does not have.
+`WorkInfo` does not return a request's input data, so the plan's *shape* is
+stored alongside in the same call; a schedule that cannot be described is
+cancelled rather than reported as half a plan.
+
+**Two extractions, both load-bearing rather than tidying.** `WallpaperSetting`
+now owns the apply path `MainActivity` had inline, **including the OEM
+sequential-write quirk found on hardware** — a second copy in the worker would
+have drifted silently, and the symptom (a scheduled rotation that only changes
+the home screen on a Samsung) would have read as a scheduling bug.
+`StorageTargetStore` now owns the granted SAF tree and vault label, and the
+worker reads them **at run time** rather than carrying copies in its input
+data, so a schedule made months ago follows a vault the user has since moved.
+
+Settings grew a seventh group, **Wallpaper** — distinct from Appearance, which
+is about how tela looks rather than what tela puts on the device's screen.
+
+### FIXED THE SAME DAY — auto-rotate crashed the app on launch, in release only
+
+**Found on the owner's device, immediately: *"tela cant be openend".*** Adding
+the WorkManager dependency made the release build die before any Dart ran:
+
+```
+java.lang.RuntimeException: Unable to get provider
+  androidx.startup.InitializationProvider
+Caused by: NoSuchMethodException:
+  androidx.work.impl.WorkDatabase_Impl.<init> []
+```
+
+WorkManager initializes at **process start** through `androidx.startup`, and
+its first act is to reflect a no-arg constructor on Room's generated
+`WorkDatabase_Impl`. R8's full mode — the default from AGP 8 — strips that
+constructor, because nothing in the code calls it by name. So the crash had
+nothing to do with rotation being *used*: it killed every launch, with the
+feature switched off.
+
+**Neither suite could have caught it, and that is the lesson worth keeping.**
+Debug builds run no R8, `flutter test` never builds an APK, and the Kotlin
+suite is JVM unit tests. Dart 1664 and Kotlin were both green across the
+broken commit. **A native dependency is not proven until a release APK has
+launched on hardware** — `make deploy` is the only step that would have found
+this, and it is now the step that did.
+
+**The first fix attempt did not work, and the reason is worth writing down:**
+`-keep,allowobfuscation,allowshrinking class * extends
+androidx.room.RoomDatabase { <init>(); }` produced the identical crash.
+`allowshrinking` tells R8 the member may be removed if it looks unused, and a
+constructor reached only by reflection *always* looks unused. The working rule
+drops it, and adds an explicit keep for `WorkDatabase_Impl`. Both are in
+`proguard-rules.pro` with the stack trace beside them.
+
+**Verified after the fix**, not assumed: release APK rebuilt and installed,
+process alive, `mCurrentFocus` on `cc.pym.tela/.MainActivity`, crash buffer
+empty, and a screenshot showing the browse wall drawing normally.
+
+### Owed on the device — everything, and this one is the hardest to observe
+
+**Nothing here has been seen to fire.** A periodic rotation is the least
+observable feature in the app: the shortest interval WorkManager will honour is
+fifteen minutes, so even confirming it works costs a quarter of an hour of not
+touching the phone. `adb shell dumpsys jobscheduler | grep tela` is the way to
+see the job is actually enqueued without waiting for it.
+
+Specific unknowns: whether the MediaStore query finds `Pictures/tela` on the
+owner's device; whether the SAF vault is still readable from a worker hours
+after the grant (it should be — the grant is persisted — but nothing has proven
+it); and whether `setStream` from a background worker is allowed at all on One
+UI, which is restrictive about what non-foreground processes may do.
+
+### Wave 4 is now closed
+
+Crop (both halves), share sheet, collections, the beam, and auto-rotate are all
+built. **PLAN.md §12 still lists "Omarchy sync" as the open item and should be
+corrected** — it is superseded by the beam, for the reasons above.
+
+**The QML half of the desktop story is deliberately not in this repo.** A
+`tela` plugin for Omarchy's Quickshell that presents what landed and sets it
+would be a real thing to build, but CLAUDE.md scopes this project as the
+Android app and Quattro's plugins live in `~/.config/omarchy/plugins/`. It
+wants its own repo.
 
 **Pass O, 2026-08-24 — built and merged: three things the owner named that
 day, all of them things they had actually felt on the device.**

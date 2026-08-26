@@ -27,7 +27,9 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_apply_failure.dart';
 import 'package:tela/domain/models/wallpaper_target.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
+import 'package:tela/domain/use_cases/resolve_beam_files.dart';
 import 'package:tela/domain/use_cases/suggest_tag_folders.dart';
+import 'package:tela/features/beam/beam_sheet.dart';
 import 'package:tela/features/favorites/favorites_providers.dart';
 
 /// What a long press on a wall tile offers, without opening the wallpaper.
@@ -57,6 +59,13 @@ enum WallpaperQuickAction {
   /// `shareOptionsFor` for that decision and what it costs.
   copy,
 
+  /// Send it to a machine on the local network.
+  ///
+  /// Offered whether or not it has been downloaded: an undownloaded wallpaper
+  /// is fetched on the way out, so "send this to my computer" means the same
+  /// thing here as it does on a download.
+  beam,
+
   /// Give up on the shortcut and open the wallpaper properly.
   openDetail,
 
@@ -66,6 +75,36 @@ enum WallpaperQuickAction {
   /// press over, because the two are the same gesture and D1 already spent it
   /// here. Deciding that twice is how they end up fighting.
   select,
+}
+
+/// Sends one wallpaper to a machine on the local network.
+///
+/// Resolves through `ResolveBeamFiles`, which fetches an undownloaded
+/// wallpaper once into the preview cache and releases that copy however the
+/// sheet ends. No purity gate here: `BeamWallpapers` enforces `mayBeamBitmap`
+/// before a byte leaves, and refuses by name rather than by a missing button.
+Future<void> _beam(
+  BuildContext context,
+  WidgetRef ref,
+  Wallpaper wallpaper,
+) async {
+  final ResolvedBeamFiles resolved = await ref
+      .read(resolveBeamFilesProvider)
+      .call(<BeamCandidate>[BeamCandidate.ofWallpaper(wallpaper)]);
+  try {
+    if (!context.mounted) return;
+    if (resolved.files.isEmpty) {
+      _say(
+        ScaffoldMessenger.of(context),
+        AppLocalizations.of(context).beamNothingToSend(1),
+        kind: ToastKind.failure,
+      );
+      return;
+    }
+    await BeamSheet.open(context, files: resolved.files);
+  } finally {
+    await resolved.release();
+  }
 }
 
 /// Asks what to do with the long-pressed [wallpaper]; null when dismissed.
@@ -128,6 +167,8 @@ Future<void> runWallpaperQuickAction({
         ref: ref,
         wallpaper: wallpaper,
       );
+    case WallpaperQuickAction.beam:
+      await _beam(context, ref, wallpaper);
     case WallpaperQuickAction.openDetail:
       openDetail();
     case WallpaperQuickAction.select:
@@ -359,6 +400,15 @@ class _QuickActionSheet extends ConsumerWidget {
               Icons.content_copy_outlined,
               l10n.detailShareClipboard,
               WallpaperQuickAction.copy,
+            ),
+            // Beside copy, for the same reason it sits beside share on the
+            // detail bar: both are things you do *to* the picture rather than
+            // somewhere you go.
+            _tile(
+              context,
+              Icons.wifi_tethering,
+              l10n.beamAction,
+              WallpaperQuickAction.beam,
             ),
             _tile(
               context,

@@ -13,6 +13,9 @@ import 'package:tela/data/favorites/drift_favorites_repository.dart';
 import 'package:tela/data/images/cache_manager_fetched_image_cache.dart';
 import 'package:tela/data/images/decoded_dominant_color.dart';
 import 'package:tela/data/konachan/dio_konachan_source.dart';
+import 'package:tela/data/localsend/beam_identity_store.dart';
+import 'package:tela/data/localsend/localsend_beam.dart';
+import 'package:tela/data/localsend/method_channel_multicast_lease.dart';
 import 'package:tela/data/notifications/method_channel_notification_access.dart';
 import 'package:tela/data/secrets/secure_secret_store.dart';
 import 'package:tela/data/security/local_auth_app_lock.dart';
@@ -24,6 +27,7 @@ import 'package:tela/data/tag_blocklist/drift_tag_blocklist_repository.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_source.dart';
 import 'package:tela/data/wallpaper/method_channel_system_wallpaper_editor.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_applier.dart';
+import 'package:tela/data/wallpaper/method_channel_wallpaper_rotation.dart';
 import 'package:tela/data/wallpaper/method_channel_wallpaper_sharer.dart';
 import 'package:tela/data/wallpaper/url_launcher_external_link.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -40,6 +44,7 @@ import 'package:tela/domain/ports/favorites_repository.dart';
 import 'package:tela/domain/ports/fetched_image_cache.dart';
 import 'package:tela/domain/ports/image_store.dart';
 import 'package:tela/domain/ports/local_preview_cache.dart';
+import 'package:tela/domain/ports/multicast_lease.dart';
 import 'package:tela/domain/ports/notification_access.dart';
 import 'package:tela/domain/ports/screen_guard.dart';
 import 'package:tela/domain/ports/secret_store.dart';
@@ -47,6 +52,8 @@ import 'package:tela/domain/ports/settings_repository.dart';
 import 'package:tela/domain/ports/system_wallpaper_editor.dart';
 import 'package:tela/domain/ports/tag_blocklist_repository.dart';
 import 'package:tela/domain/ports/wallpaper_applier.dart';
+import 'package:tela/domain/ports/wallpaper_beam.dart';
+import 'package:tela/domain/ports/wallpaper_rotation.dart';
 import 'package:tela/domain/ports/wallpaper_sharer.dart';
 import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/domain/use_cases/adjust_wallpaper.dart';
@@ -54,6 +61,8 @@ import 'package:tela/domain/use_cases/apply_cropped_wallpaper.dart';
 import 'package:tela/domain/use_cases/apply_download.dart';
 import 'package:tela/domain/use_cases/apply_private_image.dart';
 import 'package:tela/domain/use_cases/apply_wallpaper.dart';
+import 'package:tela/domain/use_cases/beam_wallpapers.dart';
+import 'package:tela/domain/use_cases/browse_collections.dart';
 import 'package:tela/domain/use_cases/confirm_nsfw_on_removable.dart';
 import 'package:tela/domain/use_cases/delete_download.dart';
 import 'package:tela/domain/use_cases/delete_downloads.dart';
@@ -62,6 +71,7 @@ import 'package:tela/domain/use_cases/drain_download_queue.dart';
 import 'package:tela/domain/use_cases/forget_api_key.dart';
 import 'package:tela/domain/use_cases/load_account_defaults.dart';
 import 'package:tela/domain/use_cases/move_stored_images.dart';
+import 'package:tela/domain/use_cases/resolve_beam_files.dart';
 import 'package:tela/domain/use_cases/resolve_browse_defaults.dart';
 import 'package:tela/domain/use_cases/retag_stored_images.dart';
 import 'package:tela/domain/use_cases/save_api_key.dart';
@@ -428,6 +438,86 @@ final Provider<SearchWallpapers> searchWallpapersProvider =
         source: ref.watch(activeWallpaperSourceProvider),
         secrets: ref.watch(secretStoreProvider),
         blocklist: ref.watch(tagBlocklistRepositoryProvider),
+      ),
+    );
+
+/// This install's LocalSend identity, generated once and then persisted.
+final Provider<BeamIdentityStore> beamIdentityStoreProvider =
+    Provider<BeamIdentityStore>(
+      (Ref ref) => BeamIdentityStore(ref.watch(settingsRepositoryProvider)),
+    );
+
+/// The beam port — LocalSend, over its own Dio.
+///
+/// **A separate Dio from the wallpaper sources', deliberately.** That one
+/// carries the Wallhaven base URL, the API-key interceptor and the 45/min
+/// throttle; none of them belong on a LAN transfer, and the key interceptor
+/// least of all — it would attach the API key to a request leaving for
+/// somebody's desktop.
+final Provider<WallpaperBeam> wallpaperBeamProvider = Provider<WallpaperBeam>((
+  Ref ref,
+) {
+  return LocalSendBeam(
+    dio: Dio(
+      BaseOptions(
+        // A receiver waits for a human to tap "accept", so the response can be
+        // a long time coming and a short timeout would read as a decline.
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(minutes: 5),
+        sendTimeout: const Duration(minutes: 30),
+        // Statuses are read as protocol answers — 403 is a decline, 409 is
+        // busy — so they must reach the adapter rather than becoming throws
+        // with no response attached.
+        validateStatus: (int? status) => status != null && status < 500,
+      ),
+    ),
+    identity: ref.watch(beamIdentityStoreProvider).identity,
+  );
+});
+
+/// Schedules the platform to change the wallpaper on its own.
+///
+/// Only ever starts, stops and describes: the rotation itself runs natively
+/// with no Dart alive (see `WallpaperRotationWorker`).
+final Provider<WallpaperRotation> wallpaperRotationProvider =
+    Provider<WallpaperRotation>(
+      (Ref ref) => const MethodChannelWallpaperRotation(),
+    );
+
+/// Resolves stored images into files a beam can read.
+///
+/// Bound to the preview cache because a vault image's SAF URI is the whole
+/// reason it exists — see [ResolveBeamFiles].
+final Provider<ResolveBeamFiles> resolveBeamFilesProvider =
+    Provider<ResolveBeamFiles>(
+      (Ref ref) => ResolveBeamFiles(ref.watch(localPreviewCacheProvider)),
+    );
+
+/// Keeps the device able to receive multicast while a discovery is open.
+final Provider<MulticastLease> multicastLeaseProvider =
+    Provider<MulticastLease>((Ref ref) => const MethodChannelMulticastLease());
+
+/// Sends wallpapers to a machine on the LAN, under the explicit-beam gate.
+final Provider<BeamWallpapers> beamWallpapersProvider =
+    Provider<BeamWallpapers>(
+      (Ref ref) => BeamWallpapers(
+        beam: ref.watch(wallpaperBeamProvider),
+        settings: ref.watch(settingsRepositoryProvider),
+        lease: ref.watch(multicastLeaseProvider),
+      ),
+    );
+
+/// Reads collections on the active source.
+///
+/// Bound to the active source like [searchWallpapersProvider], not pinned to
+/// Wallhaven: collections are a capability any source may grow, and the use
+/// case refuses on one that has not (`SourceCapabilities.browsesCollections`).
+final Provider<BrowseCollections> browseCollectionsProvider =
+    Provider<BrowseCollections>(
+      (Ref ref) => BrowseCollections(
+        source: ref.watch(activeWallpaperSourceProvider),
+        secrets: ref.watch(secretStoreProvider),
+        settings: ref.watch(settingsRepositoryProvider),
       ),
     );
 

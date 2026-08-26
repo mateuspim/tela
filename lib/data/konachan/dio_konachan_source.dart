@@ -7,6 +7,7 @@ import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/source_capabilities.dart';
 import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/wallpaper_collection.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/ports/wallpaper_source.dart';
@@ -61,6 +62,7 @@ class DioKonachanSource implements WallpaperSource {
     credentials: SourceCredentials.none,
     requestsPerMinute: 60,
     syncsAccountDefaults: false,
+    browsesCollections: false,
   );
 
   @override
@@ -191,6 +193,30 @@ class DioKonachanSource implements WallpaperSource {
   String? wallpaperIdIn(String text) {
     final String candidate = text.trim();
     return _idShape.hasMatch(candidate) ? candidate : null;
+  }
+
+  @override
+  Future<List<WallpaperCollection>> collectionsOf(String username) {
+    // Moebooru has pools, which are a different thing: site-curated ordered
+    // sets, not a user's own saved lists, and they are not addressed by
+    // username at all. Declaring collections unsupported is the honest answer
+    // rather than mapping pools onto a shape they do not fit.
+    throw UnsupportedError(
+      'Konachan has no user collections; '
+      'guard on SourceCapabilities.browsesCollections',
+    );
+  }
+
+  @override
+  Future<WallpaperPage> collectionPage(
+    CollectionRef collection, {
+    required int page,
+    required PurityFilter purity,
+  }) {
+    throw UnsupportedError(
+      'Konachan has no user collections; '
+      'guard on SourceCapabilities.browsesCollections',
+    );
   }
 
   @override

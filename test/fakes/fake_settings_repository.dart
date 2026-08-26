@@ -192,6 +192,43 @@ class FakeSettingsRepository implements SettingsRepository {
     _downloadTag = tag;
   }
 
+  @override
+  Future<String?> loadBeamFingerprint() async => beamFingerprint;
+
+  @override
+  Future<void> saveBeamFingerprint(String fingerprint) async {
+    beamFingerprint = fingerprint;
+  }
+
+  /// This install's LocalSend fingerprint, readable so a test can assert one
+  /// was generated and kept rather than re-rolled.
+  String? beamFingerprint;
+
+  @override
+  Future<bool> loadExplicitBeamAllowed() async => explicitBeamAllowed;
+
+  @override
+  Future<void> setExplicitBeamAllowed({required bool allowed}) async {
+    explicitBeamAllowed = allowed;
+  }
+
+  /// Whether explicit wallpapers may be beamed. Off by default, exactly as a
+  /// fresh install is — a test that wants the exception must say so.
+  bool explicitBeamAllowed = false;
+
+  @override
+  Future<String?> loadCollectionsUsername() async => collectionsUsername;
+
+  @override
+  Future<void> setCollectionsUsername(String? username) async {
+    final String trimmed = username?.trim() ?? '';
+    collectionsUsername = trimmed.isEmpty ? null : trimmed;
+  }
+
+  /// The stored collections username, readable directly so a test can arrange
+  /// "already told tela who I am" without going through the setter.
+  String? collectionsUsername;
+
   /// The remembered tag, which only ever holds a shared-tier one — the private
   /// library's is deliberately never persisted. See `RememberedDownloadTag`.
   TagFolder? _downloadTag;

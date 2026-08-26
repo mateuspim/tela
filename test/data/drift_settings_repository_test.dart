@@ -479,6 +479,41 @@ void main() {
       expect(await settings.loadPinnedDownloadTier(), isNull);
     });
   });
+
+  group('the collections username', () {
+    test('is absent on a fresh install', () async {
+      expect(await settings.loadCollectionsUsername(), isNull);
+    });
+
+    test('round-trips a name', () async {
+      await settings.setCollectionsUsername('jrmnt');
+      expect(await settings.loadCollectionsUsername(), 'jrmnt');
+    });
+
+    test('trims what was typed', () async {
+      // A soft keyboard's trailing space would build
+      // `/collections/jrmnt%20`, which is a 404 that looks like a wrong name.
+      await settings.setCollectionsUsername('  jrmnt  ');
+      expect(await settings.loadCollectionsUsername(), 'jrmnt');
+    });
+
+    test('clears back to none, on null and on whitespace alike', () async {
+      await settings.setCollectionsUsername('jrmnt');
+      await settings.setCollectionsUsername(null);
+      expect(await settings.loadCollectionsUsername(), isNull);
+
+      await settings.setCollectionsUsername('jrmnt');
+      await settings.setCollectionsUsername('   ');
+      expect(await settings.loadCollectionsUsername(), isNull);
+    });
+
+    test('reads an empty row as no username', () async {
+      // An empty string would build `/collections/`, a different endpoint
+      // entirely, rather than failing as "you never said who you are".
+      await db.putSetting('collections.username', '');
+      expect(await settings.loadCollectionsUsername(), isNull);
+    });
+  });
 }
 
 /// Records [times] downloads of [purity] all landing in [tier].

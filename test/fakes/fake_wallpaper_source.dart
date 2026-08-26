@@ -6,6 +6,7 @@ import 'package:tela/domain/models/source_capabilities.dart';
 import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/domain/models/wallpaper_collection.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/ports/wallpaper_source.dart';
@@ -26,6 +27,8 @@ class FakeWallpaperSource implements WallpaperSource {
     this.details,
     this.detailsById = const <String, WallpaperDetails>{},
     this.account,
+    this.collections = const <String, List<WallpaperCollection>>{},
+    this.collectionPages = const <String, WallpaperPage>{},
     this.failure,
     this.detailFailure,
     this.searchDelay,
@@ -48,6 +51,23 @@ class FakeWallpaperSource implements WallpaperSource {
   /// Wallhaven's.
   @override
   final SourceCapabilities capabilities;
+
+  /// The collections each username owns, keyed by username.
+  ///
+  /// A username absent from the map is one the source has never heard of, and
+  /// [collectionsOf] throws [NotFoundFailure] for it — the same answer
+  /// Wallhaven gives, so a test can exercise the not-found path without a
+  /// separate flag.
+  final Map<String, List<WallpaperCollection>> collections;
+
+  /// The page each collection answers, keyed by [CollectionRef.key].
+  final Map<String, WallpaperPage> collectionPages;
+
+  /// Every [collectionPage] call, in order — so a test can assert the purity
+  /// actually sent, which is the only filter that endpoint honours.
+  final List<({CollectionRef collection, int page, PurityFilter purity})>
+  collectionPageCalls =
+      <({CollectionRef collection, int page, PurityFilter purity})>[];
 
   /// The page every [search] returns, unless [failure] is set.
   final WallpaperPage? page;
@@ -161,6 +181,33 @@ class FakeWallpaperSource implements WallpaperSource {
   String? wallpaperIdIn(String text) => idIn(text);
 
   @override
+  Future<List<WallpaperCollection>> collectionsOf(String username) async {
+    final SourceFailure? toThrow = failure;
+    if (toThrow != null) throw toThrow;
+    final List<WallpaperCollection>? owned = collections[username];
+    if (owned == null) throw NotFoundFailure(username);
+    return owned;
+  }
+
+  @override
+  Future<WallpaperPage> collectionPage(
+    CollectionRef collection, {
+    required int page,
+    required PurityFilter purity,
+  }) async {
+    collectionPageCalls.add((
+      collection: collection,
+      page: page,
+      purity: purity,
+    ));
+    final SourceFailure? toThrow = failure;
+    if (toThrow != null) throw toThrow;
+    final WallpaperPage? found = collectionPages[collection.key];
+    if (found == null) throw NotFoundFailure(collection.key);
+    return found;
+  }
+
+  @override
   Future<AccountSettings> accountSettings() async {
     accountSettingsCalls++;
     final SourceFailure? toThrow = failure;
@@ -203,6 +250,7 @@ const SourceCapabilities wallhavenLikeCapabilities = SourceCapabilities(
   credentials: SourceCredentials.nsfwRequiresKey,
   requestsPerMinute: 45,
   syncsAccountDefaults: true,
+  browsesCollections: true,
 );
 
 /// A deliberately *narrower* source: no categories, no colours, no toplist,
@@ -223,4 +271,5 @@ const SourceCapabilities narrowCapabilities = SourceCapabilities(
   credentials: SourceCredentials.none,
   requestsPerMinute: 60,
   syncsAccountDefaults: false,
+  browsesCollections: false,
 );

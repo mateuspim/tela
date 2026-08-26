@@ -27,14 +27,17 @@ import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
-  testWidgets('groups related settings into six scannable sections', (
+  testWidgets('groups related settings into scannable sections', (
     WidgetTester tester,
   ) async {
     await _pumpSettings(tester, FakeSettingsRepository());
 
-    expect(find.byType(Card), findsNWidgets(6));
+    expect(find.byType(Card), findsNWidgets(7));
     expect(find.text('Wallhaven account'), findsWidgets);
     expect(find.text('Appearance'), findsOneWidget);
+    // Its own group, not a row under Appearance: that one is about how tela
+    // looks, this one is about what tela puts on the device's screen.
+    expect(find.text('Wallpaper'), findsOneWidget);
     expect(find.text('Browse defaults'), findsOneWidget);
     expect(find.text('Downloads'), findsOneWidget);
     // Its own section, not a line under Downloads: a download is a file the
@@ -70,9 +73,17 @@ void main() {
               .reduce(math.max),
         )
         .toList();
-    // A group is ~200dip tall, so anything under one group's worth of drift is
-    // as balanced as discrete blocks can be. The static split was ~2x apart.
-    expect((bottoms.first - bottoms.last).abs(), lessThan(200));
+    // Measured against the tallest group rather than a constant, because that
+    // is the actual bound: dropping each block into the shortest column can
+    // never leave the columns further apart than the last block placed, so
+    // "under one group's worth of drift" *is* as balanced as discrete blocks
+    // can be. Hardcoding the number instead made this test re-fail every time
+    // a group grew a row — it did, when the collections rows landed in the
+    // account group — while proving nothing more. The static split was ~2x.
+    final double tallest = cards
+        .map((Rect card) => card.height)
+        .reduce(math.max);
+    expect((bottoms.first - bottoms.last).abs(), lessThan(tallest));
   });
 
   testWidgets('pads its last group clear of the bottom system bar', (
@@ -605,7 +616,7 @@ void main() {
       final FakeAppLock lock = FakeAppLock();
       await _pumpSettings(tester, settings, lock: lock);
 
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(_appLockSwitch);
       await tester.pumpAndSettle();
 
       expect(lock.prompts, 1);
@@ -624,7 +635,7 @@ void main() {
         lock: FakeAppLock(passes: false),
       );
 
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(_appLockSwitch);
       await tester.pumpAndSettle();
 
       expect(settings.lockSaved, isTrue);
@@ -649,7 +660,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(_appLockSwitch);
       await tester.pumpAndSettle();
 
       expect(settings.lockSaved, isTrue);
@@ -674,7 +685,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(_appLockSwitch);
       await tester.pumpAndSettle();
 
       expect(settings.lockSaved, isFalse);
@@ -689,7 +700,7 @@ void main() {
       final FakeAppLock lock = FakeAppLock();
       await _pumpSettings(tester, settings, lock: lock);
 
-      await tester.tap(find.byType(SwitchListTile));
+      await tester.tap(_appLockSwitch);
       await tester.pumpAndSettle();
 
       expect(lock.prompts, 0);
@@ -706,12 +717,60 @@ void main() {
         lock: FakeAppLock(available: false),
       );
 
-      expect(find.byType(SwitchListTile), findsNothing);
+      expect(_appLockSwitch, findsNothing);
       expect(
         find.textContaining('Needs a screen lock or fingerprint'),
         findsOneWidget,
       );
       expect(settings.lockSaved, isFalse);
+    });
+  });
+
+  group('the explicit beam gate', () {
+    testWidgets('is off on a fresh install', (WidgetTester tester) async {
+      // The single safeguard behind tela's one deliberate exception to
+      // "explicit pixels never leave the app". A default of on would make that
+      // exception the rule.
+      await _pumpSettings(tester, FakeSettingsRepository());
+
+      expect(
+        tester.widget<SwitchListTile>(_beamSwitch).value,
+        isFalse,
+      );
+    });
+
+    testWidgets('persists being turned on immediately', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository();
+      await _pumpSettings(tester, settings);
+
+      await tester.tap(_beamSwitch);
+      await tester.pumpAndSettle();
+
+      // Written before the switch moves: a gate that lit up but did not save is
+      // one the user believes is on until the next cold start says otherwise.
+      expect(settings.explicitBeamAllowed, isTrue);
+    });
+
+    testWidgets('opens on the stored value', (WidgetTester tester) async {
+      await _pumpSettings(
+        tester,
+        FakeSettingsRepository()..explicitBeamAllowed = true,
+      );
+
+      expect(tester.widget<SwitchListTile>(_beamSwitch).value, isTrue);
+    });
+
+    testWidgets('turns back off', (WidgetTester tester) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository()
+        ..explicitBeamAllowed = true;
+      await _pumpSettings(tester, settings);
+
+      await tester.tap(_beamSwitch);
+      await tester.pumpAndSettle();
+
+      expect(settings.explicitBeamAllowed, isFalse);
     });
   });
 }
@@ -772,6 +831,23 @@ TileDensity _selectedDensity(WidgetTester tester) {
       .selected
       .single;
 }
+
+/// The explicit-beam toggle specifically. See [_appLockSwitch].
+final Finder _beamSwitch = find.ancestor(
+  of: find.text('Beam explicit wallpapers'),
+  matching: find.byType(SwitchListTile),
+);
+
+/// The app-lock toggle specifically.
+///
+/// Was `find.byType(SwitchListTile)`, which stopped meaning one thing the
+/// moment Privacy grew a second switch (the explicit beam). Finding it by its
+/// own title says which switch the test is about, and cannot go ambiguous
+/// again.
+final Finder _appLockSwitch = find.ancestor(
+  of: find.text('Lock the private library'),
+  matching: find.byType(SwitchListTile),
+);
 
 Future<void> _pumpSettings(
   WidgetTester tester,
