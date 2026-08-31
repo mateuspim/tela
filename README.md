@@ -24,6 +24,14 @@ a green build anywhere.
 The image is built automatically the first time you run any of these. Pub and
 Gradle caches live in named Docker volumes, so only the first build is slow.
 
+## Editions and releases
+
+tela ships four compile-time editions from one source commit: Play,
+Wallhaven-only, Safe multi-source, and Full. Build commands, package identities,
+tagging, signing secrets, and artifact names are documented in
+[`docs/RELEASING.md`](docs/RELEASING.md). Pull requests run the complete CI gate;
+a `vX.Y.Z` tag builds the signed release matrix.
+
 ## Running on a device
 
 The container shares the host network and the USB bus, so `adb` inside it sees

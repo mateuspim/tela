@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tela/app/build_edition.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
@@ -120,7 +121,10 @@ class _SettingsList extends StatelessWidget {
       icon: Icons.key_outlined,
       title: l10n.settingsAccountSection,
       description: l10n.settingsAccountDescription,
-      children: const <Widget>[ApiKeySection(), CollectionsSection()],
+      children: <Widget>[
+        if (buildEdition.allowsWallhavenCredentials) const ApiKeySection(),
+        const CollectionsSection(),
+      ],
     );
   }
 
@@ -190,12 +194,13 @@ class _SettingsList extends StatelessWidget {
           purity: Purity.sfw,
           selected: settings.sfwTier,
         ),
-        _TierPicker(
-          title: l10n.settingsDownloadsNsfw,
-          purity: Purity.nsfw,
-          selected: settings.nsfwTier,
-          note: l10n.settingsDownloadsNsfwNote,
-        ),
+        if (buildEdition.allowsExplicitContent)
+          _TierPicker(
+            title: l10n.settingsDownloadsNsfw,
+            purity: Purity.nsfw,
+            selected: settings.nsfwTier,
+            note: l10n.settingsDownloadsNsfwNote,
+          ),
         // Only when a purity actually routes there, and under both pickers
         // rather than inside either: one folder serves the tier whichever
         // purity uses it, so a copy per picker would suggest there are two.
@@ -213,7 +218,8 @@ class _SettingsList extends StatelessWidget {
   /// private-library defaults.
   bool get _usesFilesOutsideGallery =>
       settings.sfwTier == StorageTier.filesOutsideGallery ||
-      settings.nsfwTier == StorageTier.filesOutsideGallery;
+      (buildEdition.allowsExplicitContent &&
+          settings.nsfwTier == StorageTier.filesOutsideGallery);
 
   /// Its own group rather than a line under Downloads, because the difference
   /// between the two is the whole point: a download is a file the user kept,
@@ -235,6 +241,9 @@ class _SettingsList extends StatelessWidget {
   }
 
   Widget _privacyGroup(AppLocalizations l10n) {
+    if (!buildEdition.allowsExplicitContent) {
+      return const SizedBox.shrink();
+    }
     return _SettingsGroup(
       icon: Icons.shield_outlined,
       title: l10n.settingsPrivacySection,

@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/build_edition.dart';
 import 'package:tela/app/delete_download_action.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/move_to_private_action.dart';
@@ -302,10 +304,11 @@ class _DownloadImmersiveSessionState
         title: Text(l10n.downloadHistoryForgetTitle),
         content: Text(l10n.downloadHistoryForgetBody),
         actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.actionCancel),
-          ),
+          if (buildEdition.allowsExplicitContent)
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.actionCancel),
+            ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             child: Text(l10n.downloadHistoryForget),

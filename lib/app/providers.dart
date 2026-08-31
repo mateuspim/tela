@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/build_edition.dart';
 import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/network/konachan_client.dart';
@@ -18,6 +19,7 @@ import 'package:tela/data/localsend/localsend_beam.dart';
 import 'package:tela/data/localsend/method_channel_multicast_lease.dart';
 import 'package:tela/data/notifications/method_channel_notification_access.dart';
 import 'package:tela/data/secrets/secure_secret_store.dart';
+import 'package:tela/data/secrets/unavailable_secret_store.dart';
 import 'package:tela/data/security/local_auth_app_lock.dart';
 import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/data/storage/method_channel_image_store.dart';
@@ -89,7 +91,9 @@ import 'package:tela/domain/use_cases/walk_listing_pages.dart';
 
 /// Encrypted store for the Wallhaven API key.
 final Provider<SecretStore> secretStoreProvider = Provider<SecretStore>(
-  (Ref ref) => SecureSecretStore.create(),
+  (Ref ref) => buildEdition.allowsWallhavenCredentials
+      ? SecureSecretStore.create()
+      : const UnavailableSecretStore(),
 );
 
 /// The configured HTTP client (key header + rate limiting already wired).
@@ -103,7 +107,10 @@ final Provider<Dio> wallhavenDioProvider = Provider<Dio>(
 /// from there rather than naming this one.
 final Provider<WallpaperSource> wallhavenSourceProvider =
     Provider<WallpaperSource>(
-      (Ref ref) => DioWallhavenSource(ref.watch(wallhavenDioProvider)),
+      (Ref ref) => DioWallhavenSource(
+        ref.watch(wallhavenDioProvider),
+        allowExplicit: buildEdition.allowsExplicitContent,
+      ),
     );
 
 /// Konachan's HTTP client (User-Agent + rate limiting wired; no key, no base
@@ -118,7 +125,10 @@ final Provider<Dio> konachanDioProvider = Provider<Dio>(
 /// from there rather than naming this one.
 final Provider<WallpaperSource> konachanSourceProvider =
     Provider<WallpaperSource>(
-      (Ref ref) => DioKonachanSource(ref.watch(konachanDioProvider)),
+      (Ref ref) => DioKonachanSource(
+        ref.watch(konachanDioProvider),
+        allowUnrestricted: buildEdition.allowsUnrestrictedKonachan,
+      ),
     );
 
 /// The Android wallpaper port, bound to the native method-channel adapter.

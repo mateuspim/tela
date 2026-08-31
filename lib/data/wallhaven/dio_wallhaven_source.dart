@@ -19,9 +19,12 @@ import 'package:tela/domain/ports/wallpaper_source.dart';
 /// swapping Dio out touches only this file (CLAUDE.md, dependency rule).
 class DioWallhavenSource implements WallpaperSource {
   /// Creates the adapter over a configured [Dio] (see `WallhavenClient`).
-  const DioWallhavenSource(this._dio);
+  const DioWallhavenSource(this._dio, {this.allowExplicit = true});
 
   final Dio _dio;
+
+  /// Whether this edition permits explicit Wallhaven responses.
+  final bool allowExplicit;
 
   @override
   SourceId get id => SourceId.wallhaven;
@@ -35,8 +38,8 @@ class DioWallhavenSource implements WallpaperSource {
   /// was built around; a second source declaring less is what proves the sheet
   /// really renders from this rather than from habit.
   @override
-  SourceCapabilities get capabilities => const SourceCapabilities(
-    filters: <SourceFilter>{
+  SourceCapabilities get capabilities => SourceCapabilities(
+    filters: const <SourceFilter>{
       SourceFilter.categories,
       SourceFilter.purity,
       SourceFilter.colors,
@@ -46,7 +49,7 @@ class DioWallhavenSource implements WallpaperSource {
       SourceFilter.order,
       SourceFilter.topRange,
     },
-    sortings: <Sorting>{
+    sortings: const <Sorting>{
       Sorting.dateAdded,
       Sorting.relevance,
       Sorting.random,
@@ -55,8 +58,14 @@ class DioWallhavenSource implements WallpaperSource {
       Sorting.toplist,
       Sorting.hot,
     },
-    purities: <Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw},
-    credentials: SourceCredentials.nsfwRequiresKey,
+    purities: <Purity>{
+      Purity.sfw,
+      Purity.sketchy,
+      if (allowExplicit) Purity.nsfw,
+    },
+    credentials: allowExplicit
+        ? SourceCredentials.nsfwRequiresKey
+        : SourceCredentials.none,
     // The published ceiling. The interceptor throttles to it; a 429 still
     // backs off exponentially rather than trusting any Retry-After blindly.
     requestsPerMinute: 45,

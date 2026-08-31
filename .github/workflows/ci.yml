@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: 3.44.6
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  toolchain-pin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Match the container toolchain
+        run: grep --fixed-strings "ARG FLUTTER_VERSION=$FLUTTER_VERSION" tool/docker/Dockerfile
+
+  verify:
+    needs: toolchain-pin
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Verify generated localization files
+        run: flutter gen-l10n
+      - name: Check formatting
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          mapfile -t files < <(git diff --name-only --diff-filter=ACM "$BASE_SHA" "$GITHUB_SHA" -- '*.dart')
+          if (( ${#files[@]} > 0 )); then
+            dart format --output=none --set-exit-if-changed "${files[@]}"
+          fi
+      - name: Analyze
+        run: flutter analyze
+      - name: Dart tests
+        run: flutter test
+      - name: Kotlin tests
+        working-directory: android
+        run: ./gradlew --console=plain :app:testFullDebugUnitTest
+
+  build-matrix:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [play, wallhaven, safe, full]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Verify ${{ matrix.edition }} compile-time contract
+        run: >-
+          flutter test test/app/build_edition_runtime_test.dart
+          --dart-define=TELA_EDITION=${{ matrix.edition }}
+          --dart-define=EXPECTED_EDITION=${{ matrix.edition }}
+      - name: Build ${{ matrix.edition }} debug APK
+        run: >-
+          flutter build apk --debug
+          --flavor ${{ matrix.edition }}
+          --dart-define=TELA_EDITION=${{ matrix.edition }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tela-${{ matrix.edition }}-debug
+          path: build/app/outputs/flutter-apk/app-${{ matrix.edition }}-debug.apk
+          if-no-files-found: error
+          retention-days: 7

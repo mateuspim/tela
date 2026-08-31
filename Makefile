@@ -56,7 +56,7 @@ format:
 	$(TELA) dart format .
 
 apk:
-	$(TELA) build apk --release
+	$(TELA) build apk --release --flavor full --dart-define=TELA_EDITION=full
 
 shell:
 	$(TELA) --shell

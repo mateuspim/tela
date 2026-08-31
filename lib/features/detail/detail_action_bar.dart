@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tela/app/build_edition.dart';
 import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/copy_wallpaper_action.dart';
 import 'package:tela/app/delete_download_action.dart';
@@ -150,9 +151,7 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
     );
     final DownloadDestinationStreak? streak = await settings
         .loadDestinationStreak(_wallpaper.purity);
-    final StorageTier? pin = await ref.read(
-      pinnedDownloadTierProvider.future,
-    );
+    final StorageTier? pin = await ref.read(pinnedDownloadTierProvider.future);
     // Against the shared tiers, which is what this chooser may offer: the
     // private library's folder names do not belong on a screen with no lock in
     // front of it. See `DownloadTagField`.
@@ -374,7 +373,8 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
         // fetched once on the way out.
         _beamButton(l10n, downloaded),
         _downloadButton(l10n),
-        if (downloaded != null) _moveToPrivateButton(l10n, downloaded),
+        if (buildEdition.allowsExplicitContent && downloaded != null)
+          _moveToPrivateButton(l10n, downloaded),
         if (downloaded != null) _deleteButton(l10n, downloaded),
       ],
     );
