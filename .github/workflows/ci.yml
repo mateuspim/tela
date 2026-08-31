@@ -91,6 +91,11 @@ jobs:
           flutter build apk --debug
           --flavor ${{ matrix.edition }}
           --dart-define=TELA_EDITION=${{ matrix.edition }}
+      - name: Build and audit Play release APK
+        if: matrix.edition == 'play'
+        run: |
+          flutter build apk --release --flavor play --dart-define=TELA_EDITION=play
+          tool/audit-play-apk
       - uses: actions/upload-artifact@v4
         with:
           name: tela-${{ matrix.edition }}-debug

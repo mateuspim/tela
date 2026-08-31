@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Fail closed when a supposedly clean Play artifact carries a forbidden network
+# endpoint, credential key, package identity, or biometric permission.
+set -euo pipefail
+
+apk="${1:-build/app/outputs/flutter-apk/app-play-release.apk}"
+[[ -f "$apk" ]] || { echo "missing Play APK: $apk" >&2; exit 2; }
+command -v apkanalyzer >/dev/null || {
+  echo "apkanalyzer is required to audit $apk" >&2
+  exit 2
+}
+
+application_id="$(apkanalyzer manifest application-id "$apk")"
+[[ "$application_id" == "cc.pym.tela.play" ]] || {
+  echo "Play APK has application id $application_id" >&2
+  exit 1
+}
+
+if apkanalyzer manifest permissions "$apk" | grep -q 'USE_BIOMETRIC'; then
+  echo "Play APK still requests USE_BIOMETRIC" >&2
+  exit 1
+fi
+
+compiled_strings="$(mktemp)"
+trap 'rm -f "$compiled_strings"' EXIT
+unzip -p "$apk" 'lib/*/libapp.so' | strings > "$compiled_strings"
+
+for forbidden in 'konachan.com' 'konachan.net' 'wallhaven_api_key'; do
+  if grep -Fqi "$forbidden" "$compiled_strings"; then
+    echo "Play APK contains forbidden compiled value: $forbidden" >&2
+    exit 1
+  fi
+done
+
+echo "Play APK policy audit passed: $apk"

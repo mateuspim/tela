@@ -96,6 +96,8 @@ jobs:
           cp build/app/outputs/bundle/playRelease/app-play-release.aab \
             "dist/tela-play-v$VERSION_NAME.aab"
           (cd dist && sha256sum * > SHA256SUMS)
+      - name: Audit Play policy boundary
+        run: tool/audit-play-apk "dist/tela-play-v${{ steps.version.outputs.name }}.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: tela-${{ steps.version.outputs.name }}
