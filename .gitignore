@@ -52,6 +52,6 @@ lib/core/i18n/generated/
 # Toolchain scratch
 .ai-jail
 
-# Stitch design-mockup export: kept as a design reference. Don't auto-track
-# new files dropped in here.
-stitch_tela_wallpaper_browser/
+# Local design and project-handoff material. Keep locally, never commit.
+/stitch_tela_wallpaper_browser/
+/HANDOFF.md
