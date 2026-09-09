@@ -24,10 +24,14 @@ class DioKonachanSource implements WallpaperSource {
   /// Creates the adapter over a configured [Dio] (see `KonachanClient`).
   DioKonachanSource(
     this._dio, {
+    this.allowUnrestricted = true,
     Future<void> Function(Duration) delay = Future<void>.delayed,
   }) : _delay = delay;
 
   final Dio _dio;
+
+  /// Whether this edition may contact konachan.com.
+  final bool allowUnrestricted;
   final Future<void> Function(Duration) _delay;
 
   /// One short retry turns the transient timeout seen on hardware into a
@@ -48,15 +52,23 @@ class DioKonachanSource implements WallpaperSource {
   /// and three sortings only: `random` takes no seed and would repeat images
   /// across pages, so it is left out rather than shipped broken (PLAN §18.3).
   @override
-  SourceCapabilities get capabilities => const SourceCapabilities(
-    filters: <SourceFilter>{
+  SourceCapabilities get capabilities => SourceCapabilities(
+    filters: const <SourceFilter>{
       SourceFilter.purity,
       SourceFilter.ratios,
       SourceFilter.resolutions,
       SourceFilter.tags,
     },
-    sortings: <Sorting>{Sorting.dateAdded, Sorting.views, Sorting.favorites},
-    purities: <Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw},
+    sortings: const <Sorting>{
+      Sorting.dateAdded,
+      Sorting.views,
+      Sorting.favorites,
+    },
+    purities: <Purity>{
+      Purity.sfw,
+      if (allowUnrestricted) Purity.sketchy,
+      if (allowUnrestricted) Purity.nsfw,
+    },
     // Explicit content is served anonymously — refusing it for want of a key
     // would refuse a request Konachan would happily answer (PLAN §18.5).
     credentials: SourceCredentials.none,
@@ -67,7 +79,15 @@ class DioKonachanSource implements WallpaperSource {
 
   @override
   Future<WallpaperPage> search(SearchQuery query) async {
-    final String host = KonachanHost.forPurity(query.purity);
+    if (!allowUnrestricted && query.purity != PurityFilter.sfwOnly) {
+      throw ArgumentError(
+        'safe edition requires sfw-only Konachan purity, got '
+        '${query.purity.purities}',
+      );
+    }
+    final String host = allowUnrestricted
+        ? KonachanHost.forPurity(query.purity)
+        : KonachanHost.safe;
     try {
       final Response<List<dynamic>> response = await _getPosts(
         'https://$host/post.json',
@@ -98,10 +118,7 @@ class DioKonachanSource implements WallpaperSource {
     } on DioException catch (error) {
       if (!_isTransientNetworkFailure(error)) rethrow;
       await _delay(_networkRetryDelay);
-      return _dio.get<List<dynamic>>(
-        url,
-        queryParameters: queryParameters,
-      );
+      return _dio.get<List<dynamic>>(url, queryParameters: queryParameters);
     }
   }
 
@@ -169,11 +186,14 @@ class DioKonachanSource implements WallpaperSource {
   @override
   Future<WallpaperDetails> wallpaperDetails(String id) async {
     try {
-      // Always the unrestricted host: `.net` returns [] for a questionable or
-      // explicit post, which would surface as a mystery empty detail screen
-      // rather than the wallpaper the user opened (PLAN §18.4).
+      // Full builds use the unrestricted host so a questionable/explicit post
+      // opened earlier does not become a mystery empty screen. A safe build
+      // never saw those posts and stays on the server-enforced safe host.
+      final String host = allowUnrestricted
+          ? KonachanHost.unrestricted
+          : KonachanHost.safe;
       final Response<List<dynamic>> response = await _dio.get<List<dynamic>>(
-        'https://${KonachanHost.unrestricted}/post.json',
+        'https://$host/post.json',
         queryParameters: <String, String>{'tags': 'id:$id', 'limit': '1'},
       );
       return KonachanMapper.toDetails(response.data, id: id);

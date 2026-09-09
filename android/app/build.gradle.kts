@@ -33,6 +33,10 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    buildFeatures {
+        resValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -48,6 +52,31 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+    }
+
+    flavorDimensions += "edition"
+    productFlavors {
+        create("play") {
+            dimension = "edition"
+            applicationId = "cc.pym.tela.play"
+            resValue("string", "app_name", "tela")
+        }
+        create("wallhaven") {
+            dimension = "edition"
+            applicationId = "cc.pym.tela.wallhaven"
+            resValue("string", "app_name", "tela Wallhaven")
+        }
+        create("safe") {
+            dimension = "edition"
+            applicationId = "cc.pym.tela.safe"
+            resValue("string", "app_name", "tela Safe")
+        }
+        create("full") {
+            dimension = "edition"
+            // Preserve update compatibility with the existing owner build.
+            applicationId = "cc.pym.tela"
+            resValue("string", "app_name", "tela Full")
+        }
     }
 
     signingConfigs {

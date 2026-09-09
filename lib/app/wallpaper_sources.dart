@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
+import 'package:tela/app/build_edition.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/ports/settings_repository.dart';
@@ -15,7 +16,7 @@ final Provider<List<WallpaperSource>> wallpaperSourcesProvider =
     Provider<List<WallpaperSource>>(
       (Ref ref) => <WallpaperSource>[
         ref.watch(wallhavenSourceProvider),
-        ref.watch(konachanSourceProvider),
+        if (buildEdition.includesKonachan) ref.watch(konachanSourceProvider),
       ],
     );
 

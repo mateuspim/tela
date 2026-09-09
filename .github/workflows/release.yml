@@ -1,0 +1,108 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without the v prefix (for a dry run)
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: 3.44.6
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: github-release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require a tagged master commit
+        if: github.event_name == 'push'
+        run: |
+          git fetch origin master
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/master
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Resolve version
+        id: version
+        env:
+          MANUAL_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$MANUAL_VERSION"
+          fi
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "name=$version" >> "$GITHUB_OUTPUT"
+          echo "code=$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+      - name: Restore release signing key
+        env:
+          TELA_KEYSTORE_BASE64: ${{ secrets.TELA_KEYSTORE_BASE64 }}
+          TELA_STORE_PASSWORD: ${{ secrets.TELA_STORE_PASSWORD }}
+          TELA_KEY_ALIAS: ${{ secrets.TELA_KEY_ALIAS }}
+          TELA_KEY_PASSWORD: ${{ secrets.TELA_KEY_PASSWORD }}
+        run: |
+          test -n "$TELA_KEYSTORE_BASE64"
+          printf '%s' "$TELA_KEYSTORE_BASE64" | base64 --decode > android/tela-release.jks
+          {
+            echo "storeFile=$GITHUB_WORKSPACE/android/tela-release.jks"
+            echo "storePassword=$TELA_STORE_PASSWORD"
+            echo "keyAlias=$TELA_KEY_ALIAS"
+            echo "keyPassword=$TELA_KEY_PASSWORD"
+          } > android/key.properties
+      - name: Verify
+        run: |
+          flutter analyze
+          flutter test
+          (cd android && ./gradlew --console=plain :app:testFullDebugUnitTest)
+      - name: Build signed APK matrix
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          mkdir -p dist
+          for edition in play wallhaven safe full; do
+            flutter build apk --release --flavor "$edition" \
+              --dart-define="TELA_EDITION=$edition" \
+              --build-name="$VERSION_NAME" --build-number="$VERSION_CODE"
+            cp "build/app/outputs/flutter-apk/app-$edition-release.apk" \
+              "dist/tela-$edition-v$VERSION_NAME.apk"
+          done
+      - name: Build Play bundle
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+        run: |
+          flutter build appbundle --release --flavor play \
+            --dart-define=TELA_EDITION=play \
+            --build-name="$VERSION_NAME" --build-number="$VERSION_CODE"
+          cp build/app/outputs/bundle/playRelease/app-play-release.aab \
+            "dist/tela-play-v$VERSION_NAME.aab"
+          (cd dist && sha256sum * > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tela-${{ steps.version.outputs.name }}
+          path: dist/
+          if-no-files-found: error
+      - name: Publish GitHub Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag

@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tela/app/build_edition.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/tela_shell.dart';
 import 'package:tela/core/ui/gallery_route_transitions.dart';
@@ -155,27 +156,29 @@ abstract final class TelaRouter {
             );
           },
         ),
-        GoRoute(
-          path: TelaRoutes.privateLibraryPath,
-          name: TelaRoutes.privateLibraryName,
-          builder: (_, _) => const PrivateLibraryScreen(),
-        ),
-        GoRoute(
-          path: TelaRoutes.privateViewerPath,
-          name: TelaRoutes.privateViewerName,
-          redirect: (_, GoRouterState state) =>
-              state.extra is GallerySessionController<PrivateImage>
-              ? null
-              : TelaRoutes.privateLibraryPath,
-          pageBuilder: (BuildContext context, GoRouterState state) =>
-              fadeGalleryPage<void>(
-                context: context,
-                child: PrivateImmersiveSession(
-                  session:
-                      state.extra! as GallerySessionController<PrivateImage>,
+        if (buildEdition.allowsExplicitContent) ...<RouteBase>[
+          GoRoute(
+            path: TelaRoutes.privateLibraryPath,
+            name: TelaRoutes.privateLibraryName,
+            builder: (_, _) => const PrivateLibraryScreen(),
+          ),
+          GoRoute(
+            path: TelaRoutes.privateViewerPath,
+            name: TelaRoutes.privateViewerName,
+            redirect: (_, GoRouterState state) =>
+                state.extra is GallerySessionController<PrivateImage>
+                ? null
+                : TelaRoutes.privateLibraryPath,
+            pageBuilder: (BuildContext context, GoRouterState state) =>
+                fadeGalleryPage<void>(
+                  context: context,
+                  child: PrivateImmersiveSession(
+                    session:
+                        state.extra! as GallerySessionController<PrivateImage>,
+                  ),
                 ),
-              ),
-        ),
+          ),
+        ],
         GoRoute(
           path: TelaRoutes.downloadHistoryPath,
           name: TelaRoutes.downloadHistoryName,

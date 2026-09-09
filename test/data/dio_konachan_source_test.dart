@@ -20,12 +20,16 @@ import '../fakes/recording_dio_transport.dart';
 /// absolute URL the adapter composes is the whole thing under test.
 ({DioKonachanSource api, RecordingDioTransport transport}) _wired({
   String fixture = 'konachan_post_list.json',
+  bool allowUnrestricted = true,
 }) {
   final RecordingDioTransport transport = RecordingDioTransport(
     body: File('test/fixtures/$fixture').readAsStringSync(),
   );
   final Dio dio = Dio()..httpClientAdapter = transport;
-  return (api: DioKonachanSource(dio), transport: transport);
+  return (
+    api: DioKonachanSource(dio, allowUnrestricted: allowUnrestricted),
+    transport: transport,
+  );
 }
 
 /// The URI [query] actually leaves the device as.
@@ -59,6 +63,28 @@ void main() {
       );
 
       expect(uri.host, 'konachan.com');
+    });
+
+    test('safe edition rejects a wider query before network I/O', () async {
+      final ({DioKonachanSource api, RecordingDioTransport transport}) wired =
+          _wired(allowUnrestricted: false);
+
+      await expectLater(
+        wired.api.search(
+          const SearchQuery(purity: _all, ratios: <RatioChoice>[]),
+        ),
+        throwsArgumentError,
+      );
+      expect(wired.transport.receivedRequests, isEmpty);
+    });
+
+    test('safe edition resolves details through konachan.net', () async {
+      final ({DioKonachanSource api, RecordingDioTransport transport}) wired =
+          _wired(allowUnrestricted: false);
+
+      await wired.api.wallpaperDetails('406484');
+
+      expect(wired.transport.lastUri.host, 'konachan.net');
     });
   });
 
@@ -221,6 +247,14 @@ void main() {
       });
       expect(capabilities.credentials, SourceCredentials.none);
       expect(capabilities.needsKeyFor(_all), isFalse);
+    });
+
+    test('safe edition advertises only server-enforced safe content', () {
+      final SourceCapabilities safe = _wired(
+        allowUnrestricted: false,
+      ).api.capabilities;
+
+      expect(safe.purities, const <Purity>{Purity.sfw});
     });
 
     test('does not offer random — it takes no seed and repeats images', () {
