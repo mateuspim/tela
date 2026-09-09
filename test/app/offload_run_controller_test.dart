@@ -14,6 +14,7 @@ import 'package:tela/domain/models/wallpaper_ref.dart';
 
 import '../fakes/fake_app_visibility.dart';
 import '../fakes/fake_download_history.dart';
+import '../fakes/fake_download_queue.dart';
 import '../fakes/fake_image_store.dart';
 import '../fakes/fake_settings_repository.dart';
 
@@ -174,6 +175,9 @@ void main() {
       await harness.settle();
 
       expect(harness.settings.saved.nsfwTier, StorageTier.filesOutsideGallery);
+      expect(harness.queue.reroutes, <(StorageTier, StorageTier)>[
+        (StorageTier.appPrivate, StorageTier.filesOutsideGallery),
+      ]);
     });
 
     test('a run that moved nothing changes no setting', () async {
@@ -246,6 +250,7 @@ class _Harness {
       overrides: <Override>[
         imageStoreProvider.overrideWithValue(images),
         downloadHistoryProvider.overrideWithValue(FakeDownloadHistory()),
+        downloadQueueProvider.overrideWithValue(queue),
         settingsRepositoryProvider.overrideWithValue(settings),
         appVisibilityProvider.overrideWithValue(visibility),
       ],
@@ -255,6 +260,7 @@ class _Harness {
   final FakeAppVisibility visibility;
   final FakeImageStore images;
   final FakeSettingsRepository settings = FakeSettingsRepository();
+  final FakeDownloadQueue queue = FakeDownloadQueue();
   late final ProviderContainer container;
 
   OffloadRunController get controller =>

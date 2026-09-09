@@ -1,5 +1,6 @@
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/queued_download.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_queue.dart';
 
@@ -19,6 +20,9 @@ class FakeDownloadQueue implements DownloadQueue {
   /// How many times [resumeInterrupted] has been called, so a test can prove
   /// the startup demotion happens exactly once and before any claim.
   int resumes = 0;
+
+  final List<(StorageTier, StorageTier)> reroutes =
+      <(StorageTier, StorageTier)>[];
 
   @override
   Future<List<QueuedDownload>> entries() async =>
@@ -93,6 +97,28 @@ class FakeDownloadQueue implements DownloadQueue {
           : entry,
     );
     return failed;
+  }
+
+  @override
+  Future<int> reroute(StorageTier from, StorageTier to) async {
+    reroutes.add((from, to));
+    int changed = 0;
+    _replaceAll((QueuedDownload entry) {
+      if (entry.tier != from || entry.state == DownloadQueueState.running) {
+        return entry;
+      }
+      changed++;
+      return QueuedDownload(
+        wallpaper: entry.wallpaper,
+        queuedAt: entry.queuedAt,
+        tier: to,
+        tag: entry.tag,
+        state: entry.state,
+        attempts: entry.attempts,
+        failure: entry.failure,
+      );
+    });
+    return changed;
   }
 
   @override

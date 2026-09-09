@@ -175,6 +175,30 @@ void main() {
       },
     );
 
+    test('checkpoints each app-private source as its copy lands', () async {
+      final FakeImageStore images = FakeImageStore();
+      final MoveStoredImages move = _move(images);
+
+      await move(
+        <StoredImageMove>[
+          _fromPrivate('a'),
+          _fromPrivate('b'),
+          _fromPrivate('c'),
+        ],
+        onCopied: (int copied, int total) {
+          expect(images.deletedLocations, hasLength(copied));
+        },
+        beforeDelete: () async => fail('Private moves need no foreground gate'),
+      );
+
+      expect(images.batchSizes, <int>[1, 1, 1]);
+      expect(images.deletedLocations, <Uri>[
+        _privateLocationOf('a'),
+        _privateLocationOf('b'),
+        _privateLocationOf('c'),
+      ]);
+    });
+
     /// The regression for the rule that used to be "forget every cross-tier
     /// move". Gallery to files is an ordinary download changing shelves — the
     /// history may still hold it — and forgetting it would empty the download
@@ -332,6 +356,16 @@ StoredImageMove _toFiles(String id) => StoredImageMove(
 WallpaperRef _ref(String id) => WallpaperRef(SourceId.wallhaven, id);
 
 Uri _locationOf(String id) => Uri.parse('content://media/$id');
+
+StoredImageMove _fromPrivate(String id) => StoredImageMove(
+  ref: _ref(id),
+  purity: Purity.nsfw,
+  from: StorageTier.appPrivate,
+  location: _privateLocationOf(id),
+  to: StorageTier.filesOutsideGallery,
+);
+
+Uri _privateLocationOf(String id) => Uri.parse('file:///private/$id');
 
 DownloadRecord _record(String id) => DownloadRecord(
   wallpaper: _wallpaper(id),

@@ -148,5 +148,14 @@ class OffloadRunController extends Notifier<OffloadRun?> {
     await settings.route(Purity.sfw, StorageTier.filesOutsideGallery);
     if (state?.includesPrivateLibrary != true) return;
     await settings.route(Purity.nsfw, StorageTier.filesOutsideGallery);
+    // Batch choices are stored as explicit destinations. Without migrating
+    // them, an older private batch can refill the internal directory after the
+    // library has moved even though newly queued work follows this setting.
+    await ref
+        .read(downloadQueueProvider)
+        .reroute(
+          StorageTier.appPrivate,
+          StorageTier.filesOutsideGallery,
+        );
   }
 }

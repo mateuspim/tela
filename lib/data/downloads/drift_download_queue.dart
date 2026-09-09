@@ -4,6 +4,7 @@ import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/queued_download.dart';
 import 'package:tela/domain/models/resolution.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/download_queue.dart';
@@ -76,6 +77,15 @@ class DriftDownloadQueue implements DownloadQueue {
     return _db.moveQueueEntries(
       DownloadQueueState.failed.name,
       DownloadQueueState.pending.name,
+    );
+  }
+
+  @override
+  Future<int> reroute(StorageTier from, StorageTier to) {
+    return _db.rerouteQueueEntries(
+      from.name,
+      to.name,
+      DownloadQueueState.running.name,
     );
   }
 

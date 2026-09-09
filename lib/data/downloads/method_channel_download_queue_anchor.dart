@@ -28,6 +28,13 @@ class MethodChannelDownloadQueueAnchor implements DownloadQueueAnchor {
   /// The notification currently posted, or null when nothing is anchored.
   String? _showing;
 
+  /// Whether this adapter has reconciled its fresh Dart state with Android.
+  ///
+  /// A process can die while its foreground service survives or is restored by
+  /// an OEM. In that case [_showing] starts null even though Android still has
+  /// the old notification, so the first release must cross the channel.
+  bool _synchronized = false;
+
   static const MethodChannel _channel = MethodChannel(
     'cc.pym.tela/download_queue',
   );
@@ -42,13 +49,15 @@ class MethodChannelDownloadQueueAnchor implements DownloadQueueAnchor {
           'body': body,
         }) ??
         false;
+    _synchronized = true;
     _showing = held ? words : null;
     return held;
   }
 
   @override
   Future<void> release() async {
-    if (_showing == null) return;
+    if (_synchronized && _showing == null) return;
+    _synchronized = true;
     _showing = null;
     await _invokeMethod('release', const <String, String>{});
   }
