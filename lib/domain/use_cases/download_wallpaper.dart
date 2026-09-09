@@ -27,6 +27,7 @@ class DownloadWallpaper {
     required ImageStore imageStore,
     required SettingsRepository settings,
     required DownloadHistory history,
+    this.allowsExplicit = true,
   }) : _imageStore = imageStore,
        _settings = settings,
        _history = history;
@@ -34,6 +35,9 @@ class DownloadWallpaper {
   final ImageStore _imageStore;
   final SettingsRepository _settings;
   final DownloadHistory _history;
+
+  /// Whether this binary is permitted to persist explicit content.
+  final bool allowsExplicit;
 
   /// Stores [wallpaper], preserving its purity so the adapter routes it safely,
   /// and records where it landed so it can be set again without a second fetch.
@@ -68,6 +72,11 @@ class DownloadWallpaper {
     StorageTier? tier,
     TagFolder? tag,
   }) async {
+    if (!allowsExplicit && wallpaper.isNsfw) {
+      throw UnsupportedError(
+        'explicit downloads are unavailable in this build edition',
+      );
+    }
     final StorageTier destination = tier ?? await _defaultTier(wallpaper);
     final StoredImage stored = await _imageStore.store(
       source: wallpaper.ref.source,

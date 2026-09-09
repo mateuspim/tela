@@ -303,6 +303,7 @@ final Provider<DownloadWallpaper> downloadWallpaperProvider =
         imageStore: ref.watch(imageStoreProvider),
         settings: ref.watch(settingsRepositoryProvider),
         history: ref.watch(downloadHistoryProvider),
+        allowsExplicit: buildEdition.allowsExplicitContent,
       ),
     );
 

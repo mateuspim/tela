@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Fail closed when a supposedly clean Play artifact carries a forbidden network
+# endpoint, credential key, package identity, or biometric permission.
+set -euo pipefail
+
+apk="${1:-build/app/outputs/flutter-apk/app-play-release.apk}"
+[[ -f "$apk" ]] || { echo "missing Play APK: $apk" >&2; exit 2; }
+analyzer="$(command -v apkanalyzer || true)"
+# Hosted runners install command-line tools without always adding them to PATH.
+for sdk_root in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}"; do
+  [[ -n "$analyzer" ]] && break
+  [[ -n "$sdk_root" ]] || continue
+  for candidate in "$sdk_root"/cmdline-tools/latest/bin/apkanalyzer \
+      "$sdk_root"/cmdline-tools/*/bin/apkanalyzer \
+      "$sdk_root"/tools/bin/apkanalyzer; do
+    if [[ -x "$candidate" ]]; then
+      analyzer="$candidate"
+      break
+    fi
+  done
+done
+[[ -n "$analyzer" ]] || {
+  echo "apkanalyzer is required to audit $apk" >&2
+  exit 2
+}
+
+application_id="$("$analyzer" manifest application-id "$apk")"
+[[ "$application_id" == "cc.pym.tela.play" ]] || {
+  echo "Play APK has application id $application_id" >&2
+  exit 1
+}
+
+permissions="$("$analyzer" manifest permissions "$apk")"
+if grep -q 'USE_BIOMETRIC' <<< "$permissions"; then
+  echo "Play APK still requests USE_BIOMETRIC" >&2
+  exit 1
+fi
+
+compiled_strings="$(mktemp)"
+trap 'rm -f "$compiled_strings"' EXIT
+unzip -p "$apk" 'lib/*/libapp.so' | strings > "$compiled_strings"
+
+for forbidden in 'konachan.com' 'konachan.net' 'wallhaven_api_key'; do
+  if grep -Fqi "$forbidden" "$compiled_strings"; then
+    echo "Play APK contains forbidden compiled value: $forbidden" >&2
+    exit 1
+  fi
+done
+
+echo "Play APK policy audit passed: $apk"

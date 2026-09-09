@@ -84,6 +84,7 @@ jobs:
       - name: Verify ${{ matrix.edition }} compile-time contract
         run: >-
           flutter test test/app/build_edition_runtime_test.dart
+          test/app/edition_policy_runtime_test.dart
           --dart-define=TELA_EDITION=${{ matrix.edition }}
           --dart-define=EXPECTED_EDITION=${{ matrix.edition }}
       - name: Build ${{ matrix.edition }} debug APK
@@ -91,6 +92,11 @@ jobs:
           flutter build apk --debug
           --flavor ${{ matrix.edition }}
           --dart-define=TELA_EDITION=${{ matrix.edition }}
+      - name: Build and audit Play release APK
+        if: matrix.edition == 'play'
+        run: |
+          flutter build apk --release --flavor play --dart-define=TELA_EDITION=play
+          tool/audit-play-apk
       - uses: actions/upload-artifact@v4
         with:
           name: tela-${{ matrix.edition }}-debug

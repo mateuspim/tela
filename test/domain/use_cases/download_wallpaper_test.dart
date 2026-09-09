@@ -75,6 +75,20 @@ void main() {
       expect(imageStore.receivedTier, StorageTier.appPrivate);
     });
 
+    test('clean edition refuses explicit content before storage I/O', () async {
+      final FakeImageStore imageStore = FakeImageStore();
+      final DownloadWallpaper download = _download(
+        imageStore,
+        allowsExplicit: false,
+      );
+
+      await expectLater(
+        download(_wallpaper(Purity.nsfw)),
+        throwsUnsupportedError,
+      );
+      expect(imageStore.receivedId, isNull);
+    });
+
     test('records where the download landed, so it can be set again', () async {
       final FakeImageStore imageStore = FakeImageStore();
       final FakeDownloadHistory history = FakeDownloadHistory();
@@ -297,11 +311,13 @@ DownloadWallpaper _download(
   StorageSettings? settings,
   FakeDownloadHistory? history,
   FakeSettingsRepository? repository,
+  bool allowsExplicit = true,
 }) {
   return DownloadWallpaper(
     imageStore: imageStore,
     settings: repository ?? FakeSettingsRepository(settings: settings),
     history: history ?? FakeDownloadHistory(),
+    allowsExplicit: allowsExplicit,
   );
 }
 
