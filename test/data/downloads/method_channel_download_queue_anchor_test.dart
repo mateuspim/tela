@@ -61,11 +61,15 @@ void main() {
       expect(calls, <String>['anchor', 'release']);
     });
 
-    test('releasing with nothing held says nothing', () async {
-      await anchor.release();
+    test(
+      'first release clears notification state left by a dead process',
+      () async {
+        await anchor.release();
+        await anchor.release();
 
-      expect(calls, isEmpty);
-    });
+        expect(calls, <String>['release']);
+      },
+    );
 
     // The refusal is Android forbidding a foreground-service start from the
     // background, and it lifts the moment the user returns to the app. Caching

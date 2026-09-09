@@ -75,6 +75,32 @@ void main() {
       expect(claimed?.attempts, 1);
     });
 
+    test('reroutes explicit queued work but not an in-flight write', () async {
+      await queue.enqueue(<QueuedDownload>[
+        _entry('failed', tier: StorageTier.appPrivate),
+        _entry('running', tier: StorageTier.appPrivate),
+        _entry('other', tier: StorageTier.sharedGallery),
+      ]);
+      await queue.claimNext();
+      await queue.markFailed(_ref('failed'), ImageStoreProblem.source);
+      await queue.claimNext();
+
+      final int changed = await queue.reroute(
+        StorageTier.appPrivate,
+        StorageTier.filesOutsideGallery,
+      );
+
+      final Map<String, QueuedDownload> entries = <String, QueuedDownload>{
+        for (final QueuedDownload entry in await queue.entries())
+          entry.ref.id: entry,
+      };
+      expect(changed, 1);
+      expect(entries['failed']?.tier, StorageTier.filesOutsideGallery);
+      expect(entries['running']?.tier, StorageTier.appPrivate);
+      expect(entries['running']?.state, DownloadQueueState.running);
+      expect(entries['other']?.tier, StorageTier.sharedGallery);
+    });
+
     test('never claims the same entry twice', () async {
       await queue.enqueue(_entries(<String>['a']));
 

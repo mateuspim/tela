@@ -21,6 +21,7 @@ import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/features/settings/offload_screen.dart';
 
 import '../fakes/fake_download_history.dart';
+import '../fakes/fake_download_queue.dart';
 import '../fakes/fake_image_store.dart';
 import '../fakes/fake_settings_repository.dart';
 
@@ -347,6 +348,7 @@ Future<void> _pump(
       overrides: <Override>[
         imageStoreProvider.overrideWithValue(store),
         downloadHistoryProvider.overrideWithValue(history),
+        downloadQueueProvider.overrideWithValue(FakeDownloadQueue()),
         settingsRepositoryProvider.overrideWithValue(
           settings ?? FakeSettingsRepository(),
         ),

@@ -1,5 +1,6 @@
 import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/queued_download.dart';
+import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 
 /// The downloads this device still owes, in the order they were asked for.
@@ -69,6 +70,13 @@ abstract interface class DownloadQueue {
 
   /// Puts every failed entry back to pending. Answers how many moved.
   Future<int> requeueFailed();
+
+  /// Repoints queued work that explicitly chose [from] to [to].
+  ///
+  /// Running entries are left alone: their write may already have begun.
+  /// Null-tier entries are untouched because they resolve the configured
+  /// destination when claimed.
+  Future<int> reroute(StorageTier from, StorageTier to);
 
   /// Empties the queue. Nothing already written to disk is touched — this
   /// cancels what is owed, it does not delete what landed.

@@ -38,8 +38,10 @@ class MoveStoredImages {
 
   /// Performs every move in [moves] and answers exactly which ones landed.
   ///
-  /// Copy first, then delete the originals **in one call**, then undo the
-  /// copies whose original survived. Each step is there for a reason:
+  /// Copy first, then delete the originals, then undo copies whose original
+  /// survived. App-private sources settle after each verified copy so a process
+  /// death preserves progress. Other sources settle in one bulk call.
+  /// Each step is there for a reason:
   ///
   /// - The delete goes through [ImageStore.deleteDownloads] and not a loop over
   ///   the single delete, because on Android 30+ every gallery delete raises
@@ -56,12 +58,12 @@ class MoveStoredImages {
   /// the count it asked for. Mirrors `DeleteDownloads`, which returns what it
   /// deleted for the same reason.
   ///
-  /// [onCopied] is called after each file is copied, with how many of
-  /// [moves] have been written so far. A whole library moving to a card is
+  /// [onCopied] is called after each attempt, including failed copies, with how
+  /// many of [moves] have been attempted so far. A library moving to a card is
   /// minutes of copying, and an indeterminate spinner over it says nothing
-  /// about whether it is halfway or stuck. The delete that follows is a single
-  /// call and reports nothing, which is why this counts the copies and not the
-  /// moves that finally landed.
+  /// about whether it is halfway or stuck. App-private attempts include source
+  /// deletion; other source deletions follow in a single call. This counts
+  /// attempts rather than moves that finally landed.
   ///
   /// [stopped] is asked before each copy. **Stopping ends the copying, not the
   /// move**: everything already copied goes on to have its original deleted, so
@@ -83,12 +85,13 @@ class MoveStoredImages {
     Future<void> Function()? beforeDelete,
   }) async {
     if (moves.isEmpty) return <WallpaperRef>{};
-    final Map<StoredImageMove, StoredImage> copied = await _copyAll(
+    final _CopyResult result = await _copyAll(
       moves,
       onCopied,
       stopped,
     );
-    if (copied.isEmpty) return <WallpaperRef>{};
+    final Map<StoredImageMove, StoredImage> copied = result.pending;
+    if (copied.isEmpty) return result.moved;
     if (beforeDelete != null) await beforeDelete();
     final Set<Uri> gone = await _imageStore.deleteDownloads(
       <({StorageTier tier, Uri location})>[
@@ -96,7 +99,7 @@ class MoveStoredImages {
           (tier: move.from, location: move.location),
       ],
     );
-    return _settle(copied, gone);
+    return result.moved..addAll(await _settle(copied, gone));
   }
 
   /// Copies each source into its destination, dropping the ones that fail.
@@ -104,25 +107,51 @@ class MoveStoredImages {
   /// A failure takes that move and no other: one unreadable file in a selection
   /// of thirty is a reason to report "moved 29 of 30", not to abandon the other
   /// twenty-nine.
-  Future<Map<StoredImageMove, StoredImage>> _copyAll(
+  Future<_CopyResult> _copyAll(
     List<StoredImageMove> moves,
     void Function(int copied, int total)? onCopied,
     bool Function()? stopped,
   ) async {
-    final Map<StoredImageMove, StoredImage> copied =
+    final Map<StoredImageMove, StoredImage> pending =
         <StoredImageMove, StoredImage>{};
+    final Set<WallpaperRef> moved = <WallpaperRef>{};
     for (int i = 0; i < moves.length; i++) {
       // Checked before the copy, never during: a half-written destination file
       // is the one thing a stop must not be able to produce.
       if (stopped?.call() ?? false) break;
       final StoredImage? made = await _copy(moves[i]);
-      if (made != null) copied[moves[i]] = made;
+      if (made != null) {
+        final StoredImageMove move = moves[i];
+        if (move.from == StorageTier.appPrivate) {
+          moved.addAll(await _settleOwnedSource(move, made));
+        } else {
+          pending[move] = made;
+        }
+      }
       // Counts every attempt, not every success: this drives a progress bar,
       // and a bar that stalls on the one unreadable file in a hundred looks
       // like the move hung.
       onCopied?.call(i + 1, moves.length);
     }
-    return copied;
+    return _CopyResult(pending: pending, moved: moved);
+  }
+
+  /// Commits one app-owned source as soon as its verified copy has landed.
+  ///
+  /// App-private deletion raises no Android prompt, so holding thousands of
+  /// successful copies until the end only makes a process death forget all
+  /// progress. Gallery sources remain in the bulk path below because their OS
+  /// confirmation must stay one prompt for the whole selection.
+  Future<Set<WallpaperRef>> _settleOwnedSource(
+    StoredImageMove move,
+    StoredImage made,
+  ) async {
+    final Set<Uri> gone = await _imageStore.deleteDownloads(
+      <({StorageTier tier, Uri location})>[
+        (tier: move.from, location: move.location),
+      ],
+    );
+    return _settle(<StoredImageMove, StoredImage>{move: made}, gone);
   }
 
   Future<StoredImage?> _copy(StoredImageMove move) async {
@@ -194,4 +223,11 @@ class MoveStoredImages {
       return;
     }
   }
+}
+
+final class _CopyResult {
+  const _CopyResult({required this.pending, required this.moved});
+
+  final Map<StoredImageMove, StoredImage> pending;
+  final Set<WallpaperRef> moved;
 }

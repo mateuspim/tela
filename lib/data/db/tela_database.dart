@@ -339,6 +339,18 @@ class TelaDatabase extends _$TelaDatabase {
     );
   }
 
+  /// Changes the explicit destination of work that is not already writing.
+  Future<int> rerouteQueueEntries(String from, String to, String running) {
+    final UpdateStatement<$DownloadQueueEntriesTable, QueueRow> statement =
+        update(downloadQueueEntries)..where(
+          ($DownloadQueueEntriesTable row) =>
+              row.tier.equals(from) & row.state.equals(running).not(),
+        );
+    return statement.write(
+      DownloadQueueEntriesCompanion(tier: Value<String>(to)),
+    );
+  }
+
   Future<void> _writeQueueState(
     WallpaperRef ref,
     DownloadQueueEntriesCompanion fields,
