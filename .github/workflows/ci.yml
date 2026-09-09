@@ -84,6 +84,7 @@ jobs:
       - name: Verify ${{ matrix.edition }} compile-time contract
         run: >-
           flutter test test/app/build_edition_runtime_test.dart
+          test/app/edition_policy_runtime_test.dart
           --dart-define=TELA_EDITION=${{ matrix.edition }}
           --dart-define=EXPECTED_EDITION=${{ matrix.edition }}
       - name: Build ${{ matrix.edition }} debug APK
