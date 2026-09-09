@@ -5,18 +5,33 @@ set -euo pipefail
 
 apk="${1:-build/app/outputs/flutter-apk/app-play-release.apk}"
 [[ -f "$apk" ]] || { echo "missing Play APK: $apk" >&2; exit 2; }
-command -v apkanalyzer >/dev/null || {
+analyzer="$(command -v apkanalyzer || true)"
+# Hosted runners install command-line tools without always adding them to PATH.
+for sdk_root in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}"; do
+  [[ -n "$analyzer" ]] && break
+  [[ -n "$sdk_root" ]] || continue
+  for candidate in "$sdk_root"/cmdline-tools/latest/bin/apkanalyzer \
+      "$sdk_root"/cmdline-tools/*/bin/apkanalyzer \
+      "$sdk_root"/tools/bin/apkanalyzer; do
+    if [[ -x "$candidate" ]]; then
+      analyzer="$candidate"
+      break
+    fi
+  done
+done
+[[ -n "$analyzer" ]] || {
   echo "apkanalyzer is required to audit $apk" >&2
   exit 2
 }
 
-application_id="$(apkanalyzer manifest application-id "$apk")"
+application_id="$("$analyzer" manifest application-id "$apk")"
 [[ "$application_id" == "cc.pym.tela.play" ]] || {
   echo "Play APK has application id $application_id" >&2
   exit 1
 }
 
-if apkanalyzer manifest permissions "$apk" | grep -q 'USE_BIOMETRIC'; then
+permissions="$("$analyzer" manifest permissions "$apk")"
+if grep -q 'USE_BIOMETRIC' <<< "$permissions"; then
   echo "Play APK still requests USE_BIOMETRIC" >&2
   exit 1
 fi
