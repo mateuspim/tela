@@ -39,8 +39,12 @@ failure as a product-boundary regression, not as an ignorable string warning.
 2. Require the `CI / verify` and four `CI / build-matrix` checks.
 3. Use a temporary `release/X.Y` branch only when stabilization needs more than
    one commit. Merge every release fix back into `master`.
-4. Create an annotated `vX.Y.Z` tag on a commit contained in `master`.
-5. The Release workflow rebuilds and publishes the four APKs, the Play AAB, and
+4. Bump `version: X.Y.Z+N` in `pubspec.yaml` in the release PR. `N` must be
+   greater than every previous release versionCode (and any installed local
+   build). Local deployment and CI both use this value; do not use run counters
+   or split-per-ABI codes. Add `docs/releases/vX.Y.Z.md` with release notes.
+5. Create an annotated `vX.Y.Z` tag on a commit contained in `master`.
+6. The Release workflow rebuilds and publishes the four APKs, the Play AAB, and
    `SHA256SUMS` from that exact commit.
 
 ## Repository configuration
@@ -63,3 +67,32 @@ Play publishing is deliberately a separate promotion step. Upload the generated
 `tela-play-vX.Y.Z.aab` to Internal testing first, complete the content-rating and
 data-safety declarations, and promote only after a hardware pass. A Git tag does
 not publish directly to production.
+
+## Downloads and verification
+
+The stable Full download is
+https://github.com/mateuspim/tela/releases/latest/download/tela-full.apk .
+Each release also retains `tela-{edition}-vX.Y.Z.apk` and
+`tela-play-vX.Y.Z.aab`. The stable Full asset is a byte-identical copy of the
+versioned APK, and both are included in `SHA256SUMS`. GitHub authentication
+with repository access is required while the repository is private.
+
+Download all assets with `gh release download vX.Y.Z --repo mateuspim/tela`,
+then run `sha256sum -c SHA256SUMS` in that download directory. Check an APK
+with Android SDK `apksigner verify --verbose --print-certs tela-full.apk`.
+The expected SHA-256 certificate fingerprint is:
+
+```text
+33b859cc2dce878345bd6c04e9b53e02808e7c6cd03de3ebc38ac2cfff40cb64
+```
+
+The workflow rejects APKs signed with a different certificate. This is the
+existing Full signing key, not a debug certificate. Keep it backed up offline.
+Use `apkanalyzer manifest application-id`, `version-name`, `version-code`, and
+`min-sdk` to inspect a downloaded APK. Matching identity and certificate prove
+signing compatibility; an actual device update still requires a hardware test.
+
+Manual dispatch validates the supplied version against `pubspec.yaml` and
+builds artifacts without publishing. Published tags must belong to `master`.
+For each new release, update the source version first so later `make deploy`
+builds cannot accidentally downgrade a released installation.

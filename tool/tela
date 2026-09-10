@@ -16,7 +16,7 @@
 # a clean reinstall that wipes the app's data.
 #
 # To put a build on a device, use `deploy`. It builds the *universal* release
-# APK (versionCode 1) and installs it with `adb install -r`, which can only
+# APK (using the versionCode in pubspec.yaml) and installs it with `adb install -r`, which can only
 # update in place — it cannot uninstall, so it cannot take the Drift database or
 # the Keystore-backed API key with it.
 #

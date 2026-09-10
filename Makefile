@@ -66,7 +66,7 @@ shell:
 # with it (2026-07-22: `make install` wiped a device this way). The catch-all
 # below would forward `make install`/`make run` straight to them, so name them
 # explicitly and fail loudly instead. `make deploy` is the safe path — it builds
-# the universal versionCode-1 APK and `adb install -r`s it, never uninstalling.
+# the universal APK using pubspec.yaml’s versionCode and `adb install -r`s it, never uninstalling.
 install run:
 	@printf 'make %s runs `flutter %s`, which UNINSTALLS first and wipes the\n' '$@' '$@' >&2
 	@printf 'database and the stored API key. Use `make deploy` instead.\n' >&2
