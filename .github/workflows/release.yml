@@ -80,6 +80,10 @@ jobs:
             echo "keyAlias=$TELA_KEY_ALIAS"
             echo "keyPassword=$TELA_KEY_PASSWORD"
           } > android/key.properties
+      - name: Generate localization
+        run: |
+          flutter pub get
+          flutter gen-l10n
       - name: Verify
         run: |
           flutter analyze
