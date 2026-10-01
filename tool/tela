@@ -99,10 +99,17 @@ fi
 # its own working set; `android/gradle.properties` sizes the JVMs to fit inside
 # it, and if one ever escapes that, the OOM killer takes the container and the
 # build says so.
+#
+# 4 GB was measured on that host, and it is not enough everywhere: on a 60 GB,
+# 24-core workstation the same release build was OOM-killed at the cgroup
+# ceiling during assembleSafeRelease (2026-10-01). So a host with 16 GB or more
+# gets 8 GB; TELA_MEMORY (in GB) overrides either.
+host_gb=$(( $(awk '/^MemTotal:/ {print $2}' /proc/meminfo) / 1024 / 1024 ))
+memory_gb="${TELA_MEMORY:-$(( host_gb >= 16 ? 8 : 4 ))}"
 DOCKER_ARGS=(
   --rm
-  --memory 4g
-  --memory-swap 5g
+  --memory "${memory_gb}g"
+  --memory-swap "$(( memory_gb + 1 ))g"
   --network host
   -v "$REPO_ROOT:/app"
   -v "tela-pub-cache:/home/dev/.pub-cache"
