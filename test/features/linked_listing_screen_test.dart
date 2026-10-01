@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Riverpod 3 keeps `Override` out of the default export surface.
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/category.dart';
@@ -123,6 +124,30 @@ void main() {
     await _quickDownload(tester);
 
     expect(images.receivedTag, TagFolder('pym'));
+  });
+
+  testWidgets('download all on a tag asks no wallpaper what it is tagged', (
+    WidgetTester tester,
+  ) async {
+    // The owner, 2026-09-30: on a tag listing "it still needs to check some
+    // images to check the most taggable and i just want to use like
+    // minimalist". The button sits in the app bar, above the grid's
+    // `ListingOrigin`, so the chooser never heard the tag and fell back to a
+    // tag lookup per wallpaper on the first page.
+    final FakeWallpaperSource source = _api();
+    await _pumpListing(
+      tester,
+      source,
+      const TagLink(WallpaperTag(id: 37, name: 'minimalist')),
+    );
+
+    await tester.tap(find.byIcon(Icons.download_for_offline_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Download'));
+    await tester.pumpAndSettle();
+
+    expect(source.tagBudgets, isEmpty);
+    expect(find.text('minimalist'), findsWidgets);
   });
 
   testWidgets('a colour listing names no folder, and invents none', (
@@ -406,13 +431,23 @@ Future<void> _pumpListing(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: scope,
-      child: MaterialApp(
+      // A router, not `home:`: *Download all* captures `GoRouter.of` for its
+      // *View* toast action before anything else runs.
+      child: MaterialApp.router(
         localizationsDelegates: const <LocalizationsDelegate<Object>>[
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
         ],
-        home: LinkedListingScreen(link: link, seed: seed),
+        routerConfig: GoRouter(
+          routes: <RouteBase>[
+            GoRoute(
+              path: '/',
+              builder: (BuildContext context, GoRouterState state) =>
+                  LinkedListingScreen(link: link, seed: seed),
+            ),
+          ],
+        ),
       ),
     ),
   );

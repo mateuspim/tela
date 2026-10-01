@@ -211,10 +211,13 @@ resolveDownloadDestination({
   required Set<Purity> purities,
   required int count,
   required List<Wallpaper> tagSample,
+  TagFolder? listingTag,
 }) async {
   // Read before the first await, while the context is certainly still the one
-  // under the shelf that published it. See `ListingOrigin`.
-  final TagFolder? searched = ListingOrigin.folderOf(context);
+  // under the shelf that published it. See `ListingOrigin`. [listingTag] is
+  // for a caller that is *above* its shelf — the listing's own app bar, which
+  // the grid's `ListingOrigin` never reaches.
+  final TagFolder? searched = listingTag ?? ListingOrigin.folderOf(context);
   final StorageTier? pin = await ref.read(pinnedDownloadTierProvider.future);
   // The tag remembered for a *shared* destination, and the folders that already
   // exist there. A batch has no single tier until the user taps one, so the
