@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Puts the one release key on this machine, from the owner's Vaultwarden.
+#
+#   bw login            # once per machine (pin the CLI, see docs/RELEASING.md)
+#   ./tool/tela signing-setup
+#
+# Writes the two gitignored files the Gradle build reads — android/key.properties
+# and android/tela-release.jks — then refuses to leave them in place unless the
+# keystore holds the certificate every published release is signed with
+# (tool/release-certificate.sha256). A fresh clone without them used to build
+# with this machine's own debug key, which Android refuses as an update to any
+# installed copy; the obvious way out of that is an uninstall, and an uninstall
+# takes the private library with it (the 2026-08-11 lesson, see build.gradle.kts).
+#
+# The vault item is a Login named "tela release signing" with hidden custom
+# fields storePassword, keyAlias, keyPassword and the keystore attached as
+# tela-release.jks. Override the name with TELA_SIGNING_ITEM.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ITEM_NAME="${TELA_SIGNING_ITEM:-tela release signing}"
+KEYSTORE="$REPO_ROOT/android/tela-release.jks"
+PROPERTIES="$REPO_ROOT/android/key.properties"
+
+die() { echo "signing-setup: $*" >&2; exit 1; }
+
+require_tools() {
+  command -v bw >/dev/null || die "needs the Bitwarden CLI 'bw' on PATH, got none"
+  command -v jq >/dev/null || die "needs 'jq' on PATH, got none"
+}
+
+# Unlocks once per run; `bw unlock` prompts on the terminal, never in an arg.
+ensure_session() {
+  local status
+  status="$(bw status | jq -r .status)"
+  [[ "$status" == unauthenticated ]] && die "run 'bw login' first (status: $status)"
+  if [[ "$status" == locked && -z "${BW_SESSION:-}" ]]; then
+    BW_SESSION="$(bw unlock --raw)" || die "bw unlock failed"
+    export BW_SESSION
+  fi
+  bw sync >/dev/null
+}
+
+# A hidden field's value by name; empty when the item has no such field.
+field() {
+  jq -r --arg n "$2" '.fields[]? | select(.name == $n) | .value' <<< "$1"
+}
+
+fetch_item() {
+  bw get item "$ITEM_NAME" 2>/dev/null \
+    || die "no vault item named \"$ITEM_NAME\" (set TELA_SIGNING_ITEM to override)"
+}
+
+write_files() {
+  local item="$1" store_password key_alias key_password
+  store_password="$(field "$item" storePassword)"
+  key_alias="$(field "$item" keyAlias)"
+  key_password="$(field "$item" keyPassword)"
+  [[ -n "$store_password" && -n "$key_alias" && -n "$key_password" ]] \
+    || die "\"$ITEM_NAME\" must have fields storePassword, keyAlias, keyPassword"
+  umask 077
+  bw get attachment tela-release.jks --itemid "$(jq -r .id <<< "$item")" \
+    --output "$KEYSTORE" >/dev/null \
+    || die "\"$ITEM_NAME\" must carry an attachment named tela-release.jks"
+  # Relative to android/app, the module that reads it, so the same file works
+  # on the host, inside the toolchain container (/app) and in CI.
+  printf 'storeFile=../tela-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+    "$store_password" "$key_alias" "$key_password" > "$PROPERTIES"
+  export TELA_STORE_PASSWORD="$store_password" TELA_KEY_ALIAS="$key_alias"
+}
+
+# The keystore's certificate, as apksigner prints it: lowercase hex, no colons.
+keystore_digest() {
+  "$REPO_ROOT/tool/tela" keytool -list -v -keystore android/tela-release.jks \
+    -storepass:env TELA_STORE_PASSWORD -alias "$TELA_KEY_ALIAS" \
+    | sed -n 's/^[[:space:]]*SHA256: //p' | head -1 | tr -d ':\r' | tr 'A-F' 'a-f'
+}
+
+verify_certificate() {
+  local expected actual
+  expected="$(cat "$REPO_ROOT/tool/release-certificate.sha256")"
+  actual="$(keystore_digest)"
+  [[ "$actual" == "$expected" ]] && return 0
+  rm -f "$KEYSTORE" "$PROPERTIES"
+  die "keystore certificate must be $expected, got \"$actual\" — removed both files"
+}
+
+require_tools
+ensure_session
+write_files "$(fetch_item)"
+verify_certificate
+echo "signing-setup: release key installed; certificate matches the published releases"

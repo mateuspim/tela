@@ -24,9 +24,30 @@ Always supply matching Gradle flavor and Dart edition values:
   --dart-define=TELA_EDITION=safe
 ```
 
-`make apk` and `make deploy` build `full`, preserving the existing development
-and device workflow. A release build without `android/key.properties` is debug
-signed and must never be distributed.
+`make apk` and `make deploy` build `full` by default; `make deploy
+EDITION=safe` builds and installs another edition. A release build without
+`android/key.properties` **fails**. Set `TELA_ALLOW_DEBUG_SIGNING=1` only for an
+APK that will never be installed over a release (CI's PR build, a size check).
+
+## The release key on a new machine
+
+Every build that will reach a device is signed with the one release key, whose
+certificate is pinned in `tool/release-certificate.sha256`. The key lives in
+the owner's Vaultwarden as a Login item named `tela release signing`: hidden
+fields `storePassword`, `keyAlias`, `keyPassword`, and the keystore attached as
+`tela-release.jks`.
+
+```bash
+mise use -g npm:@bitwarden/cli@2026.8.0  # 2026.9.0 cannot log in to Vaultwarden 1.37.3 (vaultwarden#7750)
+bw config server <your-vaultwarden-url>
+bw login
+make signing-setup
+```
+
+`signing-setup` writes the two gitignored files and deletes them again unless
+the keystore's certificate matches the pin. `deploy` then compares the
+certificate of the app already on the device with the one it built and refuses
+a mismatch rather than install it — never uninstall to get past that.
 
 The Play artifact is checked after compilation with `tool/audit-play-apk`. The
 gate verifies its application id, absence of biometric permission, and absence

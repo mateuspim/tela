@@ -94,6 +94,9 @@ jobs:
           --dart-define=TELA_EDITION=${{ matrix.edition }}
       - name: Build and audit Play release APK
         if: matrix.edition == 'play'
+        # PRs have no signing secrets, and this APK is audited, never installed.
+        env:
+          TELA_ALLOW_DEBUG_SIGNING: '1'
         run: |
           flutter build apk --release --flavor play --dart-define=TELA_EDITION=play
           tool/audit-play-apk

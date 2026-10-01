@@ -28,6 +28,26 @@ if (hasReleaseKeystore) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
+// A release APK signed with the debug key used to build with only a warning,
+// and a warning scrolls past. Installed over a release, Android refuses it as
+// INSTALL_FAILED_UPDATE_INCOMPATIBLE, and the way out of that is an uninstall
+// that wipes the private library. So a release build now stops instead —
+// unless TELA_ALLOW_DEBUG_SIGNING=1 says the APK is never going on a device
+// (CI's PR build, a size measurement). `./tool/tela signing-setup` puts the
+// real key in place.
+val allowsDebugSigning = System.getenv("TELA_ALLOW_DEBUG_SIGNING") == "1"
+val releaseSigningTask = Regex("^(package|sign)\\w*Release(Bundle)?$")
+gradle.taskGraph.whenReady {
+    if (hasReleaseKeystore || allowsDebugSigning) return@whenReady
+    val signing = allTasks.firstOrNull { releaseSigningTask.matches(it.name) }
+        ?: return@whenReady
+    throw GradleException(
+        "tela: ${signing.name} needs android/key.properties, got none. " +
+            "Run ./tool/tela signing-setup, or set TELA_ALLOW_DEBUG_SIGNING=1 " +
+            "for an APK that will never be installed over a release."
+    )
+}
+
 android {
     namespace = "cc.pym.tela"
     compileSdk = flutter.compileSdkVersion
@@ -123,11 +143,12 @@ android {
 
     buildTypes {
         release {
-            // The real key when this machine has one, the debug key otherwise so
-            // `flutter run --release` and a size measurement still work on a
-            // fresh clone. A debug-signed APK cannot be shipped: Play refuses it,
-            // and it shares the signature of every other debug build — so the
-            // fallback announces itself rather than passing for the real thing.
+            // The real key when this machine has one, the debug key otherwise —
+            // but only under TELA_ALLOW_DEBUG_SIGNING=1; without it the task
+            // graph check at the top of this file stops the build. A
+            // debug-signed APK cannot be shipped: Play refuses it, and it shares
+            // the signature of every other debug build — so the fallback
+            // announces itself rather than passing for the real thing.
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
             } else {
