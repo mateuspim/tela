@@ -47,6 +47,19 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST_IS_ROOT=false
 [[ "$(id -u)" == 0 ]] && HOST_IS_ROOT=true
 
+# How to reach the Docker daemon. The owner keeps their user out of the
+# `docker` group (membership is root in all but name), so when the socket is not
+# writable each call goes through `pkexec`, which asks on the desktop. Override
+# with TELA_DOCKER, e.g. TELA_DOCKER="sudo docker". `pkexec` clears the
+# environment, which is why nothing below forwards a variable by name alone.
+if [[ -n "${TELA_DOCKER:-}" ]]; then
+  read -ra DOCKER <<< "$TELA_DOCKER"
+elif [[ -w /var/run/docker.sock ]] || ! command -v pkexec >/dev/null; then
+  DOCKER=(docker)
+else
+  DOCKER=(pkexec docker)
+fi
+
 build_image() {
   local uid gid
   uid="$(id -u)"
@@ -55,7 +68,7 @@ build_image() {
     uid=1000
     gid=1000
   fi
-  docker build \
+  "${DOCKER[@]}" build \
     --build-arg "UID=$uid" \
     --build-arg "GID=$gid" \
     -t "$IMAGE" \
@@ -69,7 +82,7 @@ case "${1:-}" in
   signing-setup) exec "$REPO_ROOT/tool/signing-setup" ;;
 esac
 
-if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+if ! "${DOCKER[@]}" image inspect "$IMAGE" >/dev/null 2>&1; then
   echo "toolchain image missing — building it once…" >&2
   build_image
 fi
@@ -109,10 +122,11 @@ DOCKER_ARGS=(
   # so this changes nothing there.
   -e GRADLE_USER_HOME=/home/dev/.gradle
   -e PUB_CACHE=/home/dev/.pub-cache
-  # Forwarded only when set. A release build without android/key.properties
-  # fails unless this is 1 — see build.gradle.kts.
-  -e TELA_ALLOW_DEBUG_SIGNING
 )
+
+# A release build without android/key.properties fails unless this is 1 — see
+# build.gradle.kts. Passed by value: `pkexec` would drop a name-only `-e`.
+[[ "${TELA_ALLOW_DEBUG_SIGNING:-}" == 1 ]] && DOCKER_ARGS+=(-e TELA_ALLOW_DEBUG_SIGNING=1)
 
 # See HOST_IS_ROOT above: as root the image's `dev` user is the wrong one to be,
 # because everything in the bind mount belongs to root and dev cannot write it —
@@ -123,14 +137,14 @@ DOCKER_ARGS=(
 [[ -t 0 ]] && DOCKER_ARGS+=(-it)
 
 if [[ "${1:-}" == "--shell" ]]; then
-  exec docker run "${DOCKER_ARGS[@]}" "$IMAGE" bash
+  exec "${DOCKER[@]}" run "${DOCKER_ARGS[@]}" "$IMAGE" bash
 fi
 
 # `dart` is not reachable through `flutter` (there is no `flutter format` any
 # more), so pass it through as its own entrypoint: ./tool/tela dart format .
 if [[ "${1:-}" == "dart" ]]; then
   shift
-  exec docker run "${DOCKER_ARGS[@]}" "$IMAGE" dart "$@"
+  exec "${DOCKER[@]}" run "${DOCKER_ARGS[@]}" "$IMAGE" dart "$@"
 fi
 
 # The native (Kotlin) suite. `flutter test` runs Dart only and never reaches
@@ -138,21 +152,27 @@ fi
 # emulator and no device is involved — Gradle and Robolectric do it all in here.
 if [[ "${1:-}" == "kotlin-test" ]]; then
   shift
-  exec docker run "${DOCKER_ARGS[@]}" "$IMAGE" \
+  exec "${DOCKER[@]}" run "${DOCKER_ARGS[@]}" "$IMAGE" \
     bash -c 'cd android && ./gradlew --console=plain :app:testFullDebugUnitTest "$@"' bash "$@"
 fi
 
 # adb is its own entrypoint too: ./tool/tela adb devices, ./tool/tela adb logcat.
 if [[ "${1:-}" == "adb" ]]; then
   shift
-  exec docker run "${DOCKER_ARGS[@]}" "$IMAGE" adb "$@"
+  exec "${DOCKER[@]}" run "${DOCKER_ARGS[@]}" "$IMAGE" adb "$@"
 fi
 
 # keytool, for `signing-setup`'s certificate check. The store password travels
-# as an env var named on the command line (`-storepass:env`), never as an arg.
+# in an owner-only env file (`-storepass:env`), never as an argument, where any
+# process could read it — and not by name, which `pkexec` would drop. No `exec`,
+# so the file is removed afterwards.
 if [[ "${1:-}" == "keytool" ]]; then
   shift
-  exec docker run "${DOCKER_ARGS[@]}" -e TELA_STORE_PASSWORD "$IMAGE" keytool "$@"
+  env_file="$(mktemp)"
+  trap 'rm -f "$env_file"' EXIT
+  printf 'TELA_STORE_PASSWORD=%s\n' "${TELA_STORE_PASSWORD:-}" > "$env_file"
+  "${DOCKER[@]}" run "${DOCKER_ARGS[@]}" --env-file "$env_file" "$IMAGE" keytool "$@"
+  exit
 fi
 
 # deploy: the one blessed way onto a device. Build the universal release APK,
@@ -173,13 +193,13 @@ if [[ "${1:-}" == "deploy" ]]; then
     *) echo "deploy: edition must be full|safe|wallhaven|play, got \"$edition\"" >&2; exit 2 ;;
   esac
   target="${1:-}"
-  docker run "${DOCKER_ARGS[@]}" "$IMAGE" flutter build apk --release \
+  "${DOCKER[@]}" run "${DOCKER_ARGS[@]}" "$IMAGE" flutter build apk --release \
     --flavor "$edition" --dart-define=TELA_EDITION="$edition"
   # Before installing, the certificate the device already trusts is compared
   # with the one just built. A mismatch is refused here, in words, instead of
   # surfacing as INSTALL_FAILED_UPDATE_INCOMPATIBLE — whose only "fix" is an
   # uninstall that takes the private library with it (2026-08-11).
-  exec docker run "${DOCKER_ARGS[@]}" "$IMAGE" bash -c '
+  exec "${DOCKER[@]}" run "${DOCKER_ARGS[@]}" "$IMAGE" bash -c '
     set -euo pipefail
     edition="$1"; target="${2:-}"
     apk="build/app/outputs/flutter-apk/app-$edition-release.apk"
@@ -211,4 +231,4 @@ if [[ "${1:-}" == "deploy" ]]; then
   ' bash "$edition" "$target"
 fi
 
-exec docker run "${DOCKER_ARGS[@]}" "$IMAGE" flutter "$@"
+exec "${DOCKER[@]}" run "${DOCKER_ARGS[@]}" "$IMAGE" flutter "$@"
