@@ -213,21 +213,21 @@ class _SettingsList extends StatelessWidget {
             selected: settings.nsfwTier,
             note: l10n.settingsDownloadsNsfwNote,
           ),
-        // Only when a purity actually routes there, and under both pickers
-        // rather than inside either: one folder serves the tier whichever
-        // purity uses it, so a copy per picker would suggest there are two.
-        // Its own inset panel says it is a detail of the Files destination, not
-        // a third peer decision.
-        if (_usesFilesOutsideGallery) const DownloadLocationSection(),
+        // Under both pickers rather than inside either: one folder serves the
+        // tier whichever purity uses it, so a copy per picker would suggest
+        // there are two. Its own inset panel says it is a detail of the Files
+        // destination, not a third peer decision. It decides for itself whether
+        // to show, since a folder chosen for a one-off download counts too.
+        DownloadLocationSection(routedThere: _usesFilesOutsideGallery),
       ],
     );
   }
 
   /// Whether either purity sends downloads to the files-outside-gallery tier.
   ///
-  /// The device/card choice is meaningless until something routes there, so it
-  /// stays hidden rather than sitting as a dead control under the gallery and
-  /// private-library defaults.
+  /// The device/card choice is meaningless until something routes there or a
+  /// folder exists, so it stays hidden rather than sitting as a dead control
+  /// under the gallery and private-library defaults.
   bool get _usesFilesOutsideGallery =>
       settings.sfwTier == StorageTier.filesOutsideGallery ||
       (buildEdition.allowsExplicitContent &&

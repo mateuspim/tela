@@ -266,7 +266,7 @@ Future<void> _pump(
           GlobalWidgetsLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(body: DownloadLocationSection()),
+        home: Scaffold(body: DownloadLocationSection(routedThere: true)),
       ),
     ),
   );

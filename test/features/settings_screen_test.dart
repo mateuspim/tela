@@ -157,6 +157,29 @@ void main() {
     expect(find.text('SD card'), findsNothing); // no card in this fake
   });
 
+  // Regression for device pass F7 (2026-10-03): a folder chosen from the
+  // download chooser for a one-off "Files" download was invisible in Settings
+  // until a default was switched to Files.
+  testWidgets('shows a folder already chosen even when no default uses it', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(),
+      imageStore: FakeImageStore(
+        folder: const DownloadFolder(
+          volumeLabel: 'SD card',
+          relativePath: 'Wallpapers/tela',
+          isRemovable: true,
+          isAvailable: true,
+        ),
+      ),
+    );
+
+    expect(find.text('Where files are saved'), findsOneWidget);
+    expect(find.textContaining('SD card/Wallpapers/tela'), findsOneWidget);
+  });
+
   testWidgets(
     'offers the SD card once files-tier routes there and a card is in',
     (
@@ -330,29 +353,6 @@ void main() {
     expect(account.enabled, isFalse);
   });
 
-  testWidgets('each row summarises its own source, never the one in force', (
-    WidgetTester tester,
-  ) async {
-    // Regression: the account row rendered whichever defaults were *active*, so
-    // selecting the device made the account's line read back the device's
-    // filters — and that line is what you consult before switching. Found on
-    // hardware (2026-07-14), where a device snapshot of "Last 24 hours" showed
-    // up on an account whose toplist range is Last month.
-    await _pumpSettings(
-      tester,
-      FakeSettingsRepository(
-        accountDefaults: _account,
-        source: BrowseDefaultsSource.device,
-        deviceDefaults: _device,
-      ),
-      secrets: FakeSecretStore(storedKey: 'abc123'),
-    );
-
-    expect(_selectedSource(tester), BrowseDefaultsSource.device);
-    // The account's own: anime, by the week.
-    expect(find.textContaining('Anime · Last week'), findsOneWidget);
-    // The device's own: people, by the year — and never on the account's row.
-    expect(find.textContaining('People · Last year'), findsOneWidget);
   // Regression for device pass F6 (2026-10-03): Safe showed a key promise and
   // a disabled account row pointing at a key field it does not have.
   testWidgets('an edition without credentials promises no key or explicit '
@@ -394,6 +394,29 @@ void main() {
     expect(find.text('This device'), findsOneWidget);
   });
 
+  testWidgets('each row summarises its own source, never the one in force', (
+    WidgetTester tester,
+  ) async {
+    // Regression: the account row rendered whichever defaults were *active*, so
+    // selecting the device made the account's line read back the device's
+    // filters — and that line is what you consult before switching. Found on
+    // hardware (2026-07-14), where a device snapshot of "Last 24 hours" showed
+    // up on an account whose toplist range is Last month.
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(
+        accountDefaults: _account,
+        source: BrowseDefaultsSource.device,
+        deviceDefaults: _device,
+      ),
+      secrets: FakeSecretStore(storedKey: 'abc123'),
+    );
+
+    expect(_selectedSource(tester), BrowseDefaultsSource.device);
+    // The account's own: anime, by the week.
+    expect(find.textContaining('Anime · Last week'), findsOneWidget);
+    // The device's own: people, by the year — and never on the account's row.
+    expect(find.textContaining('People · Last year'), findsOneWidget);
   });
 
   testWidgets('the device row says how to save one before one exists', (
@@ -898,6 +921,7 @@ Future<void> _pumpSettings(
   FakeWallpaperSource? source,
   FakeAppLock? lock,
   FakeImageStore? imageStore,
+  BuildEdition edition = BuildEdition.full,
   Size viewport = const Size(1080, 5000),
   double pixelRatio = 1,
   double bottomInset = 0,
@@ -921,8 +945,8 @@ Future<void> _pumpSettings(
           source ?? FakeWallpaperSource(),
         ),
         appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
-  BuildEdition edition = BuildEdition.full,
         imageStoreProvider.overrideWithValue(imageStore ?? FakeImageStore()),
+        buildEditionProvider.overrideWithValue(edition),
       ],
       child: MaterialApp(
         localizationsDelegates: const <LocalizationsDelegate<Object>>[
@@ -946,5 +970,4 @@ Future<void> _pumpSettings(
     ),
   );
   await tester.pumpAndSettle();
-        buildEditionProvider.overrideWithValue(edition),
 }
