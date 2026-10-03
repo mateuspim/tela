@@ -214,6 +214,10 @@ internal object SafDocuments {
             .map { it.name to DocumentsContract.buildDocumentUriUsingTree(parent, it.id) }
     }
 
+    /** The names of everything directly inside [folder], markers included. */
+    fun childNamesOf(context: Context, folder: Uri): List<String> =
+        childrenOf(context, folder).map { it.name }
+
     /** The child of [parent] called [name], **only if it already exists**. */
     fun existingFolderIn(context: Context, tree: Uri, name: String): Uri? {
         val root = rootOf(tree) ?: return null

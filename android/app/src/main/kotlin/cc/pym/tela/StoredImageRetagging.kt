@@ -121,6 +121,8 @@ internal class StoredImageRetagging(private val context: Context) {
             parent,
             target,
         ) ?: return imageStoreFailure("unavailable")
+        // Moving a tag's last wallpaper out empties it as surely as deleting it.
+        EmptyTagFolders.pruneAfterDocument(context, location)
         return moved(destination)
     }
 
@@ -149,6 +151,7 @@ internal class StoredImageRetagging(private val context: Context) {
         val destination = File(directory, file.name)
         if (destination.absolutePath == file.absolutePath) return moved(location)
         if (!file.renameTo(destination)) return imageStoreFailure("unavailable")
+        EmptyTagFolders.pruneAfterPrivate(context, file)
         return moved(Uri.fromFile(destination))
     }
 

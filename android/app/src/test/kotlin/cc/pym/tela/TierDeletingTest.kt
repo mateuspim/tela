@@ -199,4 +199,45 @@ class TierDeletingTest : ImageStorageTestCase() {
         assertFalse(anime.exists())
         assertTrue("the other tag's copy was taken too", minimal.exists())
     }
+
+    // --- emptied tag folders (device pass F9, 2026-10-03) ------------------
+
+    @Test
+    fun `deleting a tag's last wallpaper removes the emptied tag folder`() {
+        val file = writePrivateImage("wallhaven-abc123.jpg", tag = "anime")
+
+        storage.deleteDownload("appPrivate", Uri.fromFile(file))
+
+        assertFalse("the empty tag folder was left behind", privateDirectory("anime").exists())
+    }
+
+    @Test
+    fun `a tag folder that still holds a wallpaper stays`() {
+        val file = writePrivateImage("wallhaven-abc123.jpg", tag = "anime")
+        writePrivateImage("wallhaven-def456.jpg", tag = "anime")
+
+        storage.deleteDownload("appPrivate", Uri.fromFile(file))
+
+        assertTrue(privateDirectory("anime").exists())
+    }
+
+    @Test
+    fun `deleting the last untagged wallpaper keeps the tier's own folder`() {
+        val file = writePrivateImage("wallhaven-abc123.jpg")
+
+        storage.deleteDownload("appPrivate", Uri.fromFile(file))
+
+        assertTrue(privateDirectory().exists())
+    }
+
+    @Test
+    fun `deleting by key prunes every tag folder it empties`() {
+        writePrivateImage("wallhaven-abc123.jpg", tag = "anime")
+        writePrivateImage("wallhaven-abc123.jpg", tag = "minimal")
+
+        storage.deletePrivate("wallhaven-abc123")
+
+        assertFalse(privateDirectory("anime").exists())
+        assertFalse(privateDirectory("minimal").exists())
+    }
 }
