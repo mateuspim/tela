@@ -79,8 +79,10 @@ internal class StoredImageRetagging(private val context: Context) {
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.RELATIVE_PATH, TagFolders.galleryPath(tag))
         }
+        val from = EmptyTagFolders.galleryTagOf(context, location)
         val updated = context.contentResolver.update(location, values, null, null)
         if (updated <= 0) return imageStoreFailure("unavailable")
+        EmptyTagFolders.pruneGalleryTags(context, listOfNotNull(from))
         return moved(location)
     }
 
@@ -121,6 +123,8 @@ internal class StoredImageRetagging(private val context: Context) {
             parent,
             target,
         ) ?: return imageStoreFailure("unavailable")
+        // Moving a tag's last wallpaper out empties it as surely as deleting it.
+        EmptyTagFolders.pruneAfterDocument(context, location)
         return moved(destination)
     }
 
@@ -149,6 +153,7 @@ internal class StoredImageRetagging(private val context: Context) {
         val destination = File(directory, file.name)
         if (destination.absolutePath == file.absolutePath) return moved(location)
         if (!file.renameTo(destination)) return imageStoreFailure("unavailable")
+        EmptyTagFolders.pruneAfterPrivate(context, file)
         return moved(Uri.fromFile(destination))
     }
 

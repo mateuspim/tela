@@ -52,6 +52,17 @@ class StoredImageRetaggingTest : ImageStorageTestCase() {
         assertTrue(File(privateDirectory("minimal"), "wallhaven-abc123.jpg").exists())
     }
 
+    // Regression for device pass F9 (2026-10-03): moving a tag's last
+    // wallpaper out left the empty folder behind.
+    @Test
+    fun `moving a tag's last wallpaper out removes the emptied folder`() {
+        val file = writePrivateImage("wallhaven-abc123.jpg", tag = "anime")
+
+        storage.retag("appPrivate", Uri.fromFile(file), "minimal", null)
+
+        assertFalse(privateDirectory("anime").exists())
+    }
+
     /** A null tag is a destination, not a refusal: it is how an image comes back
      *  out of a tag without needing an "untagged" folder to exist. */
     @Test

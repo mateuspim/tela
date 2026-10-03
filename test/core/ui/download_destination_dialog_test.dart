@@ -280,6 +280,40 @@ void main() {
   });
 
   group('chooseBatchDownloadDestination', () {
+    // Regression for device pass F3 (2026-10-03): on the SM-X730 in landscape
+    // the stacked chooser overran the height and cut this subtitle mid-line.
+    testWidgets('fits a landscape tablet without cutting the last switch', (
+      WidgetTester tester,
+    ) async {
+      _viewport(tester, const Size(2560, 1600), pixelRatio: 2);
+      await _openBatch(tester, purities: <Purity>{Purity.sfw}, count: 19714);
+
+      expect(
+        find.byKey(const Key('download-destination-columns')),
+        findsOneWidget,
+      );
+      final Rect subtitle = tester.getRect(
+        find.text('Every download goes straight here until you change it.'),
+      );
+      final Rect visible = tester.getRect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(SingleChildScrollView),
+        ),
+      );
+      expect(subtitle.bottom, lessThanOrEqualTo(visible.bottom));
+    });
+
+    testWidgets('stacks on a portrait phone', (WidgetTester tester) async {
+      _viewport(tester, const Size(1080, 2400), pixelRatio: 2.75);
+      await _open(tester, purity: Purity.sfw);
+
+      expect(
+        find.byKey(const Key('download-destination-columns')),
+        findsNothing,
+      );
+    });
+
     testWidgets('offers every tier when the batch is all safe', (
       WidgetTester tester,
     ) async {
@@ -401,4 +435,16 @@ Future<BuildContext> _host(WidgetTester tester) async {
     ),
   );
   return tester.element(find.byType(Scaffold));
+}
+
+/// Sizes the test window like a real device, undone after the test.
+void _viewport(
+  WidgetTester tester,
+  Size physical, {
+  required double pixelRatio,
+}) {
+  tester.view
+    ..physicalSize = physical
+    ..devicePixelRatio = pixelRatio;
+  addTearDown(tester.view.reset);
 }

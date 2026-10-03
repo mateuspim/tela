@@ -20,14 +20,29 @@ data class TreeLocation(val volumeId: String, val relativePath: String) {
     val isPrimary: Boolean get() = volumeId == PRIMARY_VOLUME
 
     /**
+     * Whether the granted folder is itself called `tela`, so the tier writes
+     * into it rather than nesting a second one.
+     *
+     * Granting a folder made for tela and finding the files in `tela/tela/` was
+     * device pass F4 (2026-10-03). Case-insensitive, as shared storage is.
+     */
+    val isTelaFolder: Boolean
+        get() = relativePath.substringAfterLast('/').equals(TELA_FOLDER, ignoreCase = true)
+
+    /**
      * Where the files-outside-gallery tier actually writes inside this tree.
      *
-     * The tier appends its own `tela` child to whatever folder the user granted,
-     * so this — not [relativePath] — is the directory to show the user, to guard,
-     * and to compare against another tier's.
+     * The tier appends its own `tela` child to whatever folder the user granted
+     * — unless that folder already is one, see [isTelaFolder] — so this, not
+     * [relativePath], is the directory to show the user, to guard, and to
+     * compare against another tier's.
      */
     val telaFolderPath: String
-        get() = if (relativePath.isEmpty()) TELA_FOLDER else "$relativePath/$TELA_FOLDER"
+        get() = when {
+            relativePath.isEmpty() -> TELA_FOLDER
+            isTelaFolder -> relativePath
+            else -> "$relativePath/$TELA_FOLDER"
+        }
 
     /**
      * Whether the files tier here would share a directory with the gallery tier.

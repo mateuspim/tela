@@ -205,6 +205,31 @@ void main() {
     },
   );
 
+  // Regression: Cancel was gated on explicit content, so Safe and Play could
+  // only confirm (device pass, 2026-10-03).
+  testWidgets('forget confirmation can be cancelled, keeping the row', (
+    WidgetTester tester,
+  ) async {
+    final FakeDownloadHistory history = FakeDownloadHistory(
+      initial: <DownloadRecord>[_download('e7jvjd')],
+    );
+    await _pump(
+      tester,
+      _session(<DownloadRecord>[_download('e7jvjd')]),
+      history: history,
+    );
+
+    await tester.tap(find.byKey(const Key('download-viewer-overflow')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove from history'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(history.recorded, hasLength(1));
+    expect(find.byType(DownloadImmersiveSession), findsOneWidget);
+  });
+
   testWidgets('Move to private moves the shown record and then leaves', (
     WidgetTester tester,
   ) async {

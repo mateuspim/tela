@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:tela/app/theme.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/byte_size_text.dart';
 import 'package:tela/core/ui/wallpaper_swatch.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/category.dart';
@@ -110,7 +111,9 @@ class WallpaperMetadata extends StatelessWidget {
   List<(String, String)> _facts(AppLocalizations l10n, WallpaperDetails item) {
     return <(String, String)>[
       (l10n.detailResolution, item.wallpaper.resolution.toString()),
-      (l10n.detailFileSize, _bytes(l10n, item.wallpaper.fileSizeBytes)),
+      // The storage-screen form the download confirm already uses: "230 KB",
+      // not "235,923 bytes" (device pass F1, 2026-10-03).
+      (l10n.detailFileSize, formatBytes(item.wallpaper.fileSizeBytes)),
       // Omitted rather than filled with a placeholder when the source has no
       // category axis: an empty row would read as "uncategorised", which is a
       // different claim from "this site does not classify that way".
@@ -126,9 +129,6 @@ class WallpaperMetadata extends StatelessWidget {
         (l10n.detailFavorites, _number(favorites)),
     ];
   }
-
-  String _bytes(AppLocalizations l10n, int bytes) =>
-      l10n.detailFileSizeBytes(_number(bytes));
 
   String _number(int value) => NumberFormat.decimalPattern().format(value);
 

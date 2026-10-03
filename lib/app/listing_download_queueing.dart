@@ -122,6 +122,12 @@ Future<({bool proceed, StorageTier? tier, TagFolder? tag})?> _destination(
         purities: purities,
         count: first.total ?? first.wallpapers.length,
         tagSample: first.wallpapers,
+        // Handed over, not inherited: *Download all* sits in the app bar,
+        // above the grid's `ListingOrigin`, so the chooser would otherwise
+        // never hear the tag and look one up per wallpaper instead — "it
+        // still needs to check some images ... i just want to use like
+        // minimalist" (the owner, 2026-09-30).
+        listingTag: folder,
       );
   if (!chosen.proceed || !context.mounted) return null;
   final bool ready = await ensureDownloadFolder(

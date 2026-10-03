@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:tela/app/build_edition.dart';
 import 'package:tela/app/delete_download_action.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/move_to_private_action.dart';
@@ -304,11 +303,13 @@ class _DownloadImmersiveSessionState
         title: Text(l10n.downloadHistoryForgetTitle),
         content: Text(l10n.downloadHistoryForgetBody),
         actions: <Widget>[
-          if (buildEdition.allowsExplicitContent)
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(l10n.actionCancel),
-            ),
+          // Unconditional: it was gated on explicit content, so Safe and Play
+          // got a confirmation that could only be confirmed (device pass,
+          // 2026-10-03). Backing out has nothing to do with purity.
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.actionCancel),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             child: Text(l10n.downloadHistoryForget),

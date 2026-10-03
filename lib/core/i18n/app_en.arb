@@ -86,7 +86,7 @@
     "description": "Accessibility label for the filter button when filters differ from tela's opening query.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -96,7 +96,7 @@
     "description": "Accessibility label for the filter button, naming both the active count and the changed groups.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "filters": {
         "type": "String"
@@ -109,7 +109,7 @@
     "description": "Summary beneath the filter-sheet heading.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -273,7 +273,7 @@
     "description": "Shown when every wallpaper in a beam failed to resolve to bytes \u2014 offline while fetching an undownloaded one, or downloads whose files have since gone. Not 'not downloaded yet': an undownloaded wallpaper is fetched on the way out, so that is no longer a reason to fail.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -298,10 +298,10 @@
     "description": "Progress while a beam is in flight.",
     "placeholders": {
       "done": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "total": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -311,7 +311,7 @@
     "description": "Confirmation once a beam completes.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "alias": {
         "type": "String"
@@ -399,7 +399,7 @@
     "description": "Subtitle of a collection row: how many wallpapers its owner put in it, before any purity filter narrows what this user can see.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -419,7 +419,7 @@
     "description": "Shown above a collection's grid when the collection holds more wallpapers than the current purity filter and API key allow tela to show. Without it the grid can be empty under a collection row that promised dozens, with nothing explaining the gap.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -770,7 +770,7 @@
   "@listingDownloadAllCounted": {
     "description": "How much a whole-listing download commits to. The size is an estimate extrapolated from the first page.",
     "placeholders": {
-      "count": { "type": "int", "example": "12431" },
+      "count": { "type": "int", "format": "decimalPattern", "example": "12431" },
       "size": { "type": "String", "example": "54.2 GB" }
     }
   },
@@ -778,7 +778,7 @@
   "listingDownloadAllCountedOnly": "{count, plural, =1{1 wallpaper} other{{count} wallpapers}}",
   "@listingDownloadAllCountedOnly": {
     "description": "How many a whole-listing download commits to, where no size could be estimated.",
-    "placeholders": { "count": { "type": "int", "example": "412" } }
+    "placeholders": { "count": { "type": "int", "format": "decimalPattern", "example": "412" } }
   },
 
   "listingDownloadAllUncounted": "This source does not say how many wallpapers this listing holds.",
@@ -912,7 +912,7 @@
     "description": "Confirms a retag where every selected download moved.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -921,10 +921,10 @@
     "description": "Reports a retag where some downloads did not move \u2014 a file this install no longer owns falls back to copy-and-delete, and that delete can be declined at the system prompt. The honest subset, never the count that was asked for.",
     "placeholders": {
       "moved": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "total": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -945,7 +945,7 @@
     "description": "How many downloads are filed under one tag, shown on its row in the Library tab.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -954,10 +954,10 @@
     "description": "How much of the selection carries a suggested tag, shown on its chip. Bare numbers rather than words: it sits inside a chip beside the tag name, where a sentence would not fit.",
     "placeholders": {
       "carrying": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "total": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -998,7 +998,7 @@
     "description": "Heading above the storage destination choices when a whole selection is being downloaded. Carries the count so a nine-item batch does not read like a single download.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1008,7 +1008,7 @@
     "description": "Marks the destination a run of recent downloads has been going to, in the download-destination chooser.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1237,14 +1237,6 @@
 
   "detailResolution": "Resolution",
   "detailFileSize": "File size",
-  "detailFileSizeBytes": "{size} bytes",
-  "@detailFileSizeBytes": {
-    "placeholders": {
-      "size": {
-        "type": "String"
-      }
-    }
-  },
   "detailFileType": "File type",
   "detailCategory": "Category",
   "detailPurity": "Purity",
@@ -1380,6 +1372,11 @@
   "settingsAccountDescription": "Connect your key to unlock explicit content and account defaults.",
   "@settingsAccountDescription": {
     "description": "Explanation under the Wallhaven-account settings heading."
+  },
+
+  "settingsAccountDescriptionNoKey": "Your username opens your public collections.",
+  "@settingsAccountDescriptionNoKey": {
+    "description": "Explanation under the Wallhaven-account heading in editions that cannot store an API key, so only the username is offered."
   },
 
   "settingsBrowseDefaultsSection": "Browse defaults",
@@ -1613,7 +1610,7 @@
     "description": "Confirmation title before moving downloads into the private library.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1623,7 +1620,7 @@
     "description": "Says both halves plainly: where the file goes, and that the trip is one-way. The private tier keeps no record of what it holds beyond a file name, so tela can never prove a private image is safe for Photos — a user who is not told that will discover it when they try to undo the move.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1633,7 +1630,7 @@
     "description": "Confirms every wallpaper in the move landed in the private library.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1643,10 +1640,10 @@
     "description": "Reports a move where some files did not go — a dismissed system delete prompt, or a copy that failed. Says the rest are unchanged rather than leaving the user to guess whether they are now in two places, which is the outcome the rollback exists to prevent.",
     "placeholders": {
       "moved": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "total": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1666,7 +1663,7 @@
     "description": "The two surprises this move holds, said before it happens: it cannot go to Photos, and the image leaves every tela screen. Moving out of the private library sounds like it lands somewhere else in the app, and it does not — there is no history row to write, because the private tier keeps no wallpaper to write one from.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1676,7 +1673,7 @@
     "description": "Confirms images left the private library for the files folder. Names the destination rather than saying 'moved out', which would leave the user hunting for them.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1686,10 +1683,10 @@
     "description": "Reports a partial move out of the private library, saying where the remainder still is.",
     "placeholders": {
       "moved": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "total": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1719,7 +1716,7 @@
     "description": "How many downloads are still owed — pending plus in flight.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1729,7 +1726,7 @@
     "description": "The same count while the queue is paused. Says so on the count itself, because a paused queue and a stalled one look identical otherwise.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1739,10 +1736,10 @@
     "description": "Progress while a large selection of downloads is being deleted. Counts files settled, not an estimate, so it can pause on a slow one without lying.",
     "placeholders": {
       "done": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "total": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1757,7 +1754,7 @@
     "description": "Body of the ongoing download notification: how many are still owed. Terse because it sits in the shade under the title, not on a screen with room to explain.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1767,10 +1764,10 @@
     "description": "Names the failures beside the remaining count. A bare 'N left' over failed downloads is the aggregate lie the old batch snackbar told: those wallpapers are not coming without the user acting.",
     "placeholders": {
       "owed": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "failed": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1793,7 +1790,7 @@
         "type": "String"
       },
       "attempts": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -1883,7 +1880,7 @@
     "description": "Title of the dialog offered by the cleanup action, naming how many rows it found missing.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2120,7 +2117,7 @@
     "description": "Subtitle of the gallery group. The disappearance from Photos is the one surprise this move holds, so it is said before the tick, not after.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2135,7 +2132,7 @@
     "description": "Subtitle of the files group — the one move with no consequence beyond the location, which is worth saying so the user can tick it without reading further.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2150,7 +2147,7 @@
     "description": "Subtitle of the private group. Still the heaviest line on the screen, but it no longer says the images leave the app: since the vault they are listed back from the card, behind the same lock. What it must keep saying is the limit — a dot is concealment a file manager can switch off, not the app-lock.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2171,7 +2168,7 @@
     "description": "The running tally above the action button: how many files are ticked and what they would free.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "size": {
         "type": "String",
@@ -2205,7 +2202,7 @@
     "description": "Confirmation title, naming the count the user is about to commit to.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2251,7 +2248,7 @@
     "description": "Reported after a stopped run. Names what was kept rather than what was abandoned — the files that made the trip are not undone.",
     "placeholders": {
       "moved": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2261,10 +2258,10 @@
     "description": "Progress line while files are being copied.",
     "placeholders": {
       "done": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "total": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2279,7 +2276,7 @@
     "description": "Confirmation once every ticked file moved.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "size": {
         "type": "String",
@@ -2293,10 +2290,10 @@
     "description": "Reported when some files did not move — a failed copy, or a declined system delete prompt. No success tick: the user has to act on the remainder.",
     "placeholders": {
       "moved": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "total": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2371,7 +2368,7 @@
     "description": "Confirmation title before deleting app-private files, one or many.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2381,7 +2378,7 @@
     "description": "Explains that deleting app-private files is permanent, one or many.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2391,7 +2388,7 @@
     "description": "Confirms a batch of app-private files was deleted.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2401,13 +2398,13 @@
     "description": "Reports a batch delete where some app-private files could not be removed.",
     "placeholders": {
       "done": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "total": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "failed": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2467,10 +2464,10 @@
     "description": "Live gallery position announcement.",
     "placeholders": {
       "position": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "total": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2590,7 +2587,7 @@
     "description": "Title of the selection action bar, counting the ticked wallpapers.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2610,7 +2607,7 @@
     "description": "Confirms a batch of wallpapers was saved to favorites.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2620,7 +2617,7 @@
     "description": "Confirms a batch of wallpapers was dropped from favorites.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2630,7 +2627,7 @@
     "description": "Confirms a batch went into the download queue. Says 'queued' and not 'downloaded' because at this moment nothing is on the device yet — the old wording promised a finished download that had not happened.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2640,10 +2637,10 @@
     "description": "Shown when some of the ticked wallpapers were already in the queue, so the queue grew by less than the selection. Claiming the full count would be a lie about what the queue now holds.",
     "placeholders": {
       "queued": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "total": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2658,7 +2655,7 @@
     "description": "Confirmation title before forgetting several download-history rows at once.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2668,7 +2665,7 @@
     "description": "Confirmation body before a batch forget, saying plainly that no file is deleted.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2678,7 +2675,7 @@
     "description": "Confirms a batch of rows was dropped from the download history.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2688,7 +2685,7 @@
     "description": "Confirmation title before hard-deleting several downloads at once.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2698,7 +2695,7 @@
     "description": "Confirmation body before a batch hard delete, honest that the files are deleted (unlike batchForgetBody).",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2708,7 +2705,7 @@
     "description": "Confirms a batch of downloads was deleted from the device.",
     "placeholders": {
       "count": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   },
@@ -2718,13 +2715,13 @@
     "description": "Reports a batch hard delete where some were not deleted — a declined system prompt or a failure.",
     "placeholders": {
       "done": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "total": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       },
       "failed": {
-        "type": "int"
+        "type": "int", "format": "decimalPattern"
       }
     }
   }

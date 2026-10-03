@@ -70,9 +70,10 @@ internal class DownloadDeleting(
     private fun confirmGalleryDeletion(uri: Uri, result: MethodChannel.Result) {
         storageExecutor.execute {
             val live = ImageStorage(context).galleryRowExists(uri)
+            val tags = galleryTagsOf(listOf(uri))
             onMainThread {
                 if (live) {
-                    requestGalleryDeletions(listOf(uri), emptyList(), result)
+                    requestGalleryDeletions(listOf(uri), tags, emptyList(), result)
                 } else {
                     result.success(deletionOutcome(listOf(uri.toString())))
                 }
@@ -96,11 +97,12 @@ internal class DownloadDeleting(
         }
         storageExecutor.execute {
             val plan = planDeletions(ImageStorage(context), items)
+            val tags = galleryTagsOf(plan.confirm)
             onMainThread {
                 if (plan.confirm.isEmpty()) {
                     result.success(deletionOutcome(plan.deleted))
                 } else {
-                    requestGalleryDeletions(plan.confirm, plan.deleted, result)
+                    requestGalleryDeletions(plan.confirm, tags, plan.deleted, result)
                 }
             }
         }
@@ -114,10 +116,15 @@ internal class DownloadDeleting(
      * an ordinary state now that the queue drains without one. A gallery delete
      * simply cannot happen then: the OS owns that prompt, and Dart is told the
      * truth about what went.
+     *
+     * [galleryTags] are the tag folders those rows sit in, read before the
+     * prompt because an accepted delete leaves no row to ask. They are pruned
+     * once the OS has deleted the files (F9).
      */
     @RequiresApi(Build.VERSION_CODES.R)
     private fun requestGalleryDeletions(
         galleryUris: List<Uri>,
+        galleryTags: List<String>,
         alreadyDeleted: List<String>,
         result: MethodChannel.Result,
     ) {
@@ -134,10 +141,17 @@ internal class DownloadDeleting(
         }
         val asked = prompts()?.askDeleteConfirmation(request.intentSender) { accepted ->
             val locations = if (accepted) galleryUris.map(Uri::toString) else emptyList()
+            if (accepted) {
+                storageExecutor.execute { EmptyTagFolders.pruneGalleryTags(context, galleryTags) }
+            }
             result.success(deletionOutcome(alreadyDeleted + locations))
         }
         if (asked != true) result.success(imageStoreFailure("unavailable"))
     }
+
+    /** The gallery tag folders [uris] are filed in; storage thread only. */
+    private fun galleryTagsOf(uris: List<Uri>): List<String> =
+        uris.mapNotNull { EmptyTagFolders.galleryTagOf(context, it) }
 
     /** Runs a delete off the UI thread, answering on it. */
     private fun onStorageThread(

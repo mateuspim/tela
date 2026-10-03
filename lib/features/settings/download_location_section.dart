@@ -25,7 +25,15 @@ import 'package:tela/features/settings/vault_folder_section.dart';
 /// one tap to confirm, instead of hunting a card down in a blank tree browser.
 class DownloadLocationSection extends ConsumerWidget {
   /// Creates the device/card location chooser.
-  const DownloadLocationSection({super.key});
+  const DownloadLocationSection({required this.routedThere, super.key});
+
+  /// Whether a purity's default sends downloads to the files tier.
+  ///
+  /// When none does, the panel still shows once a folder has been chosen: a
+  /// one-off "Files" download from the chooser writes to it, and the only way
+  /// to see or move that folder was to change a default first (device pass
+  /// F7, 2026-10-03). With neither, it is a control for nothing and stays out.
+  final bool routedThere;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,6 +43,7 @@ class DownloadLocationSection extends ConsumerWidget {
       downloadLocationProvider,
     );
     final DownloadLocation? value = location.value;
+    if (!routedThere && value?.folder == null) return const SizedBox.shrink();
     // An inset, tinted panel rather than another full-width slab: the volume
     // is a detail of whichever tier routes to files-outside-gallery, and the
     // recessed surface says so at a glance. The connective line spells it out.

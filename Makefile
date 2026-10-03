@@ -5,16 +5,19 @@
 #
 #   make deploy                      # build release + install, safely
 #   make deploy DEVICE=1.2.3.4:5555  # ...connecting to a networked device first
+#   make deploy EDITION=safe         # ...a different edition (default: full)
+#   make signing-setup               # fetch the release key from Vaultwarden
 #   make test / analyze / format / apk / shell
 
 TELA := ./tool/tela
 
 .DEFAULT_GOAL := help
-.PHONY: help deploy test kotlin-test ci hooks analyze format apk shell install run
+.PHONY: help deploy signing-setup test kotlin-test ci hooks analyze format apk shell install run
 
 help:
 	@printf 'targets:\n'
-	@printf '  deploy [DEVICE=host:port]  build release APK + adb install -r (safe)\n'
+	@printf '  deploy [DEVICE=host:port] [EDITION=full]  build release + adb install -r (safe)\n'
+	@printf '  signing-setup              fetch the release key from Vaultwarden\n'
 	@printf '  test                       run the full Dart suite\n'
 	@printf '  kotlin-test                run the native (Kotlin) suite\n'
 	@printf '  ci                         analyze + both suites, as the merge gate runs them\n'
@@ -25,8 +28,13 @@ help:
 	@printf '  shell                      drop into the toolchain container\n'
 
 # The one blessed path onto a device: never `flutter install`/`run`, which wipe.
+EDITION ?= full
+
 deploy:
-	$(TELA) deploy $(DEVICE)
+	$(TELA) deploy --edition $(EDITION) $(DEVICE)
+
+signing-setup:
+	$(TELA) signing-setup
 
 test:
 	$(TELA) test

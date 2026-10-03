@@ -121,7 +121,7 @@ jobs:
             # SDK releases label signers differently (Signer #1 vs V3.0 Signer).
             # Compare all distinct certificate digests, never the display label.
             digests="$(sed -n 's/^.*certificate SHA-256 digest: //p' certificate.txt | sort -u)"
-            [[ "$digests" == '33b859cc2dce878345bd6c04e9b53e02808e7c6cd03de3ebc38ac2cfff40cb64' ]]
+            [[ "$digests" == "$(cat tool/release-certificate.sha256)" ]]
           done
           cp "dist/tela-full-v${{ steps.version.outputs.name }}.apk" dist/tela-full.apk
           (cd dist && sha256sum *.apk *.aab > SHA256SUMS)

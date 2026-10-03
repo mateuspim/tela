@@ -54,6 +54,7 @@ internal class TierDeleting(private val context: Context) {
             .filter { ImageFileNaming.keyOf(it.name) == key }
         if (matches.isEmpty()) return mapOf("success" to true)
         if (!matches.all { it.delete() }) return imageStoreFailure("unavailable")
+        matches.forEach { EmptyTagFolders.pruneAfterPrivate(context, it) }
         return mapOf("success" to true)
     }
 
@@ -117,6 +118,7 @@ internal class TierDeleting(private val context: Context) {
             return imageStoreFailure("unavailable")
         }
         if (file.exists() && !file.delete()) return imageStoreFailure("unavailable")
+        EmptyTagFolders.pruneAfterPrivate(context, file)
         return deletionOutcome(listOf(location.toString()))
     }
 
@@ -161,6 +163,10 @@ internal class TierDeleting(private val context: Context) {
         } catch (_: Exception) {
             false
         }
+        // Pruned only after a delete that did something: the already-gone
+        // paths above and below are the bulk history cleanup, where an extra
+        // listing per row is the cost the note above refuses to pay.
+        if (removed) EmptyTagFolders.pruneAfterDocument(context, location)
         if (removed || !documentExists(location)) {
             return deletionOutcome(listOf(location.toString()))
         }

@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tela/app/build_edition.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/accent_color.dart';
@@ -154,6 +155,29 @@ void main() {
 
     expect(find.text('Where files are saved'), findsOneWidget);
     expect(find.text('SD card'), findsNothing); // no card in this fake
+  });
+
+  // Regression for device pass F7 (2026-10-03): a folder chosen from the
+  // download chooser for a one-off "Files" download was invisible in Settings
+  // until a default was switched to Files.
+  testWidgets('shows a folder already chosen even when no default uses it', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(),
+      imageStore: FakeImageStore(
+        folder: const DownloadFolder(
+          volumeLabel: 'SD card',
+          relativePath: 'Wallpapers/tela',
+          isRemovable: true,
+          isAvailable: true,
+        ),
+      ),
+    );
+
+    expect(find.text('Where files are saved'), findsOneWidget);
+    expect(find.textContaining('SD card/Wallpapers/tela'), findsOneWidget);
   });
 
   testWidgets(
@@ -327,6 +351,47 @@ void main() {
           ),
         );
     expect(account.enabled, isFalse);
+  });
+
+  // Regression for device pass F6 (2026-10-03): Safe showed a key promise and
+  // a disabled account row pointing at a key field it does not have.
+  testWidgets('an edition without credentials promises no key or explicit '
+      'content', (WidgetTester tester) async {
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(),
+      edition: BuildEdition.safe,
+    );
+
+    expect(find.textContaining('Connect your key'), findsNothing);
+    expect(
+      find.text('Your username opens your public collections.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('an edition without credentials offers only the device source', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(),
+      edition: BuildEdition.play,
+    );
+
+    expect(
+      find.text("Add an API key to use your account's settings."),
+      findsNothing,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is RadioListTile<BrowseDefaultsSource> &&
+            widget.value == BrowseDefaultsSource.account,
+      ),
+      findsNothing,
+    );
+    expect(find.text('This device'), findsOneWidget);
   });
 
   testWidgets('each row summarises its own source, never the one in force', (
@@ -856,6 +921,7 @@ Future<void> _pumpSettings(
   FakeWallpaperSource? source,
   FakeAppLock? lock,
   FakeImageStore? imageStore,
+  BuildEdition edition = BuildEdition.full,
   Size viewport = const Size(1080, 5000),
   double pixelRatio = 1,
   double bottomInset = 0,
@@ -880,6 +946,7 @@ Future<void> _pumpSettings(
         ),
         appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
         imageStoreProvider.overrideWithValue(imageStore ?? FakeImageStore()),
+        buildEditionProvider.overrideWithValue(edition),
       ],
       child: MaterialApp(
         localizationsDelegates: const <LocalizationsDelegate<Object>>[

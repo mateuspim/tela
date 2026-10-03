@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/build_edition.dart';
+import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
@@ -50,7 +51,10 @@ class SettingsScreen extends ConsumerWidget {
         ),
       ),
       body: settings.when(
-        data: (StorageSettings value) => _SettingsList(settings: value),
+        data: (StorageSettings value) => _SettingsList(
+          settings: value,
+          edition: ref.watch(buildEditionProvider),
+        ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stackTrace) =>
             Center(child: Text(l10n.errorUnexpected)),
@@ -61,9 +65,13 @@ class SettingsScreen extends ConsumerWidget {
 
 /// Every settings group, in screen order.
 class _SettingsList extends StatelessWidget {
-  const _SettingsList({required this.settings});
+  const _SettingsList({required this.settings, required this.edition});
 
   final StorageSettings settings;
+
+  /// For copy only; the key section itself stays on the `buildEdition` const
+  /// so a clean release compiles it out.
+  final BuildEdition edition;
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +128,11 @@ class _SettingsList extends StatelessWidget {
     return _SettingsGroup(
       icon: Icons.key_outlined,
       title: l10n.settingsAccountSection,
-      description: l10n.settingsAccountDescription,
+      // Without credentials there is no key to connect and no explicit content
+      // to unlock; promising both was device pass F6 (2026-10-03).
+      description: edition.allowsWallhavenCredentials
+          ? l10n.settingsAccountDescription
+          : l10n.settingsAccountDescriptionNoKey,
       children: <Widget>[
         if (buildEdition.allowsWallhavenCredentials) const ApiKeySection(),
         const CollectionsSection(),
@@ -201,21 +213,21 @@ class _SettingsList extends StatelessWidget {
             selected: settings.nsfwTier,
             note: l10n.settingsDownloadsNsfwNote,
           ),
-        // Only when a purity actually routes there, and under both pickers
-        // rather than inside either: one folder serves the tier whichever
-        // purity uses it, so a copy per picker would suggest there are two.
-        // Its own inset panel says it is a detail of the Files destination, not
-        // a third peer decision.
-        if (_usesFilesOutsideGallery) const DownloadLocationSection(),
+        // Under both pickers rather than inside either: one folder serves the
+        // tier whichever purity uses it, so a copy per picker would suggest
+        // there are two. Its own inset panel says it is a detail of the Files
+        // destination, not a third peer decision. It decides for itself whether
+        // to show, since a folder chosen for a one-off download counts too.
+        DownloadLocationSection(routedThere: _usesFilesOutsideGallery),
       ],
     );
   }
 
   /// Whether either purity sends downloads to the files-outside-gallery tier.
   ///
-  /// The device/card choice is meaningless until something routes there, so it
-  /// stays hidden rather than sitting as a dead control under the gallery and
-  /// private-library defaults.
+  /// The device/card choice is meaningless until something routes there or a
+  /// folder exists, so it stays hidden rather than sitting as a dead control
+  /// under the gallery and private-library defaults.
   bool get _usesFilesOutsideGallery =>
       settings.sfwTier == StorageTier.filesOutsideGallery ||
       (buildEdition.allowsExplicitContent &&
@@ -241,9 +253,6 @@ class _SettingsList extends StatelessWidget {
   }
 
   Widget _privacyGroup(AppLocalizations l10n) {
-    if (!buildEdition.allowsExplicitContent) {
-      return const SizedBox.shrink();
-    }
     return _SettingsGroup(
       icon: Icons.shield_outlined,
       title: l10n.settingsPrivacySection,
@@ -262,7 +271,9 @@ class _SettingsList extends StatelessWidget {
         const AppLockSwitch(),
         // Beside the app-lock deliberately: both govern what may leave the
         // private library, and someone weighing one wants to see the other.
-        const BeamExplicitSwitch(),
+        // Edition-gated where the group is not: without explicit purity there
+        // is nothing for it to release.
+        if (buildEdition.allowsExplicitContent) const BeamExplicitSwitch(),
       ],
     );
   }

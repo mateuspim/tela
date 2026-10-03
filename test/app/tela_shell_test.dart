@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -48,6 +49,42 @@ void main() {
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
     expect(TelaShell.expandedNavigationWidth, 840);
+  });
+
+  // Device pass F5 (2026-10-03): on the SM-X730 the rail's three destinations
+  // were missing from the accessibility tree uiautomator reads, so TalkBack
+  // could not reach them — a page route's BlockSemantics wiped them. Searched
+  // in the live semantics tree, as an accessibility service sees it, rather
+  // than asked of the widget's own node.
+  testWidgets('the rail destinations reach the accessibility tree', (
+    WidgetTester tester,
+  ) async {
+    // Disposed in the body, not by addTearDown: flutter_test checks for a live
+    // handle before tear-downs run.
+    final SemanticsHandle semantics = tester.ensureSemantics();
+    tester.view.physicalSize = const Size(1000, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpShell(tester);
+
+    for (final String destination in <String>[
+      'Browse',
+      'Library',
+      'Settings',
+    ]) {
+      expect(
+        find.semantics.byPredicate(
+          (SemanticsNode node) =>
+              node.label.contains(destination) &&
+              node.getSemanticsData().hasAction(SemanticsAction.tap),
+        ),
+        findsAtLeast(1),
+        reason: '$destination is not reachable by an accessibility service',
+      );
+    }
+    semantics.dispose();
   });
 
   testWidgets('the rail leads with the brand lockup: mark over wordmark', (

@@ -57,7 +57,15 @@ class TelaShell extends StatelessWidget {
             onDestinationSelected: _openDestination,
           ),
           const VerticalDivider(width: 1),
-          Expanded(child: navigationShell),
+          // A semantics boundary around the branch, or the rail vanishes for
+          // TalkBack: every page route carries a ModalBarrier, whose
+          // BlockSemantics drops all nodes painted before it up to the nearest
+          // boundary — and the rail is painted first, in this same Row (device
+          // pass F5, 2026-10-03). The bottom bar escapes only by being painted
+          // after the body.
+          Expanded(
+            child: Semantics(container: true, child: navigationShell),
+          ),
         ],
       ),
     );
