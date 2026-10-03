@@ -494,7 +494,8 @@ void main() {
     // sheet's peek an opaque band across the foot of the picture. The facts
     // themselves are the assertion now.
     expect(find.byKey(const Key('metadata-fact-Resolution')), findsOneWidget);
-    expect(find.text('1,048,576 bytes'), findsOneWidget);
+    // Storage-screen form, not a raw byte count (device pass F1, 2026-10-03).
+    expect(find.text('1.0 MB'), findsOneWidget);
     expect(find.text('tela-fixture'), findsOneWidget);
     expect(find.text('landscape'), findsOneWidget);
     expect(find.text('sunset'), findsOneWidget);
