@@ -1382,6 +1382,11 @@
     "description": "Explanation under the Wallhaven-account settings heading."
   },
 
+  "settingsAccountDescriptionNoKey": "Your username opens your public collections.",
+  "@settingsAccountDescriptionNoKey": {
+    "description": "Explanation under the Wallhaven-account heading in editions that cannot store an API key, so only the username is offered."
+  },
+
   "settingsBrowseDefaultsSection": "Browse defaults",
   "@settingsBrowseDefaultsSection": {
     "description": "Heading for the choice of where browse takes its filters from."

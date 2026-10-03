@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/account_defaults.dart';
 import 'package:tela/app/browse_defaults.dart';
+import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/browse_filter_text.dart';
 import 'package:tela/core/ui/tela_toast.dart';
@@ -18,7 +19,9 @@ import 'package:tela/features/settings/api_key_controller.dart';
 ///
 /// The account option needs a key — without one there is no account to read, so
 /// it is offered but disabled rather than hidden: "why can't I pick this" has a
-/// better answer than a missing row.
+/// better answer than a missing row. Except in an edition that can never hold a
+/// key, where the disabled row was a dead end pointing at a control that does
+/// not exist (device pass F6, 2026-10-03), so it is left out.
 ///
 /// ```dart
 /// const BrowseDefaultsSection()
@@ -54,23 +57,27 @@ class _Choices extends ConsumerWidget {
     // selected — and this is the line you consult before switching.
     final AccountSettings? account = ref.watch(accountDefaultsProvider).value;
     final BrowseDefaults? device = ref.watch(deviceDefaultsProvider).value;
+    final bool offersAccount = ref
+        .watch(buildEditionProvider)
+        .allowsWallhavenCredentials;
     return RadioGroup<BrowseDefaultsSource>(
       groupValue: active.source,
       onChanged: (BrowseDefaultsSource? source) => _use(ref, source),
       child: Column(
         children: <Widget>[
-          RadioListTile<BrowseDefaultsSource>(
-            value: BrowseDefaultsSource.account,
-            // No key, no account to read. The option stays visible but cannot
-            // be picked: "why is this greyed out" has a better answer than a
-            // row that is simply missing.
-            enabled: hasKey,
-            title: Text(l10n.browseDefaultsAccount),
-            subtitle: Text(
-              _accountSubtitle(context, l10n, account, hasKey: hasKey),
+          if (offersAccount)
+            RadioListTile<BrowseDefaultsSource>(
+              value: BrowseDefaultsSource.account,
+              // No key, no account to read. The option stays visible but cannot
+              // be picked: "why is this greyed out" has a better answer than a
+              // row that is simply missing.
+              enabled: hasKey,
+              title: Text(l10n.browseDefaultsAccount),
+              subtitle: Text(
+                _accountSubtitle(context, l10n, account, hasKey: hasKey),
+              ),
+              secondary: hasKey ? const _RefreshButton() : null,
             ),
-            secondary: hasKey ? const _RefreshButton() : null,
-          ),
           RadioListTile<BrowseDefaultsSource>(
             value: BrowseDefaultsSource.device,
             title: Text(l10n.browseDefaultsDevice),

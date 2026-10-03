@@ -89,6 +89,20 @@ import 'package:tela/domain/use_cases/walk_listing_pages.dart';
 /// Features depend on the ports above, never on the adapters below, so a test
 /// swaps an implementation by overriding one provider.
 
+/// The compiled edition, as a provider so edition-dependent *copy* can be
+/// exercised in widget tests.
+///
+/// Capability gates that must be tree-shaken out of a release (the key store,
+/// sources) keep reading the `buildEdition` const instead: an override here
+/// cannot remove code, it only changes what a screen says.
+///
+/// ```dart
+/// ref.watch(buildEditionProvider).allowsWallhavenCredentials
+/// ```
+final Provider<BuildEdition> buildEditionProvider = Provider<BuildEdition>(
+  (Ref ref) => buildEdition,
+);
+
 /// Encrypted store for the Wallhaven API key.
 final Provider<SecretStore> secretStoreProvider = Provider<SecretStore>(
   (Ref ref) => buildEdition.allowsWallhavenCredentials

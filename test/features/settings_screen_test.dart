@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tela/app/build_edition.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/accent_color.dart';
@@ -352,6 +353,47 @@ void main() {
     expect(find.textContaining('Anime · Last week'), findsOneWidget);
     // The device's own: people, by the year — and never on the account's row.
     expect(find.textContaining('People · Last year'), findsOneWidget);
+  // Regression for device pass F6 (2026-10-03): Safe showed a key promise and
+  // a disabled account row pointing at a key field it does not have.
+  testWidgets('an edition without credentials promises no key or explicit '
+      'content', (WidgetTester tester) async {
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(),
+      edition: BuildEdition.safe,
+    );
+
+    expect(find.textContaining('Connect your key'), findsNothing);
+    expect(
+      find.text('Your username opens your public collections.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('an edition without credentials offers only the device source', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSettings(
+      tester,
+      FakeSettingsRepository(),
+      edition: BuildEdition.play,
+    );
+
+    expect(
+      find.text("Add an API key to use your account's settings."),
+      findsNothing,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (Widget widget) =>
+            widget is RadioListTile<BrowseDefaultsSource> &&
+            widget.value == BrowseDefaultsSource.account,
+      ),
+      findsNothing,
+    );
+    expect(find.text('This device'), findsOneWidget);
+  });
+
   });
 
   testWidgets('the device row says how to save one before one exists', (
@@ -879,6 +921,7 @@ Future<void> _pumpSettings(
           source ?? FakeWallpaperSource(),
         ),
         appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
+  BuildEdition edition = BuildEdition.full,
         imageStoreProvider.overrideWithValue(imageStore ?? FakeImageStore()),
       ],
       child: MaterialApp(
@@ -903,4 +946,5 @@ Future<void> _pumpSettings(
     ),
   );
   await tester.pumpAndSettle();
+        buildEditionProvider.overrideWithValue(edition),
 }

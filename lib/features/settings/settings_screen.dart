@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/build_edition.dart';
+import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
@@ -50,7 +51,10 @@ class SettingsScreen extends ConsumerWidget {
         ),
       ),
       body: settings.when(
-        data: (StorageSettings value) => _SettingsList(settings: value),
+        data: (StorageSettings value) => _SettingsList(
+          settings: value,
+          edition: ref.watch(buildEditionProvider),
+        ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stackTrace) =>
             Center(child: Text(l10n.errorUnexpected)),
@@ -61,9 +65,13 @@ class SettingsScreen extends ConsumerWidget {
 
 /// Every settings group, in screen order.
 class _SettingsList extends StatelessWidget {
-  const _SettingsList({required this.settings});
+  const _SettingsList({required this.settings, required this.edition});
 
   final StorageSettings settings;
+
+  /// For copy only; the key section itself stays on the `buildEdition` const
+  /// so a clean release compiles it out.
+  final BuildEdition edition;
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +128,11 @@ class _SettingsList extends StatelessWidget {
     return _SettingsGroup(
       icon: Icons.key_outlined,
       title: l10n.settingsAccountSection,
-      description: l10n.settingsAccountDescription,
+      // Without credentials there is no key to connect and no explicit content
+      // to unlock; promising both was device pass F6 (2026-10-03).
+      description: edition.allowsWallhavenCredentials
+          ? l10n.settingsAccountDescription
+          : l10n.settingsAccountDescriptionNoKey,
       children: <Widget>[
         if (buildEdition.allowsWallhavenCredentials) const ApiKeySection(),
         const CollectionsSection(),
