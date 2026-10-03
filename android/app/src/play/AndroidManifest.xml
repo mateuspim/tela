@@ -1,9 +1,0 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-    <!-- Play has no private library or app lock, so it requests no biometric
-         capability. This removes the permission from the merged manifest, not
-         merely from a screen the user cannot reach. -->
-    <uses-permission
-        android:name="android.permission.USE_BIOMETRIC"
-        tools:node="remove" />
-</manifest>

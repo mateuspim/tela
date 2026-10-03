@@ -40,7 +40,11 @@ enum BuildEdition {
   /// Whether requests may reach unrestricted konachan.com.
   bool get allowsUnrestrictedKonachan => this == BuildEdition.full;
 
-  /// Whether explicit purity and the private-content surfaces are present.
+  /// Whether explicit purity is present.
+  ///
+  /// Only the purity: the private library and its app-lock ship in every
+  /// edition (device pass F8, 2026-10-03), because the private tier is a
+  /// destination for any purity, not a place reserved for explicit files.
   bool get allowsExplicitContent =>
       this == BuildEdition.wallhaven || this == BuildEdition.full;
 

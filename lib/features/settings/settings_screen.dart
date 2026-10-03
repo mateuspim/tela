@@ -241,9 +241,6 @@ class _SettingsList extends StatelessWidget {
   }
 
   Widget _privacyGroup(AppLocalizations l10n) {
-    if (!buildEdition.allowsExplicitContent) {
-      return const SizedBox.shrink();
-    }
     return _SettingsGroup(
       icon: Icons.shield_outlined,
       title: l10n.settingsPrivacySection,
@@ -262,7 +259,9 @@ class _SettingsList extends StatelessWidget {
         const AppLockSwitch(),
         // Beside the app-lock deliberately: both govern what may leave the
         // private library, and someone weighing one wants to see the other.
-        const BeamExplicitSwitch(),
+        // Edition-gated where the group is not: without explicit purity there
+        // is nothing for it to release.
+        if (buildEdition.allowsExplicitContent) const BeamExplicitSwitch(),
       ],
     );
   }

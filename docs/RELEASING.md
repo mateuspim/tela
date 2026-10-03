@@ -50,9 +50,9 @@ certificate of the app already on the device with the one it built and refuses
 a mismatch rather than install it — never uninstall to get past that.
 
 The Play artifact is checked after compilation with `tool/audit-play-apk`. The
-gate verifies its application id, absence of biometric permission, and absence
-of Konachan endpoints or the Wallhaven secure-storage key in AOT code. Treat a
-failure as a product-boundary regression, not as an ignorable string warning.
+gate verifies its application id and the absence of Konachan endpoints or the
+Wallhaven secure-storage key in AOT code. Treat a failure as a product-boundary
+regression, not as an ignorable string warning.
 
 ## Git flow
 

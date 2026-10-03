@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Fail closed when a supposedly clean Play artifact carries a forbidden network
-# endpoint, credential key, package identity, or biometric permission.
+# endpoint, credential key, or package identity. USE_BIOMETRIC is no longer
+# forbidden: every edition has the private library and its app-lock, and Play
+# lists it as a normal permission needing no declaration.
 set -euo pipefail
 
 apk="${1:-build/app/outputs/flutter-apk/app-play-release.apk}"
@@ -29,12 +31,6 @@ application_id="$("$analyzer" manifest application-id "$apk")"
   echo "Play APK has application id $application_id" >&2
   exit 1
 }
-
-permissions="$("$analyzer" manifest permissions "$apk")"
-if grep -q 'USE_BIOMETRIC' <<< "$permissions"; then
-  echo "Play APK still requests USE_BIOMETRIC" >&2
-  exit 1
-fi
 
 compiled_strings="$(mktemp)"
 trap 'rm -f "$compiled_strings"' EXIT

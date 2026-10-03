@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:tela/app/build_edition.dart';
 import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/copy_wallpaper_action.dart';
 import 'package:tela/app/delete_download_action.dart';
@@ -373,8 +372,7 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
         // fetched once on the way out.
         _beamButton(l10n, downloaded),
         _downloadButton(l10n),
-        if (buildEdition.allowsExplicitContent && downloaded != null)
-          _moveToPrivateButton(l10n, downloaded),
+        if (downloaded != null) _moveToPrivateButton(l10n, downloaded),
         if (downloaded != null) _deleteButton(l10n, downloaded),
       ],
     );

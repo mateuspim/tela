@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:tela/app/build_edition.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
@@ -85,15 +84,16 @@ class LibraryScreen extends ConsumerWidget {
           // because the private tier genuinely is the third download
           // destination — explicit downloads land there — and it keeps its
           // plain locked row rather than earning a plaque of its own.
-          if (buildEdition.allowsExplicitContent) ...<Widget>[
-            const SizedBox(height: 20),
-            LibraryDestinationTile(
-              icon: Icons.lock_outline,
-              title: l10n.privateLibraryTitle,
-              subtitle: l10n.privateLibraryOpenDetail,
-              routeName: TelaRoutes.privateLibraryName,
-            ),
-          ],
+          // In every edition (device pass F8, 2026-10-03): the private tier is
+          // offered as a destination for any purity, so its door must exist
+          // wherever that offer does.
+          const SizedBox(height: 20),
+          LibraryDestinationTile(
+            icon: Icons.lock_outline,
+            title: l10n.privateLibraryTitle,
+            subtitle: l10n.privateLibraryOpenDetail,
+            routeName: TelaRoutes.privateLibraryName,
+          ),
           const LibraryTagShelf(),
           Expanded(
             child: SelectionShelfScope(
