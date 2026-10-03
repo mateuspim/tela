@@ -20,7 +20,7 @@ void main() {
     );
 
     expect(find.text('Download all from #anime?'), findsOne);
-    expect(find.textContaining('12431 wallpapers'), findsOne);
+    expect(find.textContaining('12,431 wallpapers'), findsOne);
     expect(find.textContaining('50.3 GB'), findsOne);
   });
 
