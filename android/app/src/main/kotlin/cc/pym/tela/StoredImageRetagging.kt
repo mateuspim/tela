@@ -79,8 +79,10 @@ internal class StoredImageRetagging(private val context: Context) {
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.RELATIVE_PATH, TagFolders.galleryPath(tag))
         }
+        val from = EmptyTagFolders.galleryTagOf(context, location)
         val updated = context.contentResolver.update(location, values, null, null)
         if (updated <= 0) return imageStoreFailure("unavailable")
+        EmptyTagFolders.pruneGalleryTags(context, listOfNotNull(from))
         return moved(location)
     }
 

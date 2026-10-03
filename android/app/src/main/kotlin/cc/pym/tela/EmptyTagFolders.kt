@@ -2,7 +2,10 @@ package cc.pym.tela
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
+import android.os.storage.StorageManager
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import java.io.File
 
 /**
@@ -17,6 +20,8 @@ import java.io.File
  * ```kotlin
  * EmptyTagFolders.pruneAfterPrivate(context, deletedFile)
  * EmptyTagFolders.pruneAfterDocument(context, deletedDocument)
+ * val tag = EmptyTagFolders.galleryTagOf(context, row)  // before the delete
+ * EmptyTagFolders.pruneGalleryTags(context, listOfNotNull(tag))
  * ```
  */
 internal object EmptyTagFolders {
@@ -93,6 +98,69 @@ internal object EmptyTagFolders {
         val parent = TreeLocation.parse(parentId) ?: return null
         if (!isTagFolder(tree, parent)) return null
         return DocumentsContract.buildDocumentUriUsingTree(document, parentId)
+    }
+
+    /**
+     * The gallery tag [location] is filed under, or null when it sits loose in
+     * `Pictures/tela` or its row cannot be read.
+     *
+     * Asked **before** a delete or retag: afterwards the row that knew its
+     * folder is gone or already points somewhere else.
+     */
+    fun galleryTagOf(context: Context, location: Uri): String? {
+        val projection = arrayOf(MediaStore.MediaColumns.RELATIVE_PATH)
+        val relativePath = try {
+            context.contentResolver.query(location, projection, null, null, null)?.use {
+                if (it.moveToFirst()) it.getString(0) else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+        return relativePath?.let(::galleryTagIn)
+    }
+
+    /**
+     * The tag a MediaStore `RELATIVE_PATH` names, or null for anything but a
+     * direct child of `Pictures/tela`.
+     *
+     * ```kotlin
+     * galleryTagIn("Pictures/tela/anime girls/")  // "anime girls"
+     * galleryTagIn("Pictures/tela/")              // null
+     * ```
+     */
+    fun galleryTagIn(relativePath: String): String? {
+        val parent = "${TreeLocation.GALLERY_FOLDER_PATH}/"
+        val path = relativePath.trimEnd('/')
+        if (!path.startsWith(parent, ignoreCase = true)) return null
+        val tag = path.substring(parent.length)
+        return tag.takeIf { it.isNotEmpty() && '/' !in it && !it.startsWith(".") }
+    }
+
+    /**
+     * Removes each gallery tag folder in [tags] that is now empty.
+     *
+     * MediaStore deletes and moves rows, never the folders they leave — the
+     * gallery half of F9. From API 30 scoped storage lets an app remove an empty
+     * directory under a standard one such as `Pictures`; before that the call
+     * is refused and the folder stays, as it always did.
+     */
+    fun pruneGalleryTags(context: Context, tags: Collection<String>) {
+        if (tags.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val storage = context.getSystemService(StorageManager::class.java) ?: return
+        val root = storage.primaryStorageVolume.directory ?: return
+        pruneGalleryTagsUnder(root, tags)
+    }
+
+    /**
+     * [pruneGalleryTags] against an explicit shared-storage [root].
+     *
+     * A plain `rmdir`, which is the whole safety argument: it refuses a folder
+     * that still holds anything — a wallpaper not deleted yet, or a file
+     * another app put there — so it can only ever take an empty one.
+     */
+    internal fun pruneGalleryTagsUnder(root: File, tags: Collection<String>) {
+        val gallery = File(root, TreeLocation.GALLERY_FOLDER_PATH)
+        tags.toSet().forEach { tag -> File(gallery, tag).delete() }
     }
 
     private fun holdsOnlyMarker(context: Context, folder: Uri): Boolean =
