@@ -76,6 +76,25 @@ class DownloadFolderDescribingTest {
         assertEquals("tela", TreeLocation.parse("primary:")?.telaFolderPath)
     }
 
+    // Regression for device pass F4 (2026-10-03): granting a folder named
+    // `tela` put every download in `tela/tela/`.
+    @Test
+    fun `a granted folder already called tela is the tela folder itself`() {
+        assertEquals("tela", TreeLocation.parse("primary:tela")?.telaFolderPath)
+        assertEquals("Wallpapers/Tela", TreeLocation.parse("1A2B-3C4D:Wallpapers/Tela")?.telaFolderPath)
+    }
+
+    @Test
+    fun `only a whole folder name counts as tela`() {
+        assertEquals("telas/tela", TreeLocation.parse("primary:telas")?.telaFolderPath)
+        assertEquals("tela/x/tela", TreeLocation.parse("primary:tela/x")?.telaFolderPath)
+    }
+
+    @Test
+    fun `granting the gallery's own tela folder is still an overlap`() {
+        assertTrue(TreeLocation.parse("primary:Pictures/tela")!!.overlapsGallery)
+    }
+
     @Test
     fun `an id starting with the separator has no volume to name`() {
         // Guards the `<= 0` boundary: substring(0, 0) would otherwise hand back

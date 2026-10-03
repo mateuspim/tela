@@ -41,9 +41,19 @@ internal object SafDocuments {
     /** The marker this tier writes, and the one file a listing must never show. */
     private const val NO_MEDIA_MARKER = ".nomedia"
 
-    /** tela's own folder inside [tree], created on first use. */
-    fun telaFolderIn(context: Context, tree: Uri): Uri? =
-        folderIn(context, tree, TreeLocation.TELA_FOLDER)
+    /**
+     * tela's own folder inside [tree], created on first use — or [tree] itself
+     * when the user granted a folder already called `tela` (device pass F4).
+     */
+    fun telaFolderIn(context: Context, tree: Uri): Uri? {
+        if (TreeLocation.of(tree)?.isTelaFolder != true) {
+            return folderIn(context, tree, TreeLocation.TELA_FOLDER)
+        }
+        // A build before F4 nested `tela/tela/` here. Keep that layout where it
+        // exists, or every download already in it is re-read as a tag folder
+        // called "tela" and the next download of one lands beside it twice.
+        return existingFolderIn(context, tree, TreeLocation.TELA_FOLDER) ?: rootOf(tree)
+    }
 
     /**
      * The hidden folder explicit images go to inside [tree], created on first
@@ -61,12 +71,17 @@ internal object SafDocuments {
 
     /** A directly-named directory inside [tree], created on first use. */
     private fun folderIn(context: Context, tree: Uri, name: String): Uri? {
+        val root = rootOf(tree) ?: return null
+        return findOrCreateDirectory(context, root, name)
+    }
+
+    /** [tree]'s own top document, or null for a tree from another provider. */
+    private fun rootOf(tree: Uri): Uri? {
         if (tree.authority != EXTERNAL_STORAGE_PROVIDER) return null
-        val root = DocumentsContract.buildDocumentUriUsingTree(
+        return DocumentsContract.buildDocumentUriUsingTree(
             tree,
             DocumentsContract.getTreeDocumentId(tree),
         )
-        return findOrCreateDirectory(context, root, name)
     }
 
     /**
@@ -201,11 +216,7 @@ internal object SafDocuments {
 
     /** The child of [parent] called [name], **only if it already exists**. */
     fun existingFolderIn(context: Context, tree: Uri, name: String): Uri? {
-        if (tree.authority != EXTERNAL_STORAGE_PROVIDER) return null
-        val root = DocumentsContract.buildDocumentUriUsingTree(
-            tree,
-            DocumentsContract.getTreeDocumentId(tree),
-        )
+        val root = rootOf(tree) ?: return null
         return findChild(context, root, name)
     }
 
@@ -213,10 +224,18 @@ internal object SafDocuments {
     private fun childIds(context: Context, parent: Uri): Set<String> =
         childrenOf(context, parent).mapTo(mutableSetOf()) { it.id }
 
-    /** The subdirectories of [parent], as document URIs. */
+    /**
+     * The tag folders of [parent], as document URIs.
+     *
+     * Hidden directories are skipped: no tag folder can be one
+     * ([TagFolders.isValid]), and once a granted `tela` folder is the tela
+     * folder itself (F4) the `.tela` vault is a child of it — a walk that
+     * stepped in could move or delete an explicit file on a safe one's behalf.
+     */
     private fun directoriesIn(context: Context, parent: Uri): List<Uri> {
         return childrenOf(context, parent)
             .filter { it.mimeType == DocumentsContract.Document.MIME_TYPE_DIR }
+            .filterNot { it.name.startsWith(".") }
             .map { DocumentsContract.buildDocumentUriUsingTree(parent, it.id) }
     }
 
