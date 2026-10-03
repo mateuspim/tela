@@ -81,6 +81,11 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+      # The contract test reaches the router, and through it every screen's
+      # strings; the l10n output is not committed, so it is generated here as
+      # the verify job does.
+      - name: Generate localization files
+        run: flutter gen-l10n
       - name: Verify ${{ matrix.edition }} compile-time contract
         run: >-
           flutter test test/app/build_edition_runtime_test.dart
