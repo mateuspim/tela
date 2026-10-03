@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_destination_card.dart';
 import 'package:tela/core/ui/download_destination_choice.dart';
+import 'package:tela/core/ui/download_destination_layout.dart';
 import 'package:tela/core/ui/download_tag_field.dart';
 import 'package:tela/core/ui/purity_alert_tint.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
@@ -300,43 +301,47 @@ class _DestinationDialogState extends State<_DestinationDialog> {
     return l10n.batchDownloadChooseTier(count);
   }
 
-  /// Caps the measure at [_maxWidth] and scrolls rather than clipping, since an
-  /// `AlertDialog` does not cap its own width and would stretch on a tablet.
   Widget _content(BuildContext context, AppLocalizations l10n) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: _maxWidth),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 8,
-          children: <Widget>[
-            ?_purityLine(context, l10n),
-            ?_pinLine(context, l10n),
-            for (final StorageTier tier in widget.options)
-              _destination(context, tier),
-            ?_alwaysAction(context, l10n),
-            const Divider(height: 8),
-            DownloadTagField(
-              selected: _tag,
-              known: widget.knownTags,
-              suggestions: _suggestions,
-              selectionSize: widget.selectionSize,
-              loadingSuggestions: _readingTags,
-              onChanged: (TagFolder? tag) => setState(() {
-                _untouched = false;
-                _tag = tag;
-                // Remembering nothing is not a state worth offering: the switch
-                // means "offer this next time", and there is no this.
-                if (tag == null) _keepTag = false;
-              }),
-            ),
-            ?_keepTagSwitch(context, l10n),
-            _keepSendingSwitch(context, l10n),
-          ],
-        ),
-      ),
+    return DownloadDestinationLayout(
+      destinations: _destinations(context, l10n),
+      options: _options(context, l10n),
     );
   }
+
+  /// Where the file goes: the warnings that qualify the choice, then the cards.
+  List<Widget> _destinations(BuildContext context, AppLocalizations l10n) {
+    return <Widget>[
+      ?_purityLine(context, l10n),
+      ?_pinLine(context, l10n),
+      for (final StorageTier tier in widget.options)
+        _destination(context, tier),
+      ?_alwaysAction(context, l10n),
+    ];
+  }
+
+  /// How it is filed and remembered: the tag, and the two "keep" switches.
+  List<Widget> _options(BuildContext context, AppLocalizations l10n) {
+    return <Widget>[
+      DownloadTagField(
+        selected: _tag,
+        known: widget.knownTags,
+        suggestions: _suggestions,
+        selectionSize: widget.selectionSize,
+        loadingSuggestions: _readingTags,
+        onChanged: _changeTag,
+      ),
+      ?_keepTagSwitch(context, l10n),
+      _keepSendingSwitch(context, l10n),
+    ];
+  }
+
+  void _changeTag(TagFolder? tag) => setState(() {
+    _untouched = false;
+    _tag = tag;
+    // Remembering nothing is not a state worth offering: the switch means
+    // "offer this next time", and there is no this.
+    if (tag == null) _keepTag = false;
+  });
 
   /// The destination a run has been going to, when that run is long enough to
   /// suggest and is *not* already where a plain tap routes — null otherwise.
@@ -439,9 +444,6 @@ class _DestinationDialogState extends State<_DestinationDialog> {
     );
   }
 
-  /// The "Keep sending here" toggle. When on, tapping a destination pins it for
-  /// every later download; when off, the tap is a one-off and leaves any pin as
-  /// it is (Stop clears an existing one).
   /// The tag's "keep offering this" switch, or nothing when no tag is chosen.
   ///
   /// Absent rather than disabled: a switch for remembering nothing has no state
@@ -457,6 +459,9 @@ class _DestinationDialogState extends State<_DestinationDialog> {
     );
   }
 
+  /// The "Keep sending here" toggle. When on, tapping a destination pins it for
+  /// every later download; when off, the tap is a one-off and leaves any pin as
+  /// it is (Stop clears an existing one).
   Widget _keepSendingSwitch(BuildContext context, AppLocalizations l10n) {
     return SwitchListTile.adaptive(
       value: _keepSending,
@@ -479,8 +484,4 @@ class _DestinationDialogState extends State<_DestinationDialog> {
       child: Text(l10n.downloadPinStop),
     );
   }
-
-  /// Wide enough for the longest destination detail on two lines, narrow enough
-  /// that the cards still read as a stack of choices on a tablet.
-  static const double _maxWidth = 360;
 }
