@@ -454,11 +454,13 @@ void main() {
     );
   });
 
-  test('the top wash still covers the controls, not just the edge', () {
-    // The device found this against a genuinely pale wallpaper: the white bar
-    // controls measured 2.9:1, over the 3:1 floor for UI graphics by nothing.
-    // A straight ramp spends its darkness above the controls where there is
-    // nothing to read, so the wash holds full strength down past them instead.
+  test('the top wash holds over the status bar, not just the edge', () {
+    // The device found this against a genuinely pale wallpaper: white chrome
+    // measured 2.9:1, over the 3:1 floor for UI graphics by nothing. A
+    // straight ramp spends its darkness above what there is to read, so the
+    // wash holds full strength down past it instead. Since the bar's controls
+    // moved into PhotoCapsules (2026-10-05) what it holds over is the status
+    // bar's clock alone.
     expect(
       DetailEditorialBody.topScrimAlphaAt(0),
       DetailEditorialBody.topScrimOpacity,

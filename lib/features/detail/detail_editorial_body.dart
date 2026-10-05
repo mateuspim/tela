@@ -205,13 +205,19 @@ class DetailEditorialBody extends StatefulWidget {
   /// and it is *not* the frosted bar A2 rejected: nothing is blurred, nothing
   /// shows a wall of thumbnails through itself, and there is exactly one image
   /// underneath rather than sixty.
-  static const double topScrimHeight = 148;
+  ///
+  /// Shortened from 148 once the bar's controls moved into `PhotoCapsule`s
+  /// (2026-10-05): they carry their own scrim, so the wash no longer has to
+  /// reach down past them — see [topScrimOpacity].
+  static const double topScrimHeight = 112;
 
   /// How far down the wash the app bar's own controls sit.
   ///
-  /// The status bar plus half a toolbar: where the back arrow and the actions
-  /// are actually drawn, which is the only place this wash has to work.
-  static const double topScrimControlRow = 80;
+  /// It was the status bar plus half a toolbar — where the bare back arrow
+  /// and actions were drawn. Those sit in capsules now, so the wash holds
+  /// only over the status bar, whose white clock still has nothing else
+  /// behind it.
+  static const double topScrimControlRow = 40;
 
   /// The wash's opacity at the top edge and where it finally reaches zero.
   ///
@@ -223,12 +229,18 @@ class DetailEditorialBody extends StatefulWidget {
   /// left the white controls at **2.9:1** — over the 3:1 floor for UI graphics
   /// by nothing. Holding the wash rather than steepening it buys the contrast
   /// without making the top edge of every wallpaper darker than it already is.
-  static const double topScrimOpacity = 0.6;
+  ///
+  /// **Lightened from 0.6 to 0.45 (owner, 2026-10-05)**, once the controls
+  /// moved into `PhotoCapsule`s that bring their own contrast: 0.6 was muddying
+  /// the top of every pale wallpaper for icons that no longer needed it. What
+  /// is left is for the system status bar — white text over a near-white sky
+  /// at 0.45 black still lands near 3.7:1, over the 3:1 floor.
+  static const double topScrimOpacity = 0.45;
 
   /// The wash's opacity [dip] logical pixels below the top of the screen.
   ///
   /// ```dart
-  /// DetailEditorialBody.topScrimAlphaAt(0); // 0.6, full strength
+  /// DetailEditorialBody.topScrimAlphaAt(0); // 0.45, full strength
   /// ```
   static double topScrimAlphaAt(double dip) {
     if (dip <= topScrimControlRow) return topScrimOpacity;
