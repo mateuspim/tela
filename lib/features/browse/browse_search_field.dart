@@ -34,6 +34,12 @@ class _BrowseSearchFieldState extends ConsumerState<BrowseSearchField> {
       controller: _entry,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
+        // Unfilled and borderless: the FloatingCapsule around it is the
+        // field's surface, and a second fill inside it reads as a box in a box.
+        filled: false,
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
         prefixIcon: const Icon(Icons.search),
         hintText: l10n.browseSearchHint,
         // Inside the field rather than under it: the field is mostly empty

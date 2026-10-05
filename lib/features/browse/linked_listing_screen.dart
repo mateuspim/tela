@@ -7,6 +7,7 @@ import 'package:tela/app/listing_download_queueing.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
 import 'package:tela/core/ui/selection_shelf.dart';
@@ -118,26 +119,30 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
         appBar: GradientAppBar(
           title: _title(context),
           actions: <Widget>[
-            IconButton(
-              icon: const Icon(Icons.download_for_offline_outlined),
-              tooltip: AppLocalizations.of(context).listingDownloadAll,
-              onPressed: () => unawaited(_downloadWholeListing(query)),
-            ),
-            // Only an uploader has collections to offer; a tag and a colour
-            // are not accounts. Gated on the source too — a booru has no such
-            // thing (`SourceCapabilities.browsesCollections`).
-            if (_collectionsOwner case final String owner)
-              IconButton(
-                icon: const Icon(Icons.collections_bookmark_outlined),
-                tooltip: AppLocalizations.of(context).collectionsOpen,
-                onPressed: () => context.pushNamed(
-                  TelaRoutes.collectionsName,
-                  extra: CollectionsArgs(username: owner, seed: _filters),
+            CapsuleActionCluster(
+              children: <Widget>[
+                IconButton(
+                  icon: const Icon(Icons.download_for_offline_outlined),
+                  tooltip: AppLocalizations.of(context).listingDownloadAll,
+                  onPressed: () => unawaited(_downloadWholeListing(query)),
                 ),
-              ),
-            const SelectModeButton(),
-            BrowseFilterButton(filters: _filters, scope: this),
-            const SizedBox(width: 8),
+                // Only an uploader has collections to offer; a tag and a
+                // colour are not accounts. Gated on the source too — a booru
+                // has no such thing (`SourceCapabilities.browsesCollections`).
+                if (_collectionsOwner case final String owner)
+                  IconButton(
+                    icon: const Icon(Icons.collections_bookmark_outlined),
+                    tooltip: AppLocalizations.of(context).collectionsOpen,
+                    onPressed: () => context.pushNamed(
+                      TelaRoutes.collectionsName,
+                      extra: CollectionsArgs(username: owner, seed: _filters),
+                    ),
+                  ),
+                const SelectModeButton(),
+                BrowseFilterButton(filters: _filters, scope: this),
+              ],
+            ),
+            const SizedBox(width: 16),
           ],
         ),
         body: WallpaperGrid(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/tela_mark.dart';
 import 'package:tela/core/ui/tela_wordmark.dart';
 
@@ -9,6 +10,11 @@ import 'package:tela/core/ui/tela_wordmark.dart';
 /// Compact screens keep destinations thumb-reachable at the bottom. Wider
 /// screens move the same destinations into a rail so the wallpaper canvas can
 /// use the extra width instead of growing an oversized bottom bar.
+///
+/// Both float: the bar is a pill and the rail a rounded panel, each a
+/// [FloatingCapsule] inset on the opaque surface. The wall stops at that
+/// surface — nothing scrolls under the navigation (see [FloatingCapsule] for
+/// why tela's chrome is never glass).
 class TelaShell extends StatelessWidget {
   /// Creates the primary navigation shell.
   const TelaShell({required this.navigationShell, super.key});
@@ -34,10 +40,18 @@ class TelaShell extends StatelessWidget {
   Widget _compactFrame(BuildContext context) {
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
-        destinations: _bottomDestinations(context),
-        onDestinationSelected: _openDestination,
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+        child: FloatingCapsule(
+          child: NavigationBar(
+            backgroundColor: Colors.transparent,
+            height: 64,
+            selectedIndex: navigationShell.currentIndex,
+            destinations: _bottomDestinations(context),
+            onDestinationSelected: _openDestination,
+          ),
+        ),
       ),
     );
   }
@@ -46,17 +60,7 @@ class TelaShell extends StatelessWidget {
     return Scaffold(
       body: Row(
         children: <Widget>[
-          NavigationRail(
-            selectedIndex: navigationShell.currentIndex,
-            labelType: NavigationRailLabelType.all,
-            leading: const Padding(
-              padding: EdgeInsets.only(top: 8, bottom: 28),
-              child: _RailBrand(),
-            ),
-            destinations: _railDestinations(context),
-            onDestinationSelected: _openDestination,
-          ),
-          const VerticalDivider(width: 1),
+          _floatingRail(context),
           // A semantics boundary around the branch, or the rail vanishes for
           // TalkBack: every page route carries a ModalBarrier, whose
           // BlockSemantics drops all nodes painted before it up to the nearest
@@ -67,6 +71,27 @@ class TelaShell extends StatelessWidget {
             child: Semantics(container: true, child: navigationShell),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _floatingRail(BuildContext context) {
+    return SafeArea(
+      right: false,
+      minimum: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+      child: FloatingCapsule(
+        radius: 28,
+        child: NavigationRail(
+          backgroundColor: Colors.transparent,
+          selectedIndex: navigationShell.currentIndex,
+          labelType: NavigationRailLabelType.all,
+          leading: const Padding(
+            padding: EdgeInsets.only(top: 12, bottom: 28),
+            child: _RailBrand(),
+          ),
+          destinations: _railDestinations(context),
+          onDestinationSelected: _openDestination,
+        ),
       ),
     );
   }

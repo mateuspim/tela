@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/browse_filter_text.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
 import 'package:tela/core/ui/selection_shelf.dart';
@@ -83,15 +84,19 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
         appBar: GradientAppBar(
           toolbarHeight: 72,
           titleSpacing: 16,
-          title: const BrowseSearchField(),
+          title: const FloatingCapsule(child: BrowseSearchField()),
           actions: <Widget>[
-            const BrowseSourceButton(),
-            const SelectModeButton(),
-            BrowseFilterButton(
-              filters: query,
-              scope: ref.read(browseQueryProvider.notifier),
+            CapsuleActionCluster(
+              children: <Widget>[
+                const BrowseSourceButton(),
+                const SelectModeButton(),
+                BrowseFilterButton(
+                  filters: query,
+                  scope: ref.read(browseQueryProvider.notifier),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 16),
           ],
           bottom: _tabBar(l10n, tabs, sortings),
         ),
@@ -114,20 +119,24 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
 
   /// Scrollable, because seven sortings do not fit across a phone. Fixed tabs
   /// would shrink to fit and cut their own labels off.
-  TabBar _tabBar(
+  ///
+  /// Set on a [CapsuleTrack], so the sortings read as one segmented control
+  /// floating under the search capsule rather than loose words on the band.
+  PreferredSizeWidget _tabBar(
     AppLocalizations l10n,
     TabController tabs,
     List<Sorting> sortings,
   ) {
-    return TabBar(
-      controller: tabs,
-      isScrollable: true,
-      tabAlignment: TabAlignment.start,
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      tabs: <Widget>[
-        for (final Sorting sorting in sortings)
-          Tab(text: sortingLabel(l10n, sorting)),
-      ],
+    return CapsuleTrack(
+      child: TabBar(
+        controller: tabs,
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        tabs: <Widget>[
+          for (final Sorting sorting in sortings)
+            Tab(text: sortingLabel(l10n, sorting)),
+        ],
+      ),
     );
   }
 

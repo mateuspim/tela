@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
 import 'package:tela/core/ui/selection_shelf.dart';
@@ -98,13 +99,17 @@ class _CollectionListingScreenState
         appBar: GradientAppBar(
           title: _title(context),
           actions: <Widget>[
-            const SelectModeButton(),
-            CollectionPurityButton(
-              purity: _purity,
-              onChanged: (PurityFilter purity) =>
-                  setState(() => _purity = purity),
+            CapsuleActionCluster(
+              children: <Widget>[
+                const SelectModeButton(),
+                CollectionPurityButton(
+                  purity: _purity,
+                  onChanged: (PurityFilter purity) =>
+                      setState(() => _purity = purity),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 16),
           ],
         ),
         body: Column(
