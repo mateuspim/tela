@@ -75,23 +75,38 @@ class TelaShell extends StatelessWidget {
     );
   }
 
+  /// The rail panel, as tall as its contents and no taller.
+  ///
+  /// It ran the full height of the screen, so in tablet landscape three
+  /// destinations sat at the top of a panel that was empty below them — the
+  /// owner: *"the three buttons waste so much space on the bottom, like in
+  /// portrait it sits flush"* (2026-10-05). Portrait gets the bottom pill,
+  /// which hugs its destinations; this is the same shape turned on its side.
+  /// Top-aligned, so the brand stays level with the search row beside it.
   Widget _floatingRail(BuildContext context) {
     return SafeArea(
       right: false,
       minimum: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-      child: FloatingCapsule(
-        radius: 28,
-        child: NavigationRail(
-          backgroundColor: Colors.transparent,
-          selectedIndex: navigationShell.currentIndex,
-          labelType: NavigationRailLabelType.all,
-          leading: const Padding(
-            padding: EdgeInsets.only(top: 12, bottom: 28),
-            child: _RailBrand(),
-          ),
-          destinations: _railDestinations(context),
-          onDestinationSelected: _openDestination,
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: IntrinsicHeight(child: _railPanel(context)),
+      ),
+    );
+  }
+
+  Widget _railPanel(BuildContext context) {
+    return FloatingCapsule(
+      radius: 28,
+      child: NavigationRail(
+        backgroundColor: Colors.transparent,
+        selectedIndex: navigationShell.currentIndex,
+        labelType: NavigationRailLabelType.all,
+        leading: const Padding(
+          padding: EdgeInsets.only(top: 12, bottom: 28),
+          child: _RailBrand(),
         ),
+        destinations: _railDestinations(context),
+        onDestinationSelected: _openDestination,
       ),
     );
   }

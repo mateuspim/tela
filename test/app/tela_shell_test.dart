@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/app.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/tela_shell.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/tela_mark.dart';
 import 'package:tela/core/ui/tela_wordmark.dart';
 
@@ -49,6 +50,37 @@ void main() {
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
     expect(TelaShell.expandedNavigationWidth, 840);
+  });
+
+  testWidgets('the rail panel hugs its destinations, not the screen height', (
+    WidgetTester tester,
+  ) async {
+    // Tablet landscape: three destinations at the top of a full-height panel,
+    // empty below them (owner, 2026-10-05).
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpShell(tester);
+
+    final Rect panel = tester.getRect(
+      find
+          .ancestor(
+            of: find.byType(NavigationRail),
+            matching: find.byType(FloatingCapsule),
+          )
+          .first,
+    );
+    final Rect settings = tester.getRect(
+      find.descendant(
+        of: find.byType(NavigationRail),
+        matching: find.text('Settings'),
+      ),
+    );
+    expect(panel.height, lessThan(800 / 2));
+    expect(panel.bottom, greaterThan(settings.bottom));
+    expect(panel.bottom - settings.bottom, lessThan(48));
   });
 
   // Device pass F5 (2026-10-03): on the SM-X730 the rail's three destinations
