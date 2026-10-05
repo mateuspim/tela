@@ -132,6 +132,12 @@ Future<WallpaperQuickAction?> chooseWallpaperQuickAction(
   final bool canSelect = WallpaperSelectionScope.of(context) != null;
   return showModalBottomSheet<WallpaperQuickAction>(
     context: context,
+    // Sized to its rows, not Material's default 9/16 cap: in tablet landscape
+    // that cap cut *Open details* off at the bottom edge with nothing saying
+    // the sheet scrolled (device survey, 2026-10-05). The scroll view below
+    // still takes over where the rows outgrow the safe area.
+    isScrollControlled: true,
+    useSafeArea: true,
     builder: (BuildContext context) =>
         _QuickActionSheet(wallpaper: wallpaper, canSelect: canSelect),
   );

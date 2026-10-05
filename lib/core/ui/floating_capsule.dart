@@ -38,22 +38,13 @@ class FloatingCapsule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    final ShapeBorder shape = _shape(scheme);
-    return DecoratedBox(
-      decoration: ShapeDecoration(
-        color: capsuleFill(scheme),
-        shape: shape,
-        shadows: _shadows(scheme),
-      ),
-      // Clipped to the shape so an ink splash or a tab indicator cannot
-      // square off the rounded ends.
-      child: ClipPath(
-        clipper: ShapeBorderClipper(shape: shape),
-        child: Material(
-          type: MaterialType.transparency,
-          child: Padding(padding: padding, child: child),
-        ),
-      ),
+    return CapsuleSurface(
+      fill: capsuleFill(scheme),
+      edge: scheme.outlineVariant.withValues(alpha: .45),
+      shadows: _shadows(scheme),
+      radius: radius,
+      padding: padding,
+      child: child,
     );
   }
 
@@ -76,18 +67,6 @@ class FloatingCapsule extends StatelessWidget {
     return raised.withValues(alpha: 1);
   }
 
-  ShapeBorder _shape(ColorScheme scheme) {
-    final BorderSide edge = BorderSide(
-      color: scheme.outlineVariant.withValues(alpha: .45),
-    );
-    final double? r = radius;
-    if (r == null) return StadiumBorder(side: edge);
-    return RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(r),
-      side: edge,
-    );
-  }
-
   /// A low, wide shadow: lift without a hard drop edge. Weaker in light mode,
   /// where a dark shadow on a pale band reads as dirt.
   List<BoxShadow> _shadows(ColorScheme scheme) {
@@ -99,6 +78,71 @@ class FloatingCapsule extends StatelessWidget {
         offset: const Offset(0, 6),
       ),
     ];
+  }
+}
+
+/// The shape, edge, shadow and clip every tela capsule is drawn with, given
+/// its [fill] — the one part that differs between [FloatingCapsule] (opaque,
+/// on the band) and `PhotoCapsule` (a scrim, over a single photograph).
+///
+/// ```dart
+/// CapsuleSurface(fill: fill, edge: edge, shadows: shadows, child: child);
+/// ```
+class CapsuleSurface extends StatelessWidget {
+  /// Creates the surface around [child].
+  const CapsuleSurface({
+    required this.fill,
+    required this.edge,
+    required this.shadows,
+    required this.child,
+    this.radius,
+    this.padding = EdgeInsets.zero,
+    super.key,
+  });
+
+  /// The capsule's body colour.
+  final Color fill;
+
+  /// The hairline drawn around it.
+  final Color edge;
+
+  /// The lift under it.
+  final List<BoxShadow> shadows;
+
+  /// What sits in the capsule.
+  final Widget child;
+
+  /// Corner radius; null for a stadium.
+  final double? radius;
+
+  /// Space between the capsule's edge and [child].
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final ShapeBorder shape = _shape();
+    return DecoratedBox(
+      decoration: ShapeDecoration(color: fill, shape: shape, shadows: shadows),
+      // Clipped to the shape so an ink splash or a tab indicator cannot
+      // square off the rounded ends.
+      child: ClipPath(
+        clipper: ShapeBorderClipper(shape: shape),
+        child: Material(
+          type: MaterialType.transparency,
+          child: Padding(padding: padding, child: child),
+        ),
+      ),
+    );
+  }
+
+  ShapeBorder _shape() {
+    final BorderSide side = BorderSide(color: edge);
+    final double? r = radius;
+    if (r == null) return StadiumBorder(side: side);
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(r),
+      side: side,
+    );
   }
 }
 

@@ -24,13 +24,19 @@ class SheetHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     // Left inset matches a ListTile's own content padding, so the caption's
-    // edge lines up with the option rows beneath it.
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Text(
-        title,
-        style: theme.textTheme.titleSmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
+    // edge lines up with the option rows beneath it. Aligned here rather than
+    // trusted to the parent: every sheet's Column centres its children by
+    // default, which shrink-wrapped the caption into the middle of the sheet
+    // (device survey, 2026-10-05).
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Text(
+          title,
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );

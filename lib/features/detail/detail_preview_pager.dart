@@ -1,15 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_route_transitions.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gallery_zoom_animator.dart';
 import 'package:tela/core/ui/gallery_zoom_controller.dart';
-import 'package:tela/core/ui/immersive_chrome_palette.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/shelf_hero_tag.dart';
 import 'package:tela/core/ui/shelf_swipe.dart';
 import 'package:tela/domain/models/wallpaper.dart';
+import 'package:tela/features/detail/detail_picture_controls.dart';
 import 'package:tela/features/detail/progressive_wallpaper_preview.dart';
 import 'package:tela/features/detail/wallpaper_immersive_session.dart';
 
@@ -133,53 +132,23 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager>
 
   @override
   Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
         _pinchablePager(),
-        Positioned(
-          // Cleared of whatever sits above the preview, because on the phone
-          // layout that is a *floating* app bar and this button would land
-          // underneath its actions — a tap on fullscreen opening the share
-          // sheet instead. `Scaffold` folds the bar's height into the body's
-          // own `MediaQuery.padding.top` when it extends behind it (see the
-          // A2 aside in HANDOFF), so reading that padding is correct in both
-          // layouts and double-counts in neither: the wide pane, whose bar
-          // reserves its own space, reports zero here.
-          top: 12 + MediaQuery.paddingOf(context).top,
-          right: 12,
-          // Sized and painted like the chrome it opens into, rather than as a
-          // default tonal button: it sits over an arbitrary wallpaper, so it
-          // needs the scrim its neighbours in the viewer get, and 48dp is the
-          // target size the viewer's own controls are already held to.
-          child: IconButton.filledTonal(
-            onPressed: _enterFullscreen,
-            tooltip: l10n.detailEnterFullscreen,
-            style: IconButton.styleFrom(
-              backgroundColor: ImmersiveChromePalette.of(context).scrim,
-              foregroundColor: ImmersiveChromePalette.of(context).ink,
-            ),
-            constraints: const BoxConstraints.tightFor(width: 48, height: 48),
-            icon: const Icon(Icons.fullscreen),
-          ),
+        // Fullscreen and the page arrows, which follow the facts sheet rather
+        // than the picture: see DetailPictureControls. The fullscreen button
+        // is still cleared of the floating bar's actions — a tap on it once
+        // landed on share — by the same `padding.top` reading, now there.
+        DetailPictureControls(
+          onFullscreen: _enterFullscreen,
+          onPrevious: _gallery.canSelectPrevious
+              ? () => _turnTo(_selectedIndex - 1)
+              : null,
+          onNext: _gallery.canSelectNext
+              ? () => _turnTo(_selectedIndex + 1)
+              : null,
         ),
-        if (_gallery.canSelectPrevious)
-          _pageChevron(
-            key: const Key('detail-previous'),
-            alignment: Alignment.centerLeft,
-            icon: Icons.chevron_left,
-            tooltip: l10n.galleryPrevious,
-            onPressed: () => _turnTo(_selectedIndex - 1),
-          ),
-        if (_gallery.canSelectNext)
-          _pageChevron(
-            key: const Key('detail-next'),
-            alignment: Alignment.centerRight,
-            icon: Icons.chevron_right,
-            tooltip: l10n.galleryNext,
-            onPressed: () => _turnTo(_selectedIndex + 1),
-          ),
       ],
     );
   }
@@ -273,27 +242,6 @@ class _DetailPreviewPagerState extends State<DetailPreviewPager>
   void _toggleDoubleTapZoom() {
     _zoomAnimator.toggleDoubleTapZoom(
       animate: !MediaQuery.disableAnimationsOf(context),
-    );
-  }
-
-  Widget _pageChevron({
-    required Key key,
-    required Alignment alignment,
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onPressed,
-  }) {
-    return Align(
-      alignment: alignment,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: IconButton.filledTonal(
-          key: key,
-          onPressed: onPressed,
-          tooltip: tooltip,
-          icon: Icon(icon),
-        ),
-      ),
     );
   }
 

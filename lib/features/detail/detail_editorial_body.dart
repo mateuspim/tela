@@ -4,6 +4,7 @@ import 'dart:ui' show lerpDouble;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:tela/core/ui/backdrop_drift_scope.dart';
+import 'package:tela/features/detail/detail_sheet_progress.dart';
 
 /// Detail, at every width: the wallpaper full-bleed, its facts on a sheet.
 ///
@@ -332,6 +333,10 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
   /// find. Re-tune it from a device or not at all.
   final ValueNotifier<double> _lift = ValueNotifier<double>(0);
 
+  /// How far the sheet has travelled from the peek to full, 0..1 — what the
+  /// controls over the picture fade by (see `DetailSheetProgress`).
+  final ValueNotifier<double> _risen = ValueNotifier<double>(0);
+
   /// How solid the sheet's surface is, 0..1 — see
   /// [DetailEditorialBody.surfaceAlphaAt].
   ///
@@ -349,6 +354,7 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
   void dispose() {
     _drift.dispose();
     _lift.dispose();
+    _risen.dispose();
     _surfaceAlpha.dispose();
     super.dispose();
   }
@@ -369,7 +375,8 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
     final double travel = sheet.maxExtent - sheet.minExtent;
     if (travel <= 0) return false;
     final double risen = (sheet.extent - sheet.minExtent) / travel;
-    _drift.value = -risen.clamp(0.0, 1.0);
+    _risen.value = risen.clamp(0.0, 1.0);
+    _drift.value = -_risen.value;
     _lift.value = (sheet.extent - sheet.minExtent) / 2;
     _surfaceAlpha.value = DetailEditorialBody.surfaceAlphaAt(
       extent: sheet.extent,
@@ -410,19 +417,23 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
     // meant before — what changed is the layer *behind* them.
     return BackdropDriftScope(
       drift: _drift,
-      child: NotificationListener<DraggableScrollableNotification>(
-        onNotification: _sheetDragged,
-        child: Stack(
-          children: <Widget>[
-            Positioned.fill(child: _bumped(widget.preview)),
-            const _TopScrim(),
-            Column(
-              children: <Widget>[
-                Expanded(child: _draggableSheet()),
-                _glued(_footed(context, widget.applyButton)),
-              ],
-            ),
-          ],
+      child: DetailSheetProgress(
+        lift: _lift,
+        risen: _risen,
+        child: NotificationListener<DraggableScrollableNotification>(
+          onNotification: _sheetDragged,
+          child: Stack(
+            children: <Widget>[
+              Positioned.fill(child: _bumped(widget.preview)),
+              const _TopScrim(),
+              Column(
+                children: <Widget>[
+                  Expanded(child: _draggableSheet()),
+                  _glued(_footed(context, widget.applyButton)),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
