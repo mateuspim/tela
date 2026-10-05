@@ -1,5 +1,6 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/theme.dart';
 
@@ -37,10 +38,11 @@ void main() {
         final Color card = theme.cardTheme.color!;
         final Color sheet = theme.bottomSheetTheme.backgroundColor!;
         final Color dialog = theme.dialogTheme.backgroundColor!;
-        final bool dark = brightness == Brightness.dark;
-        bool above(Color a, Color b) => dark
-            ? a.computeLuminance() > b.computeLuminance()
-            : a.computeLuminance() < b.computeLuminance();
+        // Lighter in both themes — the direction the capsules go. Light-mode
+        // cards used to come out darker than their sheet (device check,
+        // 2026-10-05).
+        bool above(Color a, Color b) =>
+            a.computeLuminance() > b.computeLuminance();
 
         expect(above(card, sheet), isTrue);
         expect(above(card, dialog), isTrue);
@@ -71,6 +73,22 @@ void main() {
       final OutlinedBorder shape = chip.shape! as OutlinedBorder;
       expect(shape, isA<StadiumBorder>());
       expect(shape.side, isNot(BorderSide.none));
+    });
+
+    test('system bar icons contrast with the surface; bars transparent', () {
+      // White clock on the light band, and a dark strip behind the gesture
+      // handle, before the theme owned this (device check, 2026-10-05).
+      final SystemUiOverlayStyle light = TelaTheme.light(
+        null,
+      ).appBarTheme.systemOverlayStyle!;
+      final SystemUiOverlayStyle dark = TelaTheme.dark(
+        null,
+      ).appBarTheme.systemOverlayStyle!;
+
+      expect(light.statusBarIconBrightness, Brightness.dark);
+      expect(dark.statusBarIconBrightness, Brightness.light);
+      expect(light.systemNavigationBarColor, Colors.transparent);
+      expect(light.systemNavigationBarContrastEnforced, isFalse);
     });
 
     test('menus open under their control, rounded', () {

@@ -663,7 +663,14 @@ Set<Color?> _chromeScrims(WidgetTester tester) {
           matching: find.byType(DecoratedBox),
         ),
       )
-      .map((DecoratedBox box) => (box.decoration as BoxDecoration).color)
+      .map(
+        (DecoratedBox box) => switch (box.decoration) {
+          final BoxDecoration d => d.color,
+          // The controls ride PhotoCapsules, which paint a shape.
+          final ShapeDecoration d => d.color,
+          _ => null,
+        },
+      )
       .whereType<Color>()
       .toSet();
 }

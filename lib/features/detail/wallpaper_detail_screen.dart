@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:tela/app/copy_wallpaper_action.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
+import 'package:tela/app/theme.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
@@ -286,6 +287,8 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
       surfaceTintColor: Colors.transparent,
       scrolledUnderElevation: 0,
       foregroundColor: Colors.white,
+      // Over a photo, under the dark top scrim, in either theme: light icons.
+      systemOverlayStyle: TelaTheme.systemBarsOn(Brightness.dark),
       automaticallyImplyLeading: false,
       // Inset 12 from the edge, mirroring the actions' trailing gap.
       leadingWidth: 72,

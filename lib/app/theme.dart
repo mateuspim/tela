@@ -1,5 +1,6 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// The app's Material 3 themes, built from the device palette when there is
 /// one.
@@ -143,12 +144,12 @@ abstract final class TelaTheme {
         color: scheme.outlineVariant.withValues(alpha: .55),
         space: 1,
       ),
-      // One tone above every surface a card is placed on — the page
-      // (surface), a sheet and a dialog (both surfaceContainer, below). It was
+      // Above every surface a card is placed on — the page (surface), a sheet
+      // and a dialog (both surfaceContainer, below). It was
       // surfaceContainerLow, which inside a sheet or the download dialog sat
       // *below* its own panel and read as a hole (device survey, 2026-10-05).
       cardTheme: CardThemeData(
-        color: scheme.surfaceContainerHigh,
+        color: _raised(scheme),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
@@ -177,6 +178,7 @@ abstract final class TelaTheme {
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        systemOverlayStyle: systemBarsOn(scheme.brightness),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -213,6 +215,49 @@ abstract final class TelaTheme {
     );
   }
 
+  /// The system bars' style over a surface of [surface] brightness: icons
+  /// that contrast with it, and both bars transparent.
+  ///
+  /// Explicit because tela's bars are transparent — the gradient band, and
+  /// Detail's bar over a photo — and AppBar *guesses* the icon colour from its
+  /// background, which for transparent reads as dark: white clock on the light
+  /// band (device check, light theme, 2026-10-05). The navigation bar was left
+  /// to Android, which drew an opaque dark strip behind the gesture handle in
+  /// light mode, cutting across the rail panel.
+  ///
+  /// ```dart
+  /// AppBar(systemOverlayStyle: TelaTheme.systemBarsOn(Brightness.dark));
+  /// ```
+  static SystemUiOverlayStyle systemBarsOn(Brightness surface) {
+    final Brightness icons = surface == Brightness.dark
+        ? Brightness.light
+        : Brightness.dark;
+    return SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: icons,
+      // iOS spells it the other way round: the brightness of the bar itself.
+      statusBarBrightness: surface,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: icons,
+      systemNavigationBarContrastEnforced: false,
+    );
+  }
+
+  /// The fill for a card or a menu: lighter than the sheet, dialog or page it
+  /// sits on, in **both** themes, the same direction the floating capsules
+  /// go.
+  ///
+  /// surfaceContainerHigh alone did that in dark only. In light M3 the
+  /// container tones darken as they climb, so light-mode cards came out
+  /// darker than their sheet while the capsules beside them were white —
+  /// raised meant two opposite things on one screen (device check, light
+  /// theme, 2026-10-05).
+  static Color _raised(ColorScheme scheme) =>
+      scheme.brightness == Brightness.dark
+      ? scheme.surfaceContainerHigh
+      : scheme.surfaceContainerLowest;
+
   /// The edge every raised surface carries — capsule, card, sheet, dialog,
   /// menu — so they read as one family.
   static BorderSide _hairline(ColorScheme scheme) =>
@@ -225,7 +270,7 @@ abstract final class TelaTheme {
   /// 2026-10-05).
   static PopupMenuThemeData _popupMenuTheme(ColorScheme scheme) {
     return PopupMenuThemeData(
-      color: scheme.surfaceContainerHigh,
+      color: _raised(scheme),
       surfaceTintColor: Colors.transparent,
       position: PopupMenuPosition.under,
       shape: RoundedRectangleBorder(

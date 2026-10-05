@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
-import 'package:tela/core/ui/immersive_chrome_palette.dart';
+import 'package:tela/core/ui/photo_capsule.dart';
 
 /// Transient, accessible chrome for an immersive gallery surface.
 ///
@@ -11,8 +11,9 @@ import 'package:tela/core/ui/immersive_chrome_palette.dart';
 /// utilities are icons in the top row, the count is quiet text beside them, and
 /// everything a user came here to *do* sits in a single bar along the bottom.
 ///
-/// **Nothing here is a colour constant any more.** Scrim and ink come from
-/// [ImmersiveChromePalette], so the fullscreen surface reached from Detail
+/// **Nothing here is a colour constant any more.** The scrim comes from
+/// `ImmersiveChromePalette` through [PhotoCapsule] — the same capsule Detail's
+/// controls ride, rim and all — so the fullscreen surface reached from Detail
 /// arrives in the wallpaper's own colour instead of staying the black void it
 /// was, while the private library and the download viewer — which wrap this in
 /// no ambient theme — keep the app's neutral scheme. One code path, and the
@@ -87,7 +88,6 @@ class ImmersiveGalleryControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final ImmersiveChromePalette chrome = ImmersiveChromePalette.of(context);
     return IgnorePointer(
       ignoring: !visible,
       child: ExcludeSemantics(
@@ -102,11 +102,11 @@ class ImmersiveGalleryControls extends StatelessWidget {
               children: <Widget>[
                 Align(
                   alignment: Alignment.topCenter,
-                  child: _topRow(l10n, chrome),
+                  child: _topRow(l10n),
                 ),
                 Align(
                   alignment: Alignment.bottomCenter,
-                  child: _actionBar(l10n, chrome),
+                  child: _actionBar(l10n),
                 ),
               ],
             ),
@@ -121,45 +121,47 @@ class ImmersiveGalleryControls extends StatelessWidget {
   /// Close leads because it is the one control every viewer has and the one a
   /// user reaches for most; it keeps a filled treatment where its neighbours
   /// are quiet, so the way out stays obvious without being loud.
-  Widget _topRow(AppLocalizations l10n, ImmersiveChromePalette chrome) {
+  ///
+  /// The count and utilities share one [PhotoCapsule], the cluster Detail's
+  /// actions ride — they were a pill and separate rimless circles (device
+  /// check, 2026-10-05).
+  Widget _topRow(AppLocalizations l10n) {
     return Row(
       children: <Widget>[
         _closeButton(l10n),
         const Spacer(),
-        _positionLabel(l10n, chrome),
-        const SizedBox(width: 8),
-        _zoomButton(l10n, chrome),
-        const SizedBox(width: 4),
-        _hideChromeButton(l10n, chrome),
-        for (final Widget action in actions) ...<Widget>[
-          const SizedBox(width: 4),
-          action,
-        ],
+        PhotoCapsule(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              _positionLabel(l10n),
+              _zoomButton(l10n),
+              _hideChromeButton(l10n),
+              ...actions,
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  /// "3 of 72", as text on a scrim rather than as another button.
+  /// "3 of 72", as text rather than as another button.
   ///
   /// It states something instead of doing something, so giving it a button's
   /// weight — which the old floating pill did — made the row read as one more
-  /// thing to press. The scrim stays: white text alone vanishes over a pale
-  /// wallpaper, the same legibility problem C2's blurred backdrop hit.
-  Widget _positionLabel(AppLocalizations l10n, ImmersiveChromePalette chrome) {
+  /// thing to press. It still sits on a scrim, the cluster's: white text
+  /// alone vanishes over a pale wallpaper, the same legibility problem C2's
+  /// blurred backdrop hit.
+  Widget _positionLabel(AppLocalizations l10n) {
     final String label = l10n.galleryPosition(position, itemCount);
     return Semantics(
       liveRegion: true,
       label: label,
       child: ExcludeSemantics(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: chrome.scrim,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Text(label, style: TextStyle(color: chrome.ink)),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(label, style: const TextStyle(color: PhotoCapsule.ink)),
         ),
       ),
     );
@@ -170,38 +172,33 @@ class ImmersiveGalleryControls extends StatelessWidget {
   /// Renders even with no [barActions] — the paging arrows live here too, and
   /// a viewer of one image still shows them, disabled, rather than moving the
   /// bar's contents around as a gallery grows.
-  Widget _actionBar(AppLocalizations l10n, ImmersiveChromePalette chrome) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: chrome.scrim,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            _navigationButton(
-              key: const Key('immersive-viewer-previous'),
-              label: l10n.galleryPrevious,
-              icon: Icons.arrow_back,
-              onPressed: onPrevious,
-              chrome: chrome,
-            ),
-            for (final Widget action in barActions) ...<Widget>[
-              const SizedBox(width: 4),
-              action,
-            ],
+  ///
+  /// A [PhotoCapsule], so the bar has the rim and shape of every other control
+  /// over a photo.
+  Widget _actionBar(AppLocalizations l10n) {
+    return PhotoCapsule(
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          _navigationButton(
+            key: const Key('immersive-viewer-previous'),
+            label: l10n.galleryPrevious,
+            icon: Icons.arrow_back,
+            onPressed: onPrevious,
+          ),
+          for (final Widget action in barActions) ...<Widget>[
             const SizedBox(width: 4),
-            _navigationButton(
-              key: const Key('immersive-viewer-next'),
-              label: l10n.galleryNext,
-              icon: Icons.arrow_forward,
-              onPressed: onNext,
-              chrome: chrome,
-            ),
+            action,
           ],
-        ),
+          const SizedBox(width: 4),
+          _navigationButton(
+            key: const Key('immersive-viewer-next'),
+            label: l10n.galleryNext,
+            icon: Icons.arrow_forward,
+            onPressed: onNext,
+          ),
+        ],
       ),
     );
   }
@@ -212,13 +209,10 @@ class ImmersiveGalleryControls extends StatelessWidget {
     required String label,
     required IconData icon,
     required VoidCallback? onPressed,
-    required ImmersiveChromePalette chrome,
   }) {
     return IconButton(
       key: key,
       onPressed: onPressed,
-      color: chrome.ink,
-      disabledColor: chrome.disabledInk,
       constraints: const BoxConstraints.tightFor(width: 48, height: 48),
       // The Icon's `semanticLabel` is the single source of the accessible
       // name. A `tooltip` is *not* a reliable one: measured on this codebase,
@@ -231,20 +225,16 @@ class ImmersiveGalleryControls extends StatelessWidget {
   }
 
   /// Hides the chrome this button is part of.
-  Widget _hideChromeButton(
-    AppLocalizations l10n,
-    ImmersiveChromePalette chrome,
-  ) {
+  Widget _hideChromeButton(AppLocalizations l10n) {
     return _utilityButton(
       key: const Key('immersive-viewer-hide-chrome'),
       label: l10n.galleryHideControls,
       icon: Icons.visibility_off_outlined,
       onPressed: onHideChrome,
-      chrome: chrome,
     );
   }
 
-  /// A top-row utility: icon on a scrim, words in its semantic label.
+  /// A top-row utility: an icon in the cluster, words in its semantic label.
   ///
   /// These are things you do *to the view* rather than to the wallpaper, so
   /// they stay unlabelled and quiet — the labels were what made the old corner
@@ -254,27 +244,21 @@ class ImmersiveGalleryControls extends StatelessWidget {
     required String label,
     required IconData icon,
     required VoidCallback? onPressed,
-    required ImmersiveChromePalette chrome,
   }) {
-    return IconButton.filledTonal(
+    return IconButton(
       key: key,
       onPressed: onPressed,
-      style: IconButton.styleFrom(
-        backgroundColor: chrome.scrim,
-        foregroundColor: chrome.ink,
-      ),
       constraints: const BoxConstraints.tightFor(width: 48, height: 48),
       icon: Icon(icon, semanticLabel: label),
     );
   }
 
-  Widget _zoomButton(AppLocalizations l10n, ImmersiveChromePalette chrome) {
+  Widget _zoomButton(AppLocalizations l10n) {
     return _utilityButton(
       key: const Key('immersive-viewer-zoom'),
       label: zoomed ? l10n.galleryResetZoom : l10n.galleryZoomIn,
       icon: zoomed ? Icons.zoom_out_map : Icons.zoom_in,
       onPressed: onToggleZoom,
-      chrome: chrome,
     );
   }
 
