@@ -46,6 +46,24 @@ void main() {
       expect(FloatingCapsule.capsuleFill(glassy).a, 1.0);
     });
 
+    for (final Brightness brightness in Brightness.values) {
+      test('capsuleFill is brighter than the band in $brightness', () {
+        // Above even surfaceContainerHighest, so above the band (whose top is
+        // surfaceContainer plus a brand wash):
+        // a capsule darker than that reads as a recessed outline, not as
+        // floating — what surfaceContainerHigh looked like on device.
+        final ColorScheme scheme = ColorScheme.fromSeed(
+          seedColor: TelaTheme.brandSeed,
+          brightness: brightness,
+        );
+
+        expect(
+          FloatingCapsule.capsuleFill(scheme).computeLuminance(),
+          greaterThan(scheme.surfaceContainerHighest.computeLuminance()),
+        );
+      });
+    }
+
     testWidgets('is a stadium by default and a rounded panel with a radius', (
       WidgetTester tester,
     ) async {

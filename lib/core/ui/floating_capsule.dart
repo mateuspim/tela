@@ -57,12 +57,24 @@ class FloatingCapsule extends StatelessWidget {
     );
   }
 
-  /// The capsule's fill on [scheme] — one tone above the band it floats on.
+  /// The capsule's fill on [scheme] — the most raised surface the scheme has.
+  ///
+  /// It must sit well above the band's top stop (`surfaceContainer` warmed
+  /// with the brand), and stays above even `surfaceContainerHighest`. In dark
+  /// the raised end of the tonal range is `surfaceBright`; in light it is the
+  /// near-white `surfaceContainerLowest`. Tuned on the SM-X730 (2026-10-05),
+  /// which also showed these roles need `TelaTheme`'s Monet surface fill to
+  /// differ from `surface` at all.
   ///
   /// Forced opaque: a device palette is opaque already, so this only guards
   /// against a future scheme edit quietly turning the chrome into glass.
-  static Color capsuleFill(ColorScheme scheme) =>
-      scheme.surfaceContainerHigh.withValues(alpha: 1);
+  static Color capsuleFill(ColorScheme scheme) {
+    final bool dark = scheme.brightness == Brightness.dark;
+    final Color raised = dark
+        ? scheme.surfaceBright
+        : scheme.surfaceContainerLowest;
+    return raised.withValues(alpha: 1);
+  }
 
   ShapeBorder _shape(ColorScheme scheme) {
     final BorderSide edge = BorderSide(
