@@ -9,6 +9,7 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/balanced_columns.dart';
+import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -43,7 +44,7 @@ class SettingsScreen extends ConsumerWidget {
       storageSettingsProvider,
     );
     return Scaffold(
-      appBar: AppBar(
+      appBar: GradientAppBar(
         toolbarHeight: 72,
         title: Text(
           l10n.settingsTitle,

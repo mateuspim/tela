@@ -48,6 +48,31 @@ void main() {
       });
     }
 
+    testWidgets('chips are stadiums and keep their own outline', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: TelaTheme.dark(null),
+          home: Scaffold(
+            body: FilterChip(label: const Text('sky'), onSelected: (_) {}),
+          ),
+        ),
+      );
+
+      final Material chip = tester.widget<Material>(
+        find
+            .descendant(
+              of: find.byType(FilterChip),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      final OutlinedBorder shape = chip.shape! as OutlinedBorder;
+      expect(shape, isA<StadiumBorder>());
+      expect(shape.side, isNot(BorderSide.none));
+    });
+
     test('menus open under their control, rounded', () {
       final PopupMenuThemeData menu = TelaTheme.dark(null).popupMenuTheme;
 

@@ -6,6 +6,7 @@ import 'package:tela/app/offload_run.dart';
 import 'package:tela/app/offload_run_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/byte_size_text.dart';
+import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/domain/models/offload_group.dart';
 import 'package:tela/features/settings/download_location_controller.dart';
 import 'package:tela/features/settings/offload_action.dart';
@@ -27,7 +28,7 @@ class OffloadScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.offloadTitle)),
+      appBar: GradientAppBar.pushed(title: Text(l10n.offloadTitle)),
       body: ref
           .watch(offloadGroupsProvider)
           .when(

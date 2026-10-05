@@ -168,6 +168,11 @@ abstract final class TelaTheme {
         ),
       ),
       popupMenuTheme: _popupMenuTheme(scheme),
+      // Stadium chips, in the capsule language the rest of the chrome floats
+      // in — Material's 8dp rectangle sat oddly beside pill buttons in the
+      // filter sheet and under Detail's capsules. Shape only: each chip kind
+      // keeps resolving its own border (outlined unselected, none selected).
+      chipTheme: const ChipThemeData(shape: StadiumBorder()),
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
