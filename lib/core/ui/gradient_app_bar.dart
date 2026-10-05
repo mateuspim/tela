@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 
 /// An [AppBar] on an opaque, faintly brand-warmed vertical wash with a hairline
 /// bottom edge, so the chrome reads as a crafted band instead of a flat
@@ -26,6 +27,9 @@ class GradientAppBar extends AppBar {
     super.bottom,
     super.toolbarHeight,
     super.titleSpacing,
+    super.leading,
+    super.leadingWidth,
+    super.automaticallyImplyLeading,
   }) : super(
          // The wash lives in flexibleSpace; the bar itself paints nothing so it
          // does not sit an opaque colour in front of the gradient.
@@ -34,6 +38,43 @@ class GradientAppBar extends AppBar {
          scrolledUnderElevation: 0,
          elevation: 0,
          flexibleSpace: const _GradientBand(),
+       );
+
+  /// The bar for a screen pushed over a tab — a listing, collections,
+  /// download history, the private library — whose back button floats in a
+  /// [FloatingCapsule] like the actions beside it, instead of standing bare
+  /// on the band (device survey, 2026-10-05).
+  ///
+  /// A separate constructor rather than a capsule on every bar: a tab's root
+  /// screen has no back button, and a reserved leading slot would shift its
+  /// title.
+  ///
+  /// ```dart
+  /// Scaffold(appBar: GradientAppBar.pushed(title: Text(name)));
+  /// ```
+  GradientAppBar.pushed({
+    Key? key,
+    Widget? title,
+    List<Widget>? actions,
+    PreferredSizeWidget? bottom,
+    double? toolbarHeight,
+  }) : this(
+         key: key,
+         title: title,
+         actions: actions,
+         bottom: bottom,
+         toolbarHeight: toolbarHeight,
+         automaticallyImplyLeading: false,
+         // Inset 16 from the edge, the band's own side gutter.
+         leadingWidth: 16 + kMinInteractiveDimension + 8,
+         leading: const Padding(
+           padding: EdgeInsetsDirectional.only(start: 16),
+           child: Align(
+             alignment: AlignmentDirectional.centerStart,
+             child: FloatingCapsule(child: BackButton()),
+           ),
+         ),
+         titleSpacing: 8,
        );
 }
 

@@ -116,7 +116,7 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
     // selection the tiles below use; see SelectionShelfScope.
     return SelectionShelfScope(
       child: Scaffold(
-        appBar: GradientAppBar(
+        appBar: GradientAppBar.pushed(
           title: _title(context),
           actions: <Widget>[
             CapsuleActionCluster(

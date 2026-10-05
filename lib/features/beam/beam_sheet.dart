@@ -34,6 +34,9 @@ class BeamSheet extends ConsumerStatefulWidget {
   }) {
     return showModalBottomSheet<void>(
       context: context,
+      // Root, so the scrim also dims the shell's rail — from a tab's own
+      // navigator it stopped at the rail's edge (device survey, 2026-10-05).
+      useRootNavigator: true,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (BuildContext context) => BeamSheet(files: files),

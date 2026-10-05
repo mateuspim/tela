@@ -91,7 +91,7 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     final AppLocalizations l10n = AppLocalizations.of(context);
     return SelectionShelfScope(
       child: Scaffold(
-        appBar: GradientAppBar(
+        appBar: GradientAppBar.pushed(
           toolbarHeight: 72,
           title: Text(
             l10n.privateLibraryTitle,

@@ -96,7 +96,7 @@ class _CollectionListingScreenState
 
     return SelectionShelfScope(
       child: Scaffold(
-        appBar: GradientAppBar(
+        appBar: GradientAppBar.pushed(
           title: _title(context),
           actions: <Widget>[
             CapsuleActionCluster(

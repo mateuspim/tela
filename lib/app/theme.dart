@@ -143,18 +143,31 @@ abstract final class TelaTheme {
         color: scheme.outlineVariant.withValues(alpha: .55),
         space: 1,
       ),
+      // One tone above every surface a card is placed on — the page
+      // (surface), a sheet and a dialog (both surfaceContainer, below). It was
+      // surfaceContainerLow, which inside a sheet or the download dialog sat
+      // *below* its own panel and read as a hole (device survey, 2026-10-05).
       cardTheme: CardThemeData(
-        color: scheme.surfaceContainerLow,
+        color: scheme.surfaceContainerHigh,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(
-            color: scheme.outlineVariant.withValues(alpha: .45),
-          ),
+          side: _hairline(scheme),
         ),
       ),
+      // Dialogs on the same tone as sheets, so one card colour sits above
+      // both; Material's default here is surfaceContainerHigh.
+      dialogTheme: DialogThemeData(
+        backgroundColor: scheme.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28),
+          side: _hairline(scheme),
+        ),
+      ),
+      popupMenuTheme: _popupMenuTheme(scheme),
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
@@ -181,13 +194,38 @@ abstract final class TelaTheme {
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
+      // The hairline gives a sheet the same edge every capsule and card has;
+      // without it a sheet over a dark wall was a flat slab with no top.
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: scheme.surfaceContainer,
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          side: _hairline(scheme),
         ),
+      ),
+    );
+  }
+
+  /// The edge every raised surface carries — capsule, card, sheet, dialog,
+  /// menu — so they read as one family.
+  static BorderSide _hairline(ColorScheme scheme) =>
+      BorderSide(color: scheme.outlineVariant.withValues(alpha: .45));
+
+  /// Menus open *under* the control that opened them, rounded and edged.
+  ///
+  /// The source picker opened on top of its own capsule with near-square
+  /// corners — a rectangle stamped over a stadium (device survey,
+  /// 2026-10-05).
+  static PopupMenuThemeData _popupMenuTheme(ColorScheme scheme) {
+    return PopupMenuThemeData(
+      color: scheme.surfaceContainerHigh,
+      surfaceTintColor: Colors.transparent,
+      position: PopupMenuPosition.under,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: _hairline(scheme),
       ),
     );
   }

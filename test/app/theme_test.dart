@@ -26,6 +26,48 @@ ColorScheme _collapsedDevicePalette() => const ColorScheme(
 
 void main() {
   group('TelaTheme', () {
+    for (final Brightness brightness in Brightness.values) {
+      test('cards sit above the sheets and dialogs they are placed in '
+          '($brightness)', () {
+        // Cards were surfaceContainerLow and read as holes inside the filter
+        // sheet and the download dialog (device survey, 2026-10-05).
+        final ThemeData theme = brightness == Brightness.dark
+            ? TelaTheme.dark(null)
+            : TelaTheme.light(null);
+        final Color card = theme.cardTheme.color!;
+        final Color sheet = theme.bottomSheetTheme.backgroundColor!;
+        final Color dialog = theme.dialogTheme.backgroundColor!;
+        final bool dark = brightness == Brightness.dark;
+        bool above(Color a, Color b) => dark
+            ? a.computeLuminance() > b.computeLuminance()
+            : a.computeLuminance() < b.computeLuminance();
+
+        expect(above(card, sheet), isTrue);
+        expect(above(card, dialog), isTrue);
+        expect(above(card, theme.colorScheme.surface), isTrue);
+      });
+    }
+
+    test('menus open under their control, rounded', () {
+      final PopupMenuThemeData menu = TelaTheme.dark(null).popupMenuTheme;
+
+      expect(menu.position, PopupMenuPosition.under);
+      expect(
+        (menu.shape! as RoundedRectangleBorder).borderRadius,
+        BorderRadius.circular(16),
+      );
+    });
+
+    test('sheets carry the same hairline edge as cards', () {
+      final ThemeData theme = TelaTheme.dark(null);
+      final OutlinedBorder sheet =
+          theme.bottomSheetTheme.shape! as OutlinedBorder;
+      final OutlinedBorder card = theme.cardTheme.shape! as OutlinedBorder;
+
+      expect(sheet.side, card.side);
+      expect(sheet.side, isNot(BorderSide.none));
+    });
+
     test('fills the surface tones a Monet palette arrives without', () {
       // SM-X730, 2026-10-05: band, capsules and grid all painted #1a1b20.
       final ColorScheme scheme = TelaTheme.dark(

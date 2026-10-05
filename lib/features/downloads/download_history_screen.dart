@@ -58,7 +58,7 @@ class DownloadHistoryScreen extends ConsumerWidget {
       length: 2,
       child: SelectionShelfScope(
         child: Scaffold(
-          appBar: GradientAppBar(
+          appBar: GradientAppBar.pushed(
             toolbarHeight: 72,
             title: Text(
               l10n.downloadHistoryTitle,

@@ -16,6 +16,9 @@ import 'package:tela/domain/models/wallpaper_target.dart';
 Future<WallpaperTarget?> chooseWallpaperTarget(BuildContext context) {
   return showModalBottomSheet<WallpaperTarget>(
     context: context,
+    // Root, so the scrim also dims the shell's rail — from a tab's own
+    // navigator it stopped at the rail's edge (device survey, 2026-10-05).
+    useRootNavigator: true,
     builder: _targetSheet,
   );
 }

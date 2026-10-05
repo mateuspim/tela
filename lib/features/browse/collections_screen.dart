@@ -34,7 +34,7 @@ class CollectionsScreen extends ConsumerWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String? owner = username;
     return Scaffold(
-      appBar: GradientAppBar(
+      appBar: GradientAppBar.pushed(
         title: Text(owner == null ? l10n.collectionsMine : '@$owner'),
       ),
       body: FutureBuilder<List<WallpaperCollection>>(
