@@ -53,9 +53,14 @@ class _GradientBand extends StatelessWidget {
             // A raised, brand-warmed top settling to the plain surface the grid
             // sits on. Both stops are opaque — the alpha blend sits the accent
             // *over* an opaque container — so no wall shows through.
+            //
+            // surfaceContainer, not Highest: the floating capsules ride this
+            // band in surfaceBright, and a Highest top was within a few levels
+            // of them — the search capsule all but vanished (SM-X730,
+            // 2026-10-05, the first time the band ever painted).
             Color.alphaBlend(
               scheme.primary.withValues(alpha: _accentWash),
-              scheme.surfaceContainerHighest,
+              scheme.surfaceContainer,
             ),
             scheme.surface,
           ],
@@ -66,6 +71,11 @@ class _GradientBand extends StatelessWidget {
           ),
         ),
       ),
+      // The child is what gives the band a size. AppBar stacks flexibleSpace
+      // with StackFit.passthrough under loose constraints, where a childless
+      // DecoratedBox takes the minimum: zero height. Without this the wash
+      // never painted at all (SM-X730, 2026-10-05).
+      child: const SizedBox.expand(),
     );
   }
 

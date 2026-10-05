@@ -32,6 +32,30 @@ void main() {
       expect(bar.elevation, 0);
     });
 
+    testWidgets('the wash fills the whole bar, not zero pixels of it', (
+      WidgetTester tester,
+    ) async {
+      // A childless DecoratedBox in AppBar's passthrough stack sized itself to
+      // the loose constraints' minimum — zero height — so the band was in the
+      // tree, passed the colour tests, and never painted (SM-X730, 2026-10-05).
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(appBar: GradientAppBar(title: const Text('Browse'))),
+        ),
+      );
+
+      final Finder band = find.byWidgetPredicate(
+        (Widget w) =>
+            w is DecoratedBox &&
+            w.decoration is BoxDecoration &&
+            (w.decoration as BoxDecoration).gradient != null,
+      );
+      expect(
+        tester.getSize(band),
+        tester.getSize(find.byType(GradientAppBar)),
+      );
+    });
+
     testWidgets('the wash is fully opaque, so no wall shows through', (
       WidgetTester tester,
     ) async {
