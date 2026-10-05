@@ -9,8 +9,45 @@ ColorScheme _devicePalette(Brightness brightness) => ColorScheme.fromSeed(
   brightness: brightness,
 );
 
+/// The shape `dynamic_color` 1.8.1 really hands over: its CorePalette mapping
+/// sets `surface` but no `surfaceContainer*`/`surfaceBright`/`surfaceDim`, so
+/// every one of those defaults to `surface`.
+ColorScheme _collapsedDevicePalette() => const ColorScheme(
+  brightness: Brightness.dark,
+  primary: Color(0xFFBFC2FF),
+  onPrimary: Color(0xFF282B60),
+  secondary: Color(0xFFC5C5DD),
+  onSecondary: Color(0xFF2E2F42),
+  error: Color(0xFFFFB4AB),
+  onError: Color(0xFF690005),
+  surface: Color(0xFF1A1B20),
+  onSurface: Color(0xFFE4E1E9),
+);
+
 void main() {
   group('TelaTheme', () {
+    test('fills the surface tones a Monet palette arrives without', () {
+      // SM-X730, 2026-10-05: band, capsules and grid all painted #1a1b20.
+      final ColorScheme scheme = TelaTheme.dark(
+        _collapsedDevicePalette(),
+      ).colorScheme;
+
+      expect(scheme.surface, _collapsedDevicePalette().harmonized().surface);
+      expect(scheme.surfaceContainerHighest, isNot(scheme.surface));
+      expect(
+        scheme.surfaceBright.computeLuminance(),
+        greaterThan(scheme.surface.computeLuminance()),
+      );
+    });
+
+    test('leaves a palette that already has surface tones alone', () {
+      final ColorScheme device = _devicePalette(Brightness.dark).harmonized();
+
+      final ColorScheme scheme = TelaTheme.dark(device).colorScheme;
+
+      expect(scheme.surfaceContainerHigh, device.surfaceContainerHigh);
+    });
+
     test('uses the device palette when Android supplies one', () {
       final ColorScheme device = _devicePalette(Brightness.dark);
 

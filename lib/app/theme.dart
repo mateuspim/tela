@@ -62,7 +62,7 @@ abstract final class TelaTheme {
     Color? accent,
   ) {
     final ColorScheme base = _isUsable(device, brightness)
-        ? device!.harmonized()
+        ? _withSurfaceTones(device!.harmonized())
         : ColorScheme.fromSeed(seedColor: brandSeed, brightness: brightness);
     final ColorScheme scheme = accent == null
         ? base
@@ -351,4 +351,38 @@ abstract final class TelaTheme {
 
   static bool _isUsable(ColorScheme? device, Brightness brightness) =>
       device != null && device.brightness == brightness;
+
+  /// [device] with the surface tones Monet left out filled back in.
+  ///
+  /// `dynamic_color` 1.8.1 builds the device scheme from the old CorePalette
+  /// mapping, which never sets `surfaceDim`, `surfaceBright` or any
+  /// `surfaceContainer*` role, so Flutter defaults every one of them to
+  /// `surface`. On the SM-X730 (2026-10-05) that flattened the app bar's
+  /// gradient and every floating capsule into one `#1a1b20` — raised chrome
+  /// with nothing to be raised against.
+  ///
+  /// The tones come from a scheme seeded with the device's own primary, so
+  /// their hue still follows the user's wallpaper; `surface` itself stays the
+  /// device's. A palette that already carries distinct tones is left alone,
+  /// so a plugin fix needs no change here.
+  ///
+  /// ```dart
+  /// _withSurfaceTones(device.harmonized());
+  /// ```
+  static ColorScheme _withSurfaceTones(ColorScheme device) {
+    if (device.surfaceContainerHighest != device.surface) return device;
+    final ColorScheme tones = ColorScheme.fromSeed(
+      seedColor: device.primary,
+      brightness: device.brightness,
+    );
+    return device.copyWith(
+      surfaceDim: tones.surfaceDim,
+      surfaceBright: tones.surfaceBright,
+      surfaceContainerLowest: tones.surfaceContainerLowest,
+      surfaceContainerLow: tones.surfaceContainerLow,
+      surfaceContainer: tones.surfaceContainer,
+      surfaceContainerHigh: tones.surfaceContainerHigh,
+      surfaceContainerHighest: tones.surfaceContainerHighest,
+    );
+  }
 }
