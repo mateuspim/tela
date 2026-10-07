@@ -75,21 +75,38 @@ class TelaShell extends StatelessWidget {
     );
   }
 
-  /// The rail panel, as tall as its contents and no taller.
+  /// The brand at the top, and the rail panel — as tall as its destinations
+  /// and no taller — centred in the height below it.
   ///
-  /// It ran the full height of the screen, so in tablet landscape three
+  /// The panel ran the full height of the screen, so in tablet landscape three
   /// destinations sat at the top of a panel that was empty below them — the
   /// owner: *"the three buttons waste so much space on the bottom, like in
   /// portrait it sits flush"* (2026-10-05). Portrait gets the bottom pill,
   /// which hugs its destinations; this is the same shape turned on its side.
-  /// Top-aligned, so the brand stays level with the search row beside it.
+  ///
+  /// Centred, not top-aligned: a short panel pinned to the top read as
+  /// detached from the screen (owner, same day), and the middle of the edge
+  /// is where thumbs rest holding a tablet sideways. The brand left the panel
+  /// to anchor the corner on its own, level with the search row — inside a
+  /// centred panel it would float mid-screen.
+  ///
+  /// A Column with the panel in the remaining height rather than a Stack
+  /// centred on the whole screen: on a short landscape window a screen-centred
+  /// panel would slide up under the brand.
   Widget _floatingRail(BuildContext context) {
     return SafeArea(
       right: false,
       minimum: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: IntrinsicHeight(child: _railPanel(context)),
+      child: Column(
+        children: <Widget>[
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: _RailBrand(),
+          ),
+          Expanded(
+            child: Center(child: IntrinsicHeight(child: _railPanel(context))),
+          ),
+        ],
       ),
     );
   }
@@ -101,10 +118,6 @@ class TelaShell extends StatelessWidget {
         backgroundColor: Colors.transparent,
         selectedIndex: navigationShell.currentIndex,
         labelType: NavigationRailLabelType.all,
-        leading: const Padding(
-          padding: EdgeInsets.only(top: 12, bottom: 28),
-          child: _RailBrand(),
-        ),
         destinations: _railDestinations(context),
         onDestinationSelected: _openDestination,
       ),

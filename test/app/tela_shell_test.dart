@@ -81,6 +81,14 @@ void main() {
     expect(panel.height, lessThan(800 / 2));
     expect(panel.bottom, greaterThan(settings.bottom));
     expect(panel.bottom - settings.bottom, lessThan(48));
+    // Centred in the height below the brand, not pinned to the top, where a
+    // short panel read as detached (owner, same day).
+    final double brandBottom = tester
+        .getBottomLeft(find.byType(TelaWordmark))
+        .dy;
+    final double above = panel.top - brandBottom;
+    final double below = 800 - 12 - panel.bottom;
+    expect((above - below).abs(), lessThan(24));
   });
 
   // Device pass F5 (2026-10-03): on the SM-X730 the rail's three destinations
@@ -129,14 +137,20 @@ void main() {
 
     await _pumpShell(tester);
 
-    final Finder rail = find.byType(NavigationRail);
+    // Above the panel rather than inside it, since the panel is centred
+    // (owner, 2026-10-05): the brand anchors the corner on its own.
+    final Finder shell = find.byType(TelaShell);
     expect(
-      find.descendant(of: rail, matching: find.byType(TelaMark)),
+      find.descendant(of: shell, matching: find.byType(TelaMark)),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: rail, matching: find.byType(TelaWordmark)),
+      find.descendant(of: shell, matching: find.byType(TelaWordmark)),
       findsOneWidget,
+    );
+    expect(
+      tester.getBottomLeft(find.byType(TelaWordmark)).dy,
+      lessThan(tester.getTopLeft(find.byType(NavigationRail)).dy),
     );
     // Stacked, not side by side — the rail is narrow, and a horizontal lockup
     // would either shrink the wordmark below reading size or widen the rail
