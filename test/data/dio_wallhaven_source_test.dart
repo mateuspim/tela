@@ -92,14 +92,15 @@ void main() {
       expect(uri.query, contains('ratios=16x9%2C9x16'));
     });
 
-    test('sends no ratios param at all for "any shape"', () async {
+    test('spells "any shape" out rather than omitting ratios', () async {
       final Uri uri = await _sentUriFor(
         const SearchQuery(ratios: <RatioChoice>[]),
       );
 
-      // An empty `ratios=` is not how you ask Wallhaven for every shape.
-      expect(uri.queryParameters.containsKey('ratios'), isFalse);
-      expect(uri.query, isNot(contains('ratios')));
+      // Regression: an absent `ratios` is filled from the account's own
+      // browse settings once a key is sent, so "any shape" became the
+      // account's saved ratios on every launch.
+      expect(uri.queryParameters['ratios'], 'portrait,landscape');
     });
 
     test('sends a resolved Automatic resolution as atleast', () async {

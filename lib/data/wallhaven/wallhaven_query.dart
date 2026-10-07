@@ -30,7 +30,7 @@ Map<String, String> wallhavenQueryParameters(SearchQuery query) {
     'order': query.order.apiValue,
     if (query.sorting.usesTopRange) 'topRange': query.topRange.apiValue,
     ..._resolutionParameters(query.resolution),
-    'ratios': ?RatioChoice.encode(query.ratios),
+    'ratios': _ratiosValue(query.ratios),
     if (query.color case final WallpaperColor color)
       'colors': _colorValue(color),
     'page': '${query.page}',
@@ -109,6 +109,20 @@ Map<String, String> _resolutionParameters(ResolutionFilter filter) {
           .join(','),
     },
   };
+}
+
+/// The `ratios` param, spelled out even for "any shape".
+///
+/// Omitting it is *not* "any shape" once a key is sent: Wallhaven fills every
+/// absent param from the account's own browse settings ("searches will be
+/// performed with that user's browsing settings and default filters", API
+/// docs), so an unfiltered grid quietly became the account's saved ratios.
+/// The two keywords together are the explicit whole — checked against the real
+/// server, 2026-10-07: `ratios=landscape,portrait` answers the same 626316 as
+/// no param at all, where `1x1` alongside them drops the keywords entirely.
+String _ratiosValue(List<RatioChoice> ratios) {
+  return RatioChoice.encode(ratios) ??
+      ShapeRatio.values.map((ShapeRatio shape) => shape.keyword).join(',');
 }
 
 /// The `colors` param, which takes the hex with no leading `#`.
