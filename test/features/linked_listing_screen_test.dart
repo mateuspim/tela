@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/resolution.dart';
@@ -49,6 +50,8 @@ void main() {
     );
 
     expect(source.receivedQueries.single.term, 'id:37');
+    // Pictures scrolling up dissolve into the band, as on Browse.
+    expect(find.byType(BandFadeEdge), findsOneWidget);
     expect(find.text('nature'), findsOneWidget);
     expect(find.text('Wallpapers with this tag'), findsOneWidget);
     expect(find.byType(WallpaperTile), findsOneWidget);

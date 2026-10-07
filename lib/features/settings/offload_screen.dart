@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/offload_run.dart';
 import 'package:tela/app/offload_run_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
 import 'package:tela/core/ui/byte_size_text.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/domain/models/offload_group.dart';
@@ -29,14 +30,16 @@ class OffloadScreen extends ConsumerWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: GradientAppBar.pushed(title: Text(l10n.offloadTitle)),
-      body: ref
-          .watch(offloadGroupsProvider)
-          .when(
-            data: (List<OffloadGroup> groups) => _OffloadBody(groups: groups),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (Object error, StackTrace stack) =>
-                _Notice(text: l10n.errorUnexpected),
-          ),
+      body: BandFadeEdge(
+        child: ref
+            .watch(offloadGroupsProvider)
+            .when(
+              data: (List<OffloadGroup> groups) => _OffloadBody(groups: groups),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (Object error, StackTrace stack) =>
+                  _Notice(text: l10n.errorUnexpected),
+            ),
+      ),
     );
   }
 }

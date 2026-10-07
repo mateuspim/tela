@@ -10,6 +10,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/retag_downloads_action.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
 import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
@@ -104,7 +105,7 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
             SizedBox(width: 16),
           ],
         ),
-        body: _body(context, l10n),
+        body: BandFadeEdge(child: _body(context, l10n)),
       ),
     );
   }

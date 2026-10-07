@@ -5,6 +5,7 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
 import 'package:tela/domain/models/search_query.dart';
@@ -37,34 +38,39 @@ class CollectionsScreen extends ConsumerWidget {
       appBar: GradientAppBar.pushed(
         title: Text(owner == null ? l10n.collectionsMine : '@$owner'),
       ),
-      body: FutureBuilder<List<WallpaperCollection>>(
-        // Rebuilt per build rather than held in a provider: this is a screen
-        // that is pushed, read once and popped, and a family keyed on the
-        // username would outlive it for nothing.
-        future: owner == null
-            ? ref.read(browseCollectionsProvider).mine()
-            : ref.read(browseCollectionsProvider).of(owner),
-        builder:
-            (
-              BuildContext context,
-              AsyncSnapshot<List<WallpaperCollection>> snapshot,
-            ) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final Object? error = snapshot.error;
-              if (error != null) return _Failure(error: error);
-              final List<WallpaperCollection> collections =
-                  snapshot.data ?? const <WallpaperCollection>[];
-              if (collections.isEmpty) {
-                return _Empty(message: l10n.collectionsNone);
-              }
-              return ListView.builder(
-                itemCount: collections.length,
-                itemBuilder: (BuildContext context, int index) =>
-                    _CollectionRow(collection: collections[index], seed: seed),
-              );
-            },
+      body: BandFadeEdge(
+        child: FutureBuilder<List<WallpaperCollection>>(
+          // Rebuilt per build rather than held in a provider: this is a screen
+          // that is pushed, read once and popped, and a family keyed on the
+          // username would outlive it for nothing.
+          future: owner == null
+              ? ref.read(browseCollectionsProvider).mine()
+              : ref.read(browseCollectionsProvider).of(owner),
+          builder:
+              (
+                BuildContext context,
+                AsyncSnapshot<List<WallpaperCollection>> snapshot,
+              ) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final Object? error = snapshot.error;
+                if (error != null) return _Failure(error: error);
+                final List<WallpaperCollection> collections =
+                    snapshot.data ?? const <WallpaperCollection>[];
+                if (collections.isEmpty) {
+                  return _Empty(message: l10n.collectionsNone);
+                }
+                return ListView.builder(
+                  itemCount: collections.length,
+                  itemBuilder: (BuildContext context, int index) =>
+                      _CollectionRow(
+                        collection: collections[index],
+                        seed: seed,
+                      ),
+                );
+              },
+        ),
       ),
     );
   }

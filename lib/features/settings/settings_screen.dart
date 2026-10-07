@@ -9,6 +9,7 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/balanced_columns.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/domain/models/download_location.dart';
@@ -51,14 +52,16 @@ class SettingsScreen extends ConsumerWidget {
           style: Theme.of(context).textTheme.headlineSmall,
         ),
       ),
-      body: settings.when(
-        data: (StorageSettings value) => _SettingsList(
-          settings: value,
-          edition: ref.watch(buildEditionProvider),
+      body: BandFadeEdge(
+        child: settings.when(
+          data: (StorageSettings value) => _SettingsList(
+            settings: value,
+            edition: ref.watch(buildEditionProvider),
+          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (Object error, StackTrace stackTrace) =>
+              Center(child: Text(l10n.errorUnexpected)),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stackTrace) =>
-            Center(child: Text(l10n.errorUnexpected)),
       ),
     );
   }
@@ -88,7 +91,9 @@ class _SettingsList extends StatelessWidget {
             // one the user dismisses; see device check 2026-07-21.)
             padding: EdgeInsets.fromLTRB(
               16,
-              8,
+              // 12, not 8: the band's fade covers the top 12 (BandFadeEdge),
+              // and a page at rest should sit clear of it.
+              12,
               16,
               32 + MediaQuery.paddingOf(context).bottom,
             ),

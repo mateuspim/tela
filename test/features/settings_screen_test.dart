@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/build_edition.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
 import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
@@ -28,6 +29,22 @@ import '../fakes/fake_settings_repository.dart';
 import '../fakes/fake_wallpaper_source.dart';
 
 void main() {
+  testWidgets('the page starts clear of the band fade at rest', (
+    WidgetTester tester,
+  ) async {
+    await _pumpSettings(tester, FakeSettingsRepository());
+
+    // The band dissolves what scrolls up under it (owner, 2026-10-06); a page
+    // at rest must not start inside that fade.
+    expect(find.byType(BandFadeEdge), findsOneWidget);
+    final double fadeBottom =
+        tester.getTopLeft(find.byType(BandFadeEdge)).dy + BandFadeEdge.height;
+    expect(
+      tester.getTopLeft(find.byType(Card).first).dy,
+      greaterThanOrEqualTo(fadeBottom),
+    );
+  });
+
   testWidgets('groups related settings into scannable sections', (
     WidgetTester tester,
   ) async {

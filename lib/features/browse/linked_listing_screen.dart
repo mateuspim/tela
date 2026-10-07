@@ -7,6 +7,7 @@ import 'package:tela/app/listing_download_queueing.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
 import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
@@ -145,13 +146,15 @@ class _LinkedListingScreenState extends ConsumerState<LinkedListingScreen>
             const SizedBox(width: 16),
           ],
         ),
-        body: WallpaperGrid(
-          query: query,
-          galleryIdentity: identity,
-          // The query cannot say this: a tag searches on `id:37`, which reads
-          // back as a folder called `id 37`. Only the link still holds the
-          // word — see `WallpaperLink.folderName`.
-          listingFolder: widget.link.folderName,
+        body: BandFadeEdge(
+          child: WallpaperGrid(
+            query: query,
+            galleryIdentity: identity,
+            // The query cannot say this: a tag searches on `id:37`, which reads
+            // back as a folder called `id 37`. Only the link still holds the
+            // word — see `WallpaperLink.folderName`.
+            listingFolder: widget.link.folderName,
+          ),
         ),
       ),
     );

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
 import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
@@ -112,20 +113,22 @@ class _CollectionListingScreenState
             const SizedBox(width: 16),
           ],
         ),
-        body: Column(
-          children: <Widget>[
-            _HiddenNotice(hidden: _hiddenCount),
-            Expanded(
-              child: WallpaperGrid(
-                query: query,
-                galleryIdentity: 'collection:${widget.collection.ref.key}',
-                // A collection is a nameable thing to file downloads under, and
-                // its label is already the user's own word for it.
-                listingFolder: TagFolder.sanitize(widget.collection.label),
-                pageFetch: _fetchPage,
+        body: BandFadeEdge(
+          child: Column(
+            children: <Widget>[
+              _HiddenNotice(hidden: _hiddenCount),
+              Expanded(
+                child: WallpaperGrid(
+                  query: query,
+                  galleryIdentity: 'collection:${widget.collection.ref.key}',
+                  // A collection is a nameable thing to file downloads under,
+                  // and its label is already the user's own word for it.
+                  listingFolder: TagFolder.sanitize(widget.collection.label),
+                  pageFetch: _fetchPage,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

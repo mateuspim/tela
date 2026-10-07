@@ -5,6 +5,7 @@ import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/selectable_wallpaper_shelf.dart';
 import 'package:tela/app/wallpaper_batch_actions.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
 import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
@@ -82,11 +83,13 @@ class DownloadHistoryScreen extends ConsumerWidget {
               ),
             ),
           ),
-          body: TabBarView(
-            children: <Widget>[
-              _historyTab(context, ref, l10n),
-              const DownloadQueueTab(),
-            ],
+          body: BandFadeEdge(
+            child: TabBarView(
+              children: <Widget>[
+                _historyTab(context, ref, l10n),
+                const DownloadQueueTab(),
+              ],
+            ),
           ),
         ),
       ),
