@@ -12,6 +12,7 @@ import 'package:tela/data/wallhaven/wallhaven_query.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
@@ -574,8 +575,9 @@ void main() {
     expect(find.text('Saved as your browse defaults.'), findsOneWidget);
   });
 
-  testWidgets('a saved default never carries a purity, so browse still opens '
-      'on safe', (WidgetTester tester) async {
+  testWidgets('a saved default keeps the purity it was saved with', (
+    WidgetTester tester,
+  ) async {
     final FakeSettingsRepository settings = FakeSettingsRepository();
     await _pumpBrowse(
       tester,
@@ -590,13 +592,46 @@ void main() {
     await tester.tap(find.text('Save as default'));
     await tester.pumpAndSettle();
 
-    // The session keeps the explicit chip the user just pressed, but nothing
-    // about it reaches the snapshot — the next launch opens on safe.
+    // Regression (2026-10-07): safe+explicit saved as the default reopened
+    // on safe alone.
     expect(settings.deviceSaved, isNotNull);
     final SearchQuery reopened = settings.deviceSaved!.applyTo(
       const SearchQuery(),
     );
-    expect(reopened.purity.purities, <Purity>{Purity.sfw});
+    expect(reopened.purity.purities, <Purity>{Purity.sfw, Purity.nsfw});
+  });
+
+  testWidgets('a launch on a saved explicit default asks for it with a key', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(
+      tester,
+      source,
+      storedKey: 'abc123',
+      settings: FakeSettingsRepository(
+        source: BrowseDefaultsSource.device,
+        deviceDefaults: _savedEveryPurity,
+      ),
+    );
+
+    expect(SearchQueryFacts(source.receivedQueries.last).purity, '111');
+  });
+
+  testWidgets('without a key the same default opens on what it can serve', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(
+      tester,
+      source,
+      settings: FakeSettingsRepository(
+        source: BrowseDefaultsSource.device,
+        deviceDefaults: _savedEveryPurity,
+      ),
+    );
+
+    expect(SearchQueryFacts(source.receivedQueries.last).purity, '110');
   });
 
   testWidgets('offers the shape of the screen the user is actually holding', (
@@ -974,3 +1009,9 @@ class SearchQueryFacts {
   /// Never present at the same time as [atLeast]; the server ignores it if so.
   String? get resolutions => _params['resolutions'];
 }
+
+/// A device default saved with every purity on, as the user who hit this did.
+const BrowseDefaults _savedEveryPurity = BrowseDefaults(
+  ratios: <RatioChoice>[],
+  purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw}),
+);

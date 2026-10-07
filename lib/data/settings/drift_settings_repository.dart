@@ -71,6 +71,7 @@ class DriftSettingsRepository implements SettingsRepository {
   static const String _deviceOrderKey = 'device.order';
   static const String _deviceColorKey = 'device.color';
   static const String _deviceResolutionKey = 'device.resolution';
+  static const String _devicePurityKey = 'device.purity';
 
   /// The user's brand accent, stored as a `#rrggbb` literal — the same form the
   /// picker and a `sqlite3` shell read. Absent means follow the device palette.
@@ -238,6 +239,9 @@ class DriftSettingsRepository implements SettingsRepository {
       // and absent reads as Automatic — which is what those snapshots browsed
       // on. No migration, as every setting since v1.
       storedResolution: await _db.settingValue(_deviceResolutionKey),
+      // Absent on every snapshot saved before purity was, and absent is "no
+      // opinion" — browse opens on safe, as those snapshots always did.
+      storedPurity: await _db.settingValue(_devicePurityKey),
     );
   }
 
@@ -254,6 +258,7 @@ class DriftSettingsRepository implements SettingsRepository {
       _deviceResolutionKey,
       defaults.encodedResolution(),
     );
+    await _saveDevicePurity(defaults.encodedPurity());
     // "Any colour" is the *absence* of the row, not a row saying nothing — an
     // upsert-only save would leave the last swatch behind and quietly re-apply
     // a filter the user just turned off.
@@ -263,6 +268,15 @@ class DriftSettingsRepository implements SettingsRepository {
       return;
     }
     await _db.putSetting(_deviceColorKey, color.hex);
+  }
+
+  /// Like the colour, "no opinion" is the absence of the row.
+  Future<void> _saveDevicePurity(String? encoded) async {
+    if (encoded == null) {
+      await _db.deleteSettings(<String>[_devicePurityKey]);
+      return;
+    }
+    await _db.putSetting(_devicePurityKey, encoded);
   }
 
   @override
