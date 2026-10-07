@@ -32,6 +32,7 @@ class BrowseSourceButton extends ConsumerWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool labelled = CapsuleActionCluster.labels(context);
     return PopupMenuButton<SourceId>(
+      offset: CapsuleActionCluster.menuOffset,
       tooltip: l10n.browseSource(active.displayName),
       initialValue: active.id,
       onSelected: (SourceId id) =>

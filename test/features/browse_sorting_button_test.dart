@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tela/app/theme.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/features/browse/browse_sorting_button.dart';
 
@@ -25,11 +27,17 @@ Future<TabController> _pump(
   addTearDown(tabs.dispose);
   await tester.pumpWidget(
     MaterialApp(
+      // The app's theme: it is what opens menus under their button.
+      theme: TelaTheme.dark(null),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: Center(
-          child: BrowseSortingButton(tabs: tabs, sortings: _sortings),
+          child: CapsuleActionCluster(
+            children: <Widget>[
+              BrowseSortingButton(tabs: tabs, sortings: _sortings),
+            ],
+          ),
         ),
       ),
     ),
@@ -77,6 +85,30 @@ void main() {
       expect(find.text('Latest'), findsNothing);
       expect(find.byIcon(Icons.sort), findsOneWidget);
       expect(find.byTooltip('Sorted by Latest'), findsOneWidget);
+    });
+
+    testWidgets('the menu opens below the capsule, not over its edge', (
+      WidgetTester tester,
+    ) async {
+      await _pump(tester);
+
+      await tester.tap(find.byType(BrowseSortingButton));
+      await tester.pumpAndSettle();
+
+      final double capsuleBottom = tester
+          .getBottomLeft(find.byType(CapsuleActionCluster))
+          .dy;
+      final double menuTop = tester
+          .getTopLeft(
+            find
+                .ancestor(
+                  of: find.widgetWithText(CheckedPopupMenuItem<int>, 'Top'),
+                  matching: find.byType(Material),
+                )
+                .last,
+          )
+          .dy;
+      expect(menuTop, greaterThanOrEqualTo(capsuleBottom));
     });
   });
 }

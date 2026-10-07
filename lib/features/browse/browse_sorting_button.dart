@@ -44,6 +44,7 @@ class BrowseSortingButton extends StatelessWidget {
       builder: (BuildContext context, Widget? _) {
         final String current = sortingLabel(l10n, sortings[tabs.index]);
         return PopupMenuButton<int>(
+          offset: CapsuleActionCluster.menuOffset,
           tooltip: l10n.browseSorting(current),
           initialValue: tabs.index,
           onSelected: tabs.animateTo,

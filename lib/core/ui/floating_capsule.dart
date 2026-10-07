@@ -169,6 +169,16 @@ class CapsuleActionCluster extends StatelessWidget {
   /// Space between the capsule's edge and the actions.
   static const double inset = 4;
 
+  /// Where a cluster action's menu opens, relative to the action: past the
+  /// capsule's lower [inset], plus a little air. Without it the menu opened
+  /// under the 48dp button, 4dp *inside* the capsule, and overlapped its edge
+  /// (device check, 2026-10-05).
+  ///
+  /// ```dart
+  /// PopupMenuButton<int>(offset: CapsuleActionCluster.menuOffset, ...);
+  /// ```
+  static const Offset menuOffset = Offset(0, inset + 4);
+
   /// The screen width from which a cluster action may spell itself out
   /// ("Wallhaven ▾", "Latest ▾"). Below it every action is a 48dp icon, named
   /// by its tooltip: two labels pushed a phone's cluster past the bar and

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/purity.dart';
 
@@ -32,6 +33,7 @@ class CollectionPurityButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return PopupMenuButton<Purity>(
+      offset: CapsuleActionCluster.menuOffset,
       icon: const Icon(Icons.visibility_outlined),
       tooltip: l10n.filterPurity,
       onSelected: _toggle,
