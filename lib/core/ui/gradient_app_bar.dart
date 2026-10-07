@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/ui/floating_capsule.dart';
 
-/// An [AppBar] on an opaque, faintly brand-warmed vertical wash with a hairline
-/// bottom edge, so the chrome reads as a crafted band instead of a flat
-/// rectangle — with nothing showing behind it.
+/// An [AppBar] on an opaque, faintly brand-warmed vertical wash that settles
+/// into the plain surface, so the chrome reads as a crafted band instead of a
+/// flat rectangle — with nothing showing behind it.
+///
+/// No bottom rule: the wash already ends on the body's own colour, and a
+/// hairline there made the seam to the wall read sharp (owner, 2026-10-06).
 ///
 /// Deliberately **opaque**. A see-through bar over a wall of wallpaper
 /// thumbnails reads as broken — the frosted-glass attempt proved it on device —
@@ -105,11 +108,6 @@ class _GradientBand extends StatelessWidget {
             ),
             scheme.surface,
           ],
-        ),
-        border: Border(
-          bottom: BorderSide(
-            color: scheme.outlineVariant.withValues(alpha: .5),
-          ),
         ),
       ),
       // The child is what gives the band a size. AppBar stacks flexibleSpace

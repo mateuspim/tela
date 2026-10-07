@@ -169,6 +169,21 @@ class CapsuleActionCluster extends StatelessWidget {
   /// Space between the capsule's edge and the actions.
   static const double inset = 4;
 
+  /// The screen width from which a cluster action may spell itself out
+  /// ("Wallhaven ▾", "Latest ▾"). Below it every action is a 48dp icon, named
+  /// by its tooltip: two labels pushed a phone's cluster past the bar and
+  /// squeezed the search field beside it to nothing (2026-10-06).
+  static const double labelledWidth = 600;
+
+  /// Whether this screen is wide enough for labelled actions; see
+  /// [labelledWidth].
+  ///
+  /// ```dart
+  /// if (CapsuleActionCluster.labels(context)) return Text(name);
+  /// ```
+  static bool labels(BuildContext context) =>
+      MediaQuery.sizeOf(context).width >= labelledWidth;
+
   @override
   Widget build(BuildContext context) {
     return _CollapseWhenEmpty(

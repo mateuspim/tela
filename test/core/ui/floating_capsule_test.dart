@@ -187,4 +187,30 @@ void main() {
       track.preferredSize.height,
     );
   });
+
+  group('CapsuleActionCluster.labels', () {
+    testWidgets('spells actions out from 600dp, icons below', (
+      WidgetTester tester,
+    ) async {
+      bool? labels;
+      Future<void> measure(double width) async {
+        await tester.pumpWidget(
+          MediaQuery(
+            data: MediaQueryData(size: Size(width, 800)),
+            child: Builder(
+              builder: (BuildContext context) {
+                labels = CapsuleActionCluster.labels(context);
+                return const SizedBox();
+              },
+            ),
+          ),
+        );
+      }
+
+      await measure(599);
+      expect(labels, isFalse);
+      await measure(600);
+      expect(labels, isTrue);
+    });
+  });
 }

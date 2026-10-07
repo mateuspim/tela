@@ -18,6 +18,7 @@ import 'package:tela/domain/models/wallpaper.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/features/browse/browse_screen.dart';
+import 'package:tela/features/browse/browse_sorting_button.dart';
 import 'package:tela/features/browse/wallpaper_id_chip.dart';
 
 import '../fakes/fake_secret_store.dart';
@@ -78,22 +79,27 @@ void main() {
       expect(_chip, findsNothing);
     });
 
-    testWidgets('moves neither the tabs nor the grid when it appears', (
-      WidgetTester tester,
-    ) async {
-      // The device complaint this layout exists to answer: the chip used to
-      // sit in the app bar and shove the whole tab row down mid-typing. It
-      // floats over the listing now, so nothing below it may shift by a pixel.
-      await _pumpBrowse(tester, _source());
-      final Offset tabs = tester.getTopLeft(find.byType(TabBar));
-      final Offset grid = tester.getTopLeft(find.byType(TabBarView));
+    testWidgets(
+      'moves neither the sorting button nor the grid when it appears',
+      (
+        WidgetTester tester,
+      ) async {
+        // The device complaint this layout exists to answer: the chip used to
+        // sit in the app bar and shove the whole tab row down mid-typing. It
+        // floats over the listing now, so nothing below it may shift a pixel.
+        await _pumpBrowse(tester, _source());
+        final Offset sorting = tester.getTopLeft(
+          find.byType(BrowseSortingButton),
+        );
+        final Offset grid = tester.getTopLeft(find.byType(TabBarView));
 
-      await _type(tester, 'je9ldp');
+        await _type(tester, 'je9ldp');
 
-      expect(_chip, findsOneWidget);
-      expect(tester.getTopLeft(find.byType(TabBar)), tabs);
-      expect(tester.getTopLeft(find.byType(TabBarView)), grid);
-    });
+        expect(_chip, findsOneWidget);
+        expect(tester.getTopLeft(find.byType(BrowseSortingButton)), sorting);
+        expect(tester.getTopLeft(find.byType(TabBarView)), grid);
+      },
+    );
 
     testWidgets('drops to an icon on a phone-width field', (
       WidgetTester tester,

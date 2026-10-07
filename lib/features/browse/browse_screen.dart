@@ -2,8 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/wallpaper_sources.dart';
-import 'package:tela/core/i18n/generated/app_localizations.dart';
-import 'package:tela/core/ui/browse_filter_text.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
 import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/screen_resolution.dart';
@@ -14,13 +13,16 @@ import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/features/browse/browse_filter_button.dart';
 import 'package:tela/features/browse/browse_query_controller.dart';
 import 'package:tela/features/browse/browse_search_field.dart';
+import 'package:tela/features/browse/browse_sorting_button.dart';
 import 'package:tela/features/browse/browse_source_button.dart';
 import 'package:tela/features/browse/wallpaper_grid.dart';
 
-/// The app's home: one Wallhaven listing per sorting, as tabs.
+/// The app's home: one Wallhaven listing per sorting, as swipeable pages.
 ///
-/// Each tab is the same [WallpaperGrid] under a different [Sorting] — the tabs
-/// are a query difference, not six screens. The search term and the filters
+/// Each page is the same [WallpaperGrid] under a different [Sorting] — the
+/// pages are a query difference, not six screens. They are picked from the
+/// [BrowseSortingButton] menu or by swiping; there is no tab row (it cost the
+/// wall a strip of height, owner 2026-10-06). The search term and the filters
 /// live in [browseQueryProvider] and are shared by all of them; `sorting` is
 /// layered on here because it belongs to the tab rather than to the user's
 /// filters, and `forScreen` is what answers an *Automatic* resolution filter,
@@ -60,7 +62,6 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
 
   @override
   Widget build(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
     ref.listen<String>(
       browseQueryProvider.select((SearchQuery query) => query.term),
       _onTerm,
@@ -89,6 +90,7 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
             CapsuleActionCluster(
               children: <Widget>[
                 const BrowseSourceButton(),
+                BrowseSortingButton(tabs: tabs, sortings: sortings),
                 const SelectModeButton(),
                 BrowseFilterButton(
                   filters: query,
@@ -98,44 +100,23 @@ class _BrowseScreenState extends ConsumerState<BrowseScreen>
             ),
             const SizedBox(width: 16),
           ],
-          bottom: _tabBar(l10n, tabs, sortings),
         ),
-        body: TabBarView(
-          controller: tabs,
-          children: <Widget>[
-            for (final Sorting sorting in sortings)
-              // Keyed by the sorting, not by slot: Relevance appearing
-              // shifts every grid one place right, and an unkeyed one would
-              // inherit the paging state of the listing that used to sit there.
-              WallpaperGrid(
-                key: ValueKey<(SourceId, Sorting)>((source.id, sorting)),
-                query: base.copyWith(sorting: sorting),
-              ),
-          ],
+        body: BandFadeEdge(
+          child: TabBarView(
+            controller: tabs,
+            children: <Widget>[
+              for (final Sorting sorting in sortings)
+                // Keyed by the sorting, not by slot: Relevance appearing
+                // shifts every grid one place right, and an unkeyed one would
+                // inherit the paging state of the listing that used to sit
+                // there.
+                WallpaperGrid(
+                  key: ValueKey<(SourceId, Sorting)>((source.id, sorting)),
+                  query: base.copyWith(sorting: sorting),
+                ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  /// Scrollable, because seven sortings do not fit across a phone. Fixed tabs
-  /// would shrink to fit and cut their own labels off.
-  ///
-  /// Set on a [CapsuleTrack], so the sortings read as one segmented control
-  /// floating under the search capsule rather than loose words on the band.
-  PreferredSizeWidget _tabBar(
-    AppLocalizations l10n,
-    TabController tabs,
-    List<Sorting> sortings,
-  ) {
-    return CapsuleTrack(
-      child: TabBar(
-        controller: tabs,
-        isScrollable: true,
-        tabAlignment: TabAlignment.start,
-        tabs: <Widget>[
-          for (final Sorting sorting in sortings)
-            Tab(text: sortingLabel(l10n, sorting)),
-        ],
       ),
     );
   }

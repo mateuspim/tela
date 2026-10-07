@@ -23,6 +23,8 @@ import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/domain/models/wallpaper_page.dart';
 import 'package:tela/domain/ports/wallpaper_source.dart';
 import 'package:tela/features/browse/browse_screen.dart';
+import 'package:tela/features/browse/browse_search_field.dart';
+import 'package:tela/features/browse/browse_sorting_button.dart';
 import 'package:tela/features/browse/filter_sheet.dart';
 import 'package:tela/features/browse/wallpaper_tile.dart';
 import 'package:tela/features/settings/blocked_tags_providers.dart';
@@ -190,6 +192,8 @@ void main() {
         ),
         isTrue,
       );
+      await tester.tap(find.byType(BrowseSortingButton));
+      await tester.pumpAndSettle();
       expect(find.text('Most viewed'), findsOneWidget);
       expect(find.text('Most favorited'), findsOneWidget);
       expect(find.text('Top'), findsNothing);
@@ -360,6 +364,23 @@ void main() {
     expect(SearchQueryFacts(source.receivedQueries.last).sorting, 'favorites');
   });
 
+  testWidgets('a phone keeps the search field usable beside the cluster', (
+    WidgetTester tester,
+  ) async {
+    // Spelled-out source and sorting buttons pushed a 360dp bar past its edge
+    // and left the search field a sliver (2026-10-06). Four icons leave it
+    // 112dp: the magnifier and a few characters of the term.
+    _phoneViewport(tester);
+    await _pumpBrowse(tester, FakeWallpaperSource());
+
+    expect(find.byIcon(Icons.sort), findsOneWidget);
+    expect(find.text('Latest'), findsNothing);
+    expect(
+      tester.getSize(find.byType(BrowseSearchField)).width,
+      greaterThanOrEqualTo(100),
+    );
+  });
+
   testWidgets('withholds relevance until there is a term to rank against', (
     WidgetTester tester,
   ) async {
@@ -367,7 +388,7 @@ void main() {
 
     // Wallhaven's `relevance` ranks against `q`. With no term it has nothing to
     // rank, so the tab would quietly be a listing of something else.
-    expect(find.text('Relevance'), findsNothing);
+    expect(_offeredSortings(tester), isNot(contains('Relevance')));
     expect(_selectedTab(tester), 'Latest');
   });
 
@@ -416,7 +437,7 @@ void main() {
     // Relevance vanishes with the term and every tab behind it shifts one place
     // left, so a controller that held its *index* would have moved the user
     // from Top to Hot without being asked. The selection is by sorting.
-    expect(find.text('Relevance'), findsNothing);
+    expect(_offeredSortings(tester), isNot(contains('Relevance')));
     expect(_selectedTab(tester), 'Top');
     expect(SearchQueryFacts(source.receivedQueries.last).sorting, 'toplist');
     expect(source.receivedQueries.last.term, isEmpty);
@@ -796,30 +817,51 @@ Future<void> _clearSearch(WidgetTester tester) async {
   await _settleTabs(tester);
 }
 
-/// Taps the tab named [label], scrolling the bar to it first — seven sortings
-/// do not fit across a phone, which is why the bar is scrollable at all.
+/// Picks the sorting named [label] from the sorting menu.
 Future<void> _tapTab(WidgetTester tester, String label) async {
-  await tester.ensureVisible(find.text(label));
-  await tester.tap(find.text(label));
+  await tester.tap(find.byType(BrowseSortingButton));
+  await tester.pumpAndSettle();
+  await tester.tap(find.widgetWithText(CheckedPopupMenuItem<int>, label));
   await _settleTabs(tester);
 }
 
-/// Long enough for the tab indicator to finish sliding and the grid to fetch.
+/// Long enough for the page to finish sliding and the grid to fetch.
 Future<void> _settleTabs(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
 }
 
-/// The label of the selected tab — the listing the user is actually looking at.
+/// The sorting the listing is actually on.
 ///
-/// Read through the [TabBar]'s own controller rather than an index this test
-/// computed, because the index is exactly what the screen must *not* rely on:
-/// Relevance appearing renumbers every tab behind it.
+/// Read through the controller the button drives rather than an index this
+/// test computed, because the index is exactly what the screen must *not* rely
+/// on: Relevance appearing renumbers every sorting behind it.
 String _selectedTab(WidgetTester tester) {
-  final TabBar bar = tester.widget<TabBar>(find.byType(TabBar));
-  final Tab selected = bar.tabs[bar.controller!.index] as Tab;
-  return selected.text!;
+  final BrowseSortingButton button = tester.widget<BrowseSortingButton>(
+    find.byType(BrowseSortingButton),
+  );
+  return _sortingNames[button.sortings[button.tabs.index]]!;
 }
+
+/// Every sorting the menu would offer, by label.
+List<String> _offeredSortings(WidgetTester tester) {
+  final BrowseSortingButton button = tester.widget<BrowseSortingButton>(
+    find.byType(BrowseSortingButton),
+  );
+  return <String>[
+    for (final Sorting sorting in button.sortings) _sortingNames[sorting]!,
+  ];
+}
+
+const Map<Sorting, String> _sortingNames = <Sorting, String>{
+  Sorting.dateAdded: 'Latest',
+  Sorting.relevance: 'Relevance',
+  Sorting.random: 'Random',
+  Sorting.views: 'Most viewed',
+  Sorting.favorites: 'Most favorited',
+  Sorting.toplist: 'Top',
+  Sorting.hot: 'Hot',
+};
 
 /// Every `sorting` Wallhaven was actually asked for, in order.
 List<String?> _sortingsRequested(FakeWallpaperSource source) {
