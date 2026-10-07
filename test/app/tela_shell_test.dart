@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tela/app/app.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/tela_shell.dart';
@@ -68,6 +69,49 @@ void main() {
     await _pumpShell(tester);
 
     expect(tester.getRect(_pill()).width, 753 - 32);
+  });
+
+  testWidgets('the wall runs on under a half veil, ending clear of the pill', (
+    WidgetTester tester,
+  ) async {
+    // The owner wants pictures to scroll past the bar, not stop at it
+    // (2026-10-06).
+    _setView(tester, const Size(1280, 800));
+
+    await _pumpShell(tester);
+
+    final Scaffold frame = tester.widget<Scaffold>(
+      find.byType(Scaffold).first,
+    );
+    expect(frame.extendBody, isTrue);
+
+    final DecoratedBox veil = tester.widget<DecoratedBox>(
+      find
+          .descendant(
+            of: find.ancestor(
+              of: find.byType(NavigationBar),
+              matching: find.byType(Stack),
+            ),
+            matching: find.byWidgetPredicate(
+              (Widget widget) =>
+                  widget is DecoratedBox &&
+                  widget.decoration is BoxDecoration &&
+                  (widget.decoration as BoxDecoration).gradient != null,
+            ),
+          )
+          .first,
+    );
+    final LinearGradient fade =
+        (veil.decoration as BoxDecoration).gradient! as LinearGradient;
+    expect(fade.colors.first.a, 0);
+    expect(fade.colors.last.a, closeTo(TelaShell.veilOpacity, 0.01));
+
+    // The branch is told how tall the strip is, so its last row can scroll
+    // up above the pill.
+    final double inset = MediaQuery.paddingOf(
+      tester.element(find.byType(StatefulNavigationShell)),
+    ).bottom;
+    expect(inset, greaterThanOrEqualTo(tester.getRect(_pill()).height));
   });
 
   testWidgets('the destinations reach the accessibility tree', (

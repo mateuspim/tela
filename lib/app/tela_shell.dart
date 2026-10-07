@@ -6,9 +6,15 @@ import 'package:tela/core/ui/floating_capsule.dart';
 /// The frame around tela's three primary destinations: one floating pill at
 /// the bottom, at every width.
 ///
-/// The pill is a [FloatingCapsule] inset on the opaque surface. The wall stops
-/// at that surface — nothing scrolls under the navigation (see
-/// [FloatingCapsule] for why tela's chrome is never glass).
+/// The pill is an opaque [FloatingCapsule] (see there for why tela's chrome is
+/// never glass), but the strip around it is not a solid band: the wall runs
+/// on beneath it, under a veil of the surface that fades in from clear to
+/// [veilOpacity]. The owner asked for the pictures to *"naturally scroll"*
+/// past the bar rather than stop at a hard edge (2026-10-06), relaxing the
+/// "nothing scrolls under the chrome" rule for this one strip. The pill itself
+/// stays solid, so its labels never sit on a photo. The wall still ends clear
+/// of it: `extendBody` hands the strip's height to the branch as bottom
+/// padding, which every scrolling list here already honours.
 ///
 /// Wide screens used to swap the pill for a side rail. In tablet landscape
 /// that spent a whole column of the screen on three buttons, and however the
@@ -28,20 +34,32 @@ class TelaShell extends StatelessWidget {
   /// three destinations across 1200dp.
   static const double navigationMaxWidth = 760;
 
+  /// How much of the surface the veil under the pill lays over the wall at
+  /// its densest. Half: the owner's *"like a 50% transparent"*.
+  static const double veilOpacity = 0.5;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true,
       body: navigationShell,
-      bottomNavigationBar: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-        child: Align(
-          heightFactor: 1,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: navigationMaxWidth),
-            child: _navigationPill(context),
+      bottomNavigationBar: Stack(
+        children: <Widget>[
+          const Positioned.fill(child: _NavigationVeil()),
+          SafeArea(
+            top: false,
+            minimum: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Align(
+              heightFactor: 1,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: navigationMaxWidth,
+                ),
+                child: _navigationPill(context),
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -83,6 +101,35 @@ class TelaShell extends StatelessWidget {
     navigationShell.goBranch(
       index,
       initialLocation: index == navigationShell.currentIndex,
+    );
+  }
+}
+
+/// The surface fading in behind the pill, so the wall dims as it passes
+/// under the navigation instead of being cut at a hard edge.
+///
+/// Ignores pointers: a decoration claims every hit inside its box, and the
+/// strip beside the pill would otherwise swallow taps meant for the wall.
+class _NavigationVeil extends StatelessWidget {
+  const _NavigationVeil();
+
+  @override
+  Widget build(BuildContext context) {
+    final Color surface = Theme.of(context).scaffoldBackgroundColor;
+    return IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: const <double>[0, 0.4],
+            colors: <Color>[
+              surface.withValues(alpha: 0),
+              surface.withValues(alpha: TelaShell.veilOpacity),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
