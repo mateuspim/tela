@@ -11,11 +11,11 @@ import 'package:flutter/rendering.dart';
 /// if the fill is ever made see-through.
 ///
 /// A null [radius] is a stadium (fully rounded ends), the shape for one-line
-/// controls; a panel taller than it is wide, like the rail, passes a radius.
+/// controls; a panel taller than a line passes a radius.
 ///
 /// ```dart
 /// FloatingCapsule(child: BrowseSearchField());
-/// FloatingCapsule(radius: 28, child: NavigationRail(...));
+/// FloatingCapsule(radius: 28, child: Column(children: <Widget>[...]));
 /// ```
 class FloatingCapsule extends StatelessWidget {
   /// Creates a capsule around [child].

@@ -7,8 +7,6 @@ import 'package:tela/app/app.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/tela_shell.dart';
 import 'package:tela/core/ui/floating_capsule.dart';
-import 'package:tela/core/ui/tela_mark.dart';
-import 'package:tela/core/ui/tela_wordmark.dart';
 
 import '../fakes/fake_download_queue.dart';
 import '../fakes/fake_favorites_repository.dart';
@@ -37,75 +35,48 @@ void main() {
     expect(find.textContaining('Nothing saved yet'), findsOneWidget);
   });
 
-  testWidgets('moves primary navigation to a rail on a wide screen', (
+  testWidgets('a wide screen keeps the bottom pill, never a rail', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1000, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    // A side rail spent a column on three buttons in tablet landscape, read
+    // as blank space (owner, 2026-10-06).
+    _setView(tester, const Size(1280, 800));
 
     await _pumpShell(tester);
 
-    expect(find.byType(NavigationRail), findsOneWidget);
-    expect(find.byType(NavigationBar), findsNothing);
-    expect(TelaShell.expandedNavigationWidth, 840);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(NavigationRail), findsNothing);
   });
 
-  testWidgets('the rail panel hugs its destinations, not the screen height', (
+  testWidgets('the pill stops growing in landscape, centred', (
     WidgetTester tester,
   ) async {
-    // Tablet landscape: three destinations at the top of a full-height panel,
-    // empty below them (owner, 2026-10-05).
-    tester.view.physicalSize = const Size(1200, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    _setView(tester, const Size(1280, 800));
 
     await _pumpShell(tester);
 
-    final Rect panel = tester.getRect(
-      find
-          .ancestor(
-            of: find.byType(NavigationRail),
-            matching: find.byType(FloatingCapsule),
-          )
-          .first,
-    );
-    final Rect settings = tester.getRect(
-      find.descendant(
-        of: find.byType(NavigationRail),
-        matching: find.text('Settings'),
-      ),
-    );
-    expect(panel.height, lessThan(800 / 2));
-    expect(panel.bottom, greaterThan(settings.bottom));
-    expect(panel.bottom - settings.bottom, lessThan(48));
-    // Centred in the height below the brand, not pinned to the top, where a
-    // short panel read as detached (owner, same day).
-    final double brandBottom = tester
-        .getBottomLeft(find.byType(TelaWordmark))
-        .dy;
-    final double above = panel.top - brandBottom;
-    final double below = 800 - 12 - panel.bottom;
-    expect((above - below).abs(), lessThan(24));
+    final Rect pill = tester.getRect(_pill());
+    expect(pill.width, TelaShell.navigationMaxWidth);
+    expect(pill.center.dx, 640);
   });
 
-  // Device pass F5 (2026-10-03): on the SM-X730 the rail's three destinations
-  // were missing from the accessibility tree uiautomator reads, so TalkBack
-  // could not reach them — a page route's BlockSemantics wiped them. Searched
-  // in the live semantics tree, as an accessibility service sees it, rather
-  // than asked of the widget's own node.
-  testWidgets('the rail destinations reach the accessibility tree', (
+  testWidgets('tablet portrait keeps its full-width pill', (
+    WidgetTester tester,
+  ) async {
+    _setView(tester, const Size(753, 1205));
+
+    await _pumpShell(tester);
+
+    expect(tester.getRect(_pill()).width, 753 - 32);
+  });
+
+  testWidgets('the destinations reach the accessibility tree', (
     WidgetTester tester,
   ) async {
     // Disposed in the body, not by addTearDown: flutter_test checks for a live
     // handle before tear-downs run.
     final SemanticsHandle semantics = tester.ensureSemantics();
-    tester.view.physicalSize = const Size(1000, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    _setView(tester, const Size(1280, 800));
 
     await _pumpShell(tester);
 
@@ -126,40 +97,20 @@ void main() {
     }
     semantics.dispose();
   });
+}
 
-  testWidgets('the rail leads with the brand lockup: mark over wordmark', (
-    WidgetTester tester,
-  ) async {
-    tester.view.physicalSize = const Size(1000, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+void _setView(WidgetTester tester, Size size) {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
 
-    await _pumpShell(tester);
-
-    // Above the panel rather than inside it, since the panel is centred
-    // (owner, 2026-10-05): the brand anchors the corner on its own.
-    final Finder shell = find.byType(TelaShell);
-    expect(
-      find.descendant(of: shell, matching: find.byType(TelaMark)),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: shell, matching: find.byType(TelaWordmark)),
-      findsOneWidget,
-    );
-    expect(
-      tester.getBottomLeft(find.byType(TelaWordmark)).dy,
-      lessThan(tester.getTopLeft(find.byType(NavigationRail)).dy),
-    );
-    // Stacked, not side by side — the rail is narrow, and a horizontal lockup
-    // would either shrink the wordmark below reading size or widen the rail
-    // at the wall's expense.
-    expect(
-      tester.getCenter(find.byType(TelaMark)).dy,
-      lessThan(tester.getCenter(find.byType(TelaWordmark)).dy),
-    );
-  });
+Finder _pill() {
+  return find.ancestor(
+    of: find.byType(NavigationBar),
+    matching: find.byType(FloatingCapsule),
+  );
 }
 
 Future<void> _pumpShell(WidgetTester tester) async {

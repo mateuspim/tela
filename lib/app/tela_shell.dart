@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/floating_capsule.dart';
-import 'package:tela/core/ui/tela_mark.dart';
-import 'package:tela/core/ui/tela_wordmark.dart';
 
-/// The adaptive frame around tela's three primary destinations.
+/// The frame around tela's three primary destinations: one floating pill at
+/// the bottom, at every width.
 ///
-/// Compact screens keep destinations thumb-reachable at the bottom. Wider
-/// screens move the same destinations into a rail so the wallpaper canvas can
-/// use the extra width instead of growing an oversized bottom bar.
+/// The pill is a [FloatingCapsule] inset on the opaque surface. The wall stops
+/// at that surface — nothing scrolls under the navigation (see
+/// [FloatingCapsule] for why tela's chrome is never glass).
 ///
-/// Both float: the bar is a pill and the rail a rounded panel, each a
-/// [FloatingCapsule] inset on the opaque surface. The wall stops at that
-/// surface — nothing scrolls under the navigation (see [FloatingCapsule] for
-/// why tela's chrome is never glass).
+/// Wide screens used to swap the pill for a side rail. In tablet landscape
+/// that spent a whole column of the screen on three buttons, and however the
+/// panel sat in it — full height, hugging the top, centred — the column read
+/// as blank space (owner, 2026-10-06: *"i still think there is too many blank
+/// space"*). The pill costs a strip of height instead and gives the wall the
+/// full width; portrait already had it and the owner liked it there.
 class TelaShell extends StatelessWidget {
   /// Creates the primary navigation shell.
   const TelaShell({required this.navigationShell, super.key});
@@ -22,103 +23,36 @@ class TelaShell extends StatelessWidget {
   /// go_router's stateful stack for each primary destination.
   final StatefulNavigationShell navigationShell;
 
+  /// The widest the pill grows. Tablet portrait (~753dp) keeps its
+  /// full-width pill; landscape stops here, centred, rather than stretching
+  /// three destinations across 1200dp.
+  static const double navigationMaxWidth = 760;
+
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        if (constraints.maxWidth >= expandedNavigationWidth) {
-          return _expandedFrame(context);
-        }
-        return _compactFrame(context);
-      },
-    );
-  }
-
-  /// Width at which persistent navigation moves from the bottom to the side.
-  static const double expandedNavigationWidth = 840;
-
-  Widget _compactFrame(BuildContext context) {
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: SafeArea(
         top: false,
         minimum: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-        child: FloatingCapsule(
-          child: NavigationBar(
-            backgroundColor: Colors.transparent,
-            height: 64,
-            selectedIndex: navigationShell.currentIndex,
-            destinations: _bottomDestinations(context),
-            onDestinationSelected: _openDestination,
+        child: Align(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: navigationMaxWidth),
+            child: _navigationPill(context),
           ),
         ),
       ),
     );
   }
 
-  Widget _expandedFrame(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        children: <Widget>[
-          _floatingRail(context),
-          // A semantics boundary around the branch, or the rail vanishes for
-          // TalkBack: every page route carries a ModalBarrier, whose
-          // BlockSemantics drops all nodes painted before it up to the nearest
-          // boundary — and the rail is painted first, in this same Row (device
-          // pass F5, 2026-10-03). The bottom bar escapes only by being painted
-          // after the body.
-          Expanded(
-            child: Semantics(container: true, child: navigationShell),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// The brand at the top, and the rail panel — as tall as its destinations
-  /// and no taller — centred in the height below it.
-  ///
-  /// The panel ran the full height of the screen, so in tablet landscape three
-  /// destinations sat at the top of a panel that was empty below them — the
-  /// owner: *"the three buttons waste so much space on the bottom, like in
-  /// portrait it sits flush"* (2026-10-05). Portrait gets the bottom pill,
-  /// which hugs its destinations; this is the same shape turned on its side.
-  ///
-  /// Centred, not top-aligned: a short panel pinned to the top read as
-  /// detached from the screen (owner, same day), and the middle of the edge
-  /// is where thumbs rest holding a tablet sideways. The brand left the panel
-  /// to anchor the corner on its own, level with the search row — inside a
-  /// centred panel it would float mid-screen.
-  ///
-  /// A Column with the panel in the remaining height rather than a Stack
-  /// centred on the whole screen: on a short landscape window a screen-centred
-  /// panel would slide up under the brand.
-  Widget _floatingRail(BuildContext context) {
-    return SafeArea(
-      right: false,
-      minimum: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-      child: Column(
-        children: <Widget>[
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: _RailBrand(),
-          ),
-          Expanded(
-            child: Center(child: IntrinsicHeight(child: _railPanel(context))),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _railPanel(BuildContext context) {
+  Widget _navigationPill(BuildContext context) {
     return FloatingCapsule(
-      radius: 28,
-      child: NavigationRail(
+      child: NavigationBar(
         backgroundColor: Colors.transparent,
+        height: 64,
         selectedIndex: navigationShell.currentIndex,
-        labelType: NavigationRailLabelType.all,
-        destinations: _railDestinations(context),
+        destinations: _bottomDestinations(context),
         onDestinationSelected: _openDestination,
       ),
     );
@@ -145,56 +79,10 @@ class TelaShell extends StatelessWidget {
     ];
   }
 
-  List<NavigationRailDestination> _railDestinations(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    return <NavigationRailDestination>[
-      NavigationRailDestination(
-        icon: const Icon(Icons.grid_view_outlined),
-        selectedIcon: const Icon(Icons.grid_view_rounded),
-        label: Text(l10n.navigationBrowse),
-      ),
-      NavigationRailDestination(
-        icon: const Icon(Icons.photo_library_outlined),
-        selectedIcon: const Icon(Icons.photo_library),
-        label: Text(l10n.navigationLibrary),
-      ),
-      NavigationRailDestination(
-        icon: const Icon(Icons.settings_outlined),
-        selectedIcon: const Icon(Icons.settings),
-        label: Text(l10n.settingsTitle),
-      ),
-    ];
-  }
-
   void _openDestination(int index) {
     navigationShell.goBranch(
       index,
       initialLocation: index == navigationShell.currentIndex,
-    );
-  }
-}
-
-/// The rail's brand lockup: the mark stacked over the wordmark.
-///
-/// Stacked rather than side by side because the rail is narrow — a horizontal
-/// lockup would either shrink the wordmark below reading size or push the rail
-/// wider, and the rail exists to give width back to the wall.
-///
-/// The lockup is private to the rail: it is the only place in the app that
-/// shows both, so a shared widget would be speculative. [TelaMark] and
-/// [TelaWordmark] are the shared pieces.
-class _RailBrand extends StatelessWidget {
-  const _RailBrand();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Column(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        TelaMark(size: 30),
-        SizedBox(height: 10),
-        TelaWordmark(fontSize: 20),
-      ],
     );
   }
 }

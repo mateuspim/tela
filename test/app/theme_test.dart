@@ -199,15 +199,11 @@ void main() {
         );
       });
 
-      test('the rail and the sorting tabs select on the same accent pill', () {
+      test('the nav bar and the sorting tabs select on the same accent', () {
         final ShapeDecoration tab =
             theme.tabBarTheme.indicator! as ShapeDecoration;
 
-        expect(
-          theme.navigationRailTheme.indicatorColor,
-          scheme.primaryContainer,
-        );
-        expect(tab.color, scheme.primaryContainer);
+        expect(tab.color, theme.navigationBarTheme.indicatorColor);
       });
 
       test('the selected destination gains weight, not only colour', () {

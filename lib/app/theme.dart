@@ -192,7 +192,6 @@ abstract final class TelaTheme {
         focusedBorder: _inputBorder(color: scheme.primary),
       ),
       navigationBarTheme: _navigationBarTheme(scheme),
-      navigationRailTheme: _navigationRailTheme(scheme),
       tabBarTheme: _tabBarTheme(scheme),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -329,24 +328,6 @@ abstract final class TelaTheme {
       elevation: 0,
       iconTheme: _selectedIconColor(scheme),
       labelTextStyle: _selectedLabelStyle(scheme),
-    );
-  }
-
-  /// The wide-screen navigation rail, matching the bar's selected language.
-  static NavigationRailThemeData _navigationRailTheme(ColorScheme scheme) {
-    return NavigationRailThemeData(
-      backgroundColor: scheme.surfaceContainerLow,
-      indicatorColor: scheme.primaryContainer,
-      minWidth: 88,
-      minExtendedWidth: 88,
-      useIndicator: true,
-      selectedIconTheme: IconThemeData(color: scheme.onPrimaryContainer),
-      unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant),
-      selectedLabelTextStyle: TextStyle(
-        color: scheme.onSurface,
-        fontWeight: FontWeight.w600,
-      ),
-      unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant),
     );
   }
 
