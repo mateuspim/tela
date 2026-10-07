@@ -1,3 +1,5 @@
+import 'package:tela/domain/models/stored_bits.dart';
+
 /// How explicit a wallpaper is.
 ///
 /// Nearly isomorphic to a booru's safe/questionable/explicit, which is lucky
@@ -68,4 +70,21 @@ extension type const PurityFilter(Set<Purity> purities) {
 
   /// True when this filter cannot be served without an API key.
   bool get requiresApiKey => purities.any((Purity p) => p.requiresApiKey);
+
+  /// This filter with [Purity.nsfw] taken out, or [sfwOnly] when nothing else
+  /// was in it — the fail-safe direction when there is no key to unlock it.
+  PurityFilter withoutNsfw() {
+    final Set<Purity> rest = <Purity>{...purities}..remove(Purity.nsfw);
+    return rest.isEmpty ? sfwOnly : PurityFilter(rest);
+  }
+
+  /// Encodes to the 3-bit mask tela stores a saved filter as, in the fixed
+  /// order `sfw sketchy nsfw` — see `CategoryFilter.encodeStored`.
+  String encodeStored() => encodeStoredBits(Purity.values, purities);
+
+  /// Reads back a mask [encodeStored] wrote, or null if [bits] is not one.
+  static PurityFilter? tryParseStored(String bits) {
+    final Set<Purity>? selected = decodeStoredBits(bits, Purity.values);
+    return selected == null ? null : PurityFilter(selected);
+  }
 }

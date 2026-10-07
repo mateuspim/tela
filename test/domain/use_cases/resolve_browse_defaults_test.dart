@@ -52,24 +52,42 @@ void main() {
     expect((await noSnapshot()).defaults, const BrowseDefaults());
   });
 
-  test('never opens browse on explicit, whichever source answers', () async {
-    // Neither model carries a purity, so there is nothing for either source to
-    // bring one back through. Pinned here because this is the seam both pass.
-    for (final BrowseDefaultsSource source in BrowseDefaultsSource.values) {
-      final ResolveBrowseDefaults resolve = _resolve(
-        source: source,
-        account: _account,
-        device: _device,
-      );
+  test('the account never opens browse on explicit', () async {
+    // An account carries no purity, so a fresh query keeps tela's own safe.
+    final ResolveBrowseDefaults resolve = _resolve(
+      account: _account,
+      apiKey: 'key',
+    );
 
-      final SearchQuery query = (await resolve()).defaults.applyTo(
-        const SearchQuery(),
-      );
+    final SearchQuery query = (await resolve()).defaults.applyTo(
+      const SearchQuery(),
+    );
 
-      expect(query.purity.purities, <Purity>{
-        Purity.sfw,
-      }, reason: 'source: ${source.name}');
-    }
+    expect(query.purity.purities, <Purity>{Purity.sfw});
+  });
+
+  test('a saved purity opens browse when a key unlocks it', () async {
+    final ResolveBrowseDefaults resolve = _resolve(
+      source: BrowseDefaultsSource.device,
+      device: _everyPurity,
+      apiKey: 'key',
+    );
+
+    expect((await resolve()).defaults.purity, _allPurities);
+  });
+
+  test('a saved explicit purity is stripped without a key', () async {
+    // Regression guard for the save-purity change: a keyless Wallhaven would
+    // refuse the very first request rather than open on what it can serve.
+    final ResolveBrowseDefaults resolve = _resolve(
+      source: BrowseDefaultsSource.device,
+      device: _everyPurity,
+    );
+
+    expect((await resolve()).defaults.purity?.purities, <Purity>{
+      Purity.sfw,
+      Purity.sketchy,
+    });
   });
 }
 
@@ -85,11 +103,21 @@ const BrowseDefaults _device = BrowseDefaults(
   order: SortOrder.asc,
 );
 
+const PurityFilter _allPurities = PurityFilter(<Purity>{
+  Purity.sfw,
+  Purity.sketchy,
+  Purity.nsfw,
+});
+
+const BrowseDefaults _everyPurity = BrowseDefaults(purity: _allPurities);
+
 ResolveBrowseDefaults _resolve({
   BrowseDefaultsSource source = BrowseDefaultsSource.account,
   AccountSettings? account,
   BrowseDefaults? device,
+  String? apiKey,
 }) {
+  final FakeSecretStore secrets = FakeSecretStore(storedKey: apiKey);
   final FakeSettingsRepository settings = FakeSettingsRepository(
     accountDefaults: account,
     source: source,
@@ -99,11 +127,12 @@ ResolveBrowseDefaults _resolve({
     settings: settings,
     loadAccount: LoadAccountDefaults(
       settings: settings,
-      secrets: FakeSecretStore(),
+      secrets: secrets,
       syncDefaults: SyncAccountDefaults(
         source: FakeWallpaperSource(),
         settings: settings,
       ),
     ),
+    secrets: secrets,
   );
 }

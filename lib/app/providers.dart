@@ -583,6 +583,7 @@ final Provider<ResolveBrowseDefaults> resolveBrowseDefaultsProvider =
       (Ref ref) => ResolveBrowseDefaults(
         settings: ref.watch(settingsRepositoryProvider),
         loadAccount: ref.watch(loadAccountDefaultsProvider),
+        secrets: ref.watch(secretStoreProvider),
       ),
     );
 

@@ -12,6 +12,7 @@ import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
 
@@ -108,21 +109,31 @@ class _Choices extends ConsumerWidget {
     return _summary(context, account.toBrowseDefaults());
   }
 
-  /// One source's filters, as one line: "General, Anime · Last month ·
-  /// Portrait".
+  /// One source's filters, as one line: "SFW, Sketchy · General, Anime ·
+  /// Last month · Portrait".
   ///
-  /// No purity, because neither source carries one — see [BrowseDefaults].
+  /// The purity leads only when the source saved one, which an account never
+  /// does — see [BrowseDefaults].
   String _summary(BuildContext context, BrowseDefaults defaults) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final String categories = defaults.categories.categories
         .map((Category category) => categoryLabel(l10n, category))
         .join(', ');
     return <String>[
+      ?_purities(l10n, defaults.purity),
       categories,
       topRangeLabel(l10n, defaults.topRange),
       ratiosLabel(l10n, defaults.ratios),
       resolutionFilterLabel(l10n, defaults.resolution),
     ].join(' · ');
+  }
+
+  String? _purities(AppLocalizations l10n, PurityFilter? purity) {
+    if (purity == null) return null;
+    return Purity.values
+        .where(purity.purities.contains)
+        .map((Purity each) => purityLabel(l10n, each))
+        .join(', ');
   }
 }
 

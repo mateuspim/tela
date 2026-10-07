@@ -254,8 +254,32 @@ void main() {
       expect(await db.settingValue('device.resolution'), 'auto');
     });
 
-    test('never writes a device.purity row', () async {
+    test('writes no device.purity row for "no opinion"', () async {
       await settings.saveDeviceDefaults(_device);
+
+      expect(await db.settingValue('device.purity'), isNull);
+    });
+
+    test('round-trips a saved purity, explicit included', () async {
+      const BrowseDefaults everything = BrowseDefaults(
+        purity: PurityFilter(<Purity>{
+          Purity.sfw,
+          Purity.sketchy,
+          Purity.nsfw,
+        }),
+      );
+
+      await settings.saveDeviceDefaults(everything);
+
+      expect(await db.settingValue('device.purity'), '111');
+      expect(await settings.loadDeviceDefaults(), everything);
+    });
+
+    test('dropping the purity deletes its row, not leaves the last', () async {
+      await settings.saveDeviceDefaults(
+        const BrowseDefaults(purity: PurityFilter.sfwOnly),
+      );
+      await settings.saveDeviceDefaults(const BrowseDefaults());
 
       expect(await db.settingValue('device.purity'), isNull);
     });

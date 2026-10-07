@@ -451,12 +451,12 @@ class _FilterSheetState extends ConsumerState<FilterSheet> {
 
   /// Keeps the draft as this device's defaults, and browses on it.
   ///
-  /// Applies the draft first, so the purity the user picked for this session
-  /// still lands: the saved snapshot deliberately carries no purity, so
-  /// adopting it is not what would put a chosen "Sketchy" on screen. Saving
-  /// also switches the source to this device — a "save these as my default"
-  /// that left browse still opening on the account's would be a button that
-  /// appears to do nothing.
+  /// Applies the draft first, so the listing changes the moment the sheet
+  /// closes rather than when the save lands. The snapshot keeps the purity
+  /// too — explicit included, though browse only opens on it while a key is
+  /// stored (see `ResolveBrowseDefaults`). Saving also switches the source to
+  /// this device — a "save these as my default" that left browse still opening
+  /// on the account's would be a button that appears to do nothing.
   ///
   /// The *applying* half is scoped like any other apply, but the saving half is
   /// deliberately not: "my default filters" is one answer for the device, not a

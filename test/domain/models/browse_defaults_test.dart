@@ -20,11 +20,10 @@ void main() {
       expect(captured.color, WallpaperColor('#0066cc'));
     });
 
-    test('never captures the purity, however the query is browsing', () {
-      // The load-bearing one. A saved default carrying explicit would put a
-      // grid of it on the launch screen, which is the bug the account sync
-      // already shipped once (hardware, 2026-07-14) — the user's own
-      // fingerprints on it would not make it a better front page.
+    test('captures the purity, which "Save as default" asked it to', () {
+      // Regression (2026-10-07): a saved safe+sketchy+explicit reopened on
+      // safe alone. Whether explicit may *stand* is ResolveBrowseDefaults'
+      // call, made against the key — not a refusal to save it.
       const SearchQuery explicit = SearchQuery(
         purity: PurityFilter(<Purity>{Purity.sfw, Purity.nsfw}),
       );
@@ -33,7 +32,7 @@ void main() {
         explicit,
       ).applyTo(const SearchQuery());
 
-      expect(reopened.purity.purities, <Purity>{Purity.sfw});
+      expect(reopened.purity.purities, <Purity>{Purity.sfw, Purity.nsfw});
     });
 
     test('never captures the term — searching is not a filter', () {
@@ -44,6 +43,53 @@ void main() {
       ).applyTo(const SearchQuery());
 
       expect(reopened.term, isEmpty);
+    });
+  });
+
+  group('isExpressedBy', () {
+    test('a query on the defaults expresses them, whatever its purity', () {
+      // Defaults with no purity have no opinion on it, so a sketchy session
+      // still counts as untouched — what lets a late account sync land.
+      const SearchQuery sketchy = SearchQuery(
+        purity: PurityFilter(<Purity>{Purity.sketchy}),
+      );
+
+      expect(const BrowseDefaults().isExpressedBy(sketchy), isTrue);
+    });
+
+    test('a query that moved a filter, or a saved purity, does not', () {
+      const BrowseDefaults saved = BrowseDefaults(
+        purity: PurityFilter(<Purity>{Purity.sketchy}),
+      );
+
+      expect(saved.isExpressedBy(const SearchQuery()), isFalse);
+      expect(
+        const BrowseDefaults().isExpressedBy(
+          const SearchQuery(topRange: TopRange.oneYear),
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('withoutNsfw', () {
+    test('takes explicit out of a saved purity and nothing else', () {
+      const BrowseDefaults saved = BrowseDefaults(
+        topRange: TopRange.oneYear,
+        purity: PurityFilter(<Purity>{Purity.sketchy, Purity.nsfw}),
+      );
+
+      expect(
+        saved.withoutNsfw(),
+        const BrowseDefaults(
+          topRange: TopRange.oneYear,
+          purity: PurityFilter(<Purity>{Purity.sketchy}),
+        ),
+      );
+    });
+
+    test('leaves "no opinion" alone', () {
+      expect(const BrowseDefaults().withoutNsfw().purity, isNull);
     });
   });
 
@@ -139,6 +185,7 @@ void main() {
         storedRatios: saved.encodedRatios(),
         storedOrder: saved.order.name,
         storedColor: saved.color?.hex,
+        storedPurity: saved.encodedPurity(),
       );
 
       expect(parsed, saved);
@@ -152,6 +199,24 @@ void main() {
 
     test('an absent colour row is "any colour"', () {
       expect(_parse()?.color, isNull);
+    });
+
+    test('an absent purity row is "no opinion", as every older snapshot', () {
+      expect(_parse()?.purity, isNull);
+    });
+
+    test('an unreadable purity costs the purity, not the snapshot', () {
+      final BrowseDefaults? parsed = _parse(purity: '000');
+
+      expect(parsed, isNotNull);
+      expect(parsed?.purity, isNull);
+    });
+
+    test('reads a stored purity mask back', () {
+      expect(_parse(purity: '011')?.purity?.purities, <Purity>{
+        Purity.sketchy,
+        Purity.nsfw,
+      });
     });
 
     test('one unreadable swatch costs the colour, not the snapshot', () {
@@ -191,6 +256,7 @@ void main() {
       expect(base, isNot(const BrowseDefaults(order: SortOrder.asc)));
       expect(base, isNot(const BrowseDefaults(ratios: <RatioChoice>[])));
       expect(base, isNot(base.applyToColor(WallpaperColor('#0066cc'))));
+      expect(base, isNot(const BrowseDefaults(purity: PurityFilter.sfwOnly)));
     });
   });
 
@@ -230,6 +296,7 @@ BrowseDefaults? _parse({
   String order = 'desc',
   String? color,
   String? resolution,
+  String? purity,
 }) {
   return BrowseDefaults.tryParse(
     storedCategories: categories,
@@ -238,6 +305,7 @@ BrowseDefaults? _parse({
     storedOrder: order,
     storedColor: color,
     storedResolution: resolution,
+    storedPurity: purity,
   );
 }
 

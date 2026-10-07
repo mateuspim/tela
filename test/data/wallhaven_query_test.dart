@@ -82,22 +82,23 @@ void main() {
     test('unions the ratios, because that is what the API does with them', () {
       final Map<String, String> params = wallhavenQueryParameters(
         const SearchQuery(
-          ratios: <RatioChoice>[ExactRatio(9, 16), ShapeRatio.landscape],
+          ratios: <RatioChoice>[ExactRatio(9, 16), ExactRatio(9, 20)],
         ),
       );
 
-      expect(params['ratios'], '9x16,landscape');
+      expect(params['ratios'], '9x16,9x20');
     });
 
-    test('sends no `ratios` at all for "any shape"', () {
-      // Not an empty `ratios=`, which is not how you ask for every shape.
+    test('sends both shape keywords for "any shape"', () {
+      // Regression: omitting `ratios` lets a keyed request fall back to the
+      // account's saved ratios, which overrode a device default of "any".
       final Map<String, String> params = wallhavenQueryParameters(
         const SearchQuery(
           ratios: <RatioChoice>[],
         ),
       );
 
-      expect(params.containsKey('ratios'), isFalse);
+      expect(params['ratios'], 'portrait,landscape');
     });
 
     test('never puts the API key in the query string', () {

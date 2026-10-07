@@ -12,6 +12,7 @@ import 'package:tela/data/wallhaven/wallhaven_query.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
@@ -574,8 +575,9 @@ void main() {
     expect(find.text('Saved as your browse defaults.'), findsOneWidget);
   });
 
-  testWidgets('a saved default never carries a purity, so browse still opens '
-      'on safe', (WidgetTester tester) async {
+  testWidgets('a saved default keeps the purity it was saved with', (
+    WidgetTester tester,
+  ) async {
     final FakeSettingsRepository settings = FakeSettingsRepository();
     await _pumpBrowse(
       tester,
@@ -590,13 +592,46 @@ void main() {
     await tester.tap(find.text('Save as default'));
     await tester.pumpAndSettle();
 
-    // The session keeps the explicit chip the user just pressed, but nothing
-    // about it reaches the snapshot — the next launch opens on safe.
+    // Regression (2026-10-07): safe+explicit saved as the default reopened
+    // on safe alone.
     expect(settings.deviceSaved, isNotNull);
     final SearchQuery reopened = settings.deviceSaved!.applyTo(
       const SearchQuery(),
     );
-    expect(reopened.purity.purities, <Purity>{Purity.sfw});
+    expect(reopened.purity.purities, <Purity>{Purity.sfw, Purity.nsfw});
+  });
+
+  testWidgets('a launch on a saved explicit default asks for it with a key', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(
+      tester,
+      source,
+      storedKey: 'abc123',
+      settings: FakeSettingsRepository(
+        source: BrowseDefaultsSource.device,
+        deviceDefaults: _savedEveryPurity,
+      ),
+    );
+
+    expect(SearchQueryFacts(source.receivedQueries.last).purity, '111');
+  });
+
+  testWidgets('without a key the same default opens on what it can serve', (
+    WidgetTester tester,
+  ) async {
+    final FakeWallpaperSource source = FakeWallpaperSource();
+    await _pumpBrowse(
+      tester,
+      source,
+      settings: FakeSettingsRepository(
+        source: BrowseDefaultsSource.device,
+        deviceDefaults: _savedEveryPurity,
+      ),
+    );
+
+    expect(SearchQueryFacts(source.receivedQueries.last).purity, '110');
   });
 
   testWidgets('offers the shape of the screen the user is actually holding', (
@@ -639,17 +674,16 @@ void main() {
 
     await _openFilters(tester);
     // `portrait` is broader than any exact ratio and is not a synonym for one:
-    // it returns everything taller than it is wide.
+    // it returns everything taller than it is wide. It replaces the default
+    // 9x16 rather than joining it: Wallhaven drops a keyword sent beside an
+    // exact ratio, so `9x16,portrait` would have meant 9x16 alone.
     await _tapInSheet(tester, find.widgetWithText(FilterChip, 'Any portrait'));
     await _applyFilters(tester);
 
-    expect(
-      SearchQueryFacts(source.receivedQueries.last).ratios,
-      '9x16,portrait',
-    );
+    expect(SearchQueryFacts(source.receivedQueries.last).ratios, 'portrait');
   });
 
-  testWidgets('"Any shape" sends no ratios param at all', (
+  testWidgets('"Any shape" sends both shape keywords', (
     WidgetTester tester,
   ) async {
     _phoneViewport(tester);
@@ -660,9 +694,13 @@ void main() {
     await _tapInSheet(tester, find.widgetWithText(FilterChip, 'Any shape'));
     await _applyFilters(tester);
 
-    // Not an empty `ratios=`, which is not how you ask Wallhaven for every
-    // shape. The last ratio chip *may* be turned off, unlike the last category.
-    expect(SearchQueryFacts(source.receivedQueries.last).ratios, isNull);
+    // Spelled out, not omitted: a keyed request fills an absent `ratios` from
+    // the account's settings. The last ratio chip *may* be turned off, unlike
+    // the last category.
+    expect(
+      SearchQueryFacts(source.receivedQueries.last).ratios,
+      'portrait,landscape',
+    );
   });
 
   testWidgets('the resolution filter opens on Automatic, fitting the screen', (
@@ -961,7 +999,7 @@ class SearchQueryFacts {
   /// The `colors` param — bare hex, no leading `#`, absent when unfiltered.
   String? get colors => _params['colors'];
 
-  /// The `ratios` param — comma-joined, absent when every shape is wanted.
+  /// The `ratios` param — comma-joined, both keywords for every shape.
   String? get ratios => _params['ratios'];
 
   /// The `atleast` param — the minimum size, absent under an exact filter.
@@ -971,3 +1009,9 @@ class SearchQueryFacts {
   /// Never present at the same time as [atLeast]; the server ignores it if so.
   String? get resolutions => _params['resolutions'];
 }
+
+/// A device default saved with every purity on, as the user who hit this did.
+const BrowseDefaults _savedEveryPurity = BrowseDefaults(
+  ratios: <RatioChoice>[],
+  purity: PurityFilter(<Purity>{Purity.sfw, Purity.sketchy, Purity.nsfw}),
+);

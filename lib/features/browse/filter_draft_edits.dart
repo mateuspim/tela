@@ -43,11 +43,22 @@ SearchQuery withPurityToggled(SearchQuery draft, Purity purity) {
 /// Unlike the categories and the purities, the last chip *may* be turned off:
 /// an empty `ratios` is a legitimate request — it is how you ask Wallhaven for
 /// every shape — where an empty category mask is a 400.
+///
+/// A shape keyword and an exact ratio never share the selection, so turning
+/// one kind on clears the other. Wallhaven does not union them: it drops the
+/// keyword the moment an exact ratio rides along (real server, 2026-10-07 —
+/// `ratios=landscape,9x16` answers 6106 where `landscape` alone answers
+/// 526238), so a mixed selection reads as a filter that ignored one chip.
 SearchQuery withRatioToggled(SearchQuery draft, RatioChoice choice) {
-  final List<RatioChoice> next = <RatioChoice>[...draft.ratios];
+  final List<RatioChoice> next = <RatioChoice>[
+    for (final RatioChoice kept in draft.ratios)
+      if (_isShape(kept) == _isShape(choice)) kept,
+  ];
   if (!next.remove(choice)) next.add(choice);
   return draft.copyWith(ratios: next);
 }
+
+bool _isShape(RatioChoice choice) => choice is ShapeRatio;
 
 /// Asks for every shape again.
 SearchQuery withRatiosCleared(SearchQuery draft) =>

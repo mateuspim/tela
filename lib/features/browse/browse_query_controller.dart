@@ -61,8 +61,9 @@ class BrowseQueryController extends Notifier<SearchQuery>
   /// The query a shelf opens on with nothing set by hand — what "Reset" means.
   ///
   /// Onto a *fresh* query rather than the current one, which is what puts the
-  /// purity back to safe. A linked listing resets to this same place: its
-  /// filters are its own, but "no filters" is not a per-shelf opinion.
+  /// purity back to the saved default's, or to safe when it has none. A linked
+  /// listing resets to this same place: its filters are its own, but "no
+  /// filters" is not a per-shelf opinion.
   SearchQuery get defaultQuery => _defaults.applyTo(const SearchQuery());
 
   /// Sets the free-text term. Empty means "browse", not "search for nothing".
@@ -82,8 +83,9 @@ class BrowseQueryController extends Notifier<SearchQuery>
 
   /// Restores the defaults browse currently opens on.
   ///
-  /// The one place the purity goes back to safe — "Reset filters" is the button
-  /// that undoes a sketchy or explicit session. The term survives: it is not a
+  /// The one place the purity goes back to the default — "Reset filters" is
+  /// the button that undoes a sketchy or explicit session, back to safe unless
+  /// the device's saved default says otherwise. The term survives: it is not a
   /// filter.
   @override
   void clearFilters() {
@@ -133,18 +135,19 @@ class BrowseQueryController extends Notifier<SearchQuery>
   /// force: the account backfill, or a manual refresh. Landing those on top of
   /// a filter someone just chose would silently undo it — but doing nothing at
   /// all would mean saving a key appears to change nothing until the next
-  /// launch. "Untouched" is a real comparison rather than a guess:
-  /// [BrowseDefaults] has value equality, so the live query's own filters
-  /// either still encode the old defaults or they do not.
+  /// launch. "Untouched" is a real comparison rather than a guess: the live
+  /// query either still expresses the old defaults or it does not
+  /// ([BrowseDefaults.isExpressedBy]).
   ///
   /// Applied onto the **current** query, not a fresh one, so what the defaults
   /// do not speak for survives: the term, the tab's sorting, and — the
-  /// load-bearing one — the purity. Adopting a snapshot must not quietly switch
-  /// the grid back to safe under someone who turned sketchy on for this
-  /// session. Purity only goes back to safe on a relaunch or an explicit
-  /// [clearFilters].
+  /// load-bearing one — the purity, whenever the defaults have no opinion on
+  /// it. The account's never do, so a late sync must not quietly switch the
+  /// grid back to safe under someone who turned sketchy on for this session.
+  /// A device snapshot with a saved purity does carry one, and adopting it
+  /// outright is exactly what saving it asked for.
   void _adopt(BrowseDefaults defaults, {required bool outright}) {
-    final bool untouched = BrowseDefaults.of(state) == _defaults;
+    final bool untouched = _defaults.isExpressedBy(state);
     _defaults = defaults;
     if (outright || untouched) state = defaults.applyTo(state);
   }

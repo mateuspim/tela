@@ -1,5 +1,6 @@
 import 'package:meta/meta.dart';
 import 'package:tela/domain/models/category.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution_filter.dart';
 import 'package:tela/domain/models/search_query.dart';
@@ -69,16 +70,17 @@ class ActiveBrowseDefaults {
 
 /// The filters a fresh listing starts from, and what "Reset" returns to.
 ///
-/// **Purity is not one of them, and it is absent rather than ignored.** Browse
-/// always opens on safe. Wallhaven's `/settings` states an account's purity,
-/// and honouring it turned tela's front page into a masonry grid of explicit
-/// thumbnails, at launch, behind no gate (seen on hardware, 2026-07-14). The
-/// same argument outlives the account: a *saved* default carrying explicit
-/// would do the identical thing, just with the user's own fingerprints on it,
-/// and a phone is the device you unlock on a train. Sketchy and explicit stay
-/// per-session choices in the filter sheet, which is the one place they are
-/// always a deliberate act. A field nothing reads is a field somebody
-/// eventually applies, so there is no field.
+/// **Purity is the device's to save, never the account's.** Wallhaven's
+/// `/settings` states an account's purity, and honouring it turned tela's front
+/// page into a masonry grid of explicit thumbnails, at launch, behind no gate
+/// (seen on hardware, 2026-07-14) — so `AccountSettings` still carries none,
+/// and its defaults leave [purity] null. For a while the same argument kept it
+/// out of the *saved* snapshot too, and browse always opened on safe; but the
+/// filter sheet's "Save as default" is a deliberate act on this phone, made
+/// by its owner, and refusing to keep the one choice they saved read as a bug
+/// (2026-10-07). A null [purity] means "no opinion": [applyTo] leaves the
+/// query's alone. An explicit one without a key to unlock it is stripped where
+/// the defaults are resolved, not here — see `ResolveBrowseDefaults`.
 ///
 /// `sorting` is absent for a duller reason: it belongs to the tab you are on,
 /// not to the filters you chose. The *resolution* filter is here, though it
@@ -103,15 +105,17 @@ class BrowseDefaults {
     this.resolution = const AutomaticResolution(),
     this.order = SortOrder.desc,
     this.color,
+    this.purity,
   });
 
   /// Captures the filters [query] currently expresses.
   ///
   /// This is "save what I am looking at as my default". The term is not a
   /// filter — searching for "sunset" is not an opinion about categories — and
-  /// the purity is not saved at all, per the class doc.
+  /// the purity *is* saved, per the class doc.
   factory BrowseDefaults.of(SearchQuery query) {
     return BrowseDefaults(
+      purity: query.purity,
       categories: query.categories,
       topRange: query.topRange,
       ratios: query.ratios,
@@ -134,6 +138,7 @@ class BrowseDefaults {
     required String storedOrder,
     String? storedColor,
     String? storedResolution,
+    String? storedPurity,
   }) {
     final CategoryFilter? categories = CategoryFilter.tryParseStored(
       storedCategories,
@@ -165,6 +170,11 @@ class BrowseDefaults {
       color: storedColor == null
           ? null
           : WallpaperColor.readAll(<String>[storedColor]).firstOrNull,
+      // Absent on every snapshot saved before purity was, and unreadable costs
+      // the purity alone — both read as "no opinion", which opens on safe.
+      purity: storedPurity == null
+          ? null
+          : PurityFilter.tryParseStored(storedPurity),
     );
   }
 
@@ -187,6 +197,40 @@ class BrowseDefaults {
   /// Dominant colour to match, or null for any colour.
   final WallpaperColor? color;
 
+  /// The purities to open on, or null for no opinion — always null from an
+  /// account, per the class doc.
+  final PurityFilter? purity;
+
+  /// The stored form of [purity], e.g. `110`, or null for no opinion.
+  String? encodedPurity() => purity?.encodeStored();
+
+  /// This snapshot with explicit content taken out of its [purity].
+  ///
+  /// For a device with no key to unlock it: a saved explicit default would
+  /// otherwise open browse on a request the source can only refuse.
+  BrowseDefaults withoutNsfw() {
+    final PurityFilter? saved = purity;
+    if (saved == null) return this;
+    return BrowseDefaults(
+      categories: categories,
+      topRange: topRange,
+      ratios: ratios,
+      resolution: resolution,
+      order: order,
+      color: color,
+      purity: saved.withoutNsfw(),
+    );
+  }
+
+  /// Whether [query] already says everything these defaults say.
+  ///
+  /// The test for "the user has not touched the filters". Not
+  /// `BrowseDefaults.of(query) == this`: a query always has a purity, so that
+  /// would never match defaults with no opinion on one.
+  bool isExpressedBy(SearchQuery query) {
+    return BrowseDefaults.of(applyTo(query)) == BrowseDefaults.of(query);
+  }
+
   /// The stored form of [ratios]: a comma-joined list, empty for "any shape".
   String encodedRatios() => RatioChoice.encode(ratios) ?? '';
 
@@ -194,8 +238,8 @@ class BrowseDefaults {
   String encodedResolution() => resolution.encode();
 
   /// Returns [query] with these defaults applied, and everything they do not
-  /// speak for — the purity, the term, the tab's sorting — left exactly as it
-  /// was.
+  /// speak for — the term, the tab's sorting, and a null purity — left exactly
+  /// as it was.
   ///
   /// Goes through [SearchQuery.withColor] rather than `copyWith` because a
   /// snapshot saved with *no* colour has to be able to clear one: `copyWith`
@@ -209,6 +253,7 @@ class BrowseDefaults {
           ratios: ratios,
           resolution: resolution,
           order: order,
+          purity: purity,
         )
         .withColor(color);
   }
@@ -226,7 +271,8 @@ class BrowseDefaults {
         other.encodedRatios() == encodedRatios() &&
         other.resolution == resolution &&
         other.order == order &&
-        other.color == color;
+        other.color == color &&
+        other.encodedPurity() == encodedPurity();
   }
 
   @override
@@ -238,6 +284,7 @@ class BrowseDefaults {
       resolution,
       order,
       color,
+      encodedPurity(),
     );
   }
 }
