@@ -639,14 +639,13 @@ void main() {
 
     await _openFilters(tester);
     // `portrait` is broader than any exact ratio and is not a synonym for one:
-    // it returns everything taller than it is wide.
+    // it returns everything taller than it is wide. It replaces the default
+    // 9x16 rather than joining it: Wallhaven drops a keyword sent beside an
+    // exact ratio, so `9x16,portrait` would have meant 9x16 alone.
     await _tapInSheet(tester, find.widgetWithText(FilterChip, 'Any portrait'));
     await _applyFilters(tester);
 
-    expect(
-      SearchQueryFacts(source.receivedQueries.last).ratios,
-      '9x16,portrait',
-    );
+    expect(SearchQueryFacts(source.receivedQueries.last).ratios, 'portrait');
   });
 
   testWidgets('"Any shape" sends both shape keywords', (

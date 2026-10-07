@@ -76,6 +76,37 @@ void main() {
     });
   });
 
+  group('a shape keyword and an exact ratio never mix', () {
+    // Regression: Wallhaven drops the keyword when an exact ratio rides along,
+    // so `landscape,9x16` quietly meant `9x16` alone.
+    test('a keyword clears the exact ratios', () {
+      const SearchQuery draft = SearchQuery(
+        ratios: <RatioChoice>[ExactRatio(9, 16), ExactRatio(16, 9)],
+      );
+      final SearchQuery next = withRatioToggled(draft, ShapeRatio.landscape);
+      expect(next.ratios, <RatioChoice>[ShapeRatio.landscape]);
+    });
+
+    test('an exact ratio clears the keywords', () {
+      const SearchQuery draft = SearchQuery(
+        ratios: <RatioChoice>[ShapeRatio.portrait, ShapeRatio.landscape],
+      );
+      final SearchQuery next = withRatioToggled(draft, const ExactRatio(9, 20));
+      expect(next.ratios, <RatioChoice>[const ExactRatio(9, 20)]);
+    });
+
+    test('ratios of the same kind still union', () {
+      const SearchQuery draft = SearchQuery(
+        ratios: <RatioChoice>[ExactRatio(16, 9)],
+      );
+      final SearchQuery next = withRatioToggled(draft, const ExactRatio(9, 20));
+      expect(next.ratios, <RatioChoice>[
+        const ExactRatio(16, 9),
+        const ExactRatio(9, 20),
+      ]);
+    });
+  });
+
   group('the colour is a radio, not a chip row', () {
     test('a second colour replaces the first', () {
       final SearchQuery draft = withColorChosen(

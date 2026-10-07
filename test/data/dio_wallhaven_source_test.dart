@@ -67,11 +67,11 @@ void main() {
       // hands over staying one param.
       final Uri uri = await _sentUriFor(
         const SearchQuery(
-          ratios: <RatioChoice>[ExactRatio(16, 9), ShapeRatio.landscape],
+          ratios: <RatioChoice>[ExactRatio(16, 9), ExactRatio(9, 20)],
         ),
       );
 
-      expect(uri.queryParametersAll['ratios'], <String>['16x9,landscape']);
+      expect(uri.queryParametersAll['ratios'], <String>['16x9,9x20']);
     });
 
     test('percent-encodes the union separator to something Wallhaven still '

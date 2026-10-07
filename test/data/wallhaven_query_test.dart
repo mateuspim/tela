@@ -82,11 +82,11 @@ void main() {
     test('unions the ratios, because that is what the API does with them', () {
       final Map<String, String> params = wallhavenQueryParameters(
         const SearchQuery(
-          ratios: <RatioChoice>[ExactRatio(9, 16), ShapeRatio.landscape],
+          ratios: <RatioChoice>[ExactRatio(9, 16), ExactRatio(9, 20)],
         ),
       );
 
-      expect(params['ratios'], '9x16,landscape');
+      expect(params['ratios'], '9x16,9x20');
     });
 
     test('sends both shape keywords for "any shape"', () {
