@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/core/ui/backdrop_drift_scope.dart';
 import 'package:tela/features/detail/detail_editorial_body.dart';
+import 'package:tela/features/detail/detail_sheet_grip.dart';
+import 'package:tela/features/detail/detail_sheet_motion.dart';
+import 'package:tela/features/detail/detail_top_scrim.dart';
 
 const Key _preview = Key('the-preview');
 const Key _metadata = Key('the-metadata');
@@ -279,7 +282,7 @@ void main() {
 
     expect(
       tester.getSize(_gripBand()).height,
-      DetailEditorialBody.sheetGripSettledHeight,
+      DetailSheetGrip.settledHeight,
     );
   });
 
@@ -317,7 +320,7 @@ void main() {
     await _raiseSheet(tester);
     final double open = sheet.size;
 
-    await DetailEditorialBody.revealSheet(sheet, animate: false);
+    await DetailSheetMotion.revealSheet(sheet, animate: false);
     await tester.pumpAndSettle();
 
     expect(sheet.size, open);
@@ -462,29 +465,27 @@ void main() {
     // moved into PhotoCapsules (2026-10-05) what it holds over is the status
     // bar's clock alone.
     expect(
-      DetailEditorialBody.topScrimAlphaAt(0),
-      DetailEditorialBody.topScrimOpacity,
+      DetailTopScrim.alphaAt(0),
+      DetailTopScrim.opacity,
     );
     expect(
-      DetailEditorialBody.topScrimAlphaAt(
-        DetailEditorialBody.topScrimControlRow,
+      DetailTopScrim.alphaAt(
+        DetailTopScrim.controlRow,
       ),
-      DetailEditorialBody.topScrimOpacity,
+      DetailTopScrim.opacity,
       reason: 'the controls sit here; a fading wash is what failed on device',
     );
     // And it is a wash, not a bar: gone by its own height, so nothing draws an
     // edge across the wallpaper.
     expect(
-      DetailEditorialBody.topScrimAlphaAt(DetailEditorialBody.topScrimHeight),
+      DetailTopScrim.alphaAt(DetailTopScrim.height),
       0,
     );
     expect(
-      DetailEditorialBody.topScrimAlphaAt(
-        (DetailEditorialBody.topScrimControlRow +
-                DetailEditorialBody.topScrimHeight) /
-            2,
+      DetailTopScrim.alphaAt(
+        (DetailTopScrim.controlRow + DetailTopScrim.height) / 2,
       ),
-      closeTo(DetailEditorialBody.topScrimOpacity / 2, 0.001),
+      closeTo(DetailTopScrim.opacity / 2, 0.001),
     );
   });
 
@@ -507,7 +508,7 @@ void main() {
         (scrim.decoration as BoxDecoration).gradient! as LinearGradient;
     expect(
       wash.colors.first.a,
-      closeTo(DetailEditorialBody.topScrimOpacity, 0.01),
+      closeTo(DetailTopScrim.opacity, 0.01),
     );
     expect(wash.colors[1].a, wash.colors.first.a);
     expect(wash.colors.last.a, 0);

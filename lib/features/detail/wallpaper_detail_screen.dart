@@ -30,6 +30,7 @@ import 'package:tela/features/detail/detail_action_bar.dart';
 import 'package:tela/features/detail/detail_apply_button.dart';
 import 'package:tela/features/detail/detail_editorial_body.dart';
 import 'package:tela/features/detail/detail_preview_pager.dart';
+import 'package:tela/features/detail/detail_sheet_motion.dart';
 import 'package:tela/features/detail/wallpaper_metadata.dart';
 import 'package:tela/features/settings/blocked_tags_providers.dart';
 
@@ -348,7 +349,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   /// screen reader, so it is never the only way in.
   void _revealDetails() {
     unawaited(
-      DetailEditorialBody.revealSheet(
+      DetailSheetMotion.revealSheet(
         _sheet,
         animate: !MediaQuery.disableAnimationsOf(context),
       ),

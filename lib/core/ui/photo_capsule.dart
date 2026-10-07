@@ -12,7 +12,7 @@ import 'package:tela/core/ui/immersive_chrome_palette.dart';
 /// exactly there (HANDOFF, floating-capsule overhaul, 2026-10-04). Nothing is
 /// blurred: the fill is the viewer's own scrim ([ImmersiveChromePalette]),
 /// near-black carrying the wallpaper's hue, so a pale sky cannot wash out the
-/// white controls — the 3:1 lesson `topScrimOpacity` already paid for.
+/// white controls — the 3:1 lesson `DetailTopScrim.opacity` already paid for.
 ///
 /// Same shape language as the rest of the chrome — stadium, hairline edge,
 /// soft lift — so Detail reads as the same app as Browse. Ink is forced white,

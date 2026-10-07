@@ -911,7 +911,7 @@ void main() {
     // seam, because the screen is the only thing holding both.
     // Deliberately **not** settled first. The screen is still arriving here,
     // which is when a controller animation on the sheet gets cancelled out
-    // from under itself — see `DetailEditorialBody.moveSheet`. Add a
+    // from under itself — see `DetailSheetMotion.moveSheet`. Add a
     // `pumpAndSettle` above and this stops testing the case that was broken.
     await _pumpDetail(tester, _details());
     final Finder sheet = find.byKey(DetailEditorialBody.sheetKey);
