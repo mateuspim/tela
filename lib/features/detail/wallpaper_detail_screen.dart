@@ -6,11 +6,13 @@ import 'package:go_router/go_router.dart';
 import 'package:tela/app/copy_wallpaper_action.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/routes.dart';
+import 'package:tela/app/theme.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/immersive_system_ui.dart';
 import 'package:tela/core/ui/listing_origin.dart';
+import 'package:tela/core/ui/photo_capsule.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_failure_text.dart';
 import 'package:tela/domain/models/external_link_failure.dart';
@@ -28,6 +30,7 @@ import 'package:tela/features/detail/detail_action_bar.dart';
 import 'package:tela/features/detail/detail_apply_button.dart';
 import 'package:tela/features/detail/detail_editorial_body.dart';
 import 'package:tela/features/detail/detail_preview_pager.dart';
+import 'package:tela/features/detail/detail_sheet_motion.dart';
 import 'package:tela/features/detail/wallpaper_metadata.dart';
 import 'package:tela/features/settings/blocked_tags_providers.dart';
 
@@ -272,13 +275,40 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   /// bar**: nothing here is blurred, and what shows through is the single
   /// photograph the screen is about, not a wall of sixty competing with the
   /// chrome. That was the whole objection, and it does not apply.
+  ///
+  /// Back and the actions each ride a [PhotoCapsule]: the scrim alone gave
+  /// them nothing to sit on once the sheet rose to full and the icons landed
+  /// bare on the facts (device survey, 2026-10-05), and the capsule is the
+  /// same shape the rest of the app's chrome now floats in.
   PreferredSizeWidget _floatingBar() {
+    final bool canGoBack =
+        ModalRoute.of(context)?.impliesAppBarDismissal ?? false;
     return AppBar(
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       scrolledUnderElevation: 0,
       foregroundColor: Colors.white,
-      actions: <Widget>[DetailActionBar(wallpaper: _wallpaper)],
+      // Over a photo, under the dark top scrim, in either theme: light icons.
+      systemOverlayStyle: TelaTheme.systemBarsOn(Brightness.dark),
+      automaticallyImplyLeading: false,
+      // Inset 12 from the edge, mirroring the actions' trailing gap.
+      leadingWidth: 72,
+      leading: canGoBack
+          ? const Padding(
+              padding: EdgeInsetsDirectional.only(start: 12),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: PhotoCapsule(child: BackButton()),
+              ),
+            )
+          : null,
+      actions: <Widget>[
+        PhotoCapsule(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: DetailActionBar(wallpaper: _wallpaper),
+        ),
+        const SizedBox(width: 12),
+      ],
     );
   }
 
@@ -319,7 +349,7 @@ class _WallpaperDetailScreenState extends ConsumerState<WallpaperDetailScreen> {
   /// screen reader, so it is never the only way in.
   void _revealDetails() {
     unawaited(
-      DetailEditorialBody.revealSheet(
+      DetailSheetMotion.revealSheet(
         _sheet,
         animate: !MediaQuery.disableAnimationsOf(context),
       ),

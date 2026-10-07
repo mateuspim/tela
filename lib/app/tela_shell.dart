@@ -1,14 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
-import 'package:tela/core/ui/tela_mark.dart';
-import 'package:tela/core/ui/tela_wordmark.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 
-/// The adaptive frame around tela's three primary destinations.
+/// The frame around tela's three primary destinations: one floating pill at
+/// the bottom, at every width.
 ///
-/// Compact screens keep destinations thumb-reachable at the bottom. Wider
-/// screens move the same destinations into a rail so the wallpaper canvas can
-/// use the extra width instead of growing an oversized bottom bar.
+/// The pill is an opaque [FloatingCapsule] (see there for why tela's chrome is
+/// never glass), but the strip around it is not a solid band: the wall runs
+/// on beneath it, under a veil of the surface that fades in from clear to
+/// [veilOpacity]. The owner asked for the pictures to *"naturally scroll"*
+/// past the bar rather than stop at a hard edge (2026-10-06), relaxing the
+/// "nothing scrolls under the chrome" rule for this one strip. The pill itself
+/// stays solid, so its labels never sit on a photo. The wall still ends clear
+/// of it: `extendBody` hands the strip's height to the branch as bottom
+/// padding, which every scrolling list here already honours.
+///
+/// Wide screens used to swap the pill for a side rail. In tablet landscape
+/// that spent a whole column of the screen on three buttons, and however the
+/// panel sat in it — full height, hugging the top, centred — the column read
+/// as blank space (owner, 2026-10-06: *"i still think there is too many blank
+/// space"*). The pill costs a strip of height instead and gives the wall the
+/// full width; portrait already had it and the owner liked it there.
 class TelaShell extends StatelessWidget {
   /// Creates the primary navigation shell.
   const TelaShell({required this.navigationShell, super.key});
@@ -16,57 +29,49 @@ class TelaShell extends StatelessWidget {
   /// go_router's stateful stack for each primary destination.
   final StatefulNavigationShell navigationShell;
 
+  /// The widest the pill grows. Tablet portrait (~753dp) keeps its
+  /// full-width pill; landscape stops here, centred, rather than stretching
+  /// three destinations across 1200dp.
+  static const double navigationMaxWidth = 760;
+
+  /// How much of the surface the veil under the pill lays over the wall at
+  /// its densest. Half: the owner's *"like a 50% transparent"*.
+  static const double veilOpacity = 0.5;
+
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        if (constraints.maxWidth >= expandedNavigationWidth) {
-          return _expandedFrame(context);
-        }
-        return _compactFrame(context);
-      },
-    );
-  }
-
-  /// Width at which persistent navigation moves from the bottom to the side.
-  static const double expandedNavigationWidth = 840;
-
-  Widget _compactFrame(BuildContext context) {
     return Scaffold(
+      extendBody: true,
       body: navigationShell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
-        destinations: _bottomDestinations(context),
-        onDestinationSelected: _openDestination,
+      bottomNavigationBar: Stack(
+        children: <Widget>[
+          const Positioned.fill(child: _NavigationVeil()),
+          SafeArea(
+            top: false,
+            minimum: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Align(
+              heightFactor: 1,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: navigationMaxWidth,
+                ),
+                child: _navigationPill(context),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _expandedFrame(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        children: <Widget>[
-          NavigationRail(
-            selectedIndex: navigationShell.currentIndex,
-            labelType: NavigationRailLabelType.all,
-            leading: const Padding(
-              padding: EdgeInsets.only(top: 8, bottom: 28),
-              child: _RailBrand(),
-            ),
-            destinations: _railDestinations(context),
-            onDestinationSelected: _openDestination,
-          ),
-          const VerticalDivider(width: 1),
-          // A semantics boundary around the branch, or the rail vanishes for
-          // TalkBack: every page route carries a ModalBarrier, whose
-          // BlockSemantics drops all nodes painted before it up to the nearest
-          // boundary — and the rail is painted first, in this same Row (device
-          // pass F5, 2026-10-03). The bottom bar escapes only by being painted
-          // after the body.
-          Expanded(
-            child: Semantics(container: true, child: navigationShell),
-          ),
-        ],
+  Widget _navigationPill(BuildContext context) {
+    return FloatingCapsule(
+      child: NavigationBar(
+        backgroundColor: Colors.transparent,
+        height: 64,
+        selectedIndex: navigationShell.currentIndex,
+        destinations: _bottomDestinations(context),
+        onDestinationSelected: _openDestination,
       ),
     );
   }
@@ -92,27 +97,6 @@ class TelaShell extends StatelessWidget {
     ];
   }
 
-  List<NavigationRailDestination> _railDestinations(BuildContext context) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    return <NavigationRailDestination>[
-      NavigationRailDestination(
-        icon: const Icon(Icons.grid_view_outlined),
-        selectedIcon: const Icon(Icons.grid_view_rounded),
-        label: Text(l10n.navigationBrowse),
-      ),
-      NavigationRailDestination(
-        icon: const Icon(Icons.photo_library_outlined),
-        selectedIcon: const Icon(Icons.photo_library),
-        label: Text(l10n.navigationLibrary),
-      ),
-      NavigationRailDestination(
-        icon: const Icon(Icons.settings_outlined),
-        selectedIcon: const Icon(Icons.settings),
-        label: Text(l10n.settingsTitle),
-      ),
-    ];
-  }
-
   void _openDestination(int index) {
     navigationShell.goBranch(
       index,
@@ -121,27 +105,31 @@ class TelaShell extends StatelessWidget {
   }
 }
 
-/// The rail's brand lockup: the mark stacked over the wordmark.
+/// The surface fading in behind the pill, so the wall dims as it passes
+/// under the navigation instead of being cut at a hard edge.
 ///
-/// Stacked rather than side by side because the rail is narrow — a horizontal
-/// lockup would either shrink the wordmark below reading size or push the rail
-/// wider, and the rail exists to give width back to the wall.
-///
-/// The lockup is private to the rail: it is the only place in the app that
-/// shows both, so a shared widget would be speculative. [TelaMark] and
-/// [TelaWordmark] are the shared pieces.
-class _RailBrand extends StatelessWidget {
-  const _RailBrand();
+/// Ignores pointers: a decoration claims every hit inside its box, and the
+/// strip beside the pill would otherwise swallow taps meant for the wall.
+class _NavigationVeil extends StatelessWidget {
+  const _NavigationVeil();
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        TelaMark(size: 30),
-        SizedBox(height: 10),
-        TelaWordmark(fontSize: 20),
-      ],
+    final Color surface = Theme.of(context).scaffoldBackgroundColor;
+    return IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: const <double>[0, 0.4],
+            colors: <Color>[
+              surface.withValues(alpha: 0),
+              surface.withValues(alpha: TelaShell.veilOpacity),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

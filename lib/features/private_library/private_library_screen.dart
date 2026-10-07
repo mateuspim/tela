@@ -10,6 +10,8 @@ import 'package:tela/app/providers.dart';
 import 'package:tela/app/retag_downloads_action.dart';
 import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/gallery_session_controller.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
@@ -90,15 +92,20 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     final AppLocalizations l10n = AppLocalizations.of(context);
     return SelectionShelfScope(
       child: Scaffold(
-        appBar: GradientAppBar(
+        appBar: GradientAppBar.pushed(
           toolbarHeight: 72,
           title: Text(
             l10n.privateLibraryTitle,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
-          actions: const <Widget>[SelectModeButton(), SizedBox(width: 8)],
+          // Collapses while selecting, when Select hides itself — see
+          // CapsuleActionCluster.
+          actions: const <Widget>[
+            CapsuleActionCluster(children: <Widget>[SelectModeButton()]),
+            SizedBox(width: 16),
+          ],
         ),
-        body: _body(context, l10n),
+        body: BandFadeEdge(child: _body(context, l10n)),
       ),
     );
   }

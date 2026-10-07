@@ -1,9 +1,11 @@
 import 'dart:async';
-import 'dart:ui' show lerpDouble;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:tela/core/ui/backdrop_drift_scope.dart';
+import 'package:tela/features/detail/detail_sheet_grip.dart';
+import 'package:tela/features/detail/detail_sheet_motion.dart';
+import 'package:tela/features/detail/detail_sheet_progress.dart';
+import 'package:tela/features/detail/detail_top_scrim.dart';
 
 /// Detail, at every width: the wallpaper full-bleed, its facts on a sheet.
 ///
@@ -96,14 +98,14 @@ class DetailEditorialBody extends StatefulWidget {
   ///
   /// It settled the *unit* a day later — a fraction landed inside the first
   /// fact row and sliced it in half — and then settled the **contents**: the
-  /// peek is now [sheetGripHeight] and nothing else, which is why widening the
-  /// grip's touch target widened the peek with it. It was the grip plus a
-  /// "Details" heading on an opaque band, and *"because of that it hides some
-  /// of the information of the background"* (2026-08-15). The heading is gone
-  /// from `WallpaperMetadata` entirely and the band is gone with it — see
+  /// peek is now [DetailSheetGrip.height] and nothing else, which is why
+  /// widening the grip's touch target widened the peek with it. It was the grip
+  /// plus a "Details" heading on an opaque band, and *"because of that it hides
+  /// some of the information of the background"* (2026-08-15). The heading is
+  /// gone from `WallpaperMetadata` entirely and the band is gone with it — see
   /// [surfaceAlphaAt]. What is left over the wallpaper is a handle and the
   /// apply button, which is the whole of what a closed sheet has to say.
-  static const double peekSheetHeight = sheetGripHeight;
+  static const double peekSheetHeight = DetailSheetGrip.height;
 
   /// [peekSheetHeight] as a fraction of a sheet box [arena] dip tall.
   ///
@@ -156,153 +158,12 @@ class DetailEditorialBody extends StatefulWidget {
     return ((extent - floor) / travel).clamp(0.0, 1.0);
   }
 
-  /// The grip's whole vertical footprint **at the peek** — Material's own
-  /// minimum touch target, and therefore the closed sheet's whole height.
-  ///
-  /// It was [sheetGripSettledHeight], the bar plus its margins, which made the
-  /// closed sheet 21dp tall: the entire hit area of the only control that
-  /// opens the facts, at under half what a thumb is owed. The owner called it
-  /// *"kinda hit or miss"* (2026-08-24), and both misses were loud — the apply
-  /// button is glued immediately below — they share one surface — and since
-  /// pass N the
-  /// picture immediately above enters fullscreen on a tap. Nothing about the
-  /// screen *looks* different for the change: the sheet is fully transparent
-  /// at the peek (see [surfaceAlphaAt]), so what grew is an invisible target,
-  /// and the cost is the bottom 48dp of the picture no longer taking a pinch.
-  ///
-  /// Flutter draws exactly this box for its own handle — `showDragHandle`
-  /// constrains it to `kMinInteractiveDimension` — and this sheet only misses
-  /// out because it is part of the page rather than presented, so none of that
-  /// theming reaches it. See [_SheetGrip].
-  static const double sheetGripHeight = kMinInteractiveDimension;
-
-  /// What the grip's band shrinks back to once the panel is solid — the
-  /// footprint the bar and its margins had before any of this: 12 + 5 + 4.
-  ///
-  /// The reach is a closed-sheet problem — open, the handle is decoration and
-  /// the facts are already under the thumb — so the target is spent where it
-  /// is needed and given back where it is not. Without this an opened sheet
-  /// would carry 48dp of blank above its first fact row, which is the kind of
-  /// thing the peek's own history says gets noticed on a device.
-  ///
-  /// The bar is centred in whichever band it has, so growing the closed one
-  /// lifts it **away** from the apply button rather than toward it — which is
-  /// the half of "hit or miss" that was doing the damage.
-  static const double sheetGripSettledHeight = 21;
-
   /// Stable hook for tests asserting where the sheet has come to rest.
   ///
   /// On the sheet's own surface rather than the `DraggableScrollableSheet`,
   /// which fills the whole body and so reports the screen's rect however far
   /// the sheet has actually risen.
   static const Key sheetKey = Key('detail-editorial-sheet');
-
-  /// Height of the wash behind the app bar's controls.
-  ///
-  /// A transparent bar over an arbitrary photograph is a back arrow that
-  /// vanishes on a pale sky. This is the same argument as `wallpaperTileEdge`
-  /// and it is *not* the frosted bar A2 rejected: nothing is blurred, nothing
-  /// shows a wall of thumbnails through itself, and there is exactly one image
-  /// underneath rather than sixty.
-  static const double topScrimHeight = 148;
-
-  /// How far down the wash the app bar's own controls sit.
-  ///
-  /// The status bar plus half a toolbar: where the back arrow and the actions
-  /// are actually drawn, which is the only place this wash has to work.
-  static const double topScrimControlRow = 80;
-
-  /// The wash's opacity at the top edge and where it finally reaches zero.
-  ///
-  /// It **holds** at full strength down to [topScrimControlRow] instead of
-  /// fading from the first pixel, which is the whole fix: a straight ramp
-  /// spends most of its darkness above the controls, where there is nothing to
-  /// read, and arrives at them already half gone. Measured on the device
-  /// (SM-X730, 2026-08-14) against a genuinely pale wallpaper, the old ramp
-  /// left the white controls at **2.9:1** — over the 3:1 floor for UI graphics
-  /// by nothing. Holding the wash rather than steepening it buys the contrast
-  /// without making the top edge of every wallpaper darker than it already is.
-  static const double topScrimOpacity = 0.6;
-
-  /// The wash's opacity [dip] logical pixels below the top of the screen.
-  ///
-  /// ```dart
-  /// DetailEditorialBody.topScrimAlphaAt(0); // 0.6, full strength
-  /// ```
-  static double topScrimAlphaAt(double dip) {
-    if (dip <= topScrimControlRow) return topScrimOpacity;
-    if (dip >= topScrimHeight) return 0;
-    final double fade =
-        (dip - topScrimControlRow) / (topScrimHeight - topScrimControlRow);
-    return topScrimOpacity * (1 - fade);
-  }
-
-  /// How long the sheet takes to settle when something other than a finger
-  /// moves it. Matches the pager's own page turn, so the screen has one speed.
-  static const Duration sheetSettle = Duration(milliseconds: 240);
-
-  /// Raises [sheet] to [restingSheetFraction], unless it is already at least
-  /// that far up.
-  ///
-  /// The guard is not a tidiness check. The upward throw that calls this is
-  /// armed across the whole picture, and a picture is still visible above a
-  /// fully-raised sheet — so without it, flicking up on a sheet already at
-  /// [fullSheetFraction] would *lower* it, which is the opposite of what the
-  /// gesture says.
-  static Future<void> revealSheet(
-    DraggableScrollableController sheet, {
-    required bool animate,
-  }) {
-    if (!sheet.isAttached || sheet.size >= restingSheetFraction) {
-      return Future<void>.value();
-    }
-    return moveSheet(sheet, extent: restingSheetFraction, animate: animate);
-  }
-
-  /// Moves [sheet] to [extent], instantly where the platform asked for no
-  /// motion.
-  ///
-  /// Static, and the single spelling of it, because three things now move this
-  /// sheet without a finger on it: the grip's tap, the upward throw, and the
-  /// return to the peek. A detached controller is an ordinary state, not an
-  /// error — the sheet attaches on its first layout, and a gesture can arrive
-  /// in the frame before that.
-  ///
-  /// **The check after the animation is not belt-and-braces.**
-  /// `DraggableScrollableController.animateTo` registers an activity on the
-  /// sheet, and *any* scroll activity beginning there cancels it — silently,
-  /// with a future that then never completes. A Detail screen still arriving
-  /// produces exactly those, so a throw in the first moments after opening did
-  /// nothing at all (measured 2026-08-24: the first reveal after mount was
-  /// swallowed every time, the next one worked). That is the same
-  /// "sometimes it doesn't" this whole pass exists to end, so the sheet is put
-  /// where it was asked to go.
-  ///
-  /// Only when it has not moved *at all*: a sheet the user grabbed mid-flight
-  /// is somewhere else by now, and yanking it to the target would be the more
-  /// annoying bug of the two.
-  static Future<void> moveSheet(
-    DraggableScrollableController sheet, {
-    required double extent,
-    required bool animate,
-  }) async {
-    if (!sheet.isAttached) return;
-    if (!animate) {
-      sheet.jumpTo(extent);
-      return;
-    }
-    final double before = sheet.size;
-    unawaited(
-      sheet.animateTo(
-        extent,
-        duration: sheetSettle,
-        curve: Curves.easeOutCubic,
-      ),
-    );
-    await Future<void>.delayed(sheetSettle);
-    if (!sheet.isAttached || sheet.size != before) return;
-    sheet.jumpTo(extent);
-  }
 
   @override
   State<DetailEditorialBody> createState() => _DetailEditorialBodyState();
@@ -332,6 +193,10 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
   /// find. Re-tune it from a device or not at all.
   final ValueNotifier<double> _lift = ValueNotifier<double>(0);
 
+  /// How far the sheet has travelled from the peek to full, 0..1 — what the
+  /// controls over the picture fade by (see `DetailSheetProgress`).
+  final ValueNotifier<double> _risen = ValueNotifier<double>(0);
+
   /// How solid the sheet's surface is, 0..1 — see
   /// [DetailEditorialBody.surfaceAlphaAt].
   ///
@@ -349,6 +214,7 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
   void dispose() {
     _drift.dispose();
     _lift.dispose();
+    _risen.dispose();
     _surfaceAlpha.dispose();
     super.dispose();
   }
@@ -369,7 +235,8 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
     final double travel = sheet.maxExtent - sheet.minExtent;
     if (travel <= 0) return false;
     final double risen = (sheet.extent - sheet.minExtent) / travel;
-    _drift.value = -risen.clamp(0.0, 1.0);
+    _risen.value = risen.clamp(0.0, 1.0);
+    _drift.value = -_risen.value;
     _lift.value = (sheet.extent - sheet.minExtent) / 2;
     _surfaceAlpha.value = DetailEditorialBody.surfaceAlphaAt(
       extent: sheet.extent,
@@ -410,19 +277,23 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
     // meant before — what changed is the layer *behind* them.
     return BackdropDriftScope(
       drift: _drift,
-      child: NotificationListener<DraggableScrollableNotification>(
-        onNotification: _sheetDragged,
-        child: Stack(
-          children: <Widget>[
-            Positioned.fill(child: _bumped(widget.preview)),
-            const _TopScrim(),
-            Column(
-              children: <Widget>[
-                Expanded(child: _draggableSheet()),
-                _glued(_footed(context, widget.applyButton)),
-              ],
-            ),
-          ],
+      child: DetailSheetProgress(
+        lift: _lift,
+        risen: _risen,
+        child: NotificationListener<DraggableScrollableNotification>(
+          onNotification: _sheetDragged,
+          child: Stack(
+            children: <Widget>[
+              Positioned.fill(child: _bumped(widget.preview)),
+              const DetailTopScrim(),
+              Column(
+                children: <Widget>[
+                  Expanded(child: _draggableSheet()),
+                  _glued(_footed(context, widget.applyButton)),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -517,11 +388,11 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
     if (sheet == null || !sheet.isAttached) return;
     final bool animate = !MediaQuery.disableAnimationsOf(context);
     if (sheet.size < DetailEditorialBody.restingSheetFraction) {
-      unawaited(DetailEditorialBody.revealSheet(sheet, animate: animate));
+      unawaited(DetailSheetMotion.revealSheet(sheet, animate: animate));
       return;
     }
     unawaited(
-      DetailEditorialBody.moveSheet(sheet, extent: _peek, animate: animate),
+      DetailSheetMotion.moveSheet(sheet, extent: _peek, animate: animate),
     );
   }
 
@@ -555,156 +426,10 @@ class _DetailEditorialBodyState extends State<DetailEditorialBody> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            _SheetGrip(alpha: _surfaceAlpha, onTap: _toggleSheet),
+            DetailSheetGrip(alpha: _surfaceAlpha, onTap: _toggleSheet),
             widget.metadata,
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// The wash that keeps the back arrow readable over a bright wallpaper.
-class _TopScrim extends StatelessWidget {
-  const _TopScrim();
-
-  /// Where the wash stops holding, as a fraction of its own height.
-  static const double _controlRowStop =
-      DetailEditorialBody.topScrimControlRow /
-      DetailEditorialBody.topScrimHeight;
-
-  /// The held colour, and the nothing it fades to.
-  static const Color _wash = Color.fromRGBO(
-    0,
-    0,
-    0,
-    DetailEditorialBody.topScrimOpacity,
-  );
-  static const Color _clear = Color.fromRGBO(0, 0, 0, 0);
-
-  @override
-  Widget build(BuildContext context) {
-    return const Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      height: DetailEditorialBody.topScrimHeight,
-      // Decoration only: the image beneath it still takes every gesture, so
-      // the wallpaper can be pinched and held right up to the top edge.
-      child: IgnorePointer(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              // Three stops, not two: full strength down past the controls,
-              // then out. See DetailEditorialBody.topScrimAlphaAt.
-              stops: <double>[0, _controlRowStop, 1],
-              colors: <Color>[_wash, _wash, _clear],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The handle that says the sheet moves.
-///
-/// Drawn rather than taken from `BottomSheetThemeData.showDragHandle`, which
-/// only applies to a `showModalBottomSheet` — this sheet is part of the page
-/// and was never presented, so it inherits none of that theming.
-///
-/// Its colour travels with the surface it sits on. At rest there is no surface
-/// at all — the handle is alone over the photograph, where `onSurfaceVariant`
-/// is a mid grey that a pale sky swallows — so it is white there and settles
-/// onto the scheme's own colour as the panel fades in.
-///
-/// White is not enough on its own, and the device proved it twice rather than
-/// the argument. On a near-white wallpaper the plain white handle was
-/// *invisible*; a shadow alone then measured **1.51:1** against a pure-white
-/// one — a soft halo spreads its darkness over too many pixels to be an edge
-/// (SM-X730, 2026-08-15). So it carries **both**, at exactly the strength the
-/// missing surface owes it and none once the panel is solid: a hairline outline
-/// that gives the bar a hard edge on white, and the shadow that lifts it off a
-/// busy or mid-toned picture, which an outline alone cannot do.
-///
-/// Third time this project has paid for the same lesson — see
-/// `wallpaperTileEdge` and [DetailEditorialBody.topScrimOpacity]: a control
-/// over an arbitrary photograph cannot take its contrast on trust.
-class _SheetGrip extends StatelessWidget {
-  const _SheetGrip({required this.alpha, this.onTap});
-
-  /// How solid the surface beneath the handle is, 0..1.
-  final ValueListenable<double> alpha;
-
-  /// Called when the band around the bar is tapped, to open or close the
-  /// sheet. Null leaves the handle drag-only.
-  final VoidCallback? onTap;
-
-  /// The bar itself, before either of its defences.
-  static const double _barWidth = 32;
-  static const double _barHeight = 5;
-
-  /// The outline's and the shadow's strength where the handle is alone over
-  /// the wallpaper. Both scale to nothing as the panel fades in.
-  static const double _outlineOpacity = 0.7;
-  static const double _shadowOpacity = 0.45;
-
-  /// The band's height at [solid] — see
-  /// [DetailEditorialBody.sheetGripHeight] for why it is not one number.
-  ///
-  /// ```dart
-  /// _SheetGrip.bandHeightAt(0); // 48, the closed sheet's whole target
-  /// ```
-  static double bandHeightAt(double solid) {
-    return lerpDouble(
-      DetailEditorialBody.sheetGripHeight,
-      DetailEditorialBody.sheetGripSettledHeight,
-      solid.clamp(0.0, 1.0),
-    )!;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final Color settled = Theme.of(context).colorScheme.onSurfaceVariant;
-    // Opaque, so the whole band takes the tap and not just the 32x5 bar drawn
-    // in the middle of it. It claims no drag, so the sheet underneath still
-    // scrolls out from under a finger that meant to pull rather than tap.
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: ValueListenableBuilder<double>(
-        valueListenable: alpha,
-        builder: (BuildContext context, double solid, Widget? child) =>
-            SizedBox(
-              height: bandHeightAt(solid),
-              child: Center(child: _bar(solid, settled)),
-            ),
-      ),
-    );
-  }
-
-  Widget _bar(double solid, Color settled) {
-    return Container(
-      width: _barWidth,
-      height: _barHeight,
-      decoration: BoxDecoration(
-        color: Color.lerp(Colors.white, settled, solid),
-        borderRadius: BorderRadius.circular(_barHeight / 2),
-        border: Border.all(
-          color: Colors.black.withValues(
-            alpha: _outlineOpacity * (1 - solid),
-          ),
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(
-              alpha: _shadowOpacity * (1 - solid),
-            ),
-            blurRadius: 4,
-          ),
-        ],
       ),
     );
   }

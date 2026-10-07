@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
+import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/wallpaper_details.dart';
 import 'package:tela/features/settings/blocked_tags_providers.dart';
@@ -22,19 +24,21 @@ class BlockedTagsScreen extends ConsumerWidget {
       blockedTagsProvider,
     );
     return Scaffold(
-      appBar: AppBar(
+      appBar: GradientAppBar.pushed(
         toolbarHeight: 72,
         title: Text(
           l10n.blockedTagsTitle,
           style: Theme.of(context).textTheme.headlineSmall,
         ),
       ),
-      body: blocked.when(
-        data: (List<WallpaperTag> tags) => _list(context, ref, l10n, tags),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
-          icon: Icons.error_outline,
-          message: l10n.errorUnexpected,
+      body: BandFadeEdge(
+        child: blocked.when(
+          data: (List<WallpaperTag> tags) => _list(context, ref, l10n, tags),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (Object error, StackTrace stackTrace) => WallpaperStatusView(
+            icon: Icons.error_outline,
+            message: l10n.errorUnexpected,
+          ),
         ),
       ),
     );
@@ -58,7 +62,8 @@ class BlockedTagsScreen extends ConsumerWidget {
       // `wallpaperGridPadding`.
       padding: EdgeInsets.fromLTRB(
         0,
-        8,
+        // Clear of the band's 12dp fade at rest (BandFadeEdge).
+        12,
         0,
         8 + MediaQuery.paddingOf(context).bottom,
       ),

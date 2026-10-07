@@ -30,6 +30,22 @@ void main() {
       expect(text.style?.fontSize, theme.textTheme.titleSmall?.fontSize);
       expect(text.style?.color, theme.colorScheme.onSurfaceVariant);
     });
+
+    testWidgets('lines up on the left even in a centring column', (
+      WidgetTester tester,
+    ) async {
+      // Every chooser sheet is a Column, which centres by default: the caption
+      // sat in the middle of the sheet above left-aligned rows.
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Column(children: <Widget>[SheetHeader(title: 'Share')]),
+          ),
+        ),
+      );
+
+      expect(tester.getTopLeft(find.text('Share')).dx, 16);
+    });
   });
 }
 

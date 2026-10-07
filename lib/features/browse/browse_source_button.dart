@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/ports/wallpaper_source.dart';
 
@@ -12,6 +13,9 @@ import 'package:tela/domain/ports/wallpaper_source.dart';
 /// anything, and it would cost the app bar a slot the filter button wants. It
 /// appears the moment a second adapter is added to the registry — no feature
 /// change, which is the whole point of `wallpaperSourcesProvider`.
+///
+/// A phone gets the icon alone (see [CapsuleActionCluster.labels]), the site
+/// named by the tooltip.
 ///
 /// Switching resets the query (see `BrowseQueryController`): filters are not
 /// portable between sources.
@@ -26,21 +30,15 @@ class BrowseSourceButton extends ConsumerWidget {
 
     final WallpaperSource active = ref.watch(activeWallpaperSourceProvider);
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool labelled = CapsuleActionCluster.labels(context);
     return PopupMenuButton<SourceId>(
+      offset: CapsuleActionCluster.menuOffset,
       tooltip: l10n.browseSource(active.displayName),
       initialValue: active.id,
       onSelected: (SourceId id) =>
           ref.read(activeSourceProvider.notifier).choose(id),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(active.displayName),
-            const Icon(Icons.arrow_drop_down),
-          ],
-        ),
-      ),
+      icon: labelled ? null : const Icon(Icons.travel_explore),
+      child: labelled ? _label(active.displayName) : null,
       itemBuilder: (BuildContext context) => <PopupMenuEntry<SourceId>>[
         for (final WallpaperSource source in sources)
           CheckedPopupMenuItem<SourceId>(
@@ -49,6 +47,16 @@ class BrowseSourceButton extends ConsumerWidget {
             child: Text(source.displayName),
           ),
       ],
+    );
+  }
+
+  Widget _label(String name) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[Text(name), const Icon(Icons.arrow_drop_down)],
+      ),
     );
   }
 }

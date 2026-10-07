@@ -5,6 +5,8 @@ import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/selectable_wallpaper_shelf.dart';
 import 'package:tela/app/wallpaper_batch_actions.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/band_fade_edge.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
 import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/selection_shelf.dart';
@@ -57,29 +59,37 @@ class DownloadHistoryScreen extends ConsumerWidget {
       length: 2,
       child: SelectionShelfScope(
         child: Scaffold(
-          appBar: GradientAppBar(
+          appBar: GradientAppBar.pushed(
             toolbarHeight: 72,
             title: Text(
               l10n.downloadHistoryTitle,
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             actions: const <Widget>[
-              MissingDownloadsCleanupButton(),
-              SelectModeButton(),
-              SizedBox(width: 8),
+              CapsuleActionCluster(
+                children: <Widget>[
+                  MissingDownloadsCleanupButton(),
+                  SelectModeButton(),
+                ],
+              ),
+              SizedBox(width: 16),
             ],
-            bottom: TabBar(
-              tabs: <Widget>[
-                Tab(text: l10n.downloadHistoryTab),
-                Tab(child: _queueTabLabel(context, ref, l10n)),
-              ],
+            bottom: CapsuleTrack(
+              child: TabBar(
+                tabs: <Widget>[
+                  Tab(text: l10n.downloadHistoryTab),
+                  Tab(child: _queueTabLabel(context, ref, l10n)),
+                ],
+              ),
             ),
           ),
-          body: TabBarView(
-            children: <Widget>[
-              _historyTab(context, ref, l10n),
-              const DownloadQueueTab(),
-            ],
+          body: BandFadeEdge(
+            child: TabBarView(
+              children: <Widget>[
+                _historyTab(context, ref, l10n),
+                const DownloadQueueTab(),
+              ],
+            ),
           ),
         ),
       ),

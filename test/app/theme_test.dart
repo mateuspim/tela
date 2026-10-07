@@ -1,5 +1,6 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/theme.dart';
 
@@ -9,8 +10,129 @@ ColorScheme _devicePalette(Brightness brightness) => ColorScheme.fromSeed(
   brightness: brightness,
 );
 
+/// The shape `dynamic_color` 1.8.1 really hands over: its CorePalette mapping
+/// sets `surface` but no `surfaceContainer*`/`surfaceBright`/`surfaceDim`, so
+/// every one of those defaults to `surface`.
+ColorScheme _collapsedDevicePalette() => const ColorScheme(
+  brightness: Brightness.dark,
+  primary: Color(0xFFBFC2FF),
+  onPrimary: Color(0xFF282B60),
+  secondary: Color(0xFFC5C5DD),
+  onSecondary: Color(0xFF2E2F42),
+  error: Color(0xFFFFB4AB),
+  onError: Color(0xFF690005),
+  surface: Color(0xFF1A1B20),
+  onSurface: Color(0xFFE4E1E9),
+);
+
 void main() {
   group('TelaTheme', () {
+    for (final Brightness brightness in Brightness.values) {
+      test('cards sit above the sheets and dialogs they are placed in '
+          '($brightness)', () {
+        // Cards were surfaceContainerLow and read as holes inside the filter
+        // sheet and the download dialog (device survey, 2026-10-05).
+        final ThemeData theme = brightness == Brightness.dark
+            ? TelaTheme.dark(null)
+            : TelaTheme.light(null);
+        final Color card = theme.cardTheme.color!;
+        final Color sheet = theme.bottomSheetTheme.backgroundColor!;
+        final Color dialog = theme.dialogTheme.backgroundColor!;
+        // Lighter in both themes — the direction the capsules go. Light-mode
+        // cards used to come out darker than their sheet (device check,
+        // 2026-10-05).
+        bool above(Color a, Color b) =>
+            a.computeLuminance() > b.computeLuminance();
+
+        expect(above(card, sheet), isTrue);
+        expect(above(card, dialog), isTrue);
+        expect(above(card, theme.colorScheme.surface), isTrue);
+      });
+    }
+
+    testWidgets('chips are stadiums and keep their own outline', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: TelaTheme.dark(null),
+          home: Scaffold(
+            body: FilterChip(label: const Text('sky'), onSelected: (_) {}),
+          ),
+        ),
+      );
+
+      final Material chip = tester.widget<Material>(
+        find
+            .descendant(
+              of: find.byType(FilterChip),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      final OutlinedBorder shape = chip.shape! as OutlinedBorder;
+      expect(shape, isA<StadiumBorder>());
+      expect(shape.side, isNot(BorderSide.none));
+    });
+
+    test('system bar icons contrast with the surface; bars transparent', () {
+      // White clock on the light band, and a dark strip behind the gesture
+      // handle, before the theme owned this (device check, 2026-10-05).
+      final SystemUiOverlayStyle light = TelaTheme.light(
+        null,
+      ).appBarTheme.systemOverlayStyle!;
+      final SystemUiOverlayStyle dark = TelaTheme.dark(
+        null,
+      ).appBarTheme.systemOverlayStyle!;
+
+      expect(light.statusBarIconBrightness, Brightness.dark);
+      expect(dark.statusBarIconBrightness, Brightness.light);
+      expect(light.systemNavigationBarColor, Colors.transparent);
+      expect(light.systemNavigationBarContrastEnforced, isFalse);
+    });
+
+    test('menus open under their control, rounded', () {
+      final PopupMenuThemeData menu = TelaTheme.dark(null).popupMenuTheme;
+
+      expect(menu.position, PopupMenuPosition.under);
+      expect(
+        (menu.shape! as RoundedRectangleBorder).borderRadius,
+        BorderRadius.circular(16),
+      );
+    });
+
+    test('sheets carry the same hairline edge as cards', () {
+      final ThemeData theme = TelaTheme.dark(null);
+      final OutlinedBorder sheet =
+          theme.bottomSheetTheme.shape! as OutlinedBorder;
+      final OutlinedBorder card = theme.cardTheme.shape! as OutlinedBorder;
+
+      expect(sheet.side, card.side);
+      expect(sheet.side, isNot(BorderSide.none));
+    });
+
+    test('fills the surface tones a Monet palette arrives without', () {
+      // SM-X730, 2026-10-05: band, capsules and grid all painted #1a1b20.
+      final ColorScheme scheme = TelaTheme.dark(
+        _collapsedDevicePalette(),
+      ).colorScheme;
+
+      expect(scheme.surface, _collapsedDevicePalette().harmonized().surface);
+      expect(scheme.surfaceContainerHighest, isNot(scheme.surface));
+      expect(
+        scheme.surfaceBright.computeLuminance(),
+        greaterThan(scheme.surface.computeLuminance()),
+      );
+    });
+
+    test('leaves a palette that already has surface tones alone', () {
+      final ColorScheme device = _devicePalette(Brightness.dark).harmonized();
+
+      final ColorScheme scheme = TelaTheme.dark(device).colorScheme;
+
+      expect(scheme.surfaceContainerHigh, device.surfaceContainerHigh);
+    });
+
     test('uses the device palette when Android supplies one', () {
       final ColorScheme device = _devicePalette(Brightness.dark);
 
@@ -77,15 +199,11 @@ void main() {
         );
       });
 
-      test('the rail and the sorting tabs select on the same accent pill', () {
+      test('the nav bar and the sorting tabs select on the same accent', () {
         final ShapeDecoration tab =
             theme.tabBarTheme.indicator! as ShapeDecoration;
 
-        expect(
-          theme.navigationRailTheme.indicatorColor,
-          scheme.primaryContainer,
-        );
-        expect(tab.color, scheme.primaryContainer);
+        expect(tab.color, theme.navigationBarTheme.indicatorColor);
       });
 
       test('the selected destination gains weight, not only colour', () {

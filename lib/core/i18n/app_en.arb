@@ -66,6 +66,15 @@
     }
   },
 
+  "browseSorting": "Sorted by {sorting}",
+  "@browseSorting": {
+    "description": "Accessibility label and tooltip for the browse sorting menu button, naming the sorting currently shown.",
+    "placeholders": {
+      "sorting": {
+        "type": "String"
+      }
+    }
+  },
   "browseSource": "Source: {name}",
   "@browseSource": {
     "description": "Accessibility label and tooltip for the browse source switcher, naming the site currently being browsed.",

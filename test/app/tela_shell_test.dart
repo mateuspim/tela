@@ -3,11 +3,11 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tela/app/app.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/tela_shell.dart';
-import 'package:tela/core/ui/tela_mark.dart';
-import 'package:tela/core/ui/tela_wordmark.dart';
+import 'package:tela/core/ui/floating_capsule.dart';
 
 import '../fakes/fake_download_queue.dart';
 import '../fakes/fake_favorites_repository.dart';
@@ -36,36 +36,91 @@ void main() {
     expect(find.textContaining('Nothing saved yet'), findsOneWidget);
   });
 
-  testWidgets('moves primary navigation to a rail on a wide screen', (
+  testWidgets('a wide screen keeps the bottom pill, never a rail', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1000, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    // A side rail spent a column on three buttons in tablet landscape, read
+    // as blank space (owner, 2026-10-06).
+    _setView(tester, const Size(1280, 800));
 
     await _pumpShell(tester);
 
-    expect(find.byType(NavigationRail), findsOneWidget);
-    expect(find.byType(NavigationBar), findsNothing);
-    expect(TelaShell.expandedNavigationWidth, 840);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(NavigationRail), findsNothing);
   });
 
-  // Device pass F5 (2026-10-03): on the SM-X730 the rail's three destinations
-  // were missing from the accessibility tree uiautomator reads, so TalkBack
-  // could not reach them — a page route's BlockSemantics wiped them. Searched
-  // in the live semantics tree, as an accessibility service sees it, rather
-  // than asked of the widget's own node.
-  testWidgets('the rail destinations reach the accessibility tree', (
+  testWidgets('the pill stops growing in landscape, centred', (
+    WidgetTester tester,
+  ) async {
+    _setView(tester, const Size(1280, 800));
+
+    await _pumpShell(tester);
+
+    final Rect pill = tester.getRect(_pill());
+    expect(pill.width, TelaShell.navigationMaxWidth);
+    expect(pill.center.dx, 640);
+  });
+
+  testWidgets('tablet portrait keeps its full-width pill', (
+    WidgetTester tester,
+  ) async {
+    _setView(tester, const Size(753, 1205));
+
+    await _pumpShell(tester);
+
+    expect(tester.getRect(_pill()).width, 753 - 32);
+  });
+
+  testWidgets('the wall runs on under a half veil, ending clear of the pill', (
+    WidgetTester tester,
+  ) async {
+    // The owner wants pictures to scroll past the bar, not stop at it
+    // (2026-10-06).
+    _setView(tester, const Size(1280, 800));
+
+    await _pumpShell(tester);
+
+    final Scaffold frame = tester.widget<Scaffold>(
+      find.byType(Scaffold).first,
+    );
+    expect(frame.extendBody, isTrue);
+
+    final DecoratedBox veil = tester.widget<DecoratedBox>(
+      find
+          .descendant(
+            of: find.ancestor(
+              of: find.byType(NavigationBar),
+              matching: find.byType(Stack),
+            ),
+            matching: find.byWidgetPredicate(
+              (Widget widget) =>
+                  widget is DecoratedBox &&
+                  widget.decoration is BoxDecoration &&
+                  (widget.decoration as BoxDecoration).gradient != null,
+            ),
+          )
+          .first,
+    );
+    final LinearGradient fade =
+        (veil.decoration as BoxDecoration).gradient! as LinearGradient;
+    expect(fade.colors.first.a, 0);
+    expect(fade.colors.last.a, closeTo(TelaShell.veilOpacity, 0.01));
+
+    // The branch is told how tall the strip is, so its last row can scroll
+    // up above the pill.
+    final double inset = MediaQuery.paddingOf(
+      tester.element(find.byType(StatefulNavigationShell)),
+    ).bottom;
+    expect(inset, greaterThanOrEqualTo(tester.getRect(_pill()).height));
+  });
+
+  testWidgets('the destinations reach the accessibility tree', (
     WidgetTester tester,
   ) async {
     // Disposed in the body, not by addTearDown: flutter_test checks for a live
     // handle before tear-downs run.
     final SemanticsHandle semantics = tester.ensureSemantics();
-    tester.view.physicalSize = const Size(1000, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+    _setView(tester, const Size(1280, 800));
 
     await _pumpShell(tester);
 
@@ -86,34 +141,20 @@ void main() {
     }
     semantics.dispose();
   });
+}
 
-  testWidgets('the rail leads with the brand lockup: mark over wordmark', (
-    WidgetTester tester,
-  ) async {
-    tester.view.physicalSize = const Size(1000, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+void _setView(WidgetTester tester, Size size) {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
 
-    await _pumpShell(tester);
-
-    final Finder rail = find.byType(NavigationRail);
-    expect(
-      find.descendant(of: rail, matching: find.byType(TelaMark)),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: rail, matching: find.byType(TelaWordmark)),
-      findsOneWidget,
-    );
-    // Stacked, not side by side — the rail is narrow, and a horizontal lockup
-    // would either shrink the wordmark below reading size or widen the rail
-    // at the wall's expense.
-    expect(
-      tester.getCenter(find.byType(TelaMark)).dy,
-      lessThan(tester.getCenter(find.byType(TelaWordmark)).dy),
-    );
-  });
+Finder _pill() {
+  return find.ancestor(
+    of: find.byType(NavigationBar),
+    matching: find.byType(FloatingCapsule),
+  );
 }
 
 Future<void> _pumpShell(WidgetTester tester) async {

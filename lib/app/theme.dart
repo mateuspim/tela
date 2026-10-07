@@ -1,5 +1,6 @@
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// The app's Material 3 themes, built from the device palette when there is
 /// one.
@@ -62,7 +63,7 @@ abstract final class TelaTheme {
     Color? accent,
   ) {
     final ColorScheme base = _isUsable(device, brightness)
-        ? device!.harmonized()
+        ? _withSurfaceTones(device!.harmonized())
         : ColorScheme.fromSeed(seedColor: brandSeed, brightness: brightness);
     final ColorScheme scheme = accent == null
         ? base
@@ -143,22 +144,41 @@ abstract final class TelaTheme {
         color: scheme.outlineVariant.withValues(alpha: .55),
         space: 1,
       ),
+      // Above every surface a card is placed on — the page (surface), a sheet
+      // and a dialog (both surfaceContainer, below). It was
+      // surfaceContainerLow, which inside a sheet or the download dialog sat
+      // *below* its own panel and read as a hole (device survey, 2026-10-05).
       cardTheme: CardThemeData(
-        color: scheme.surfaceContainerLow,
+        color: _raised(scheme),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(
-            color: scheme.outlineVariant.withValues(alpha: .45),
-          ),
+          side: _hairline(scheme),
         ),
       ),
+      // Dialogs on the same tone as sheets, so one card colour sits above
+      // both; Material's default here is surfaceContainerHigh.
+      dialogTheme: DialogThemeData(
+        backgroundColor: scheme.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28),
+          side: _hairline(scheme),
+        ),
+      ),
+      popupMenuTheme: _popupMenuTheme(scheme),
+      // Stadium chips, in the capsule language the rest of the chrome floats
+      // in — Material's 8dp rectangle sat oddly beside pill buttons in the
+      // filter sheet and under Detail's capsules. Shape only: each chip kind
+      // keeps resolving its own border (outlined unselected, none selected).
+      chipTheme: const ChipThemeData(shape: StadiumBorder()),
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        systemOverlayStyle: systemBarsOn(scheme.brightness),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -172,7 +192,6 @@ abstract final class TelaTheme {
         focusedBorder: _inputBorder(color: scheme.primary),
       ),
       navigationBarTheme: _navigationBarTheme(scheme),
-      navigationRailTheme: _navigationRailTheme(scheme),
       tabBarTheme: _tabBarTheme(scheme),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -181,13 +200,81 @@ abstract final class TelaTheme {
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
+      // The hairline gives a sheet the same edge every capsule and card has;
+      // without it a sheet over a dark wall was a flat slab with no top.
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: scheme.surfaceContainer,
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          side: _hairline(scheme),
         ),
+      ),
+    );
+  }
+
+  /// The system bars' style over a surface of [surface] brightness: icons
+  /// that contrast with it, and both bars transparent.
+  ///
+  /// Explicit because tela's bars are transparent — the gradient band, and
+  /// Detail's bar over a photo — and AppBar *guesses* the icon colour from its
+  /// background, which for transparent reads as dark: white clock on the light
+  /// band (device check, light theme, 2026-10-05). The navigation bar was left
+  /// to Android, which drew an opaque dark strip behind the gesture handle in
+  /// light mode, cutting across the rail panel.
+  ///
+  /// ```dart
+  /// AppBar(systemOverlayStyle: TelaTheme.systemBarsOn(Brightness.dark));
+  /// ```
+  static SystemUiOverlayStyle systemBarsOn(Brightness surface) {
+    final Brightness icons = surface == Brightness.dark
+        ? Brightness.light
+        : Brightness.dark;
+    return SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: icons,
+      // iOS spells it the other way round: the brightness of the bar itself.
+      statusBarBrightness: surface,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: icons,
+      systemNavigationBarContrastEnforced: false,
+    );
+  }
+
+  /// The fill for a card or a menu: lighter than the sheet, dialog or page it
+  /// sits on, in **both** themes, the same direction the floating capsules
+  /// go.
+  ///
+  /// surfaceContainerHigh alone did that in dark only. In light M3 the
+  /// container tones darken as they climb, so light-mode cards came out
+  /// darker than their sheet while the capsules beside them were white —
+  /// raised meant two opposite things on one screen (device check, light
+  /// theme, 2026-10-05).
+  static Color _raised(ColorScheme scheme) =>
+      scheme.brightness == Brightness.dark
+      ? scheme.surfaceContainerHigh
+      : scheme.surfaceContainerLowest;
+
+  /// The edge every raised surface carries — capsule, card, sheet, dialog,
+  /// menu — so they read as one family.
+  static BorderSide _hairline(ColorScheme scheme) =>
+      BorderSide(color: scheme.outlineVariant.withValues(alpha: .45));
+
+  /// Menus open *under* the control that opened them, rounded and edged.
+  ///
+  /// The source picker opened on top of its own capsule with near-square
+  /// corners — a rectangle stamped over a stadium (device survey,
+  /// 2026-10-05).
+  static PopupMenuThemeData _popupMenuTheme(ColorScheme scheme) {
+    return PopupMenuThemeData(
+      color: _raised(scheme),
+      surfaceTintColor: Colors.transparent,
+      position: PopupMenuPosition.under,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: _hairline(scheme),
       ),
     );
   }
@@ -241,24 +328,6 @@ abstract final class TelaTheme {
       elevation: 0,
       iconTheme: _selectedIconColor(scheme),
       labelTextStyle: _selectedLabelStyle(scheme),
-    );
-  }
-
-  /// The wide-screen navigation rail, matching the bar's selected language.
-  static NavigationRailThemeData _navigationRailTheme(ColorScheme scheme) {
-    return NavigationRailThemeData(
-      backgroundColor: scheme.surfaceContainerLow,
-      indicatorColor: scheme.primaryContainer,
-      minWidth: 88,
-      minExtendedWidth: 88,
-      useIndicator: true,
-      selectedIconTheme: IconThemeData(color: scheme.onPrimaryContainer),
-      unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant),
-      selectedLabelTextStyle: TextStyle(
-        color: scheme.onSurface,
-        fontWeight: FontWeight.w600,
-      ),
-      unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant),
     );
   }
 
@@ -351,4 +420,38 @@ abstract final class TelaTheme {
 
   static bool _isUsable(ColorScheme? device, Brightness brightness) =>
       device != null && device.brightness == brightness;
+
+  /// [device] with the surface tones Monet left out filled back in.
+  ///
+  /// `dynamic_color` 1.8.1 builds the device scheme from the old CorePalette
+  /// mapping, which never sets `surfaceDim`, `surfaceBright` or any
+  /// `surfaceContainer*` role, so Flutter defaults every one of them to
+  /// `surface`. On the SM-X730 (2026-10-05) that flattened the app bar's
+  /// gradient and every floating capsule into one `#1a1b20` — raised chrome
+  /// with nothing to be raised against.
+  ///
+  /// The tones come from a scheme seeded with the device's own primary, so
+  /// their hue still follows the user's wallpaper; `surface` itself stays the
+  /// device's. A palette that already carries distinct tones is left alone,
+  /// so a plugin fix needs no change here.
+  ///
+  /// ```dart
+  /// _withSurfaceTones(device.harmonized());
+  /// ```
+  static ColorScheme _withSurfaceTones(ColorScheme device) {
+    if (device.surfaceContainerHighest != device.surface) return device;
+    final ColorScheme tones = ColorScheme.fromSeed(
+      seedColor: device.primary,
+      brightness: device.brightness,
+    );
+    return device.copyWith(
+      surfaceDim: tones.surfaceDim,
+      surfaceBright: tones.surfaceBright,
+      surfaceContainerLowest: tones.surfaceContainerLowest,
+      surfaceContainerLow: tones.surfaceContainerLow,
+      surfaceContainer: tones.surfaceContainer,
+      surfaceContainerHigh: tones.surfaceContainerHigh,
+      surfaceContainerHighest: tones.surfaceContainerHighest,
+    );
+  }
 }
