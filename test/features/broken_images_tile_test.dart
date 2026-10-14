@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -55,6 +57,24 @@ void main() {
       find.text("Repaired 1, deleted 0, couldn't fix 0."),
       findsOneWidget,
     );
+  });
+
+  testWidgets('shows no count while the downloads are still being listed', (
+    WidgetTester tester,
+  ) async {
+    final Completer<void> listing = Completer<void>();
+    final FakeDownloadHistory history = FakeDownloadHistory()
+      ..listingHeld = listing.future;
+    await _pump(tester, FakeImageStore(), _FakeWallpaperStoring(), history);
+
+    await tester.tap(find.byKey(const Key('settings-broken-images')));
+    await tester.pump();
+    expect(find.text('Looking for your downloads…'), findsOneWidget);
+    expect(find.textContaining('0 of 0'), findsNothing);
+
+    listing.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('No broken images found.'), findsOneWidget);
   });
 
   testWidgets('cancelling touches nothing', (WidgetTester tester) async {
@@ -118,9 +138,10 @@ Future<Wallpaper> _fetch(WallpaperRef ref) async => Wallpaper(
 Future<void> _pump(
   WidgetTester tester,
   FakeImageStore images,
-  _FakeWallpaperStoring storing,
-) async {
-  final FakeDownloadHistory history = FakeDownloadHistory();
+  _FakeWallpaperStoring storing, [
+  FakeDownloadHistory? listing,
+]) async {
+  final FakeDownloadHistory history = listing ?? FakeDownloadHistory();
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[

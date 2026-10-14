@@ -39,7 +39,11 @@ Future<void> _findAndRepair(BuildContext context, WidgetRef ref) async {
   final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
   final List<BrokenImage> broken = await showBulkProgress<List<BrokenImage>>(
     context: context,
-    label: l10n.brokenImagesChecking,
+    // No count until the listing lands: on a library of thousands that takes
+    // seconds, and "Checking 0 of 0" read as stuck (owner, 2026-10-14).
+    label: (int done, int total) => total == 0
+        ? l10n.brokenImagesListing
+        : l10n.brokenImagesChecking(done, total),
     work: (InspectionProgress report) =>
         ref.read(findBrokenImagesProvider)(onProgress: report),
   );

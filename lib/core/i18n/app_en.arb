@@ -2745,6 +2745,10 @@
     "description": "Subtitle of the repair row. 'Cut off' is a download that stopped part-way."
   },
 
+  "brokenImagesListing": "Looking for your downloads…",
+  "@brokenImagesListing": {
+    "description": "Progress before the inspection knows how many images it will look at."
+  },
   "brokenImagesChecking": "Checking {done} of {total}…",
   "@brokenImagesChecking": {
     "description": "Progress while every stored image is inspected for damage.",

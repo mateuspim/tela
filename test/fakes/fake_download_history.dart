@@ -30,9 +30,14 @@ class FakeDownloadHistory implements DownloadHistory {
   /// `DownloadQueueController.listingRefreshWindow`.
   int reads = 0;
 
+  /// While set, [downloads] waits on it — a listing still in flight, as a
+  /// library of thousands is on a device.
+  Future<void>? listingHeld;
+
   @override
   Future<List<DownloadRecord>> downloads() async {
     reads++;
+    await listingHeld;
     return _recorded.reversed.toList();
   }
 
