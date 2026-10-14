@@ -56,6 +56,44 @@ class TierWriteLogTest {
     }
 
     /**
+     * Regression: 39 offload copies all logged a bare IllegalStateException,
+     * which could not say whether the card lost bytes or kept stale ones
+     * (owner, 2026-10-07).
+     */
+    @Test
+    fun `a readback mismatch names both byte counts`() {
+        TierWriteLog.failure("filesOutsideGallery", "nsfw", StoredCopyMismatch(100, 140))
+
+        val fields = JSONObject(loggedPayload())
+        assertEquals("cc.pym.tela.StoredCopyMismatch", fields.getString("error"))
+        assertEquals(100L, fields.getLong("expectedBytes"))
+        assertEquals(140L, fields.getLong("actualBytes"))
+    }
+
+    @Test
+    fun `a readback mismatch says where the bytes differ`() {
+        val difference = ByteDifference(firstAt = 20, lastAt = 90, count = 8)
+
+        TierWriteLog.failure(
+            "filesOutsideGallery",
+            "nsfw",
+            StoredCopyMismatch(100, 100, difference),
+        )
+
+        val fields = JSONObject(loggedPayload())
+        assertEquals(20L, fields.getLong("firstDiffAt"))
+        assertEquals(90L, fields.getLong("lastDiffAt"))
+        assertEquals(8L, fields.getLong("diffBytes"))
+    }
+
+    @Test
+    fun `a readback that could not open says so rather than guessing a size`() {
+        TierWriteLog.failure("filesOutsideGallery", "nsfw", StoredCopyMismatch(100, null))
+
+        assertTrue(JSONObject(loggedPayload()).isNull("actualBytes"))
+    }
+
+    /**
      * The half that was missing first time round: most ways a write fails are
      * an ordinary `return imageStoreFailure(...)`, which never reaches a catch.
      */

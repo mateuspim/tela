@@ -125,6 +125,7 @@ class ImageStoreChannel(context: Context) {
             "canReadImage" -> handleCanReadImage(call, result)
             "canReadImages" -> handleCanReadImages(call, result)
             "measureImages" -> handleMeasureImages(call, result)
+            "inspectImages" -> handleInspectImages(call, result)
             "materializeImage" -> handleMaterializeImage(call, result)
             "materializeRemoteImage" -> handleMaterializeRemoteImage(call, result)
             "materializeVaultThumbnail" -> handleMaterializeVaultThumbnail(call, result)
@@ -268,6 +269,26 @@ class ImageStoreChannel(context: Context) {
                 }
             }
             onMainThread { result.success(mapOf("success" to true, "readable" to readable)) }
+        }
+    }
+
+    /**
+     * Judges each of `locations` whole, empty, cut off or unreadable, in order.
+     *
+     * One crossing for the whole library, on [Downloads.executor] like
+     * [handleMeasureImages]: a per-file round trip over thousands of images is
+     * the stall the bulk delete already learned about. See
+     * [StoredImageInspecting].
+     */
+    private fun handleInspectImages(call: MethodCall, result: MethodChannel.Result) {
+        val locations = call.argument<List<String>>("locations") ?: run {
+            result.success(mapOf("conditions" to emptyList<String>()))
+            return
+        }
+        val inspecting = StoredImageInspecting(context)
+        Downloads.executor.execute {
+            val conditions = locations.map { inspecting.inspect(Uri.parse(it)) }
+            onMainThread { result.success(mapOf("conditions" to conditions)) }
         }
     }
 

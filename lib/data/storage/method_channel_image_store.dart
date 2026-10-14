@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:tela/data/storage/stored_image_condition_reply.dart';
 import 'package:tela/domain/models/download_deletion.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
@@ -9,6 +10,7 @@ import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/models/stored_image_condition.dart';
 import 'package:tela/domain/models/stored_image_size.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/vault_folder.dart';
@@ -256,6 +258,19 @@ class MethodChannelImageStore implements ImageStore {
         locations.length,
         StoredImageSize.zero,
       );
+    }
+  }
+
+  @override
+  Future<List<StoredImageCondition>> inspectAll(List<Uri> locations) async {
+    if (locations.isEmpty) return const <StoredImageCondition>[];
+    try {
+      final Object? raw = await _invokeMethod('inspectImages', <String, Object>{
+        'locations': <String>[for (final Uri l in locations) l.toString()],
+      });
+      return conditionsFromReply(raw, locations.length);
+    } on PlatformException {
+      return conditionsFromReply(null, locations.length);
     }
   }
 

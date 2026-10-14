@@ -8,6 +8,7 @@ import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/models/stored_image_condition.dart';
 import 'package:tela/domain/models/stored_image_size.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/vault_folder.dart';
@@ -288,6 +289,22 @@ class FakeImageStore implements ImageStore {
   /// Every location handed to [measureAll], flattened across its calls — so a
   /// test can say what was *not* measured, which a call count cannot.
   final List<Uri> measured = <Uri>[];
+
+  /// What [inspectAll] answers, by location; anything absent is intact.
+  Map<Uri, StoredImageCondition> conditions = <Uri, StoredImageCondition>{};
+
+  /// Every batch handed to [inspectAll], in call order — so a test can pin
+  /// that a large library is inspected in chunks, not one crossing per file.
+  final List<List<Uri>> inspectedBatches = <List<Uri>>[];
+
+  @override
+  Future<List<StoredImageCondition>> inspectAll(List<Uri> locations) async {
+    inspectedBatches.add(List<Uri>.of(locations));
+    return <StoredImageCondition>[
+      for (final Uri l in locations)
+        conditions[l] ?? StoredImageCondition.intact,
+    ];
+  }
 
   @override
   Future<List<StoredImageSize>> measureAll(List<Uri> locations) async {

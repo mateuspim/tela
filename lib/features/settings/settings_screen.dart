@@ -21,6 +21,7 @@ import 'package:tela/features/settings/accent_color_section.dart';
 import 'package:tela/features/settings/api_key_section.dart';
 import 'package:tela/features/settings/app_lock_switch.dart';
 import 'package:tela/features/settings/beam_explicit_switch.dart';
+import 'package:tela/features/settings/broken_images_tile.dart';
 import 'package:tela/features/settings/browse_defaults_section.dart';
 import 'package:tela/features/settings/clear_cache_tile.dart';
 import 'package:tela/features/settings/collections_section.dart';
@@ -254,6 +255,11 @@ class _SettingsList extends StatelessWidget {
         // get space back, and someone who came here for room should be offered
         // the one that costs nothing before the one that moves their library.
         _OffloadTile(),
+        Divider(),
+        // Beside the offload because that is where the damage came from: an
+        // offload before copies were verified left empty files on the card
+        // (owner, 2026-10-07).
+        BrokenImagesTile(),
       ],
     );
   }
