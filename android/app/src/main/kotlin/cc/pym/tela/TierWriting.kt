@@ -30,7 +30,7 @@ private class ImageWrite(
     val tier: String,
     val tag: String?,
     val localCopyFrom: Uri? = null,
-    val expectedDigest: (() -> ByteArray?)? = null,
+    val expectedDigest: (() -> StreamDigest?)? = null,
     val writeBytes: (OutputStream) -> Unit,
 ) {
     val fileName: String get() = ImageFileNaming.fileName(source, id, extension)
@@ -54,6 +54,8 @@ private class ImageWrite(
  * ```
  */
 internal class TierWriting(private val context: Context) {
+    private val localCopies = LocalCopyChecks(context)
+
     /** Downloads [request]'s image from the network into its tier. */
     fun store(request: ImageStoreRequest, target: OutsideGalleryTarget): Map<String, Any> {
         return write(
@@ -84,7 +86,7 @@ internal class TierWriting(private val context: Context) {
      */
     fun copy(request: ImageCopyRequest, target: OutsideGalleryTarget): Map<String, Any> {
         val from = Uri.parse(request.from)
-        var copiedDigest: ByteArray? = null
+        var copiedDigest: StreamDigest? = null
         return write(
             ImageWrite(
                 source = request.source,
@@ -365,20 +367,7 @@ internal class TierWriting(private val context: Context) {
         // copies of every wallpaper is worse still.
         val existing = SafDocuments.findChild(context, directory, request.fileName)
         if (existing != null) {
-            if (matchesLocalCopy(request, existing)) {
-                SafDocuments.dropFromOtherFolders(
-                    context,
-                    telaFolder,
-                    directory,
-                    request.fileName,
-                )
-                return stored(existing, request.tag)
-            }
-            val rewritten = rewriteDocument(existing, request)
-            if (rewritten["success"] == true) {
-                SafDocuments.dropFromOtherFolders(context, telaFolder, directory, request.fileName)
-            }
-            return rewritten
+            writeOverExisting(existing, request, telaFolder, directory)?.let { return it }
         }
         val file = DocumentsContract.createDocument(
             resolver,
@@ -393,10 +382,42 @@ internal class TierWriting(private val context: Context) {
             SafDocuments.dropFromOtherFolders(context, telaFolder, directory, request.fileName)
             stored(file, request.tag)
         } catch (error: Exception) {
-            resolver.delete(file, null, null)
+            SafDocuments.deleteQuietly(context, file)
             throw error
         }
     }
+
+    /**
+     * Settles a document already holding [request]'s name, or answers null when
+     * it has been cleared away and the caller should create a fresh one.
+     *
+     * See [ExistingCopyPolicy] for which of the three happens and why.
+     */
+    private fun writeOverExisting(
+        existing: Uri,
+        request: ImageWrite,
+        telaFolder: Uri,
+        directory: Uri,
+    ): Map<String, Any>? {
+        val matches = matchesLocalCopy(request, existing)
+        val result = when (ExistingCopyPolicy.decide(request.localCopyFrom != null, matches)) {
+            ExistingCopyPolicy.REUSE -> stored(existing, request.tag)
+            ExistingCopyPolicy.REWRITE -> rewriteDocument(existing, request)
+            ExistingCopyPolicy.REPLACE -> return replaceable(existing)
+        }
+        if (result["success"] == true) {
+            SafDocuments.dropFromOtherFolders(context, telaFolder, directory, request.fileName)
+        }
+        return result
+    }
+
+    /**
+     * Deletes a mismatched offload leftover so a fresh document can take its
+     * name. Answers null once it is gone, a failure when it would not go — a
+     * `createDocument` beside it would only produce `wallhaven-abc123 (1).jpg`.
+     */
+    private fun replaceable(existing: Uri): Map<String, Any>? =
+        if (SafDocuments.deleteQuietly(context, existing)) null else imageStoreFailure("unavailable")
 
     /**
      * Overwrites an existing document in place, truncating it first.
@@ -412,36 +433,11 @@ internal class TierWriting(private val context: Context) {
         return stored(file, request.tag)
     }
 
-    /**
-     * Proves a device-to-device copy before its caller is allowed to delete the
-     * source. A successfully closed SAF stream is not proof that removable
-     * storage retained every byte; an interrupted or unhealthy card can leave
-     * a short document without throwing until it is read back.
-     *
-     * Remote downloads have no local source and keep their existing contract.
-     * The offload path does have one, so an existing corrupt vault document is
-     * first overwritten above and then hashed against the internal bytes. The
-     * source digest is accumulated while those bytes are already flowing into
-     * the card, avoiding a second full internal read. A mismatch turns the copy
-     * into a failure and MoveStoredImages consequently leaves that original in
-     * place.
-     */
-    private fun verifyLocalCopy(request: ImageWrite, written: Uri) {
-        val expected = request.expectedDigest?.invoke() ?: return
-        val actual = context.contentResolver.openInputStream(written)?.use(::digestOf)
-        check(actual != null && expected.contentEquals(actual)) {
-            "stored copy did not match its source"
-        }
-    }
+    private fun verifyLocalCopy(request: ImageWrite, written: Uri) =
+        localCopies.verify(request.expectedDigest?.invoke(), request.localCopyFrom, written)
 
-    /** Reuses a verified destination left by an interrupted offload. */
-    private fun matchesLocalCopy(request: ImageWrite, existing: Uri): Boolean {
-        val source = request.localCopyFrom ?: return false
-        val resolver = context.contentResolver
-        val expected = resolver.openInputStream(source)?.use(::digestOf) ?: return false
-        val actual = resolver.openInputStream(existing)?.use(::digestOf) ?: return false
-        return expected.contentEquals(actual)
-    }
+    private fun matchesLocalCopy(request: ImageWrite, existing: Uri): Boolean =
+        localCopies.matches(request.localCopyFrom, existing)
 
     private fun storePrivately(request: ImageWrite): Map<String, Any> {
         val directory = TagFolders.privateDirectory(context, request.tag)
@@ -483,7 +479,7 @@ internal class TierWriting(private val context: Context) {
      * all three tiers: a MediaStore image, a SAF document and a `file:` URI all
      * open the same way.
      */
-    private fun copyLocal(from: Uri, output: OutputStream): ByteArray {
+    private fun copyLocal(from: Uri, output: OutputStream): StreamDigest {
         context.contentResolver.openInputStream(from)?.use { input ->
             return copyAndDigest(input, output)
         }

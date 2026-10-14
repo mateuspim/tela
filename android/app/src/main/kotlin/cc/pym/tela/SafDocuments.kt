@@ -162,6 +162,22 @@ internal object SafDocuments {
     }
 
     /**
+     * Deletes a SAF document, answering whether it went. Never throws.
+     *
+     * `DocumentsContract.deleteDocument`, not `ContentResolver.delete`: a
+     * DocumentsProvider answers the latter with `UnsupportedOperationException`.
+     * The failed-write cleanup used it, so every failed copy onto the card was
+     * left behind *and* reported as that exception instead of the real fault —
+     * which is how 39 offload failures hid their cause (owner, 2026-10-07).
+     * Swallowing here is what keeps a cleanup from ever masking that fault again.
+     */
+    fun deleteQuietly(context: Context, document: Uri): Boolean = try {
+        DocumentsContract.deleteDocument(context.contentResolver, document)
+    } catch (_: Exception) {
+        false
+    }
+
+    /**
      * Deletes [name] from every tag folder under [telaFolder] except [keep].
      *
      * One wallpaper, one tag — the SAF half of the rule

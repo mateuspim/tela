@@ -55,3 +55,6 @@ lib/core/i18n/generated/
 # Local design and project-handoff material. Keep locally, never commit.
 /stitch_tela_wallpaper_browser/
 /HANDOFF.md
+
+# Kotlin compiler session cache (Kotlin 2.x Gradle plugin)
+android/.kotlin/

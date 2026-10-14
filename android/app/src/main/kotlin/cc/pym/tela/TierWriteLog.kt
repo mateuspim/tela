@@ -47,6 +47,17 @@ internal object TierWriteLog {
             .put("error", error.javaClass.name)
         val cause = error.cause
         if (cause != null) fields.put("cause", cause.javaClass.name)
+        // Byte counts only — the one throw whose own fields say what went
+        // wrong, and they name no file.
+        if (error is StoredCopyMismatch) {
+            fields.put("expectedBytes", error.expectedBytes)
+            fields.put("actualBytes", error.actualBytes ?: JSONObject.NULL)
+            error.difference?.let { difference ->
+                fields.put("firstDiffAt", difference.firstAt)
+                fields.put("lastDiffAt", difference.lastAt)
+                fields.put("diffBytes", difference.count)
+            }
+        }
         return fields.toString()
     }
 }
