@@ -92,15 +92,18 @@ void main() {
     expect(history.forgetAllBatchSizes, <int>[1]);
   });
 
-  test('reports each image as it settles', () async {
-    final List<int> reported = <int>[];
+  /// The total goes out before the first image: without it the dialog read
+  /// "Repairing 0 of 0" for as long as the first download took (owner, on
+  /// device, 2026-10-13).
+  test('reports the total up front, then each image as it settles', () async {
+    final List<(int, int)> reported = <(int, int)>[];
 
     await repair()(
       <BrokenImage>[_broken('a'), _broken('b')],
-      onProgress: (int done, int total) => reported.add(done),
+      onProgress: (int done, int total) => reported.add((done, total)),
     );
 
-    expect(reported, <int>[1, 2]);
+    expect(reported, <(int, int)>[(0, 2), (1, 2), (2, 2)]);
   });
 }
 

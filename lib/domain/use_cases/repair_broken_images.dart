@@ -63,6 +63,9 @@ class RepairBrokenImages {
     RepairProgress? onProgress,
   }) async {
     final List<BrokenImage> unrepaired = <BrokenImage>[];
+    // The total before the first fetch, or the dialog reads "0 of 0" for as
+    // long as that first download takes.
+    onProgress?.call(0, broken.length);
     for (int i = 0; i < broken.length; i++) {
       if (!await _redownload(broken[i])) unrepaired.add(broken[i]);
       onProgress?.call(i + 1, broken.length);
