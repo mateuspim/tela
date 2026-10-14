@@ -2733,5 +2733,70 @@
         "type": "int", "format": "decimalPattern"
       }
     }
+  },
+
+  "brokenImagesTitle": "Repair broken images",
+  "@brokenImagesTitle": {
+    "description": "Settings row that looks for damaged downloads and offers to fetch them again."
+  },
+
+  "brokenImagesDetail": "Find downloads that are empty or cut off, and fetch them again.",
+  "@brokenImagesDetail": {
+    "description": "Subtitle of the repair row. 'Cut off' is a download that stopped part-way."
+  },
+
+  "brokenImagesChecking": "Checking {done} of {total}…",
+  "@brokenImagesChecking": {
+    "description": "Progress while every stored image is inspected for damage.",
+    "placeholders": {
+      "done": {"type": "int", "format": "decimalPattern"},
+      "total": {"type": "int", "format": "decimalPattern"}
+    }
+  },
+
+  "brokenImagesNoneFound": "No broken images found.",
+  "@brokenImagesNoneFound": {
+    "description": "Toast when the inspection finds nothing damaged."
+  },
+
+  "brokenImagesFoundTitle": "{count, plural, =1{1 broken image} other{{count} broken images}}",
+  "@brokenImagesFoundTitle": {
+    "description": "Title of the confirmation shown after the inspection finds damaged images.",
+    "placeholders": {
+      "count": {"type": "int", "format": "decimalPattern"}
+    }
+  },
+
+  "brokenImagesFoundBody": "{empty} empty, {cutOff} cut off. Each one will be downloaded again into the same folder. Any that can't be fetched — gone from the source, or needing an API key — will be deleted.",
+  "@brokenImagesFoundBody": {
+    "description": "Body of the repair confirmation. Names both outcomes so a deletion is never a surprise. Counts only, never names: the private library is included.",
+    "placeholders": {
+      "empty": {"type": "int", "format": "decimalPattern"},
+      "cutOff": {"type": "int", "format": "decimalPattern"}
+    }
+  },
+
+  "brokenImagesRepairAction": "Repair",
+  "@brokenImagesRepairAction": {
+    "description": "Confirm button that starts the repair."
+  },
+
+  "brokenImagesRepairing": "Repairing {done} of {total}…",
+  "@brokenImagesRepairing": {
+    "description": "Progress while damaged images are downloaded again one at a time.",
+    "placeholders": {
+      "done": {"type": "int", "format": "decimalPattern"},
+      "total": {"type": "int", "format": "decimalPattern"}
+    }
+  },
+
+  "brokenImagesDone": "Repaired {repaired}, deleted {removed}, couldn't fix {failed}.",
+  "@brokenImagesDone": {
+    "description": "Toast after a repair. 'Couldn't fix' counts files neither re-downloaded nor deleted, such as a declined system delete prompt.",
+    "placeholders": {
+      "repaired": {"type": "int", "format": "decimalPattern"},
+      "removed": {"type": "int", "format": "decimalPattern"},
+      "failed": {"type": "int", "format": "decimalPattern"}
+    }
   }
 }

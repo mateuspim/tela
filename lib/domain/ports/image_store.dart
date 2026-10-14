@@ -7,6 +7,7 @@ import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
+import 'package:tela/domain/models/stored_image_condition.dart';
 import 'package:tela/domain/models/stored_image_size.dart';
 import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/vault_folder.dart';
@@ -213,6 +214,21 @@ abstract interface class ImageStore {
   /// A file that cannot be measured — deleted from Photos, a revoked grant —
   /// is [StoredImageSize.zero], never an exception and never a shorter list.
   Future<List<StoredImageSize>> measureAll(List<Uri> locations);
+
+  /// Whether each of [locations] looks whole, answered in one crossing.
+  ///
+  /// The sibling of [measureAll], batched and ordered the same way. Reads only
+  /// each file's size and two ends — an empty file, or one missing its format's
+  /// end marker, is damaged — so a whole library is inspected in seconds.
+  ///
+  /// A file that cannot be opened is [StoredImageCondition.unreadable], never
+  /// an exception and never a shorter list; so is every row of a reply that
+  /// could not be read. Unknown is never reported as broken.
+  ///
+  /// ```dart
+  /// final List<StoredImageCondition> found = await store.inspectAll(uris);
+  /// ```
+  Future<List<StoredImageCondition>> inspectAll(List<Uri> locations);
 
   /// Where files-outside-gallery writes, and whether a card is offered.
   ///
