@@ -176,8 +176,80 @@ void main() {
 
       expect(harness.settings.saved.nsfwTier, StorageTier.filesOutsideGallery);
       expect(harness.queue.reroutes, <(StorageTier, StorageTier)>[
+        (StorageTier.sharedGallery, StorageTier.filesOutsideGallery),
         (StorageTier.appPrivate, StorageTier.filesOutsideGallery),
       ]);
+    });
+
+    /// Queued batches carry their destination with them, so a gallery batch
+    /// queued before the move would otherwise refill the gallery after it.
+    test('queued gallery work follows to the card', () async {
+      final _Harness harness = _Harness();
+      addTearDown(harness.dispose);
+
+      harness.controller.start(<OffloadGroup>[_group(1)]);
+      await harness.settle();
+
+      expect(harness.queue.reroutes, <(StorageTier, StorageTier)>[
+        (StorageTier.sharedGallery, StorageTier.filesOutsideGallery),
+      ]);
+    });
+
+    group('a "Keep sending here" pin', () {
+      /// Regression: the pin outranks the configured tier, so re-routing alone
+      /// left a pinned user downloading straight back to built-in storage.
+      test('on the gallery follows when the vault moved too', () async {
+        final _Harness harness = _Harness(pin: StorageTier.sharedGallery);
+        addTearDown(harness.dispose);
+
+        harness.controller.start(<OffloadGroup>[
+          _group(1),
+          _group(1, kind: OffloadKind.privateLibrary),
+        ]);
+        await harness.settle();
+
+        expect(
+          harness.settings.pinnedTierSaved,
+          StorageTier.filesOutsideGallery,
+        );
+      });
+
+      /// Re-pinning to the card would send explicit downloads there too, which
+      /// only ticking the private library may do.
+      test('on the gallery is cleared when the vault stayed', () async {
+        final _Harness harness = _Harness(pin: StorageTier.sharedGallery);
+        addTearDown(harness.dispose);
+
+        harness.controller.start(<OffloadGroup>[_group(1)]);
+        await harness.settle();
+
+        expect(harness.settings.pinnedTierSaved, isNull);
+      });
+
+      test('on the private library follows the vault', () async {
+        final _Harness harness = _Harness(pin: StorageTier.appPrivate);
+        addTearDown(harness.dispose);
+
+        harness.controller.start(<OffloadGroup>[
+          _group(1, kind: OffloadKind.privateLibrary),
+        ]);
+        await harness.settle();
+
+        expect(
+          harness.settings.pinnedTierSaved,
+          StorageTier.filesOutsideGallery,
+        );
+      });
+
+      test('on the private library stays when the vault stayed', () async {
+        final _Harness harness = _Harness(pin: StorageTier.appPrivate);
+        addTearDown(harness.dispose);
+
+        harness.controller.start(<OffloadGroup>[_group(1)]);
+        await harness.settle();
+
+        expect(harness.settings.pinnedTierSaved, StorageTier.appPrivate);
+      });
     });
 
     test('a run that moved nothing changes no setting', () async {
@@ -239,13 +311,17 @@ OffloadGroup _group(
 
 /// A container with every seam the runner touches, and a way to let it finish.
 class _Harness {
-  _Harness({bool foreground = true, bool failEveryCopy = false})
-    : visibility = FakeAppVisibility(foreground: foreground),
-      images = FakeImageStore(
-        failingIds: failEveryCopy
-            ? <String>{for (int i = 0; i < 10; i++) 'id$i'}
-            : const <String>{},
-      ) {
+  _Harness({
+    bool foreground = true,
+    bool failEveryCopy = false,
+    StorageTier? pin,
+  }) : settings = FakeSettingsRepository(pinnedDownloadTier: pin),
+       visibility = FakeAppVisibility(foreground: foreground),
+       images = FakeImageStore(
+         failingIds: failEveryCopy
+             ? <String>{for (int i = 0; i < 10; i++) 'id$i'}
+             : const <String>{},
+       ) {
     container = ProviderContainer(
       overrides: <Override>[
         imageStoreProvider.overrideWithValue(images),
@@ -259,7 +335,7 @@ class _Harness {
 
   final FakeAppVisibility visibility;
   final FakeImageStore images;
-  final FakeSettingsRepository settings = FakeSettingsRepository();
+  final FakeSettingsRepository settings;
   final FakeDownloadQueue queue = FakeDownloadQueue();
   late final ProviderContainer container;
 

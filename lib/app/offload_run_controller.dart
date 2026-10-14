@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/library_listings.dart';
 import 'package:tela/app/offload_run.dart';
+import 'package:tela/app/pinned_download_tier.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
@@ -145,17 +146,42 @@ class OffloadRunController extends Notifier<OffloadRun?> {
     final StorageSettingsController settings = ref.read(
       storageSettingsProvider.notifier,
     );
+    final bool privateMoved = state?.includesPrivateLibrary == true;
     await settings.route(Purity.sfw, StorageTier.filesOutsideGallery);
-    if (state?.includesPrivateLibrary != true) return;
+    // Gallery entries are never explicit, so this one is safe unconditionally.
+    await _rerouteQueued(StorageTier.sharedGallery);
+    await _repin(privateMoved: privateMoved);
+    if (!privateMoved) return;
     await settings.route(Purity.nsfw, StorageTier.filesOutsideGallery);
-    // Batch choices are stored as explicit destinations. Without migrating
-    // them, an older private batch can refill the internal directory after the
-    // library has moved even though newly queued work follows this setting.
-    await ref
-        .read(downloadQueueProvider)
-        .reroute(
-          StorageTier.appPrivate,
-          StorageTier.filesOutsideGallery,
-        );
+    await _rerouteQueued(StorageTier.appPrivate);
+  }
+
+  /// Moves queued work bound for [from] onto the card.
+  ///
+  /// Batch choices are stored as explicit destinations. Without migrating
+  /// them, an older batch can refill the built-in storage after the move even
+  /// though newly queued work follows the new setting.
+  Future<int> _rerouteQueued(StorageTier from) => ref
+      .read(downloadQueueProvider)
+      .reroute(from, StorageTier.filesOutsideGallery);
+
+  /// Brings a "Keep sending here" pin along with the move.
+  ///
+  /// The pin outranks the configured tier, so re-routing alone left a pinned
+  /// user downloading straight back onto the storage the move just cleared —
+  /// the setting changed and nothing they downloaded did. A gallery pin with
+  /// the private library left behind is **cleared, not re-pinned**: the card
+  /// tier is legal for explicit content, so pinning it would carry explicit
+  /// downloads onto the card, which only ticking that group may do.
+  Future<void> _repin({required bool privateMoved}) async {
+    final StorageTier? pin = await ref.read(pinnedDownloadTierProvider.future);
+    final PinnedDownloadTier pins = ref.read(
+      pinnedDownloadTierProvider.notifier,
+    );
+    final bool emptied =
+        pin == StorageTier.sharedGallery || pin == StorageTier.appPrivate;
+    if (!emptied) return;
+    if (privateMoved) return pins.pin(StorageTier.filesOutsideGallery);
+    if (pin == StorageTier.sharedGallery) await pins.clear();
   }
 }
