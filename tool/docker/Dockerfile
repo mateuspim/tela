@@ -5,7 +5,10 @@
 # anywhere. Versions are pinned, never `latest`: a silent Flutter bump is a
 # silent Dart-SDK bump, and that breaks package resolution without touching
 # a single line of our code.
-FROM eclipse-temurin:17-jdk
+#
+# Fully qualified because Podman, unlike Docker, won't assume docker.io for a
+# short name when no registries.conf alias exists.
+FROM docker.io/library/eclipse-temurin:17-jdk
 
 ARG FLUTTER_VERSION=3.44.6
 ARG ANDROID_API=36
