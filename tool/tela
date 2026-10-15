@@ -47,18 +47,28 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HOST_IS_ROOT=false
 [[ "$(id -u)" == 0 ]] && HOST_IS_ROOT=true
 
-# How to reach the Docker daemon. The owner keeps their user out of the
-# `docker` group (membership is root in all but name), so when the socket is not
-# writable each call goes through `pkexec`, which asks on the desktop. Override
-# with TELA_DOCKER, e.g. TELA_DOCKER="sudo docker". `pkexec` clears the
-# environment, which is why nothing below forwards a variable by name alone.
+# How to reach a container runtime. The owner keeps their user out of the
+# `docker` group (membership is root in all but name), so rootless Podman comes
+# first: it runs as the invoking user with no daemon and no password prompt.
+# Without it, a writable Docker socket is used directly, and failing that each
+# call goes through `pkexec`, which asks on the desktop. Override with
+# TELA_DOCKER, e.g. TELA_DOCKER="sudo docker". `pkexec` clears the environment,
+# which is why nothing below forwards a variable by name alone.
 if [[ -n "${TELA_DOCKER:-}" ]]; then
   read -ra DOCKER <<< "$TELA_DOCKER"
+elif command -v podman >/dev/null; then
+  DOCKER=(podman)
 elif [[ -w /var/run/docker.sock ]] || ! command -v pkexec >/dev/null; then
   DOCKER=(docker)
 else
   DOCKER=(pkexec docker)
 fi
+
+# Rootless Podman maps container uids into the user's subuid range, so the
+# image's `dev` user would write the bind mount as uid 100999. `keep-id` maps
+# the invoking uid onto the same uid inside, which is `dev` — see build_image.
+ROOTLESS_PODMAN=false
+[[ "${DOCKER[-1]}" == podman && "$HOST_IS_ROOT" == false ]] && ROOTLESS_PODMAN=true
 
 build_image() {
   local uid gid
@@ -140,7 +150,15 @@ DOCKER_ARGS=(
 # which surfaces as `Flutter failed to write to a file at "/app/.dart_tool"`.
 [[ "$HOST_IS_ROOT" == true ]] && DOCKER_ARGS+=(--user 0:0 -e HOME=/home/dev)
 
-[[ -d /dev/bus/usb ]] && DOCKER_ARGS+=(-v /dev/bus/usb:/dev/bus/usb --device-cgroup-rule='c 189:* rmw')
+[[ "$ROOTLESS_PODMAN" == true ]] && DOCKER_ARGS+=(--userns=keep-id)
+
+# Rootless Podman refuses device cgroup rules outright, and doesn't need one:
+# it reaches the USB nodes with the user's own permissions, which udev's
+# `uaccess` ACL already grants on an attached phone.
+if [[ -d /dev/bus/usb ]]; then
+  DOCKER_ARGS+=(-v /dev/bus/usb:/dev/bus/usb)
+  [[ "$ROOTLESS_PODMAN" == false ]] && DOCKER_ARGS+=(--device-cgroup-rule='c 189:* rmw')
+fi
 [[ -t 0 ]] && DOCKER_ARGS+=(-it)
 
 if [[ "${1:-}" == "--shell" ]]; then
