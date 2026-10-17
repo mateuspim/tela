@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/domain/models/download_folder.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
@@ -33,7 +34,7 @@ void main() {
   testWidgets('offers device always and card only when one is available', (
     WidgetTester tester,
   ) async {
-    await _pump(tester, FakeImageStore());
+    await _pump(tester, FakeImageStore(folder: onDevice));
 
     expect(find.text('Internal storage'), findsOneWidget);
     expect(find.text('SD card'), findsNothing);
@@ -42,7 +43,10 @@ void main() {
   testWidgets('shows the card option when a card is in the slot', (
     WidgetTester tester,
   ) async {
-    await _pump(tester, FakeImageStore(sdCardAvailable: true));
+    await _pump(
+      tester,
+      FakeImageStore(folder: onDevice, sdCardAvailable: true),
+    );
 
     expect(find.text('Internal storage'), findsOneWidget);
     expect(find.text('SD card'), findsOneWidget);
@@ -87,6 +91,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final FakeImageStore store = FakeImageStore(
+      folder: onDevice,
       sdCardAvailable: true,
       chosenFolder: onCard,
     );
@@ -96,6 +101,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(store.chosenKinds, <StorageVolumeKind>[StorageVolumeKind.sdCard]);
+    expect(store.chosenPurities, <Purity>[Purity.sfw]);
     expect(find.textContaining('SD card/Wallpapers/tela'), findsOneWidget);
   });
 
@@ -118,13 +124,72 @@ void main() {
     expect(find.textContaining('Internal storage/tela'), findsOneWidget);
   });
 
-  testWidgets('with nothing chosen yet, neither volume is selected', (
+  testWidgets('with nothing chosen yet, it offers to choose a folder', (
     WidgetTester tester,
   ) async {
     await _pump(tester, FakeImageStore());
 
-    expect(_selectedKind(tester), isNull);
-    expect(find.textContaining('will ask you to confirm'), findsOneWidget);
+    expect(find.byType(RadioGroup<StorageVolumeKind>), findsNothing);
+    expect(find.text('Choose where to store these'), findsOneWidget);
+    expect(find.textContaining('No folder yet'), findsOneWidget);
+  });
+
+  testWidgets('the choose button grants this purity its folder', (
+    WidgetTester tester,
+  ) async {
+    final FakeImageStore store = FakeImageStore(
+      sdCardAvailable: true,
+      chosenFolder: onCard,
+    );
+    await _pump(tester, store, purity: Purity.nsfw);
+
+    await tester.tap(find.text('Choose where to store these'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SD card'));
+    await tester.pumpAndSettle();
+
+    expect(store.chosenKinds, <StorageVolumeKind>[StorageVolumeKind.sdCard]);
+    expect(store.chosenPurities, <Purity>[Purity.nsfw]);
+  });
+
+  testWidgets('each purity names its own folder', (WidgetTester tester) async {
+    final FakeImageStore store = FakeImageStore(
+      folder: onDevice,
+      explicitFolder: onCard,
+      sdCardAvailable: true,
+    );
+
+    await _pump(tester, store);
+    expect(find.text('Where safe and sketchy files are saved'), findsOneWidget);
+    expect(_selectedKind(tester), StorageVolumeKind.device);
+
+    await _pump(tester, store, purity: Purity.nsfw);
+    expect(find.text('Where explicit files are saved'), findsOneWidget);
+    expect(_selectedKind(tester), StorageVolumeKind.sdCard);
+  });
+
+  testWidgets('a safe folder on the card raises no explicit warning', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      FakeImageStore(
+        folder: onDevice,
+        sdCardAvailable: true,
+        chosenFolder: onCard,
+      ),
+      settings: FakeSettingsRepository(
+        settings: StorageSettings(
+          sfwTier: StorageTier.filesOutsideGallery,
+          nsfwTier: StorageTier.filesOutsideGallery,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('SD card'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Explicit downloads on a removable card'), findsNothing);
   });
 
   group('explicit-on-removable warning', () {
@@ -146,8 +211,13 @@ void main() {
     ) async {
       await _pump(
         tester,
-        FakeImageStore(sdCardAvailable: true, chosenFolder: onCard),
+        FakeImageStore(
+          folder: onDevice,
+          sdCardAvailable: true,
+          chosenFolder: onCard,
+        ),
         settings: nsfwOnFiles(),
+        purity: Purity.nsfw,
       );
 
       await tester.tap(find.text('SD card'));
@@ -165,8 +235,13 @@ void main() {
       final FakeSettingsRepository settings = nsfwOnFiles();
       await _pump(
         tester,
-        FakeImageStore(sdCardAvailable: true, chosenFolder: onCard),
+        FakeImageStore(
+          folder: onDevice,
+          sdCardAvailable: true,
+          chosenFolder: onCard,
+        ),
         settings: settings,
+        purity: Purity.nsfw,
       );
 
       await tester.tap(find.text('SD card'));
@@ -185,8 +260,13 @@ void main() {
       final FakeSettingsRepository settings = nsfwOnFiles();
       await _pump(
         tester,
-        FakeImageStore(sdCardAvailable: true, chosenFolder: onCard),
+        FakeImageStore(
+          folder: onDevice,
+          sdCardAvailable: true,
+          chosenFolder: onCard,
+        ),
         settings: settings,
+        purity: Purity.nsfw,
       );
 
       await tester.tap(find.text('SD card'));
@@ -205,8 +285,13 @@ void main() {
     ) async {
       await _pump(
         tester,
-        FakeImageStore(sdCardAvailable: true, chosenFolder: onCard),
+        FakeImageStore(
+          folder: onDevice,
+          sdCardAvailable: true,
+          chosenFolder: onCard,
+        ),
         settings: nsfwOnFiles(acknowledged: true),
+        purity: Purity.nsfw,
       );
 
       await tester.tap(find.text('SD card'));
@@ -223,8 +308,13 @@ void main() {
     ) async {
       await _pump(
         tester,
-        FakeImageStore(chosenFolder: onDevice),
+        FakeImageStore(
+          folder: onCard,
+          sdCardAvailable: true,
+          chosenFolder: onDevice,
+        ),
         settings: nsfwOnFiles(),
+        purity: Purity.nsfw,
       );
 
       await tester.tap(find.text('Internal storage'));
@@ -250,6 +340,7 @@ Future<void> _pump(
   WidgetTester tester,
   FakeImageStore store, {
   FakeSettingsRepository? settings,
+  Purity purity = Purity.sfw,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -259,14 +350,18 @@ Future<void> _pump(
           settings ?? FakeSettingsRepository(),
         ),
       ],
-      child: const MaterialApp(
-        localizationsDelegates: <LocalizationsDelegate<Object>>[
+      child: MaterialApp(
+        localizationsDelegates: const <LocalizationsDelegate<Object>>[
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(body: DownloadLocationSection(routedThere: true)),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: DownloadLocationSection(purity: purity),
+          ),
+        ),
       ),
     ),
   );

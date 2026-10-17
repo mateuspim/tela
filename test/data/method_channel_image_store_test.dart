@@ -835,11 +835,38 @@ void main() {
 
       final DownloadFolder? folder = await store.chooseDownloadFolder(
         StorageVolumeKind.sdCard,
+        purity: Purity.sketchy,
       );
 
       expect(fake.receivedMethod, 'chooseDownloadFolder');
-      expect(fake.receivedArguments, <String, String>{'kind': 'sdCard'});
+      // Sketchy is sent as its bucket: it shares the safe folder.
+      expect(fake.receivedArguments, <String, String>{
+        'kind': 'sdCard',
+        'purity': 'sfw',
+      });
       expect(folder?.volumeLabel, 'SD card');
+    });
+
+    test('an explicit pick answers the explicit folder', () async {
+      final _FakeImageStoreChannel fake = _FakeImageStoreChannel(
+        response: <Object?, Object?>{
+          'success': true,
+          'sdCardAvailable': true,
+          'folder': folderPayload(path: 'tela'),
+          'explicitFolder': folderPayload(path: '.tela'),
+        },
+      );
+      final MethodChannelImageStore store = MethodChannelImageStore(
+        invokeMethod: fake.call,
+      );
+
+      final DownloadFolder? folder = await store.chooseDownloadFolder(
+        StorageVolumeKind.sdCard,
+        purity: Purity.nsfw,
+      );
+
+      expect(fake.receivedArguments?['purity'], 'nsfw');
+      expect(folder?.relativePath, '.tela');
     });
 
     test('a cancelled or absent pick answers null, not a folder', () async {
@@ -853,7 +880,10 @@ void main() {
       );
 
       expect(
-        await store.chooseDownloadFolder(StorageVolumeKind.device),
+        await store.chooseDownloadFolder(
+          StorageVolumeKind.device,
+          purity: Purity.sfw,
+        ),
         isNull,
       );
     });

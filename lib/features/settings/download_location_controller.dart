@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/vault_folder.dart';
 import 'package:tela/domain/ports/image_store.dart';
@@ -40,15 +41,19 @@ class DownloadLocationController extends AsyncNotifier<DownloadLocation> {
     return true;
   }
 
-  /// Points downloads at [kind]'s volume, opening the picker to confirm it.
+  /// Points [purity]'s downloads at [kind]'s volume, opening the picker to
+  /// confirm it.
   ///
   /// A cancelled or unavailable pick leaves the previous location showing: the
   /// port answers null for both, and overwriting state with that would blank a
   /// folder the user never asked to clear. On success the card-available flag
   /// is re-read too, since inserting the card is what made this reachable.
-  Future<void> choose(StorageVolumeKind kind) async {
+  Future<void> choose(StorageVolumeKind kind, {required Purity purity}) async {
     final ImageStore store = ref.read(imageStoreProvider);
-    final DownloadFolder? chosen = await store.chooseDownloadFolder(kind);
+    final DownloadFolder? chosen = await store.chooseDownloadFolder(
+      kind,
+      purity: purity,
+    );
     if (chosen == null) return;
     state = await AsyncValue.guard<DownloadLocation>(store.downloadLocation);
   }

@@ -5,6 +5,7 @@ import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
@@ -22,6 +23,7 @@ class FakeImageStore implements ImageStore {
     this.failure,
     this.storedImage,
     this.folder,
+    this.explicitFolder,
     this.chosenFolder,
     this.sdCardAvailable = false,
     List<PrivateImage> privateLibrary = const <PrivateImage>[],
@@ -318,6 +320,11 @@ class FakeImageStore implements ImageStore {
   /// The folder already granted, or null for a tier nobody has configured.
   final DownloadFolder? folder;
 
+  /// The explicit folder granted on its own, or null when explicit downloads
+  /// still share the safe one — the native fallback, mirrored in
+  /// [downloadLocation].
+  final DownloadFolder? explicitFolder;
+
   /// What the picker returns; null stands for the user backing out of it.
   ///
   /// Separate from [folder] so a test can say "they had none and chose one",
@@ -329,6 +336,9 @@ class FakeImageStore implements ImageStore {
 
   /// The volume kinds passed to [chooseDownloadFolder], in order.
   final List<StorageVolumeKind> chosenKinds = <StorageVolumeKind>[];
+
+  /// The purities passed to [chooseDownloadFolder], in order.
+  final List<Purity> chosenPurities = <Purity>[];
 
   /// The vault in force, as [setVaultFolder] last left it.
   VaultFolder vault = VaultFolder.standard;
@@ -348,15 +358,29 @@ class FakeImageStore implements ImageStore {
     folder: _granted ?? folder,
     sdCardAvailable: sdCardAvailable,
     vault: vault,
+    // As the native store answers: a separate grant, else the folder explicit
+    // downloads were already sharing, else whatever safe was first given.
+    explicitFolder: _grantedExplicit ?? explicitFolder ?? folder ?? _granted,
   );
 
   @override
-  Future<DownloadFolder?> chooseDownloadFolder(StorageVolumeKind kind) async {
+  Future<DownloadFolder?> chooseDownloadFolder(
+    StorageVolumeKind kind, {
+    required Purity purity,
+  }) async {
     chosenKinds.add(kind);
-    _granted = chosenFolder;
+    chosenPurities.add(purity);
+    if (StorageSettings.bucketFor(purity) == Purity.nsfw) {
+      _grantedExplicit = chosenFolder ?? _grantedExplicit;
+    } else {
+      _granted = chosenFolder ?? _granted;
+    }
     return chosenFolder;
   }
 
   /// Set once the picker has run, so a later read sees what it granted.
   DownloadFolder? _granted;
+
+  /// The explicit twin of [_granted].
+  DownloadFolder? _grantedExplicit;
 }

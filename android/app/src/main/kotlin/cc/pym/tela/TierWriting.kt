@@ -335,7 +335,8 @@ internal class TierWriting(private val context: Context) {
         request: ImageWrite,
         target: OutsideGalleryTarget,
     ): Map<String, Any> {
-        val tree = target.tree?.let(Uri::parse) ?: return imageStoreFailure("notConfigured")
+        val tree = target.treeFor(request.purity)?.let(Uri::parse)
+            ?: return imageStoreFailure("notConfigured")
         // Before anything is created: this tier writes a `.nomedia`, and a tree
         // that resolves onto the gallery's folder would hide it whole. A tree
         // tela cannot even read is refused as well — "is this somebody else's

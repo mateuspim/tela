@@ -65,7 +65,29 @@ object VaultFolders {
 data class OutsideGalleryTarget(
     val tree: String?,
     val vaultLabel: String = VaultFolders.DEFAULT_LABEL,
+    /**
+     * The tree explicit images go to — the vault lives inside this one.
+     *
+     * Its own grant since the owner asked for safe and explicit downloads to be
+     * placeable apart, e.g. safe on the device and explicit on the card
+     * (2026-10-16). Defaults to [tree], which is what every build before that
+     * did and what a user who never chose a second folder still gets.
+     */
+    val explicitTree: String? = tree,
 ) {
     /** The hidden directory's name, or null when the label is not usable. */
     val vaultDirectory: String? get() = VaultFolders.directoryOf(vaultLabel)
+
+    /** The tree a [purity] writes into: [explicitTree] for `nsfw`, else [tree]. */
+    fun treeFor(purity: String): String? = if (purity == "nsfw") explicitTree else tree
+
+    /**
+     * Every tree a vault may sit in, the explicit one first.
+     *
+     * The safe tree is read too because a vault there predates the split — the
+     * images in it were written before the explicit folder moved, and a
+     * private library that stopped showing them would be the "hidden means
+     * vanished" failure [SafVaultListing] exists to prevent.
+     */
+    val vaultTrees: List<String> get() = listOfNotNull(explicitTree, tree).distinct()
 }

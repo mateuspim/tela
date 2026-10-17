@@ -9,6 +9,8 @@ import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/offload_group.dart';
+import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image_move.dart';
 import 'package:tela/features/settings/download_location_controller.dart';
@@ -40,7 +42,7 @@ Future<bool> runOffload({
     for (final OffloadGroup group in groups) ...group.moves,
   ];
   if (moves.isEmpty) return false;
-  final DownloadFolder? card = await _grantCardFolder(ref);
+  final DownloadFolder? card = await _grantCardFolders(ref, moves);
   if (card == null || !context.mounted) return false;
   final int bytes = groups.fold(0, (int sum, OffloadGroup g) => sum + g.bytes);
   if (!_fits(context, card, bytes)) return false;
@@ -48,28 +50,51 @@ Future<bool> runOffload({
   return _start(ref, groups);
 }
 
-/// Points the files tier at the card, opening the picker when it is not there
-/// already, and answers the folder it will write into.
+/// Points every folder [moves] will land in at the card — safe and explicit
+/// images each have their own (owner, 2026-10-16) — and answers the last one,
+/// or null as soon as one cannot be had.
+///
+/// Safe first, so a picker the user backs out of on the first ask stops the
+/// whole move before anything is copied.
+Future<DownloadFolder?> _grantCardFolders(
+  WidgetRef ref,
+  List<StoredImageMove> moves,
+) async {
+  final Set<Purity> buckets = <Purity>{
+    for (final StoredImageMove move in moves)
+      StorageSettings.bucketFor(move.purity),
+  };
+  DownloadFolder? card;
+  for (final Purity bucket in <Purity>[Purity.sfw, Purity.nsfw]) {
+    if (!buckets.contains(bucket)) continue;
+    card = await _grantCardFolder(ref, bucket);
+    if (card == null) return null;
+  }
+  return card;
+}
+
+/// Points [purity]'s folder at the card, opening the picker when it is not
+/// there already, and answers the folder it will write into.
 ///
 /// Re-uses the settings controller rather than calling the store directly, so
 /// the location row behind this screen shows the new folder the moment the
 /// picker closes. Answers null for a backed-out picker, an ejected card, or a
 /// folder that came back on built-in storage — all three leave nothing to move
 /// *to*, and none of them is an error worth a red toast.
-Future<DownloadFolder?> _grantCardFolder(WidgetRef ref) async {
+Future<DownloadFolder?> _grantCardFolder(WidgetRef ref, Purity purity) async {
   final DownloadLocation before = await ref.read(
     downloadLocationProvider.future,
   );
-  final DownloadFolder? ready = _readyCard(before);
+  final DownloadFolder? ready = _readyCard(before, purity);
   if (ready != null) return ready;
   await ref
       .read(downloadLocationProvider.notifier)
-      .choose(StorageVolumeKind.sdCard);
-  return _readyCard(await ref.read(downloadLocationProvider.future));
+      .choose(StorageVolumeKind.sdCard, purity: purity);
+  return _readyCard(await ref.read(downloadLocationProvider.future), purity);
 }
 
-DownloadFolder? _readyCard(DownloadLocation location) {
-  final DownloadFolder? folder = location.folder;
+DownloadFolder? _readyCard(DownloadLocation location, Purity purity) {
+  final DownloadFolder? folder = location.folderFor(purity);
   if (folder == null || !folder.isRemovable || !folder.isAvailable) return null;
   return folder;
 }

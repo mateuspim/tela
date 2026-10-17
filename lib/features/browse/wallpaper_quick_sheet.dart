@@ -19,6 +19,7 @@ import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_target_sheet.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -285,6 +286,9 @@ Future<({bool proceed, StorageTier? tier, TagFolder? tag})> _resolveDestination(
     known: knownTags,
     selection: <Wallpaper>[wallpaper],
   );
+  final DownloadLocation location = await ref
+      .read(imageStoreProvider)
+      .downloadLocation();
   if (!context.mounted) return (proceed: false, tier: null, tag: null);
   final DownloadDestinationChoice? choice = await chooseDownloadDestination(
     context,
@@ -295,6 +299,7 @@ Future<({bool proceed, StorageTier? tier, TagFolder? tag})> _resolveDestination(
     tagIsRemembered: searched == null && remembered != null,
     knownTags: knownTags,
     tagSuggestions: suggestions,
+    location: location,
   );
   if (choice == null || choice.stopsPin) {
     return (proceed: false, tier: null, tag: null);

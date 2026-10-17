@@ -165,19 +165,22 @@ void main() {
     // Dead control otherwise: the volume choice means nothing until a purity
     // actually routes to files-outside-gallery, so it stays hidden until then.
     await _pumpSettings(tester, FakeSettingsRepository());
-    expect(find.text('Where files are saved'), findsNothing);
+    expect(find.text('Where safe and sketchy files are saved'), findsNothing);
 
     await tester.tap(find.text('Files, not gallery').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('Where files are saved'), findsOneWidget);
-    expect(find.text('SD card'), findsNothing); // no card in this fake
+    expect(find.text('Where safe and sketchy files are saved'), findsOneWidget);
+    // No folder yet, so it offers one rather than waiting for a download.
+    expect(find.text('Choose where to store these'), findsOneWidget);
+    // Only the picker set to Files gets a panel.
+    expect(find.text('Where explicit files are saved'), findsNothing);
   });
 
-  // Regression for device pass F7 (2026-10-03): a folder chosen from the
-  // download chooser for a one-off "Files" download was invisible in Settings
-  // until a default was switched to Files.
-  testWidgets('shows a folder already chosen even when no default uses it', (
+  // Reverses device pass F7 (2026-10-03), at the owner's ask (2026-10-16): a
+  // folder panel shows only under a picker set to "Files, not gallery", even
+  // when a one-off download has already granted a folder.
+  testWidgets('hides a folder no default uses', (
     WidgetTester tester,
   ) async {
     await _pumpSettings(
@@ -193,8 +196,8 @@ void main() {
       ),
     );
 
-    expect(find.text('Where files are saved'), findsOneWidget);
-    expect(find.textContaining('SD card/Wallpapers/tela'), findsOneWidget);
+    expect(find.text('Where safe and sketchy files are saved'), findsNothing);
+    expect(find.textContaining('SD card/Wallpapers/tela'), findsNothing);
   });
 
   testWidgets(
@@ -210,10 +213,21 @@ void main() {
             nsfwTier: StorageTier.appPrivate,
           ),
         ),
-        imageStore: FakeImageStore(sdCardAvailable: true),
+        imageStore: FakeImageStore(
+          folder: const DownloadFolder(
+            volumeLabel: 'Internal storage',
+            relativePath: 'tela',
+            isRemovable: false,
+            isAvailable: true,
+          ),
+          sdCardAvailable: true,
+        ),
       );
 
-      expect(find.text('Where files are saved'), findsOneWidget);
+      expect(
+        find.text('Where safe and sketchy files are saved'),
+        findsOneWidget,
+      );
       expect(find.text('SD card'), findsOneWidget);
     },
   );

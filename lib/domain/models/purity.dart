@@ -57,6 +57,20 @@ enum Purity {
   /// Konachan does, verified live — reads this through its own capabilities
   /// rather than being refused locally.
   bool get requiresApiKey => this == Purity.nsfw;
+
+  /// The most explicit purity in [purities] — the one whose warning the
+  /// download chooser shows over a mixed batch — or [Purity.sfw] for an empty
+  /// set.
+  ///
+  /// ```dart
+  /// Purity.strongestOf({Purity.sfw, Purity.nsfw}); // Purity.nsfw
+  /// ```
+  static Purity strongestOf(Set<Purity> purities) {
+    return purities.fold(
+      Purity.sfw,
+      (Purity worst, Purity p) => p.index > worst.index ? p : worst,
+    );
+  }
 }
 
 /// The set of purities a search asks for.

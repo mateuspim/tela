@@ -14,6 +14,7 @@ import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/listing_origin.dart';
 import 'package:tela/core/ui/tela_toast.dart';
+import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -114,36 +115,47 @@ Future<bool> ensureDownloadFolder({
   required Set<Purity> purities,
   required StorageTier? tier,
 }) async {
-  if (!await _landsOutsideGallery(ref, purities, tier)) return true;
+  final Set<Purity> outside = await _landingOutsideGallery(
+    ref,
+    purities,
+    tier,
+  );
+  if (outside.isEmpty) return true;
   if (!context.mounted) return false;
   return ref
       .read(configuredDownloadProvider)
       .ensureFolder(
         ({required bool offerSdCard}) =>
             chooseDownloadVolume(context, offerSdCard: offerSdCard),
+        purities: outside,
       );
 }
 
-/// Whether anything with one of these purities is headed for the tier that owns
-/// a folder.
+/// The purities among [purities] headed for the tier that owns a folder —
+/// each bucket of which needs its own, now that safe and explicit downloads
+/// are placed apart.
 ///
 /// A resolved [tier] answers it outright. A null one means "resolve per
 /// wallpaper when it runs", so the same rule the download itself will apply is
 /// applied here — [StorageSettings.tierWithPin], over the pin and each purity's
 /// configured destination — rather than a second guess at it.
-Future<bool> _landsOutsideGallery(
+Future<Set<Purity>> _landingOutsideGallery(
   WidgetRef ref,
   Set<Purity> purities,
   StorageTier? tier,
 ) async {
-  if (tier != null) return tier == StorageTier.filesOutsideGallery;
+  if (tier != null) {
+    return tier == StorageTier.filesOutsideGallery ? purities : <Purity>{};
+  }
   final SettingsRepository settings = ref.read(settingsRepositoryProvider);
   final StorageTier? pin = await ref.read(pinnedDownloadTierProvider.future);
   final StorageSettings storage = await settings.loadStorageSettings();
-  return purities.any(
-    (Purity purity) =>
-        storage.tierWithPin(purity, pin) == StorageTier.filesOutsideGallery,
-  );
+  return purities
+      .where(
+        (Purity purity) =>
+            storage.tierWithPin(purity, pin) == StorageTier.filesOutsideGallery,
+      )
+      .toSet();
 }
 
 /// Says how many went into the queue, with a way to go and watch them.
@@ -244,6 +256,9 @@ resolveDownloadDestination({
     known: known,
     selection: tagSample,
   );
+  final DownloadLocation location = await ref
+      .read(imageStoreProvider)
+      .downloadLocation();
   if (!context.mounted) return (proceed: false, tier: null, tag: null);
   final DownloadDestinationChoice? choice =
       await chooseBatchDownloadDestination(
@@ -255,6 +270,7 @@ resolveDownloadDestination({
         tagIsRemembered: searched == null && remembered != null,
         knownTags: known,
         tagSuggestions: suggestions,
+        location: location,
       );
   if (choice == null) return (proceed: false, tier: null, tag: null);
   // Stop clears the pin and downloads nothing — the deliberate way out, and the
