@@ -10,6 +10,7 @@ import 'package:tela/core/ui/purity_alert_tint.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -52,6 +53,7 @@ Future<DownloadDestinationChoice?> chooseDownloadDestination(
   bool tagIsRemembered = false,
   List<TagFolder> knownTags = const <TagFolder>[],
   Future<List<TagCandidate>>? tagSuggestions,
+  DownloadLocation? location,
 }) {
   return _show(
     context,
@@ -64,6 +66,7 @@ Future<DownloadDestinationChoice?> chooseDownloadDestination(
     tagIsRemembered: tagIsRemembered,
     knownTags: knownTags,
     tagSuggestions: tagSuggestions,
+    location: location,
     // One wallpaper needs no share counts: "1/1" on every chip says nothing.
     selectionSize: 0,
   );
@@ -90,11 +93,12 @@ Future<DownloadDestinationChoice?> chooseBatchDownloadDestination(
   bool tagIsRemembered = false,
   List<TagFolder> knownTags = const <TagFolder>[],
   Future<List<TagCandidate>>? tagSuggestions,
+  DownloadLocation? location,
 }) {
   return _show(
     context,
     options: StorageSettings.choicesForAll(purities),
-    strongestPurity: _strongest(purities),
+    strongestPurity: Purity.strongestOf(purities),
     configuredTier: null,
     streak: null,
     pinnedTier: pinnedTier,
@@ -102,17 +106,9 @@ Future<DownloadDestinationChoice?> chooseBatchDownloadDestination(
     tagIsRemembered: tagIsRemembered,
     knownTags: knownTags,
     tagSuggestions: tagSuggestions,
+    location: location,
     selectionSize: count,
     batchCount: count,
-  );
-}
-
-/// The most explicit purity in [purities] — the one whose warning the chooser
-/// shows over a mixed batch — or [Purity.sfw] for an empty set.
-Purity _strongest(Set<Purity> purities) {
-  return purities.fold(
-    Purity.sfw,
-    (Purity worst, Purity p) => p.index > worst.index ? p : worst,
   );
 }
 
@@ -127,6 +123,7 @@ Future<DownloadDestinationChoice?> _show(
   required bool tagIsRemembered,
   required List<TagFolder> knownTags,
   required Future<List<TagCandidate>>? tagSuggestions,
+  required DownloadLocation? location,
   required int selectionSize,
   int? batchCount,
 }) {
@@ -145,6 +142,7 @@ Future<DownloadDestinationChoice?> _show(
       tagIsRemembered: tagIsRemembered,
       knownTags: knownTags,
       tagSuggestions: tagSuggestions,
+      location: location,
       selectionSize: selectionSize,
       batchCount: batchCount,
     ),
@@ -165,6 +163,7 @@ class _DestinationDialog extends StatefulWidget {
     required this.tagIsRemembered,
     required this.knownTags,
     required this.tagSuggestions,
+    required this.location,
     required this.selectionSize,
     this.batchCount,
   });
@@ -208,6 +207,10 @@ class _DestinationDialog extends StatefulWidget {
   /// the dialog must not wait: it opens on what is free (the search's tag, the
   /// folders that exist) and fills the rest in when they land.
   final Future<List<TagCandidate>>? tagSuggestions;
+
+  /// Where the files tier writes, so each card can name its disk; null hides
+  /// that line.
+  final DownloadLocation? location;
 
   /// How many wallpapers the suggestions are counted over.
   final int selectionSize;
@@ -412,6 +415,7 @@ class _DestinationDialogState extends State<_DestinationDialog> {
       tier: tier,
       streak: widget.streak,
       suggestedTier: _suggestedTier,
+      volume: widget.location?.volumeFor(tier, widget.strongestPurity),
       onTap: () => Navigator.pop(
         context,
         DownloadDestinationChoice(

@@ -253,10 +253,21 @@ abstract interface class ImageStore {
   Future<bool> setVaultFolder(VaultFolder vault);
 
   /// Opens the system folder picker pointed at [kind]'s volume and remembers
-  /// what the user grants.
+  /// what the user grants as the folder for [purity]'s bucket — explicit
+  /// downloads have their own (see `DownloadLocation.explicitFolder`).
   ///
   /// Returns the new folder, or null when they backed out or the volume was
   /// gone (a card asked for with an empty slot) — a cancelled picker must leave
   /// the previous grant exactly as it was.
-  Future<DownloadFolder?> chooseDownloadFolder(StorageVolumeKind kind);
+  ///
+  /// ```dart
+  /// await store.chooseDownloadFolder(
+  ///   StorageVolumeKind.sdCard,
+  ///   purity: Purity.nsfw,
+  /// );
+  /// ```
+  Future<DownloadFolder?> chooseDownloadFolder(
+    StorageVolumeKind kind, {
+    required Purity purity,
+  });
 }

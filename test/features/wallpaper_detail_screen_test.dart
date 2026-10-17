@@ -1368,8 +1368,9 @@ Future<void> _pumpDetail(
         tagBlocklistRepositoryProvider.overrideWithValue(
           blocklist ?? FakeTagBlocklistRepository(),
         ),
-        if (imageStore != null)
-          imageStoreProvider.overrideWithValue(imageStore),
+        // Bound always: the download chooser reads the folder's location from
+        // it before it opens, and the real one is a method channel.
+        imageStoreProvider.overrideWithValue(imageStore ?? FakeImageStore()),
         if (applier != null)
           wallpaperApplierProvider.overrideWithValue(applier),
         if (externalLink != null)

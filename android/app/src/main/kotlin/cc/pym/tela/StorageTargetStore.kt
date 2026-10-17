@@ -20,11 +20,42 @@ internal object StorageTargetStore {
     /** The preferences file [ImageStoreChannel] writes these into. */
     private const val PREFERENCES = "tela.storage"
     private const val OUTSIDE_GALLERY_TREE = "outsideGalleryTree"
+    private const val EXPLICIT_TREE = "explicitTree"
     private const val VAULT_LABEL = "vaultLabel"
 
     /** The granted tree URI, or null when nothing has been granted. */
     fun tree(context: Context): String? = preferences(context)
         .getString(OUTSIDE_GALLERY_TREE, null)
+
+    /**
+     * The tree explicit images go to, falling back to [tree] when no separate
+     * one was ever chosen — the one-folder layout every earlier build wrote.
+     */
+    fun explicitTree(context: Context): String? = preferences(context)
+        .getString(EXPLICIT_TREE, null) ?: tree(context)
+
+    /**
+     * Records a granted [tree] as the folder for [purity]'s bucket.
+     *
+     * Re-pointing the **safe** folder first pins the old one as the explicit
+     * folder when none was chosen apart. Without that, the read-time fallback
+     * in [explicitTree] would carry explicit downloads along to wherever safe
+     * ones were just sent — explicit images moving to a new disk because of a
+     * setting about safe ones.
+     */
+    fun saveTree(context: Context, tree: String, purity: String) {
+        val stored = preferences(context)
+        val editor = stored.edit()
+        if (purity == "nsfw") {
+            editor.putString(EXPLICIT_TREE, tree).apply()
+            return
+        }
+        val previous = stored.getString(OUTSIDE_GALLERY_TREE, null)
+        if (previous != null && !stored.contains(EXPLICIT_TREE)) {
+            editor.putString(EXPLICIT_TREE, previous)
+        }
+        editor.putString(OUTSIDE_GALLERY_TREE, tree).apply()
+    }
 
     /**
      * The vault label, falling back to the default for a missing **or
@@ -42,9 +73,9 @@ internal object StorageTargetStore {
         return stored
     }
 
-    /** Both halves, as the one value every writer and listing takes. */
+    /** Every part, as the one value every writer and listing takes. */
     fun target(context: Context): OutsideGalleryTarget =
-        OutsideGalleryTarget(tree(context), vaultLabel(context))
+        OutsideGalleryTarget(tree(context), vaultLabel(context), explicitTree(context))
 
     private fun preferences(context: Context) =
         context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)

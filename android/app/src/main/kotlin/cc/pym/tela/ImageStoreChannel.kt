@@ -160,7 +160,7 @@ class ImageStoreChannel(context: Context) {
         // tree browser here — the old behaviour — is exactly the UX slice 2
         // replaced.
         if (request.tier == "filesOutsideGallery") {
-            outsideGalleryProblem()?.let { problem ->
+            outsideGalleryProblem(request.purity)?.let { problem ->
                 result.success(imageStoreFailure(problem))
                 return
             }
@@ -197,7 +197,7 @@ class ImageStoreChannel(context: Context) {
             return
         }
         if (request.tier == "filesOutsideGallery") {
-            outsideGalleryProblem()?.let { problem ->
+            outsideGalleryProblem(request.purity)?.let { problem ->
                 result.success(imageStoreFailure(problem))
                 return
             }
@@ -401,24 +401,34 @@ class ImageStoreChannel(context: Context) {
      * a picker needs one, and Dart only ever asks for this from a screen.
      *
      * The persistable-grant flags are added here so no caller can forget them.
+     *
+     * `purity` says whose folder this is: `nsfw` grants the explicit folder,
+     * anything else the safe one. Absent means safe, which is what every
+     * caller before the split was choosing.
      */
     private fun handleChooseDownloadFolder(call: MethodCall, result: MethodChannel.Result) {
         val kind = call.argument<String>("kind") ?: run {
             result.success(imageStoreFailure("unavailable"))
             return
         }
+        val purity = call.argument<String>("purity") ?: "sfw"
         val intent = DownloadVolumes(context).openTreeIntentFor(kind) ?: run {
             result.success(imageStoreFailure("notConfigured"))
             return
         }
         val asked = prompts?.askFolderGrant(intent.addFlags(DIRECTORY_ACCESS_FLAGS)) { tree, flags ->
-            onFolderGrant(tree, flags, result)
+            onFolderGrant(tree, flags, purity, result)
         }
         if (asked != true) result.success(imageStoreFailure("notConfigured"))
     }
 
-    private fun onFolderGrant(tree: Uri?, flags: Int, result: MethodChannel.Result) {
-        if (tree == null || !saveOutsideGalleryTree(tree, flags)) {
+    private fun onFolderGrant(
+        tree: Uri?,
+        flags: Int,
+        purity: String,
+        result: MethodChannel.Result,
+    ) {
+        if (tree == null || !saveOutsideGalleryTree(tree, flags, purity)) {
             result.success(imageStoreFailure("notConfigured"))
             return
         }
@@ -437,16 +447,13 @@ class ImageStoreChannel(context: Context) {
      * the obvious thing to grant and it is the one that must not be taken — see
      * [TreeLocation.overlapsGallery].
      */
-    private fun saveOutsideGalleryTree(tree: Uri, returnedFlags: Int): Boolean {
+    private fun saveOutsideGalleryTree(tree: Uri, returnedFlags: Int, purity: String): Boolean {
         if (tree.authority != EXTERNAL_STORAGE_PROVIDER) return false
         if (TreeLocation.of(tree)?.overlapsGallery != false) return false
         val grantedFlags = returnedFlags and PERSISTED_DIRECTORY_ACCESS_FLAGS
         return try {
             context.contentResolver.takePersistableUriPermission(tree, grantedFlags)
-            context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-                .edit()
-                .putString(OUTSIDE_GALLERY_TREE, tree.toString())
-                .apply()
+            StorageTargetStore.saveTree(context, tree.toString(), purity)
             true
         } catch (_: SecurityException) {
             false
@@ -455,10 +462,8 @@ class ImageStoreChannel(context: Context) {
 
     /** Describes the location off the UI thread; it does filesystem stats. */
     private fun describeDownloadLocation(result: MethodChannel.Result) {
-        onStorageThread(result) {
-            DownloadFolderDescribing(context).describe(outsideGalleryTree()) +
-                mapOf("vaultLabel" to vaultLabel())
-        }
+        val target = outsideGalleryTarget()
+        onStorageThread(result) { DownloadFolderDescribing(context).describe(target) }
     }
 
     /**
@@ -495,28 +500,16 @@ class ImageStoreChannel(context: Context) {
      * "reconnect it" rather than offering setup for a folder that already
      * exists.
      */
-    private fun outsideGalleryProblem(): String? {
-        val tree = outsideGalleryTree() ?: return "notConfigured"
+    private fun outsideGalleryProblem(purity: String): String? {
+        val tree = outsideGalleryTarget().treeFor(purity) ?: return "notConfigured"
         return if (DownloadFolderDescribing(context).isAvailable(tree)) null else "folderUnavailable"
     }
 
     private fun outsideGalleryTree(): String? = StorageTargetStore.tree(context)
 
-    /**
-     * The vault label, falling back to the default for a missing **or unusable**
-     * one.
-     *
-     * The second half matters: a preferences file is editable on a rooted device
-     * and survives a downgrade, so the value read here is not necessarily one
-     * [handleSetVaultFolder] wrote. Falling back rather than failing keeps a
-     * bad row from making explicit downloads impossible, and the allowlist is
-     * applied again in [VaultFolders.directoryOf] before it becomes a path.
-     */
-    private fun vaultLabel(): String = StorageTargetStore.vaultLabel(context)
-
     /** Where the files tier writes right now: the granted tree and the vault. */
     private fun outsideGalleryTarget(): OutsideGalleryTarget =
-        OutsideGalleryTarget(outsideGalleryTree(), vaultLabel())
+        StorageTargetStore.target(context)
 
     private fun imageCopyRequest(call: MethodCall): ImageCopyRequest? {
         val source = call.argument<String>("source") ?: return null
@@ -556,7 +549,6 @@ class ImageStoreChannel(context: Context) {
     private companion object {
         const val CHANNEL = "cc.pym.tela/images"
         const val PREFERENCES = "tela.storage"
-        const val OUTSIDE_GALLERY_TREE = "outsideGalleryTree"
         const val VAULT_LABEL = "vaultLabel"
         const val EXTERNAL_STORAGE_PROVIDER = "com.android.externalstorage.documents"
         const val DIRECTORY_ACCESS_FLAGS =

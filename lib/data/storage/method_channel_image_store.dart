@@ -7,6 +7,7 @@ import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/source_id.dart';
+import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/stored_image.dart';
@@ -332,14 +333,19 @@ class MethodChannelImageStore implements ImageStore {
   }
 
   @override
-  Future<DownloadFolder?> chooseDownloadFolder(StorageVolumeKind kind) async {
+  Future<DownloadFolder?> chooseDownloadFolder(
+    StorageVolumeKind kind, {
+    required Purity purity,
+  }) async {
+    final Purity bucket = StorageSettings.bucketFor(purity);
     try {
       final Object? raw = await _invokeMethod(
         'chooseDownloadFolder',
-        <String, String>{'kind': kind.name},
+        <String, String>{'kind': kind.name, 'purity': bucket.name},
       );
       if (raw is! Map<Object?, Object?> || raw['success'] != true) return null;
-      return _downloadFolderFrom(raw['folder']);
+      final String key = bucket == Purity.nsfw ? 'explicitFolder' : 'folder';
+      return _downloadFolderFrom(raw[key]);
     } on PlatformException {
       return null;
     }
@@ -353,6 +359,7 @@ class MethodChannelImageStore implements ImageStore {
       folder: _downloadFolderFrom(raw['folder']),
       sdCardAvailable: raw['sdCardAvailable'] == true,
       vault: _vaultFrom(raw['vaultLabel']),
+      explicitFolder: _downloadFolderFrom(raw['explicitFolder']),
     );
   }
 

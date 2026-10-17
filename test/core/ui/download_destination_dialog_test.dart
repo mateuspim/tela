@@ -5,6 +5,8 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/download_destination_choice.dart';
 import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/download_folder.dart';
+import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 
@@ -44,6 +46,25 @@ void main() {
       expect(find.text('Gallery'), findsNothing);
       expect(find.text('Files, not gallery'), findsOneWidget);
       expect(find.text('Private library'), findsOneWidget);
+    });
+
+    // Regression, owner 2026-10-16: with downloads set to the SD card, picking
+    // "Private library" kept landing explicit wallpapers on the device, and
+    // nothing on the card said that tier never follows the card.
+    testWidgets('names the disk each destination writes to', (
+      WidgetTester tester,
+    ) async {
+      await _open(tester, purity: Purity.nsfw, location: _onSdCard);
+
+      expect(find.text('Saves to SD card'), findsOneWidget);
+      expect(find.text('Saves to Internal storage'), findsOneWidget);
+    });
+
+    testWidgets('names no disk when the location is unknown', (
+      WidgetTester tester,
+    ) async {
+      await _open(tester, purity: Purity.nsfw);
+      expect(find.textContaining('Saves to'), findsNothing);
     });
 
     testWidgets('names the purity when there is something to warn about', (
@@ -388,6 +409,7 @@ Future<Future<DownloadDestinationChoice?>> _open(
   StorageTier configuredTier = StorageTier.sharedGallery,
   DownloadDestinationStreak? streak,
   StorageTier? pinnedTier,
+  DownloadLocation? location,
 }) async {
   final BuildContext context = await _host(tester);
   final Future<DownloadDestinationChoice?> picked = chooseDownloadDestination(
@@ -396,6 +418,7 @@ Future<Future<DownloadDestinationChoice?>> _open(
     configuredTier: configuredTier,
     streak: streak,
     pinnedTier: pinnedTier,
+    location: location,
   );
   await tester.pumpAndSettle();
   return picked;
@@ -419,6 +442,18 @@ Future<Future<DownloadDestinationChoice?>> _openBatch(
   await tester.pumpAndSettle();
   return picked;
 }
+
+/// Explicit downloads set to a folder on a mounted SD card.
+const DownloadLocation _onSdCard = DownloadLocation(
+  folder: null,
+  explicitFolder: DownloadFolder(
+    volumeLabel: 'SD card',
+    relativePath: 'Pictures/.tela',
+    isRemovable: true,
+    isAvailable: true,
+  ),
+  sdCardAvailable: true,
+);
 
 /// Pumps the localized host app and hands back a real context to open from.
 Future<BuildContext> _host(WidgetTester tester) async {

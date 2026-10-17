@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,11 +9,8 @@ import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/balanced_columns.dart';
 import 'package:tela/core/ui/band_fade_edge.dart';
 import 'package:tela/core/ui/gradient_app_bar.dart';
-import 'package:tela/core/ui/storage_tier_text.dart';
-import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
-import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/features/library/library_destination_tile.dart';
 import 'package:tela/features/settings/accent_color_section.dart';
 import 'package:tela/features/settings/api_key_section.dart';
@@ -25,13 +20,10 @@ import 'package:tela/features/settings/broken_images_tile.dart';
 import 'package:tela/features/settings/browse_defaults_section.dart';
 import 'package:tela/features/settings/clear_cache_tile.dart';
 import 'package:tela/features/settings/collections_section.dart';
-import 'package:tela/features/settings/download_location_controller.dart';
-import 'package:tela/features/settings/download_location_section.dart';
 import 'package:tela/features/settings/notifications_tile.dart';
-import 'package:tela/features/settings/nsfw_removable_guard.dart';
 import 'package:tela/features/settings/pinned_destination_notice.dart';
 import 'package:tela/features/settings/rotation_section.dart';
-import 'package:tela/features/settings/settings_section_label.dart';
+import 'package:tela/features/settings/storage_tier_picker.dart';
 import 'package:tela/features/settings/tile_density_section.dart';
 
 /// Where downloads go, configured for safe and explicit content separately.
@@ -208,37 +200,21 @@ class _SettingsList extends StatelessWidget {
         // captions carry the breaks, the way the Appearance card separates its
         // accent and size controls. A slab per sub-decision was what made the
         // block read as rows bolted on in sequence.
-        _TierPicker(
+        StorageTierPicker(
           title: l10n.settingsDownloadsSfw,
           purity: Purity.sfw,
           selected: settings.sfwTier,
         ),
         if (buildEdition.allowsExplicitContent)
-          _TierPicker(
+          StorageTierPicker(
             title: l10n.settingsDownloadsNsfw,
             purity: Purity.nsfw,
             selected: settings.nsfwTier,
             note: l10n.settingsDownloadsNsfwNote,
           ),
-        // Under both pickers rather than inside either: one folder serves the
-        // tier whichever purity uses it, so a copy per picker would suggest
-        // there are two. Its own inset panel says it is a detail of the Files
-        // destination, not a third peer decision. It decides for itself whether
-        // to show, since a folder chosen for a one-off download counts too.
-        DownloadLocationSection(routedThere: _usesFilesOutsideGallery),
       ],
     );
   }
-
-  /// Whether either purity sends downloads to the files-outside-gallery tier.
-  ///
-  /// The device/card choice is meaningless until something routes there or a
-  /// folder exists, so it stays hidden rather than sitting as a dead control
-  /// under the gallery and private-library defaults.
-  bool get _usesFilesOutsideGallery =>
-      settings.sfwTier == StorageTier.filesOutsideGallery ||
-      (buildEdition.allowsExplicitContent &&
-          settings.nsfwTier == StorageTier.filesOutsideGallery);
 
   /// Its own group rather than a line under Downloads, because the difference
   /// between the two is the whole point: a download is a file the user kept,
@@ -376,99 +352,5 @@ class _SettingsGroup extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-/// The tiers a [Purity] may be routed to, as a single-choice list.
-///
-/// The options come from the domain, so the gallery is absent for NSFW because
-/// the rule says so — not because this widget remembered to hide it.
-class _TierPicker extends ConsumerWidget {
-  const _TierPicker({
-    required this.title,
-    required this.purity,
-    required this.selected,
-    this.note,
-  });
-
-  final String title;
-  final Purity purity;
-  final StorageTier selected;
-  final String? note;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: SettingsSectionLabel(text: title),
-        ),
-        RadioGroup<StorageTier>(
-          groupValue: selected,
-          onChanged: (StorageTier? tier) =>
-              unawaited(_route(ref, context, tier)),
-          child: Column(
-            children: <Widget>[
-              for (final StorageTier tier in StorageSettings.choicesFor(purity))
-                _tile(context, tier),
-            ],
-          ),
-        ),
-        if (note != null) _note(context, note!),
-      ],
-    );
-  }
-
-  Widget _tile(BuildContext context, StorageTier tier) {
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    return RadioListTile<StorageTier>(
-      value: tier,
-      secondary: Icon(storageTierIcon(tier)),
-      title: Text(storageTierLabel(l10n, tier)),
-      subtitle: Text(storageTierDetail(l10n, tier)),
-    );
-  }
-
-  Widget _note(BuildContext context, String text) {
-    final ThemeData theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      child: Text(
-        text,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      ),
-    );
-  }
-
-  /// Routes [purity] to [tier], warning *before* it lands when this is the NSFW
-  /// picker moving to files-outside-gallery and the folder is a removable card.
-  /// This edge and the folder chooser's are the two moments explicit downloads
-  /// can first point at a card; gating before the write means a declined
-  /// warning never persists the unsafe routing, even for the frame it is open.
-  Future<void> _route(
-    WidgetRef ref,
-    BuildContext context,
-    StorageTier? tier,
-  ) async {
-    if (tier == null) return;
-    if (purity == Purity.nsfw && tier == StorageTier.filesOutsideGallery) {
-      final DownloadLocation location = await ref.read(
-        downloadLocationProvider.future,
-      );
-      if (!context.mounted) return;
-      final bool proceed = await confirmExplicitOnRemovable(
-        ref,
-        context,
-        nsfwTier: tier,
-        folderRemovable: location.folder?.isRemovable ?? false,
-      );
-      // Declined: leave NSFW on its current (private) tier — nothing written.
-      if (!proceed) return;
-    }
-    await ref.read(storageSettingsProvider.notifier).route(purity, tier);
   }
 }

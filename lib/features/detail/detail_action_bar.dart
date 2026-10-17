@@ -23,6 +23,7 @@ import 'package:tela/core/ui/wallpaper_share_sheet.dart';
 import 'package:tela/core/ui/wallpaper_taxonomy_text.dart';
 import 'package:tela/domain/models/bitmap_export_rule.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/share_option.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -174,6 +175,9 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
       known: knownTags,
       selection: <Wallpaper>[_wallpaper],
     );
+    final DownloadLocation location = await ref
+        .read(imageStoreProvider)
+        .downloadLocation();
     if (!mounted) return;
     final DownloadDestinationChoice? choice = await chooseDownloadDestination(
       context,
@@ -185,6 +189,7 @@ class _DetailActionBarState extends ConsumerState<DetailActionBar> {
       tagIsRemembered: searched == null && remembered != null,
       knownTags: knownTags,
       tagSuggestions: suggestions,
+      location: location,
     );
     if (choice == null) return;
     // Stop clears the pin and downloads nothing — the deliberate way out.

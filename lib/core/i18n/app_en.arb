@@ -1094,6 +1094,21 @@
     "description": "Explains the app-private storage tier, including its uninstall caveat."
   },
 
+  "settingsPrivateOnDevice": "The private library always stays on this device. To keep explicit wallpapers on the SD card, choose Files, not gallery.",
+  "@settingsPrivateOnDevice": {
+    "description": "Note under the explicit-wallpapers destination picker when an SD card is in use: the private library never moves to the card."
+  },
+
+  "downloadDestinationVolume": "Saves to {volume}",
+  "@downloadDestinationVolume": {
+    "description": "Line on a download chooser card naming the disk that destination writes to. {volume} is a localized volume name like 'Internal storage' or 'SD card'.",
+    "placeholders": {
+      "volume": {
+        "type": "String"
+      }
+    }
+  },
+
   "detailDownloadSuccess": "Wallpaper downloaded.",
   "@detailDownloadSuccess": {
     "description": "Confirmation shown after the wallpaper has been stored."
@@ -1528,15 +1543,7 @@
     "description": "States the hard NSFW rule, so the missing Gallery option does not read as a bug."
   },
 
-  "settingsDownloadLocationTitle": "Where files are saved",
-  "@settingsDownloadLocationTitle": {
-    "description": "Header for the choice of which volume the files-outside-gallery tier writes to."
-  },
 
-  "settingsDownloadLocationHelp": "Downloads set to “Files, not gallery” are saved here.",
-  "@settingsDownloadLocationHelp": {
-    "description": "Connects the volume choice back to the tier that feeds it, so the device/card decision reads as a detail of the Files destination rather than a separate setting."
-  },
 
   "settingsStorageVolumeDevice": "Internal storage",
   "@settingsStorageVolumeDevice": {
@@ -1558,7 +1565,27 @@
     "description": "Subtitle for the SD card download-location option."
   },
 
-  "settingsDownloadFolderNone": "tela will ask you to confirm a folder the first time it saves here.",
+  "settingsDownloadLocationTitle": "Where files are saved",
+  "@settingsDownloadLocationTitle": {
+    "description": "Header for the choice of which volume the files-outside-gallery tier writes to."
+  },
+
+  "settingsSafeFolderTitle": "Where safe and sketchy files are saved",
+  "@settingsSafeFolderTitle": {
+    "description": "Title of the folder panel under the safe-and-sketchy destination picker, shown while it is set to Files, not gallery."
+  },
+
+  "settingsExplicitFolderTitle": "Where explicit files are saved",
+  "@settingsExplicitFolderTitle": {
+    "description": "Title of the folder panel under the explicit destination picker, shown while it is set to Files, not gallery."
+  },
+
+  "settingsDownloadFolderChoose": "Choose where to store these",
+  "@settingsDownloadFolderChoose": {
+    "description": "Button in a folder panel with no folder yet: opens the device / SD card choice, then the system folder picker."
+  },
+
+  "settingsDownloadFolderNone": "No folder yet. Choose one now, or tela will ask the first time it saves here.",
   "@settingsDownloadFolderNone": {
     "description": "Shown under the volume choice when no folder has been granted yet."
   },

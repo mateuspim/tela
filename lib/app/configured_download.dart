@@ -1,6 +1,8 @@
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/purity.dart';
+import 'package:tela/domain/models/storage_settings.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/storage_volume_kind.dart';
 import 'package:tela/domain/models/tag_folder.dart';
@@ -106,13 +108,28 @@ class ConfiguredDownload {
   /// screen, or every entry fails on the same unanswered question. True when a
   /// folder is granted (already, or just now); false when the user backed out.
   ///
+  /// [purities] are the ones headed for the files tier. Safe and explicit
+  /// downloads each have their own folder, so a mixed batch may ask twice —
+  /// once per bucket that has none yet, safe first.
+  ///
   /// ```dart
-  /// if (!await configuredDownload.ensureFolder(chooseVolume)) return;
+  /// if (!await configuredDownload.ensureFolder(
+  ///   chooseVolume,
+  ///   purities: <Purity>{Purity.sfw, Purity.nsfw},
+  /// )) return;
   /// ```
-  Future<bool> ensureFolder(ChooseDownloadVolume chooseVolume) async {
-    final DownloadLocation location = await _imageStore.downloadLocation();
-    if (location.folder != null) return true;
-    return _grantFrom(location, chooseVolume);
+  Future<bool> ensureFolder(
+    ChooseDownloadVolume chooseVolume, {
+    required Set<Purity> purities,
+  }) async {
+    final Set<Purity> buckets = purities.map(StorageSettings.bucketFor).toSet();
+    for (final Purity bucket in <Purity>[Purity.sfw, Purity.nsfw]) {
+      if (!buckets.contains(bucket)) continue;
+      final DownloadLocation location = await _imageStore.downloadLocation();
+      if (location.folderFor(bucket) != null) continue;
+      if (!await _grantFrom(location, chooseVolume, bucket)) return false;
+    }
+    return true;
   }
 
   /// Grants a folder through the chooser, then retries the download once.
@@ -122,15 +139,21 @@ class ConfiguredDownload {
     TagFolder? tag,
     ChooseDownloadVolume chooseVolume,
   ) async {
-    if (!await _grantFolder(chooseVolume)) return DownloadOutcome.cancelled;
+    if (!await _grantFolder(chooseVolume, wallpaper.purity)) {
+      return DownloadOutcome.cancelled;
+    }
     return _retry(wallpaper, tier, tag);
   }
 
   /// Opens the chooser — aimed by whether a card is on offer — and grants the
-  /// pick. False when the user dismissed the sheet or the system picker.
-  Future<bool> _grantFolder(ChooseDownloadVolume chooseVolume) async {
+  /// pick as [purity]'s folder. False when the user dismissed the sheet or the
+  /// system picker.
+  Future<bool> _grantFolder(
+    ChooseDownloadVolume chooseVolume,
+    Purity purity,
+  ) async {
     final DownloadLocation location = await _imageStore.downloadLocation();
-    return _grantFrom(location, chooseVolume);
+    return _grantFrom(location, chooseVolume, purity);
   }
 
   /// The chooser half, over a [location] already read — so [ensureFolder] does
@@ -138,12 +161,16 @@ class ConfiguredDownload {
   Future<bool> _grantFrom(
     DownloadLocation location,
     ChooseDownloadVolume chooseVolume,
+    Purity purity,
   ) async {
     final StorageVolumeKind? kind = await chooseVolume(
       offerSdCard: location.offersSdCard,
     );
     if (kind == null) return false;
-    final DownloadFolder? folder = await _imageStore.chooseDownloadFolder(kind);
+    final DownloadFolder? folder = await _imageStore.chooseDownloadFolder(
+      kind,
+      purity: purity,
+    );
     return folder != null;
   }
 

@@ -209,6 +209,89 @@ void main() {
       expect(chooser.calls, 0);
       expect(store.chosenKinds, isEmpty);
     });
+
+    // Safe and explicit downloads each have their own folder (owner,
+    // 2026-10-16), so first-time setup must grant the one this wallpaper needs.
+    test('an explicit wallpaper sets up the explicit folder', () async {
+      final _ScriptedDownload perform = _ScriptedDownload(<Object?>[
+        const ImageStoreFailure(ImageStoreProblem.notConfigured),
+        null,
+      ]);
+      final FakeImageStore store = FakeImageStore(chosenFolder: _folder());
+      final ConfiguredDownload download = ConfiguredDownload(
+        perform: perform.call,
+        imageStore: store,
+      );
+
+      await download(
+        _wallpaper('three', purity: Purity.nsfw),
+        chooseVolume: _RecordingChooser(StorageVolumeKind.sdCard).call,
+      );
+
+      expect(store.chosenPurities, <Purity>[Purity.nsfw]);
+    });
+  });
+
+  group('ensureFolder', () {
+    test('asks nothing when the needed folder is already granted', () async {
+      final FakeImageStore store = FakeImageStore(folder: _folder());
+      final _RecordingChooser chooser = _RecordingChooser(
+        StorageVolumeKind.device,
+      );
+
+      final bool ready = await ConfiguredDownload(
+        perform: _ScriptedDownload(<Object?>[]).call,
+        imageStore: store,
+      ).ensureFolder(chooser.call, purities: <Purity>{Purity.sketchy});
+
+      expect(ready, isTrue);
+      expect(chooser.calls, 0);
+    });
+
+    test('grants only the explicit folder for an explicit batch', () async {
+      final FakeImageStore store = FakeImageStore(chosenFolder: _folder());
+
+      final bool ready =
+          await ConfiguredDownload(
+            perform: _ScriptedDownload(<Object?>[]).call,
+            imageStore: store,
+          ).ensureFolder(
+            _RecordingChooser(StorageVolumeKind.sdCard).call,
+            purities: <Purity>{Purity.nsfw},
+          );
+
+      expect(ready, isTrue);
+      expect(store.chosenPurities, <Purity>[Purity.nsfw]);
+    });
+
+    test('a mixed batch grants the safe folder first', () async {
+      // A first safe folder is where explicit downloads go too until one is
+      // chosen apart, so one grant settles both buckets.
+      final FakeImageStore store = FakeImageStore(chosenFolder: _folder());
+
+      await ConfiguredDownload(
+        perform: _ScriptedDownload(<Object?>[]).call,
+        imageStore: store,
+      ).ensureFolder(
+        _RecordingChooser(StorageVolumeKind.sdCard).call,
+        purities: <Purity>{Purity.nsfw, Purity.sfw},
+      );
+
+      expect(store.chosenPurities, <Purity>[Purity.sfw]);
+    });
+
+    test('backing out answers false', () async {
+      final bool ready =
+          await ConfiguredDownload(
+            perform: _ScriptedDownload(<Object?>[]).call,
+            imageStore: FakeImageStore(),
+          ).ensureFolder(
+            _RecordingChooser(null).call,
+            purities: <Purity>{Purity.sfw},
+          );
+
+      expect(ready, isFalse);
+    });
   });
 }
 
@@ -253,7 +336,7 @@ DownloadFolder _folder() => const DownloadFolder(
   isAvailable: true,
 );
 
-Wallpaper _wallpaper(String id) => Wallpaper(
+Wallpaper _wallpaper(String id, {Purity purity = Purity.sfw}) => Wallpaper(
   id: id,
   source: SourceId.wallhaven,
   pageUrl: Uri.parse('https://wallhaven.cc/w/$id'),
@@ -263,7 +346,7 @@ Wallpaper _wallpaper(String id) => Wallpaper(
   thumbOriginalUrl: 'https://th.wallhaven.cc/orig/$id.jpg',
   resolution: const Resolution(1080, 2400),
   fileSizeBytes: 1024,
-  purity: Purity.sfw,
+  purity: purity,
   category: Category.general,
   colors: const <String>[],
 );

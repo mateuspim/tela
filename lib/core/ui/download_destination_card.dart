@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/storage_tier_text.dart';
+import 'package:tela/core/ui/storage_volume_line.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/storage_volume_kind.dart';
 
 /// One destination's row inside the download chooser: its icon, its name, what
 /// choosing it actually means, and the note when a run has been landing there.
@@ -19,11 +21,18 @@ class DownloadDestinationCard extends StatelessWidget {
     required this.streak,
     required this.suggestedTier,
     required this.onTap,
+    this.volume,
     super.key,
   });
 
   /// The destination this row offers.
   final StorageTier tier;
+
+  /// The disk [tier] writes to, or null when it is not known yet.
+  ///
+  /// Named on the card because the tier name alone does not say it: the
+  /// private library never follows the SD card the files tier is set to.
+  final StorageVolumeKind? volume;
 
   /// The run of recent downloads to one destination, or null when there is
   /// none worth mentioning.
@@ -78,6 +87,8 @@ class DownloadDestinationCard extends StatelessWidget {
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
+        if (volume case final StorageVolumeKind kind)
+          StorageVolumeLine(kind: kind),
         ?_note(theme, l10n, tier),
       ],
     );

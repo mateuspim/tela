@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/storage_settings_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/byte_size_text.dart';
+import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/storage_volume_kind_text.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/download_location.dart';
@@ -17,23 +18,30 @@ import 'package:tela/features/settings/nsfw_removable_guard.dart';
 import 'package:tela/features/settings/settings_section_label.dart';
 import 'package:tela/features/settings/vault_folder_section.dart';
 
-/// Picks which volume the files-outside-gallery tier writes to: device or card.
+/// Picks which volume one purity's files-outside-gallery folder is on: device
+/// or card.
 ///
 /// This is the whole reason the tier and the folder are no longer two separate
 /// decisions. Selecting "Files, not gallery" now leads here, where "This
 /// device" or "SD card" opens the system picker already aimed at that volume —
 /// one tap to confirm, instead of hunting a card down in a blank tree browser.
+///
+/// **One per purity bucket**, shown under that bucket's picker and only while
+/// it is set to "Files, not gallery": safe and explicit downloads each have
+/// their own folder, so explicit ones can sit on the card while safe ones stay
+/// on the device (owner, 2026-10-16). The parent decides when to show it; with
+/// no folder yet it offers a button to choose one rather than waiting for the
+/// first download to ask.
+///
+/// ```dart
+/// const DownloadLocationSection(purity: Purity.nsfw);
+/// ```
 class DownloadLocationSection extends ConsumerWidget {
-  /// Creates the device/card location chooser.
-  const DownloadLocationSection({required this.routedThere, super.key});
+  /// Creates the device/card location chooser for [purity]'s folder.
+  const DownloadLocationSection({required this.purity, super.key});
 
-  /// Whether a purity's default sends downloads to the files tier.
-  ///
-  /// When none does, the panel still shows once a folder has been chosen: a
-  /// one-off "Files" download from the chooser writes to it, and the only way
-  /// to see or move that folder was to change a default first (device pass
-  /// F7, 2026-10-03). With neither, it is a control for nothing and stays out.
-  final bool routedThere;
+  /// Whose folder this is — [Purity.sfw] stands for safe and sketchy.
+  final Purity purity;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -43,7 +51,6 @@ class DownloadLocationSection extends ConsumerWidget {
       downloadLocationProvider,
     );
     final DownloadLocation? value = location.value;
-    if (!routedThere && value?.folder == null) return const SizedBox.shrink();
     // An inset, tinted panel rather than another full-width slab: the volume
     // is a detail of whichever tier routes to files-outside-gallery, and the
     // recessed surface says so at a glance. The connective line spells it out.
@@ -70,34 +77,81 @@ class DownloadLocationSection extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  SettingsSectionLabel(
-                    text: l10n.settingsDownloadLocationTitle,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    l10n.settingsDownloadLocationHelp,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
+                  SettingsSectionLabel(text: _title(l10n)),
                 ],
               ),
             ),
-            if (value != null) ..._choices(context, ref, value),
+            if (value != null) ..._body(context, ref, value),
           ],
         ),
       ),
     );
   }
 
-  List<Widget> _choices(
+  String _title(AppLocalizations l10n) {
+    if (_explicit) return l10n.settingsExplicitFolderTitle;
+    return l10n.settingsSafeFolderTitle;
+  }
+
+  bool get _explicit => StorageSettings.bucketFor(purity) == Purity.nsfw;
+
+  /// The volume choice once a folder exists; before that, a button to pick one.
+  List<Widget> _body(
     BuildContext context,
     WidgetRef ref,
     DownloadLocation location,
   ) {
+    final DownloadFolder? folder = location.folderFor(purity);
+    if (folder == null) return <Widget>[_chooseButton(context, ref, location)];
+    return _choices(context, ref, location, folder);
+  }
+
+  /// "Choose where to store these": the device/card sheet, then the picker.
+  Widget _chooseButton(
+    BuildContext context,
+    WidgetRef ref,
+    DownloadLocation location,
+  ) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 8,
+        children: <Widget>[
+          _status(context, null),
+          FilledButton.tonalIcon(
+            onPressed: () => unawaited(_chooseFirst(ref, context, location)),
+            icon: const Icon(Icons.create_new_folder_outlined),
+            label: Text(l10n.settingsDownloadFolderChoose),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _chooseFirst(
+    WidgetRef ref,
+    BuildContext context,
+    DownloadLocation location,
+  ) async {
+    final StorageVolumeKind? kind = await chooseDownloadVolume(
+      context,
+      offerSdCard: location.offersSdCard,
+    );
+    if (!context.mounted) return;
+    await _choose(ref, context, kind);
+  }
+
+  List<Widget> _choices(
+    BuildContext context,
+    WidgetRef ref,
+    DownloadLocation location,
+    DownloadFolder folder,
+  ) {
     return <Widget>[
       RadioGroup<StorageVolumeKind>(
-        groupValue: location.currentKind,
+        groupValue: folder.kind,
         onChanged: (StorageVolumeKind? kind) =>
             unawaited(_choose(ref, context, kind)),
         child: Column(
@@ -110,22 +164,16 @@ class DownloadLocationSection extends ConsumerWidget {
           ],
         ),
       ),
-      _status(context, location.folder),
-      // Only once explicit downloads actually route here. Until then the vault
-      // is a folder nothing writes to, and a settings row for it would be a
-      // dead control describing a directory that does not exist — the same
-      // argument that keeps this whole panel hidden until the tier is in use.
-      if (_vaultInUse(ref)) ...<Widget>[
+      _status(context, folder),
+      // Only in the explicit folder's panel, which only shows while explicit
+      // downloads route here. Anywhere else the vault is a folder nothing
+      // writes to, and a settings row for it would be a dead control
+      // describing a directory that does not exist.
+      if (_explicit) ...<Widget>[
         const Divider(height: 1),
         const VaultFolderSection(),
       ],
     ];
-  }
-
-  /// Whether explicit downloads land in this tier, and so in its vault.
-  bool _vaultInUse(WidgetRef ref) {
-    final StorageSettings? settings = ref.watch(storageSettingsProvider).value;
-    return settings?.nsfwTier == StorageTier.filesOutsideGallery;
   }
 
   Widget _tile(BuildContext context, StorageVolumeKind kind) {
@@ -171,11 +219,11 @@ class DownloadLocationSection extends ConsumerWidget {
     return '${folder.volumeLabel}/${folder.relativePath}';
   }
 
-  /// Points downloads at [kind]'s volume, then warns if the newly chosen folder
-  /// is a removable card that explicit downloads already route to. This is the
-  /// second edge of slice 4's warning, and the one easily missed: NSFW can
-  /// already sit on files-outside-gallery here, so choosing a card is what tips
-  /// it onto removable storage.
+  /// Points [purity]'s downloads at [kind]'s volume, then — for the explicit
+  /// folder — warns if it is now a removable card. This is the second edge of
+  /// slice 4's warning, and the one easily missed: NSFW can already sit on
+  /// files-outside-gallery here, so choosing a card is what tips it onto
+  /// removable storage. The safe folder has nothing to warn about.
   ///
   /// Unlike the tier picker, the grant is already taken by the time the warning
   /// shows, so a decline cannot un-choose the folder — it routes NSFW to the
@@ -186,8 +234,10 @@ class DownloadLocationSection extends ConsumerWidget {
     StorageVolumeKind? kind,
   ) async {
     if (kind == null) return;
-    await ref.read(downloadLocationProvider.notifier).choose(kind);
-    if (!context.mounted) return;
+    await ref
+        .read(downloadLocationProvider.notifier)
+        .choose(kind, purity: purity);
+    if (!context.mounted || !_explicit) return;
 
     final StorageSettings settings = await ref.read(
       storageSettingsProvider.future,
@@ -200,7 +250,7 @@ class DownloadLocationSection extends ConsumerWidget {
       ref,
       context,
       nsfwTier: settings.nsfwTier,
-      folderRemovable: location.folder?.isRemovable ?? false,
+      folderRemovable: location.explicitFolder?.isRemovable ?? false,
     );
     if (proceed) return;
     await ref

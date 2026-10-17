@@ -162,6 +162,24 @@ class DownloadFolderDescribing(private val context: Context) {
     }
 
     /**
+     * The whole files tier: [describe] of the safe tree, plus the vault label
+     * and the explicit folder — named by its hidden vault directory, since that
+     * is where explicit images actually land inside it.
+     *
+     * The explicit folder is reported even when it is the same tree as the
+     * safe one, so Settings can show each purity its own row either way.
+     */
+    fun describe(target: OutsideGalleryTarget): Map<String, Any> {
+        val volumes = DownloadVolumes(context)
+        val vault = target.vaultDirectory ?: ".${VaultFolders.DEFAULT_LABEL}"
+        val explicit = folderOf(target.explicitTree, volumes) { location ->
+            listOf(location.relativePath, vault).filter { it.isNotEmpty() }.joinToString("/")
+        }
+        val base = describe(target.tree) + mapOf("vaultLabel" to target.vaultLabel)
+        return if (explicit == null) base else base + mapOf("explicitFolder" to explicit)
+    }
+
+    /**
      * Whether the granted [tree] can take a download right now.
      *
      * The store gate asks this to tell an ejected card (folderUnavailable) from
@@ -177,15 +195,19 @@ class DownloadFolderDescribing(private val context: Context) {
     }
 
     /** The granted folder as a payload, or null for none / an unusable tree. */
-    private fun folderOf(tree: String?, volumes: DownloadVolumes): Map<String, Any>? {
+    private fun folderOf(
+        tree: String?,
+        volumes: DownloadVolumes,
+        // The tier writes into a "tela" child of the granted tree, so that is
+        // the path to show — not the folder the user pointed at.
+        shownPath: (TreeLocation) -> String = { it.telaFolderPath },
+    ): Map<String, Any>? {
         val uri = tree?.let(Uri::parse) ?: return null
         val location = treeLocationOf(uri) ?: return null
         val volume = volumes.forLocation(location)
         return mapOf(
             "volumeLabel" to (volume?.getDescription(context) ?: fallbackLabel(location)),
-            // The tier writes into a "tela" child of the granted tree, so that
-            // is the path to show — not the folder the user pointed at.
-            "relativePath" to location.telaFolderPath,
+            "relativePath" to shownPath(location),
             "isRemovable" to (volume?.isRemovable ?: !location.isPrimary),
             "isAvailable" to isAvailable(uri, volume),
         ) + freeBytesOf(uri)

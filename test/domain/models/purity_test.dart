@@ -20,6 +20,19 @@ void main() {
     });
   });
 
+  group('strongestOf', () {
+    test('answers the most explicit purity in the set', () {
+      expect(
+        Purity.strongestOf(<Purity>{Purity.sfw, Purity.nsfw, Purity.sketchy}),
+        Purity.nsfw,
+      );
+    });
+
+    test('answers safe for an empty set', () {
+      expect(Purity.strongestOf(<Purity>{}), Purity.sfw);
+    });
+  });
+
   group('withoutNsfw', () {
     test('takes explicit out and keeps the rest', () {
       const PurityFilter filter = PurityFilter(<Purity>{

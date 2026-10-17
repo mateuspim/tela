@@ -31,15 +31,15 @@ internal class SafVaultListing(private val context: Context) {
      * show. It renders what it has, which is the app-private tier.
      */
     fun list(target: OutsideGalleryTarget): List<Map<String, Any>> {
-        val vault = vaultIn(target) ?: return emptyList()
-        return (untagged(vault) + tagged(vault))
+        return target.vaultTrees
+            .mapNotNull { tree -> vaultIn(Uri.parse(tree), target) }
+            .flatMap { vault -> untagged(vault) + tagged(vault) }
             .mapNotNull { (file, tag) -> describe(file, tag) }
             .sortedByDescending { row -> row["savedAt"] as Long }
     }
 
-    /** The vault directory, or null when there is nothing to read. */
-    private fun vaultIn(target: OutsideGalleryTarget): Uri? {
-        val tree = target.tree?.let(Uri::parse) ?: return null
+    /** [tree]'s vault directory, or null when there is nothing to read. */
+    private fun vaultIn(tree: Uri, target: OutsideGalleryTarget): Uri? {
         val name = target.vaultDirectory ?: return null
         return try {
             SafDocuments.existingFolderIn(context, tree, name)

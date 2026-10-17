@@ -126,6 +126,9 @@ Future<bool> confirmAndMoveOutOfPrivate({
       .ensureFolder(
         ({required bool offerSdCard}) =>
             chooseDownloadVolume(context, offerSdCard: offerSdCard),
+        // Every move out declares nsfw (see below), so the explicit folder is
+        // the one these land in.
+        purities: <Purity>{Purity.nsfw},
       );
   if (!ready || !context.mounted) return false;
   final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
