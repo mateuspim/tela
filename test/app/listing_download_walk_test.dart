@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/listing_download_walk.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/domain/models/batch_routing.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/queued_download.dart';
@@ -54,6 +55,27 @@ void main() {
       'p3a',
       'p3b',
     ]);
+  });
+
+  // Owner, 2026-10-16: a listing that may turn up explicit wallpapers lands
+  // whole under the explicit rules, rather than split across gallery and card.
+  test('an explicit routing queues every page as explicit', () async {
+    final FakeWallpaperSource source = _source(pages: 2, perPage: 1);
+    final FakeDownloadQueue queue = FakeDownloadQueue();
+    final ProviderContainer container = _container(source, queue);
+
+    await container
+        .read(listingDownloadWalkProvider.notifier)
+        .start(
+          query: const SearchQuery(),
+          first: _page(<String>['p1a'], currentPage: 1, lastPage: 2),
+          listing: '#x',
+          routing: const BatchRouting(<Purity>{Purity.sfw, Purity.nsfw}),
+        );
+
+    final List<QueuedDownload> entries = await queue.entries();
+    expect(entries, hasLength(2));
+    expect(entries.every((QueuedDownload e) => e.wallpaper.isNsfw), isTrue);
   });
 
   test('does not re-fetch the page the caller already holds', () async {

@@ -8,6 +8,7 @@ import 'package:tela/app/routes.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/listing_download_dialog.dart';
 import 'package:tela/core/ui/tela_toast.dart';
+import 'package:tela/domain/models/batch_routing.dart';
 import 'package:tela/domain/models/listing_download_size.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
@@ -79,6 +80,7 @@ Future<void> queueListingDownload({
         listing: listing,
         tier: destination.tier,
         tag: destination.tag,
+        routing: BatchRouting(query.purity.purities),
       );
   _sayQueued(router, messenger, l10n, queued);
 }
@@ -114,7 +116,9 @@ Future<({bool proceed, StorageTier? tier, TagFolder? tag})?> _destination(
   WallpaperPage first,
   TagFolder? folder,
 ) async {
-  final Set<Purity> purities = query.purity.purities;
+  // Routed by what the query *may* return: a listing that can turn up an
+  // explicit wallpaper lands whole under the explicit rules. See BatchRouting.
+  final Set<Purity> purities = BatchRouting(query.purity.purities).purities;
   final ({bool proceed, StorageTier? tier, TagFolder? tag}) chosen =
       await resolveDownloadDestination(
         context: context,

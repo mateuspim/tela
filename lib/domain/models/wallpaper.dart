@@ -99,6 +99,29 @@ class Wallpaper {
   /// invariant is that NSFW files are never MediaStore-indexed in any tier.
   bool get isNsfw => purity == Purity.nsfw;
 
+  /// This wallpaper, routed as explicit — for a batch that holds explicit
+  /// images and so lands together under the explicit rules (see
+  /// `BatchRouting`). Never the other way: nothing here may make an explicit
+  /// wallpaper read as safe.
+  ///
+  /// ```dart
+  /// wallpaper.routedAsExplicit().isNsfw; // true
+  /// ```
+  Wallpaper routedAsExplicit() => Wallpaper(
+    id: id,
+    source: source,
+    pageUrl: pageUrl,
+    fullImageUrl: fullImageUrl,
+    thumbSmallUrl: thumbSmallUrl,
+    thumbLargeUrl: thumbLargeUrl,
+    thumbOriginalUrl: thumbOriginalUrl,
+    resolution: resolution,
+    fileSizeBytes: fileSizeBytes,
+    purity: Purity.nsfw,
+    category: category,
+    colors: colors,
+  );
+
   @override
   bool operator ==(Object other) => other is Wallpaper && other.ref == ref;
 

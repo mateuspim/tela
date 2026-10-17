@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/download_queue_controller.dart';
 import 'package:tela/app/providers.dart';
+import 'package:tela/domain/models/batch_routing.dart';
+import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/search_query.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tag_folder.dart';
@@ -71,6 +73,9 @@ class ListingDownloadWalk extends Notifier<ListingWalkProgress?> {
   /// re-fetching it here would spend a request to learn what is in hand, and on
   /// a `random` listing would re-roll the shuffle.
   ///
+  /// [routing] is applied to every page, so a listing that may turn up an
+  /// explicit wallpaper queues each one as explicit — see [BatchRouting].
+  ///
   /// Returns how many wallpapers the queue newly accepted.
   Future<int> start({
     required SearchQuery query,
@@ -78,12 +83,13 @@ class ListingDownloadWalk extends Notifier<ListingWalkProgress?> {
     required String listing,
     StorageTier? tier,
     TagFolder? tag,
+    BatchRouting routing = const BatchRouting(<Purity>{}),
   }) async {
     if (isRunning) return 0;
     _stopped = false;
     state = ListingWalkProgress(listing: listing, queued: 0, isRunning: true);
     try {
-      await _queue(first.wallpapers, tier: tier, tag: tag);
+      await _queue(routing.apply(first.wallpapers), tier: tier, tag: tag);
       await ref
           .read(walkListingPagesProvider)
           .call(
@@ -91,7 +97,7 @@ class ListingDownloadWalk extends Notifier<ListingWalkProgress?> {
             after: first,
             isCancelled: () => _stopped,
             onPage: (List<Wallpaper> page) =>
-                _queue(page, tier: tier, tag: tag),
+                _queue(routing.apply(page), tier: tier, tag: tag),
           );
     } finally {
       state = ListingWalkProgress(
