@@ -14,6 +14,7 @@ import 'package:tela/core/ui/download_destination_dialog.dart';
 import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/listing_origin.dart';
 import 'package:tela/core/ui/tela_toast.dart';
+import 'package:tela/domain/models/batch_routing.dart';
 import 'package:tela/domain/models/download_location.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -63,14 +64,16 @@ Future<bool> queueBatchDownload({
   // shelf can be gone by the time the *View* action is tapped, and a GoRouter
   // outlives the widget that was asked for it.
   final GoRouter router = GoRouter.of(context);
-  final Set<Purity> purities = <Purity>{
+  // An explicit image anywhere in the selection routes all of it as explicit,
+  // so one batch never splits across the gallery and the card.
+  final BatchRouting routing = BatchRouting(<Purity>{
     for (final Wallpaper wallpaper in wallpapers) wallpaper.purity,
-  };
+  });
   final ({bool proceed, StorageTier? tier, TagFolder? tag}) destination =
       await resolveDownloadDestination(
         context: context,
         ref: ref,
-        purities: purities,
+        purities: routing.purities,
         count: wallpapers.length,
         tagSample: wallpapers,
       );
@@ -78,14 +81,18 @@ Future<bool> queueBatchDownload({
   final bool ready = await ensureDownloadFolder(
     context: context,
     ref: ref,
-    purities: purities,
+    purities: routing.purities,
     tier: destination.tier,
   );
   if (!ready) return false;
 
   final int queued = await ref
       .read(downloadQueueControllerProvider.notifier)
-      .enqueue(wallpapers, tier: destination.tier, tag: destination.tag);
+      .enqueue(
+        routing.apply(wallpapers),
+        tier: destination.tier,
+        tag: destination.tag,
+      );
   _sayQueued(router, messenger, l10n, queued, wallpapers.length);
   return true;
 }
