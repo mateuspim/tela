@@ -4,7 +4,7 @@
 #   ./tool/tela analyze
 #   ./tool/tela test
 #   ./tool/tela build apk --release
-#   ./tool/tela deploy [--edition safe] [host:port] # build release + install, safely
+#   ./tool/tela deploy [--edition safe] [--silent] [host:port] # build release + install, safely
 #   ./tool/tela signing-setup      # fetch the release key from Vaultwarden
 #   ./tool/tela adb <args>         # raw adb inside the container
 #   ./tool/tela devices
@@ -213,6 +213,14 @@ if [[ "${1:-}" == "deploy" ]]; then
     edition="${2:?deploy --edition needs one of full|safe|wallhaven|play}"
     shift 2
   fi
+  # --silent installs without force-stopping or opening the app: for putting
+  # several editions on a device at once without four apps jumping to the
+  # front. `install -r` restarts the process on its own if it was running.
+  silent=0
+  if [[ "${1:-}" == "--silent" ]]; then
+    silent=1
+    shift
+  fi
   case "$edition" in
     full|safe|wallhaven|play) ;;
     *) echo "deploy: edition must be full|safe|wallhaven|play, got \"$edition\"" >&2; exit 2 ;;
@@ -226,7 +234,7 @@ if [[ "${1:-}" == "deploy" ]]; then
   # uninstall that takes the private library with it (2026-08-11).
   exec "${DOCKER[@]}" run "${DOCKER_ARGS[@]}" "$IMAGE" bash -c '
     set -euo pipefail
-    edition="$1"; target="${2:-}"
+    edition="$1"; silent="$2"; target="${3:-}"
     apk="build/app/outputs/flutter-apk/app-$edition-release.apk"
     pkg=cc.pym.tela; [[ "$edition" == full ]] || pkg="cc.pym.tela.$edition"
     signer="$(find "$ANDROID_SDK_ROOT/build-tools" -name apksigner | sort -V | tail -1)"
@@ -251,9 +259,10 @@ if [[ "${1:-}" == "deploy" ]]; then
       fi
     fi
     adb "${dev[@]}" install -r "$apk"
+    [[ "$silent" == 1 ]] && exit 0
     adb "${dev[@]}" shell am force-stop "$pkg"
     adb "${dev[@]}" shell am start -n "$pkg/cc.pym.tela.MainActivity"
-  ' bash "$edition" "$target"
+  ' bash "$edition" "$silent" "$target"
 fi
 
 exec "${DOCKER[@]}" run "${DOCKER_ARGS[@]}" "$IMAGE" flutter "$@"
