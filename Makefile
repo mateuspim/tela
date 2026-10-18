@@ -6,17 +6,19 @@
 #   make deploy                      # build release + install, safely
 #   make deploy DEVICE=1.2.3.4:5555  # ...connecting to a networked device first
 #   make deploy EDITION=safe         # ...a different edition (default: full)
+#   make deploy-all                  # every edition, installed silently
 #   make signing-setup               # fetch the release key from Vaultwarden
 #   make test / analyze / format / apk / shell
 
 TELA := ./tool/tela
 
 .DEFAULT_GOAL := help
-.PHONY: help deploy signing-setup test kotlin-test ci hooks analyze format apk shell install run
+.PHONY: help deploy deploy-all signing-setup test kotlin-test ci hooks analyze format apk shell install run
 
 help:
 	@printf 'targets:\n'
 	@printf '  deploy [DEVICE=host:port] [EDITION=full]  build release + adb install -r (safe)\n'
+	@printf '  deploy-all [DEVICE=host:port]  every edition, installed without launching\n'
 	@printf '  signing-setup              fetch the release key from Vaultwarden\n'
 	@printf '  test                       run the full Dart suite\n'
 	@printf '  kotlin-test                run the native (Kotlin) suite\n'
@@ -32,6 +34,12 @@ EDITION ?= full
 
 deploy:
 	$(TELA) deploy --edition $(EDITION) $(DEVICE)
+
+# Same safe path per edition, but --silent: nothing is force-stopped or opened.
+deploy-all:
+	@for e in full play safe wallhaven; do \
+		$(TELA) deploy --edition $$e --silent $(DEVICE) || exit 1; \
+	done
 
 signing-setup:
 	$(TELA) signing-setup
