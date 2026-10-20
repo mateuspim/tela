@@ -95,8 +95,7 @@ The stable Full download is
 https://github.com/mateuspim/tela/releases/latest/download/tela-full.apk .
 Each release also retains `tela-{edition}-vX.Y.Z.apk` and
 `tela-play-vX.Y.Z.aab`. The stable Full asset is a byte-identical copy of the
-versioned APK, and both are included in `SHA256SUMS`. GitHub authentication
-with repository access is required while the repository is private.
+versioned APK, and both are included in `SHA256SUMS`.
 
 Download all assets with `gh release download vX.Y.Z --repo mateuspim/tela`,
 then run `sha256sum -c SHA256SUMS` in that download directory. Check an APK
