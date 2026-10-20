@@ -58,3 +58,5 @@ lib/core/i18n/generated/
 
 # Kotlin compiler session cache (Kotlin 2.x Gradle plugin)
 android/.kotlin/
+# Release-key backup, encrypted; never commit even encrypted.
+/tela-signing/
