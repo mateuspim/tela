@@ -1,6 +1,6 @@
 # <img src="assets/brand/tela_mark.svg" alt="" width="32" height="32" align="top"> tela
 
-![tela on a tablet: a "mountain landscape" search on the left, a wallpaper's detail view with its Set wallpaper button on the right](docs/preview.png)
+![tela: the wordmark and its features beside two tablets, a "mountain landscape" search and a wallpaper's detail view with its Set wallpaper button](preview.png)
 
 **Wallhaven in your pocket.** tela is an Android app for browsing
 [Wallhaven](https://wallhaven.cc), previewing a wallpaper full screen and
