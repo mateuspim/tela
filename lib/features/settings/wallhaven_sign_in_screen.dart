@@ -12,11 +12,15 @@ import 'package:tela/core/web/sign_in_browser.dart';
 /// A pushed route rather than a go_router one: like the key dialog it replaces,
 /// it is a sub-flow that hands a value back to its caller, not a destination.
 ///
+/// On the root navigator: Settings lives in a shell branch, and a push onto the
+/// branch's own navigator kept the Browse/Library/Settings bar showing under a
+/// full-screen login (device pass, 2026-11-03).
+///
 /// ```dart
 /// final String? key = await showWallhavenSignIn(context);
 /// ```
 Future<String?> showWallhavenSignIn(BuildContext context) {
-  return Navigator.of(context).push<String>(
+  return Navigator.of(context, rootNavigator: true).push<String>(
     MaterialPageRoute<String>(
       builder: (BuildContext context) => const WallhavenSignInScreen(),
     ),

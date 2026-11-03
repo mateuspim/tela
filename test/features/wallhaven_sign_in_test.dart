@@ -41,6 +41,24 @@ void main() {
     expect(browser.forgetCount, 1);
   });
 
+  testWidgets('covers the whole app, not just the Settings tab', (
+    WidgetTester tester,
+  ) async {
+    // Settings sits in a shell branch with its own navigator; pushing there
+    // left the bottom bar showing under the login (device pass, 2026-11-03).
+    await _pumpSection(tester, nested: true);
+
+    await _openSignIn(tester);
+
+    final NavigatorState root = tester.state<NavigatorState>(
+      find.byType(Navigator).first,
+    );
+    final NavigatorState host = Navigator.of(
+      tester.element(find.byType(WallhavenSignInScreen)),
+    );
+    expect(host, same(root));
+  });
+
   testWidgets('a key reported twice pops the screen once', (
     WidgetTester tester,
   ) async {
@@ -104,7 +122,9 @@ Future<void> _pumpSection(
   FakeSecretStore? secrets,
   FakeSignInBrowser? browser,
   FakeWallpaperSource? source,
+  bool nested = false,
 }) async {
+  const Widget section = Scaffold(body: ApiKeySection());
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
@@ -117,15 +137,23 @@ Future<void> _pumpSection(
           browser ?? FakeSignInBrowser(),
         ),
       ],
-      child: const MaterialApp(
-        localizationsDelegates: <LocalizationsDelegate<Object>>[
+      child: MaterialApp(
+        localizationsDelegates: const <LocalizationsDelegate<Object>>[
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
         supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(body: ApiKeySection()),
+        // `nested` stands in for go_router's shell branch: the section under
+        // a navigator of its own, below the app's root one.
+        home: nested
+            ? Navigator(
+                onGenerateRoute: (RouteSettings _) => MaterialPageRoute<void>(
+                  builder: (BuildContext _) => section,
+                ),
+              )
+            : section,
       ),
     ),
   );
