@@ -6,6 +6,7 @@ import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/domain/use_cases/save_api_key.dart';
 import 'package:tela/features/settings/api_key_controller.dart';
 import 'package:tela/features/settings/api_key_dialog.dart';
+import 'package:tela/features/settings/wallhaven_sign_in_screen.dart';
 
 /// The Wallhaven API key row: whether one is stored, and how to change that.
 ///
@@ -20,14 +21,35 @@ class ApiKeySection extends ConsumerWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final bool stored = ref.watch(apiKeyProvider).value ?? false;
 
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        ListTile(
+          leading: const Icon(Icons.key_outlined),
+          title: Text(l10n.settingsApiKeyTitle),
+          subtitle: Text(
+            stored ? l10n.settingsApiKeyPresent : l10n.settingsApiKeyAbsent,
+          ),
+          trailing: stored ? _removeButton(context, ref, l10n) : null,
+          onTap: () => _enterKey(context, ref),
+        ),
+        // Only while there is no key: once one is stored, signing in again
+        // would just fetch the same key. Remove it first to switch accounts.
+        if (!stored) _signInTile(context, ref, l10n),
+      ],
+    );
+  }
+
+  Widget _signInTile(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) {
     return ListTile(
-      leading: const Icon(Icons.key_outlined),
-      title: Text(l10n.settingsApiKeyTitle),
-      subtitle: Text(
-        stored ? l10n.settingsApiKeyPresent : l10n.settingsApiKeyAbsent,
-      ),
-      trailing: stored ? _removeButton(context, ref, l10n) : null,
-      onTap: () => _enterKey(context, ref),
+      leading: const Icon(Icons.login),
+      title: Text(l10n.settingsSignInTitle),
+      subtitle: Text(l10n.settingsSignInSubtitle),
+      onTap: () => _signIn(context, ref),
     );
   }
 
@@ -45,6 +67,14 @@ class ApiKeySection extends ConsumerWidget {
 
   Future<void> _enterKey(BuildContext context, WidgetRef ref) async {
     final String? key = await showApiKeyDialog(context);
+    if (key == null || !context.mounted) return;
+    await _save(context, ref, key);
+  }
+
+  /// Same save as a pasted key: the harvested one is verified against the API
+  /// the same way, so a page that showed something odd cannot store it.
+  Future<void> _signIn(BuildContext context, WidgetRef ref) async {
+    final String? key = await showWallhavenSignIn(context);
     if (key == null || !context.mounted) return;
     await _save(context, ref, key);
   }
