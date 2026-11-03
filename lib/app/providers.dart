@@ -5,6 +5,8 @@ import 'package:tela/app/configured_download.dart';
 import 'package:tela/app/wallpaper_sources.dart';
 import 'package:tela/core/network/konachan_client.dart';
 import 'package:tela/core/network/wallhaven_client.dart';
+import 'package:tela/core/web/sign_in_browser.dart';
+import 'package:tela/core/web/webview_sign_in_browser.dart';
 import 'package:tela/data/app/flutter_app_visibility.dart';
 import 'package:tela/data/db/tela_database.dart';
 import 'package:tela/data/downloads/drift_download_history.dart';
@@ -166,6 +168,11 @@ final Provider<SystemWallpaperEditor> systemWallpaperEditorProvider =
 /// The external-link port, bound to the device browser via `url_launcher`.
 final Provider<ExternalLink> externalLinkProvider = Provider<ExternalLink>(
   (Ref ref) => const UrlLauncherExternalLink(),
+);
+
+/// The embedded Wallhaven sign-in browser, bound to `webview_flutter`.
+final Provider<SignInBrowser> signInBrowserProvider = Provider<SignInBrowser>(
+  (Ref ref) => const WebViewSignInBrowser(),
 );
 
 /// The three-tier image-storage port, bound to Android's scoped-storage API.

@@ -1513,6 +1513,21 @@
     "description": "Shown when the key was stored but the verifying request failed for a reason other than rejection."
   },
 
+  "settingsSignInTitle": "Sign in to Wallhaven",
+  "@settingsSignInTitle": {
+    "description": "Row that fetches the API key by logging in on wallhaven.cc, and the title of that sign-in screen."
+  },
+
+  "settingsSignInSubtitle": "Fetch your key by logging in. Your password stays with Wallhaven.",
+  "@settingsSignInSubtitle": {
+    "description": "Subtitle of the sign-in row. The password is typed into Wallhaven's own page; tela keeps only the key."
+  },
+
+  "settingsSignInHint": "Log in below. tela picks up your API key from Account settings, then signs you out of this page. If no key shows up, create one there.",
+  "@settingsSignInHint": {
+    "description": "Line above the embedded Wallhaven login page, saying what happens after logging in."
+  },
+
   "settingsApiKeyRemoved": "API key removed.",
   "@settingsApiKeyRemoved": {
     "description": "Shown after the stored key is deleted."
