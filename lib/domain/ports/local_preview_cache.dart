@@ -1,4 +1,5 @@
 import 'package:tela/domain/models/local_preview.dart';
+import 'package:tela/domain/models/thumbnail_cancellation.dart';
 import 'package:tela/domain/models/vault_thumbnail.dart';
 
 /// Materialises a downloaded image into a file Flutter can decode offline.
@@ -50,10 +51,18 @@ abstract interface class LocalPreviewCache {
   /// release: unlike [materialize]'s throwaway copy, this lives in the
   /// platform's own cache directory for as long as the OS keeps it.
   ///
+  /// Works for any private-library image — a vault `content:` document or an
+  /// app-private `file:` path — so neither re-decodes its original on every
+  /// visit.
+  ///
+  /// A [cancellation] raised before the request starts makes it answer null
+  /// without decoding; an adapter that cannot queue may ignore it.
+  ///
   /// Answers null for every reason the source cannot be read, the same as
   /// [materialize].
   Future<VaultThumbnail?> materializeThumbnail(
     Uri location,
-    int maxDimensionPx,
-  );
+    int maxDimensionPx, {
+    ThumbnailCancellation? cancellation,
+  });
 }

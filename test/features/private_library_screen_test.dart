@@ -373,18 +373,23 @@ void main() {
       expect(previews.thumbnailsRequested, <Uri>[vault.location]);
     });
 
-    testWidgets('an app-private tile never asks the preview cache at all', (
+    testWidgets('an app-private tile asks for a persisted thumbnail once', (
       WidgetTester tester,
     ) async {
-      final FakeLocalPreviewCache previews = FakeLocalPreviewCache();
+      // Regression (owner, 2026-11-04): it used to decode the original with
+      // Image.file(cacheWidth:) on every visit, ~30s for a big library.
+      final FakeLocalPreviewCache previews = FakeLocalPreviewCache(
+        fallbackBounds: (width: 4, height: 3),
+      );
+      final PrivateImage image = _image('e7jvjd');
 
       await _pump(
         tester,
-        FakeImageStore(privateLibrary: <PrivateImage>[_image('e7jvjd')]),
+        FakeImageStore(privateLibrary: <PrivateImage>[image]),
         previews: previews,
       );
 
-      expect(previews.thumbnailsRequested, isEmpty);
+      expect(previews.thumbnailsRequested, <Uri>[image.location]);
     });
   });
 
@@ -494,7 +499,8 @@ Future<void> _pump(
           FakeSettingsRepository(privateLibraryLocked: locked),
         ),
         localPreviewCacheProvider.overrideWithValue(
-          previews ?? FakeLocalPreviewCache(),
+          previews ??
+              FakeLocalPreviewCache(fallbackBounds: (width: 4, height: 3)),
         ),
       ],
       child: MaterialApp(

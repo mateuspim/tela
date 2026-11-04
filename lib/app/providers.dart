@@ -27,6 +27,7 @@ import 'package:tela/data/settings/drift_settings_repository.dart';
 import 'package:tela/data/storage/method_channel_image_store.dart';
 import 'package:tela/data/storage/method_channel_local_preview_cache.dart';
 import 'package:tela/data/storage/method_channel_screen_guard.dart';
+import 'package:tela/data/storage/queued_local_preview_cache.dart';
 import 'package:tela/data/tag_blocklist/drift_tag_blocklist_repository.dart';
 import 'package:tela/data/wallhaven/dio_wallhaven_source.dart';
 import 'package:tela/data/wallpaper/method_channel_system_wallpaper_editor.dart';
@@ -184,7 +185,9 @@ final Provider<ImageStore> imageStoreProvider = Provider<ImageStore>(
 /// `content:`/SAF location into a decodable cache file.
 final Provider<LocalPreviewCache> localPreviewCacheProvider =
     Provider<LocalPreviewCache>(
-      (Ref ref) => MethodChannelLocalPreviewCache(),
+      // Queued so a wall of uncached private tiles decodes three at a time,
+      // newest first, instead of all at once in scroll order.
+      (Ref ref) => QueuedLocalPreviewCache(MethodChannelLocalPreviewCache()),
     );
 
 /// The fetched-image disk cache, as Settings can measure and empty it.
