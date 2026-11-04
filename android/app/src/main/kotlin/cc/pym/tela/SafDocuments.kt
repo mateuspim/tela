@@ -155,6 +155,44 @@ internal object SafDocuments {
      * no new collision is ever manufactured in the first place.
      */
     fun findChild(context: Context, parent: Uri, name: String): Uri? {
+        if (parent.authority == EXTERNAL_STORAGE_PROVIDER) {
+            return probeChild(context, parent, name)
+        }
+        return listedChild(context, parent, name)
+    }
+
+    /**
+     * Asks for the one document a child would have, instead of listing them all.
+     *
+     * ExternalStorageProvider names a child `<parent id>/<name>` (no extra
+     * slash under a volume root, whose id ends in `:`), so "does [parent] hold
+     * [name]" is a single-row query. A listing is a binder round trip *per
+     * row*; on a card holding thousands of wallpapers it was ~5 full listings
+     * per file copied. The medium the provider reads is FAT-family where this
+     * runs, so the probe is as case-insensitive as the listing it replaces.
+     * A provider that answers the probe with an error falls back to listing.
+     */
+    private fun probeChild(context: Context, parent: Uri, name: String): Uri? {
+        val parentId = DocumentsContract.getDocumentId(parent)
+        val separator = if (parentId.endsWith(":")) "" else "/"
+        val candidate =
+            DocumentsContract.buildDocumentUriUsingTree(parent, "$parentId$separator$name")
+        return try {
+            if (documentExists(context, candidate)) candidate else null
+        } catch (_: Exception) {
+            listedChild(context, parent, name)
+        }
+    }
+
+    private fun documentExists(context: Context, document: Uri): Boolean {
+        val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+        SafListingCount.bump()
+        return context.contentResolver.query(document, projection, null, null, null)
+            ?.use { cursor -> cursor.moveToFirst() } ?: false
+    }
+
+    /** The slow path: list [parent] and match [name] case-insensitively. */
+    private fun listedChild(context: Context, parent: Uri, name: String): Uri? {
         val match =
             childrenOf(context, parent).firstOrNull { it.name.equals(name, ignoreCase = true) }
                 ?: return null
@@ -191,7 +229,7 @@ internal object SafDocuments {
      * to fail a download that has already landed.
      */
     fun dropFromOtherFolders(context: Context, telaFolder: Uri, keep: Uri, name: String) {
-        val folders = listOf(telaFolder) + directoriesIn(context, telaFolder)
+        val folders = listOf(telaFolder) + tagFoldersOf(context, telaFolder)
         for (folder in folders.filter { it != keep }) {
             val stale = findChild(context, folder, name) ?: continue
             try {
@@ -243,6 +281,12 @@ internal object SafDocuments {
     /** The document ids directly inside [parent]. */
     private fun childIds(context: Context, parent: Uri): Set<String> =
         childrenOf(context, parent).mapTo(mutableSetOf()) { it.id }
+
+    /** [directoriesIn], remembered for a few seconds; see [SafFolderMemo]. */
+    private fun tagFoldersOf(context: Context, parent: Uri): List<Uri> {
+        SafFolderMemo.recall(parent)?.let { return it }
+        return directoriesIn(context, parent).also { SafFolderMemo.remember(parent, it) }
+    }
 
     /**
      * The tag folders of [parent], as document URIs.
@@ -299,7 +343,9 @@ internal object SafDocuments {
     }
 
     private fun findOrCreateDirectory(context: Context, parent: Uri, name: String): Uri? {
-        return findChild(context, parent, name) ?: DocumentsContract.createDocument(
+        findChild(context, parent, name)?.let { return it }
+        SafFolderMemo.forget(parent)
+        return DocumentsContract.createDocument(
             context.contentResolver,
             parent,
             DocumentsContract.Document.MIME_TYPE_DIR,
