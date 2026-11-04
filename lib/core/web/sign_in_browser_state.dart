@@ -38,3 +38,36 @@ final class SignInMissingKey extends SignInBrowserState {
   /// Creates the missing-key state.
   const SignInMissingKey();
 }
+
+/// Decides which reported states reach the screen, so a late progress tick
+/// cannot undo a settled one.
+///
+/// Android does not order `onProgress` against `onPageFinished`: a tick can
+/// land after the page finished and would flip Ready (or MissingKey) back to
+/// Loading, leaving a full bar stuck. Once a state settles — ready, failed or
+/// missing key — loading ticks are dropped until [reset] (a new page started).
+///
+/// ```dart
+/// final SignInBrowserState? shown = gate.admit(const SignInLoading(0.9));
+/// ```
+class SignInStateGate {
+  bool _settled = false;
+  bool _failed = false;
+
+  /// Whether the last admitted state was [SignInFailed].
+  bool get failed => _failed;
+
+  /// Forgets the settled state: a new page started loading.
+  void reset() {
+    _settled = false;
+    _failed = false;
+  }
+
+  /// [state] if it should be shown, or null if it is a stale loading tick.
+  SignInBrowserState? admit(SignInBrowserState state) {
+    if (state is SignInLoading && _settled) return null;
+    _settled = state is! SignInLoading;
+    _failed = state is SignInFailed;
+    return state;
+  }
+}

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:tela/core/web/independent_steps.dart';
 import 'package:tela/core/web/sign_in_browser.dart';
 import 'package:tela/core/web/sign_in_browser_state.dart';
 import 'package:tela/domain/models/wallhaven_sign_in.dart';
@@ -65,10 +66,11 @@ class WebViewSignInBrowser implements SignInBrowser {
     final WebViewController? controller = _controller;
     _controller = null;
     _lastRequested = WallhavenSignIn.loginUrl;
-    await WebViewCookieManager().clearCookies();
-    if (controller == null) return;
-    await controller.clearCache();
-    await controller.clearLocalStorage();
+    await runIndependently(<Future<void> Function()>[
+      WebViewCookieManager().clearCookies,
+      if (controller != null) controller.clearCache,
+      if (controller != null) controller.clearLocalStorage,
+    ]);
   }
 }
 
@@ -94,9 +96,10 @@ class _SignInWebView extends StatefulWidget {
 class _SignInWebViewState extends State<_SignInWebView> {
   WebViewController get _controller => widget.controller;
 
-  /// Android still fires `onPageFinished` for the error page it shows; this
-  /// keeps that from turning a failure back into "ready".
-  bool _failed = false;
+  /// Android still fires `onPageFinished` for the error page it shows, and may
+  /// deliver `onProgress` after it; the gate keeps both from undoing a
+  /// settled state.
+  final SignInStateGate _gate = SignInStateGate();
 
   @override
   void initState() {
@@ -108,7 +111,7 @@ class _SignInWebViewState extends State<_SignInWebView> {
     await _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
     await _controller.setNavigationDelegate(
       NavigationDelegate(
-        onNavigationRequest: _gate,
+        onNavigationRequest: _gateTopFrame,
         onPageStarted: (String url) => _started(),
         onProgress: (int percent) => _emit(SignInLoading(percent / 100)),
         onWebResourceError: _onError,
@@ -127,12 +130,13 @@ class _SignInWebViewState extends State<_SignInWebView> {
   }
 
   void _emit(SignInBrowserState state) {
-    if (!mounted || _failed && state is SignInLoading) return;
-    widget.onState(state);
+    final SignInBrowserState? shown = _gate.admit(state);
+    if (!mounted || shown == null) return;
+    widget.onState(shown);
   }
 
   void _started() {
-    _failed = false;
+    _gate.reset();
     _emit(const SignInLoading(0));
   }
 
@@ -140,20 +144,19 @@ class _SignInWebViewState extends State<_SignInWebView> {
   /// page failing, so only the top frame's count.
   void _onError(WebResourceError error) {
     if (error.isForMainFrame == false) return;
-    _failed = true;
     _emit(const SignInFailed());
   }
 
   /// Keeps the top frame on wallhaven.cc. Sub-frames pass: a login captcha
   /// lives in one, served from its provider's own host.
-  NavigationDecision _gate(NavigationRequest request) {
+  NavigationDecision _gateTopFrame(NavigationRequest request) {
     if (!request.isMainFrame) return NavigationDecision.navigate;
     final bool allowed = WallhavenSignIn.isWallhaven(Uri.parse(request.url));
     return allowed ? NavigationDecision.navigate : NavigationDecision.prevent;
   }
 
   Future<void> _advance(String url) async {
-    if (_failed) return;
+    if (_gate.failed) return;
     switch (WallhavenSignIn.stepFor(Uri.parse(url))) {
       case SignInStep.awaitCredentials:
         _emit(const SignInReady());
@@ -167,13 +170,24 @@ class _SignInWebViewState extends State<_SignInWebView> {
   /// An account that never generated a key shows none: say so, and the user
   /// can create one on the page, which reloads it and brings us back here.
   Future<void> _readKey() async {
-    final Object raw = await _controller.runJavaScriptReturningResult(
-      _readKeyScript,
-    );
-    final String? key = WallhavenSignIn.keyFrom(raw.toString());
-    if (!mounted) return;
+    final String? raw = await _runReadScript();
+    if (raw == null || !mounted) return;
+    final String? key = WallhavenSignIn.keyFrom(raw);
     if (key == null) return _emit(const SignInMissingKey());
     _emit(const SignInReady());
     widget.onKeyFound(key);
+  }
+
+  /// The script's result, or null if the page navigated away mid-call. That is
+  /// not "no key": the next page's finish reads again, so nothing is emitted.
+  Future<String?> _runReadScript() async {
+    try {
+      final Object raw = await _controller.runJavaScriptReturningResult(
+        _readKeyScript,
+      );
+      return raw.toString();
+    } on Object {
+      return null;
+    }
   }
 }
