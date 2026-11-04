@@ -31,11 +31,20 @@ internal class SafVaultListing(private val context: Context) {
      * show. It renders what it has, which is the app-private tier.
      */
     fun list(target: OutsideGalleryTarget): List<Map<String, Any>> {
-        return target.vaultTrees
-            .mapNotNull { tree -> vaultIn(Uri.parse(tree), target) }
-            .flatMap { vault -> untagged(vault) + tagged(vault) }
-            .mapNotNull { (file, tag) -> describe(file, tag) }
-            .sortedByDescending { row -> row["savedAt"] as Long }
+        val clock = PhaseClock("vaultlist")
+        try {
+            val files = clock.phase("walk") {
+                target.vaultTrees
+                    .mapNotNull { tree -> vaultIn(Uri.parse(tree), target) }
+                    .flatMap { vault -> untagged(vault) + tagged(vault) }
+            }
+            clock.count("files", files.size.toLong())
+            return files
+                .mapNotNull { (file, tag) -> describe(file, tag) }
+                .sortedByDescending { row -> row["savedAt"] as Long }
+        } finally {
+            clock.finish()
+        }
     }
 
     /** [tree]'s vault directory, or null when there is nothing to read. */
