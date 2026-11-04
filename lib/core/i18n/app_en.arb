@@ -2369,6 +2369,26 @@
     "description": "Explanation under the privacy settings heading."
   },
 
+  "privateLibraryOrder": "Order: {order}",
+  "@privateLibraryOrder": {
+    "description": "Accessibility label and tooltip for the private library's order menu button, naming the order currently shown (e.g. 'Order: Newest first').",
+    "placeholders": {
+      "order": {
+        "type": "String"
+      }
+    }
+  },
+
+  "libraryOrderNewestFirst": "Newest first",
+  "@libraryOrderNewestFirst": {
+    "description": "Order menu item: the most recently saved images first."
+  },
+
+  "libraryOrderOldestFirst": "Oldest first",
+  "@libraryOrderOldestFirst": {
+    "description": "Order menu item: the earliest saved images first."
+  },
+
   "privateLibraryTitle": "Private library",
   "@privateLibraryTitle": {
     "description": "Title of the screen listing app-private downloads. Matches the storage tier's name."

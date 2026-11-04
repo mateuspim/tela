@@ -12,6 +12,7 @@ import 'package:tela/core/ui/wallpaper_source_badge.dart';
 import 'package:tela/core/ui/wallpaper_source_labels_scope.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/library_order.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -464,6 +465,42 @@ void main() {
     });
   });
 
+  group('order', () {
+    // Owner, 2026-11-04: "we dont have a way to sort them by most recent first
+    // or oldest". Newest first stays the default; the menu flips it and the
+    // choice is saved.
+    final PrivateImage older = _savedAt('aaaaaa', DateTime.utc(2026));
+    final PrivateImage newer = _savedAt('bbbbbb', DateTime.utc(2026, 6));
+
+    testWidgets('lists newest first by default', (WidgetTester tester) async {
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[older, newer]),
+      );
+
+      expect(_tileOrder(tester), <String>['bbbbbb', 'aaaaaa']);
+    });
+
+    testWidgets('choosing oldest first reorders the grid and saves it', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository();
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[older, newer]),
+        settings: settings,
+      );
+
+      await tester.tap(find.byTooltip('Order: Newest first'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Oldest first'));
+      await tester.pumpAndSettle();
+
+      expect(_tileOrder(tester), <String>['aaaaaa', 'bbbbbb']);
+      expect(settings.privateLibraryOrder, LibraryOrder.oldestFirst);
+    });
+  });
+
   group('source badge', () {
     testWidgets('a private tile names the source its file came from', (
       WidgetTester tester,
@@ -557,6 +594,7 @@ Future<void> _pump(
   bool locked = false,
   Map<String, String>? labels,
   LocalPreviewCache? previews,
+  FakeSettingsRepository? settings,
 }) async {
   const Widget screen = PrivateLibraryScreen();
   await tester.pumpWidget(
@@ -567,7 +605,7 @@ Future<void> _pump(
         screenGuardProvider.overrideWithValue(guard ?? FakeScreenGuard()),
         appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
         settingsRepositoryProvider.overrideWithValue(
-          FakeSettingsRepository(privateLibraryLocked: locked),
+          settings ?? FakeSettingsRepository(privateLibraryLocked: locked),
         ),
         localPreviewCacheProvider.overrideWithValue(
           previews ??
@@ -656,3 +694,34 @@ List<String> _thumbnailPaths(WidgetTester tester) => <String>[
   for (final Image image in tester.widgetList<Image>(find.byType(Image)))
     if (image.image is FileImage) (image.image as FileImage).file.path,
 ];
+
+/// An app-private image saved at [savedAt], to pin the library's order.
+PrivateImage _savedAt(String id, DateTime savedAt) => PrivateImage(
+  ref: WallpaperRef(SourceId.wallhaven, id),
+  location: Uri.file(
+    '/data/user/0/cc.pym.tela/files/wallpapers/wallhaven-$id.jpg',
+  ),
+  savedAt: savedAt,
+  sizeBytes: 2048,
+  width: 1080,
+  height: 2400,
+);
+
+/// The ids of the private tiles in reading order: by row, then left to right.
+List<String> _tileOrder(WidgetTester tester) {
+  final Finder tiles = find.bySemanticsLabel(RegExp('^Private wallpaper '));
+  final List<Element> found = tiles.evaluate().toList()
+    ..sort((Element a, Element b) {
+      final Offset pa = tester.getTopLeft(
+        find.byElementPredicate((e) => e == a),
+      );
+      final Offset pb = tester.getTopLeft(
+        find.byElementPredicate((e) => e == b),
+      );
+      return pa.dy != pb.dy ? pa.dy.compareTo(pb.dy) : pa.dx.compareTo(pb.dx);
+    });
+  return <String>[
+    for (final Element e in found)
+      (e.widget as Semantics).properties.label!.split(' ').last,
+  ];
+}

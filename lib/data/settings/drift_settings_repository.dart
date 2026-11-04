@@ -4,6 +4,7 @@ import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/library_order.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -86,6 +87,10 @@ class DriftSettingsRepository implements SettingsRepository {
   /// constant name — so a renamed constant reads back as unset (medium) rather
   /// than as some other density. Absent means medium.
   static const String _densityKey = 'appearance.tileDensity';
+
+  /// The private library's [LibraryOrder], stored as its constant name. Absent
+  /// or unreadable means newest first, the order it always listed in.
+  static const String _privateOrderKey = 'privateLibrary.order';
 
   /// Where the last run of downloads landed, one row per storage bucket, as
   /// `tier:count` (see [DownloadDestinationStreak.encode]).
@@ -303,6 +308,17 @@ class DriftSettingsRepository implements SettingsRepository {
   @override
   Future<void> saveTileDensity(TileDensity density) {
     return _db.putSetting(_densityKey, density.name);
+  }
+
+  @override
+  Future<LibraryOrder> loadPrivateLibraryOrder() async {
+    return LibraryOrder.tryFromName(await _db.settingValue(_privateOrderKey)) ??
+        LibraryOrder.newestFirst;
+  }
+
+  @override
+  Future<void> savePrivateLibraryOrder(LibraryOrder order) {
+    return _db.putSetting(_privateOrderKey, order.name);
   }
 
   @override

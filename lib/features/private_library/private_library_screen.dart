@@ -26,6 +26,7 @@ import 'package:tela/core/ui/wallpaper_source_badge.dart';
 import 'package:tela/core/ui/wallpaper_source_labels_scope.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/library_order.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tag_folder.dart';
@@ -33,6 +34,8 @@ import 'package:tela/domain/models/thumbnail_cancellation.dart';
 import 'package:tela/domain/models/vault_thumbnail.dart';
 import 'package:tela/domain/use_cases/resolve_beam_files.dart';
 import 'package:tela/features/beam/beam_sheet.dart';
+import 'package:tela/features/private_library/private_library_order_button.dart';
+import 'package:tela/features/private_library/private_library_order_controller.dart';
 import 'package:tela/features/private_library/private_secure_access.dart';
 import 'package:tela/features/settings/beam_explicit_switch.dart';
 
@@ -116,7 +119,12 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
           // Collapses while selecting, when Select hides itself — see
           // CapsuleActionCluster.
           actions: const <Widget>[
-            CapsuleActionCluster(children: <Widget>[SelectModeButton()]),
+            CapsuleActionCluster(
+              children: <Widget>[
+                PrivateLibraryOrderButton(),
+                SelectModeButton(),
+              ],
+            ),
             SizedBox(width: 16),
           ],
         ),
@@ -151,9 +159,15 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     AppLocalizations l10n,
     List<PrivateImage> stored,
   ) {
-    final List<PrivateImage> shown = stored
-        .where((PrivateImage i) => _tagFilter.matches(i.tag))
-        .toList();
+    // Ordered here, after the filter, so the viewer's swipes follow the grid.
+    final LibraryOrder order =
+        ref.watch(privateLibraryOrderProvider).value ??
+        LibraryOrder.newestFirst;
+    final List<PrivateImage> shown = order.sorted(
+      stored.where((PrivateImage i) => _tagFilter.matches(i.tag)),
+      savedAt: (PrivateImage i) => i.savedAt,
+      tieBreak: (PrivateImage i) => i.ref.key,
+    );
     return Column(
       children: <Widget>[
         TagFilterBar(
