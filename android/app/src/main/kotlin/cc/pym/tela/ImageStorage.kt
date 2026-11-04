@@ -64,7 +64,14 @@ class ImageStorage(private val context: Context) {
 
     /** Copies an image already on this device into [request]'s tier. */
     fun copy(request: ImageCopyRequest, target: OutsideGalleryTarget): Map<String, Any> =
-        TierWriting(context).copy(request, target)
+        TierWriting(context).copy(request, target).also { answer -> carryThumbnail(request, answer) }
+
+    /** Gives a successful copy the source's grid thumbnail; see [StoredThumbnails.carry]. */
+    private fun carryThumbnail(request: ImageCopyRequest, answer: Map<String, Any>) {
+        if (answer["success"] != true) return
+        val copied = answer["location"] as? String ?: return
+        StoredThumbnails(context).carry(Uri.parse(request.from), Uri.parse(copied))
+    }
 
     /** Moves a stored image into another tag folder within its own tier. */
     fun retag(

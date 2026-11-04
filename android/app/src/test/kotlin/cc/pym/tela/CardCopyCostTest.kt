@@ -101,6 +101,22 @@ class CardCopyCostTest {
         assertNotNull(SafDocuments.findChild(context, root, "x.jpg"))
     }
 
+    /**
+     * The copy lands at a new location, so without carrying the thumbnail
+     * every moved tile was decoded again from the card (owner, 2026-11-04).
+     */
+    @Test
+    fun `a copy carries the source's thumbnail to its new location`() {
+        val directory = TelaDirectories.thumbnails(context).apply { mkdirs() }
+        File(directory, StoredThumbnails.cacheName(Uri.fromFile(source), 400))
+            .writeText("tile")
+
+        val copied = Uri.parse(copy("aaa111")["location"] as String)
+
+        val carried = File(directory, StoredThumbnails.cacheName(copied, 400))
+        assertEquals("tile", carried.readText())
+    }
+
     @Test
     fun `copying a file does not duplicate it when it is copied again`() {
         assertTrue(copy("aaa111")["success"] == true)

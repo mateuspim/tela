@@ -60,6 +60,37 @@ internal class StoredThumbnails(private val context: Context) {
             ?.forEach { it.delete() }
     }
 
+    /**
+     * Copies every cached size of [from]'s thumbnail to the name [to] would get.
+     *
+     * For a move between tiers: the copy is a new location, so without this its
+     * thumbnail is a miss and every tile is decoded again from the card — the
+     * owner watched 7,298 regenerate after moving the library (2026-11-04).
+     * A **copy**, not a rename: the source's own delete still runs [forget], and
+     * if the move is declined or fails before that, the source keeps its tile.
+     * Best-effort; a thumbnail that does not carry is only a slower first paint.
+     */
+    fun carry(from: Uri, to: Uri) {
+        val directory = TelaDirectories.thumbnails(context)
+        val fromPrefix = namePrefix(from)
+        val toPrefix = namePrefix(to)
+        directory.listFiles { file -> file.name.startsWith(fromPrefix) }?.forEach { cached ->
+            val size = cached.name.removePrefix(fromPrefix)
+            if (size.contains(".tmp-")) return@forEach
+            copyAtomically(cached, File(directory, toPrefix + size))
+        }
+    }
+
+    private fun copyAtomically(source: File, target: File) {
+        val temp = File(target.parentFile, "${target.name}.tmp-${System.nanoTime()}")
+        try {
+            source.copyTo(temp, overwrite = true)
+            if (!temp.renameTo(target)) temp.delete()
+        } catch (_: Exception) {
+            temp.delete()
+        }
+    }
+
     private fun readCached(target: File): Map<String, Any>? {
         if (!target.isFile) return null
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }

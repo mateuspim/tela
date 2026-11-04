@@ -101,6 +101,24 @@ class StoredThumbnailsTest : ImageStorageTestCase() {
     }
 
     @Test
+    fun `carry gives every cached size to the new location and keeps the old`() {
+        val source = writeJpeg("wallhaven-move00.jpg", 800, 400)
+        val from = Uri.fromFile(source)
+        val to = Uri.parse("content://com.android.externalstorage.documents/document/x")
+        thumbnails().make(from, 100)
+        thumbnails().make(from, 200)
+
+        thumbnails().carry(from, to)
+
+        val names = cachedFiles().map { it.name }.toSet()
+        for (size in listOf(100, 200)) {
+            assertTrue(StoredThumbnails.cacheName(from, size) in names)
+            assertTrue(StoredThumbnails.cacheName(to, size) in names)
+        }
+        assertEquals(4, names.size)
+    }
+
+    @Test
     fun `deleting a private download forgets its thumbnail`() {
         val source = writeJpeg("wallhaven-abc123.jpg", 800, 400)
         thumbnails().make(Uri.fromFile(source), 100)
