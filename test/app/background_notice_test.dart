@@ -199,6 +199,29 @@ void _offloadTests() {
       expect(anchor.holds.last, 'Move downloads to SD card|Moving 1 of 4…');
     });
 
+    test('once the pace is known the shade says how long is left', () async {
+      final FakeDownloadQueueAnchor anchor = FakeDownloadQueueAnchor();
+      final ProviderContainer container = await _start(
+        FakeDownloadQueue(),
+        anchor,
+      );
+
+      container.read(offloadRunProvider.notifier).state = const OffloadRun(
+        phase: OffloadPhase.copying,
+        total: 4,
+        copied: 1,
+        bytes: 4000,
+        copiedBytes: 1000,
+        elapsed: Duration(minutes: 1),
+      );
+      await _settle();
+
+      expect(
+        anchor.holds.last,
+        'Move downloads to SD card|Moving 1 of 4 · about 3 min left',
+      );
+    });
+
     /// The phase where the shade is the only place left to say anything: the
     /// copy is done, the app is away, and the OS delete prompt needs a screen.
     test('a run waiting for a screen says so in the shade', () async {

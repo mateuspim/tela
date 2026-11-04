@@ -61,7 +61,7 @@ class SurveyOffloadGroups {
       moves
           .putIfAbsent(kind, () => <StoredImageMove>[])
           .add(
-            _moveOf(recorded[i]),
+            _moveOf(recorded[i], sizes[i].bytes),
           );
       bytes[kind] = (bytes[kind] ?? 0) + sizes[i].bytes;
     }
@@ -102,7 +102,7 @@ class SurveyOffloadGroups {
   /// The tag rides along because a tag **is** a directory: an offload that
   /// dropped it would flatten a library the user has been filing for months
   /// into one folder on the card, and no undo puts it back.
-  StoredImageMove _moveOf(DownloadRecord record) {
+  StoredImageMove _moveOf(DownloadRecord record, int sizeBytes) {
     return StoredImageMove(
       ref: record.wallpaper.ref,
       purity: record.wallpaper.purity,
@@ -110,6 +110,7 @@ class SurveyOffloadGroups {
       location: record.location,
       to: StorageTier.filesOutsideGallery,
       tag: record.tag,
+      sizeBytes: sizeBytes,
     );
   }
 
@@ -152,6 +153,7 @@ class SurveyOffloadGroups {
               location: image.location,
               to: StorageTier.filesOutsideGallery,
               tag: image.tag,
+              sizeBytes: image.sizeBytes,
             ),
         ],
         bytes: images.fold(

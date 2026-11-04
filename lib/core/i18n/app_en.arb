@@ -2317,6 +2317,51 @@
     }
   },
 
+  "offloadPercentDone": "{percent}% done",
+  "@offloadPercentDone": {"description": "Large figure on the offload progress panel: how much of the move's data is copied.", "placeholders": {"percent": {"type": "int"}}},
+
+  "offloadTimeLeft": "About {time} left",
+  "@offloadTimeLeft": {"description": "Estimate beside the percentage while copying. {time} is a duration such as '38 min' or '1 h 5 min'.", "placeholders": {"time": {"type": "String"}}},
+
+  "offloadTimeLeftEstimating": "Working out time left…",
+  "@offloadTimeLeftEstimating": {"description": "Shown for the first seconds of a move, before enough is copied to estimate the rest honestly."},
+
+  "offloadStatFiles": "Files",
+  "@offloadStatFiles": {"description": "Label of the file-count row on the offload progress panel."},
+
+  "offloadStatData": "Data",
+  "@offloadStatData": {"description": "Label of the copied-size row on the offload progress panel."},
+
+  "offloadStatSpeed": "Speed",
+  "@offloadStatSpeed": {"description": "Label of the transfer-speed row on the offload progress panel."},
+
+  "offloadStatElapsed": "Elapsed",
+  "@offloadStatElapsed": {"description": "Label of the time-so-far row on the offload progress panel."},
+
+  "offloadStatMeasuring": "Measuring…",
+  "@offloadStatMeasuring": {"description": "Value of the speed row before the move has run long enough to measure it."},
+
+  "offloadStatOf": "{done} of {total}",
+  "@offloadStatOf": {"description": "Value of a progress row, e.g. '1,234 of 7,298' or '12.4 GB of 65.3 GB'. Both are pre-formatted.", "placeholders": {"done": {"type": "String"}, "total": {"type": "String"}}},
+
+  "offloadStatUnknown": "—",
+  "@offloadStatUnknown": {"description": "Value of a progress row with nothing to report, such as the data row for a selection whose sizes were never measured."},
+
+  "offloadSpeedValue": "{size}/s",
+  "@offloadSpeedValue": {"description": "Transfer speed, where {size} is a formatted size such as '4.1 MB'.", "placeholders": {"size": {"type": "String"}}},
+
+  "offloadProgressTimeLeft": "Moving {done} of {total} · about {time} left",
+  "@offloadProgressTimeLeft": {"description": "Notification line while copying once a time estimate exists. {time} is e.g. '38 min'.", "placeholders": {"done": {"type": "int", "format": "decimalPattern"}, "total": {"type": "int", "format": "decimalPattern"}, "time": {"type": "String"}}},
+
+  "durationHoursMinutes": "{hours} h {minutes} min",
+  "@durationHoursMinutes": {"description": "A duration of an hour or more, e.g. '1 h 5 min'.", "placeholders": {"hours": {"type": "int"}, "minutes": {"type": "int"}}},
+
+  "durationMinutes": "{minutes} min",
+  "@durationMinutes": {"description": "A duration under an hour, e.g. '38 min'.", "placeholders": {"minutes": {"type": "int"}}},
+
+  "durationUnderMinute": "under a minute",
+  "@durationUnderMinute": {"description": "A duration shorter than one minute, read inside 'About {time} left'."},
+
   "offloadFinishing": "Removing the originals…",
   "@offloadFinishing": {
     "description": "Progress line for the delete pass, which reports nothing per file. Named rather than left as a stalled bar at 100%, because on Android 30+ this is where the system's own delete prompt appears."
