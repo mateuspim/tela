@@ -7,6 +7,7 @@ import 'package:tela/core/ui/download_volume_sheet.dart';
 import 'package:tela/core/ui/tela_toast.dart';
 import 'package:tela/domain/models/download_record.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/library_order.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/storage_tier.dart';
@@ -66,7 +67,11 @@ Future<bool> moveToPrivate({
     messenger,
     l10n,
     moves: <StoredImageMove>[
-      for (final DownloadRecord record in records)
+      for (final DownloadRecord record in LibraryOrder.oldestFirst.sorted(
+        records,
+        savedAt: (DownloadRecord r) => r.downloadedAt,
+        tieBreak: (DownloadRecord r) => r.wallpaper.ref.key,
+      ))
         StoredImageMove(
           ref: record.wallpaper.ref,
           purity: record.wallpaper.purity,
@@ -108,10 +113,10 @@ Future<bool> confirmAndMoveOutOfPrivate({
   // it in place, and the delete that follows then removes the file it just
   // wrote. Filtered rather than refused whole, so a mixed selection still moves
   // the app-private half it really can. See `PrivateImage.tier`.
-  final List<PrivateImage> movable = <PrivateImage>[
+  final List<PrivateImage> movable = oldestSavedFirst(<PrivateImage>[
     for (final PrivateImage image in images)
       if (image.tier == StorageTier.appPrivate) image,
-  ];
+  ]);
   if (movable.isEmpty) return false;
   final AppLocalizations l10n = AppLocalizations.of(context);
   final bool confirmed = await _confirm(

@@ -214,6 +214,29 @@ void main() {
       expect(images.vaultListings, 0);
     });
 
+    /// A copy is stamped with the moment it was made, so the card's saved
+    /// times follow the copy order. Listed newest first and copied that way,
+    /// the moved library came out reversed under "Oldest first".
+    test('the private library is copied oldest saved first', () async {
+      final FakeImageStore images = FakeImageStore(
+        privateLibrary: <PrivateImage>[
+          _private('new', 500, savedAt: DateTime(2026, 11, 3)),
+          _private('old', 500, savedAt: DateTime(2026, 1, 3)),
+          _private('mid', 500, savedAt: DateTime(2026, 6, 3)),
+        ],
+      );
+
+      final List<OffloadGroup> groups = await _survey(
+        images,
+        FakeDownloadHistory(),
+      )();
+
+      expect(
+        groups.single.moves.map((StoredImageMove m) => m.ref.id),
+        <String>['old', 'mid', 'new'],
+      );
+    });
+
     test('an empty device answers no groups at all', () async {
       final List<OffloadGroup> groups = await _survey(
         FakeImageStore(),
@@ -246,10 +269,11 @@ PrivateImage _private(
   String id,
   int bytes, {
   StorageTier tier = StorageTier.appPrivate,
+  DateTime? savedAt,
 }) => PrivateImage(
   ref: WallpaperRef(SourceId.wallhaven, id),
   location: Uri.parse('file:///data/tela/wallhaven-$id.jpg'),
-  savedAt: DateTime(2026, 8, 25),
+  savedAt: savedAt ?? DateTime(2026, 8, 25),
   sizeBytes: bytes,
   tier: tier,
 );
