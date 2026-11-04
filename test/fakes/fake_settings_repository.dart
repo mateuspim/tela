@@ -2,6 +2,7 @@ import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/library_order.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -163,6 +164,17 @@ class FakeSettingsRepository implements SettingsRepository {
   @override
   Future<void> saveTileDensity(TileDensity density) async {
     _density = density;
+  }
+
+  /// The private library's order, as `savePrivateLibraryOrder` last left it.
+  LibraryOrder privateLibraryOrder = LibraryOrder.newestFirst;
+
+  @override
+  Future<LibraryOrder> loadPrivateLibraryOrder() async => privateLibraryOrder;
+
+  @override
+  Future<void> savePrivateLibraryOrder(LibraryOrder order) async {
+    privateLibraryOrder = order;
   }
 
   @override

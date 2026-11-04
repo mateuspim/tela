@@ -26,12 +26,16 @@ import 'package:tela/core/ui/wallpaper_source_badge.dart';
 import 'package:tela/core/ui/wallpaper_source_labels_scope.dart';
 import 'package:tela/core/ui/wallpaper_status_view.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/library_order.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/tag_folder.dart';
+import 'package:tela/domain/models/thumbnail_cancellation.dart';
 import 'package:tela/domain/models/vault_thumbnail.dart';
 import 'package:tela/domain/use_cases/resolve_beam_files.dart';
 import 'package:tela/features/beam/beam_sheet.dart';
+import 'package:tela/features/private_library/private_library_order_button.dart';
+import 'package:tela/features/private_library/private_library_order_controller.dart';
 import 'package:tela/features/private_library/private_secure_access.dart';
 import 'package:tela/features/settings/beam_explicit_switch.dart';
 
@@ -82,8 +86,22 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   final Map<String, VaultThumbnail> _vaultThumbnails =
       <String, VaultThumbnail>{};
 
-  void _onVaultThumbnailResolved(String key, VaultThumbnail thumbnail) {
+  /// Remembers [thumbnail] so a tile scrolled back in skips the request, and
+  /// rebuilds the screen only when the row packing depends on it.
+  ///
+  /// A rebuild re-packs every row of the library. With 7,298 app-private images
+  /// whose ratio the listing already knows, rebuilding once per decoded
+  /// thumbnail (three every ~50 ms) starved the UI thread: tiles stayed blank
+  /// until scrolled and a tapped photo would not open (device pass,
+  /// 2026-11-04). The tile paints its own thumbnail, so only an unknown ratio
+  /// needs this.
+  void _onThumbnailResolved(PrivateImage image, VaultThumbnail thumbnail) {
+    final String key = image.ref.key;
     if (!mounted || _vaultThumbnails[key] == thumbnail) return;
+    if (image.aspectRatio != null) {
+      _vaultThumbnails[key] = thumbnail;
+      return;
+    }
     setState(() => _vaultThumbnails[key] = thumbnail);
   }
 
@@ -101,7 +119,12 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
           // Collapses while selecting, when Select hides itself — see
           // CapsuleActionCluster.
           actions: const <Widget>[
-            CapsuleActionCluster(children: <Widget>[SelectModeButton()]),
+            CapsuleActionCluster(
+              children: <Widget>[
+                PrivateLibraryOrderButton(),
+                SelectModeButton(),
+              ],
+            ),
             SizedBox(width: 16),
           ],
         ),
@@ -136,9 +159,15 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
     AppLocalizations l10n,
     List<PrivateImage> stored,
   ) {
-    final List<PrivateImage> shown = stored
-        .where((PrivateImage i) => _tagFilter.matches(i.tag))
-        .toList();
+    // Ordered here, after the filter, so the viewer's swipes follow the grid.
+    final LibraryOrder order =
+        ref.watch(privateLibraryOrderProvider).value ??
+        LibraryOrder.newestFirst;
+    final List<PrivateImage> shown = order.sorted(
+      stored.where((PrivateImage i) => _tagFilter.matches(i.tag)),
+      savedAt: (PrivateImage i) => i.savedAt,
+      tieBreak: (PrivateImage i) => i.ref.key,
+    );
     return Column(
       children: <Widget>[
         TagFilterBar(
@@ -254,7 +283,7 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
       onTap: gestures.onTap,
       onLongPress: gestures.onLongPress,
       cachedThumbnail: _vaultThumbnails[stored[index].ref.key],
-      onThumbnailResolved: _onVaultThumbnailResolved,
+      onThumbnailResolved: _onThumbnailResolved,
     );
   }
 
@@ -481,13 +510,13 @@ class _PrivateTile extends StatelessWidget {
 
   /// This image's already-resolved vault thumbnail, if any.
   ///
-  /// Null for an app-private image, which never needs one, and for a vault
-  /// image whose tile has not finished resolving yet.
+  /// Null until this tile's thumbnail has finished resolving.
   final VaultThumbnail? cachedThumbnail;
 
-  /// Reports a newly-resolved vault thumbnail back up to the screen, so its
+  /// Reports a newly-resolved thumbnail back up to the screen, so an unknown
   /// aspect ratio can feed the grid's row packing on the next build.
-  final void Function(String key, VaultThumbnail thumbnail) onThumbnailResolved;
+  final void Function(PrivateImage image, VaultThumbnail thumbnail)
+  onThumbnailResolved;
 
   @override
   Widget build(BuildContext context) {
@@ -553,29 +582,26 @@ class _PrivateTile extends StatelessWidget {
   /// Decodes at roughly tile width, not at the source's 6K. The decoded
   /// thumbnail flies into the secure viewer under a shelf-scoped Hero tag.
   ///
-  /// An app-private file is a plain `file:` path, which `Image.file` reads
-  /// directly. A vault file is a `content:` SAF document, which it cannot: a
-  /// `File` built from anything but a `file:` URI throws before this even
-  /// reaches the frame, which is why every vault tile used to render as a
-  /// bare grey box in release builds — Flutter's default error widget there
-  /// draws nothing else. [_VaultThumbnailImage] resolves that case instead.
+  /// Both tiers go through [_StoredThumbnailImage], which asks native code for
+  /// a persisted thumbnail. A vault file is a `content:` SAF document that
+  /// `Image.file` cannot read at all (a `File` built from anything but a
+  /// `file:` URI throws, so release builds drew a bare grey box). An
+  /// app-private file could be read directly, but decoding every original on
+  /// every visit is what made the library take ~30s to open one photo
+  /// (owner, 2026-11-04); the persisted thumbnail is decoded once, ever.
   Widget _thumbnail(BuildContext context) {
     final double devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
-    final Widget picture = image.tier == StorageTier.filesOutsideGallery
-        ? _VaultThumbnailImage(
-            image: image,
-            cachedThumbnail: cachedThumbnail,
-            onResolved: onThumbnailResolved,
-            maxDimensionPx: (_tileWidthDip * devicePixelRatio).round(),
-          )
-        : Image.file(
-            File.fromUri(image.location),
-            fit: BoxFit.cover,
-            cacheWidth: (_tileWidthDip * devicePixelRatio).round(),
-            errorBuilder:
-                (BuildContext context, Object error, StackTrace? trace) =>
-                    const Center(child: Icon(Icons.broken_image_outlined)),
-          );
+    final Widget picture = _StoredThumbnailImage(
+      // Keyed by image: a tag switch reuses grid positions, and an unkeyed
+      // state kept the last tag's picture and never asked for the new one
+      // (device pass, 2026-11-04). A new key is a fresh request; the old
+      // state's dispose cancels its own.
+      key: ValueKey<String>(image.ref.key),
+      image: image,
+      cachedThumbnail: cachedThumbnail,
+      onResolved: onThumbnailResolved,
+      maxDimensionPx: (_tileWidthDip * devicePixelRatio).round(),
+    );
     return Hero(
       tag: shelfHeroTag('private-library', image.ref.key, position),
       child: Container(
@@ -588,31 +614,40 @@ class _PrivateTile extends StatelessWidget {
   static const double _tileWidthDip = 200;
 }
 
-/// A vault tile's picture: resolved once from its `content:` document, then
+/// A tile's picture: resolved once into a persisted native thumbnail, then
 /// read straight off the cached path every rebuild after.
+///
+/// A tile disposed before its decode starts cancels the request, so a fling
+/// does not queue decodes for tiles nobody can see.
 ///
 /// Kept apart from [_PrivateTile] because it is the only part of a tile with
 /// anything asynchronous to do — the rest is a plain, stateless build.
-class _VaultThumbnailImage extends ConsumerStatefulWidget {
-  const _VaultThumbnailImage({
+class _StoredThumbnailImage extends ConsumerStatefulWidget {
+  const _StoredThumbnailImage({
     required this.image,
     required this.cachedThumbnail,
     required this.onResolved,
     required this.maxDimensionPx,
+    super.key,
   });
 
   final PrivateImage image;
   final VaultThumbnail? cachedThumbnail;
-  final void Function(String key, VaultThumbnail thumbnail) onResolved;
+  final void Function(PrivateImage image, VaultThumbnail thumbnail) onResolved;
   final int maxDimensionPx;
 
   @override
-  ConsumerState<_VaultThumbnailImage> createState() =>
-      _VaultThumbnailImageState();
+  ConsumerState<_StoredThumbnailImage> createState() =>
+      _StoredThumbnailImageState();
 }
 
-class _VaultThumbnailImageState extends ConsumerState<_VaultThumbnailImage> {
+class _StoredThumbnailImageState extends ConsumerState<_StoredThumbnailImage> {
   bool _failed = false;
+
+  /// This tile's own answer, drawn without waiting for the screen to rebuild —
+  /// which it deliberately does not for an image whose ratio is already known.
+  VaultThumbnail? _resolved;
+  final ThumbnailCancellation _cancellation = ThumbnailCancellation();
 
   @override
   void initState() {
@@ -620,21 +655,32 @@ class _VaultThumbnailImageState extends ConsumerState<_VaultThumbnailImage> {
     if (widget.cachedThumbnail == null) unawaited(_resolve());
   }
 
+  @override
+  void dispose() {
+    _cancellation.cancel();
+    super.dispose();
+  }
+
   Future<void> _resolve() async {
     final VaultThumbnail? thumbnail = await ref
         .read(localPreviewCacheProvider)
-        .materializeThumbnail(widget.image.location, widget.maxDimensionPx);
+        .materializeThumbnail(
+          widget.image.location,
+          widget.maxDimensionPx,
+          cancellation: _cancellation,
+        );
     if (!mounted) return;
     if (thumbnail == null) {
       setState(() => _failed = true);
       return;
     }
-    widget.onResolved(widget.image.ref.key, thumbnail);
+    setState(() => _resolved = thumbnail);
+    widget.onResolved(widget.image, thumbnail);
   }
 
   @override
   Widget build(BuildContext context) {
-    final VaultThumbnail? thumbnail = widget.cachedThumbnail;
+    final VaultThumbnail? thumbnail = widget.cachedThumbnail ?? _resolved;
     if (thumbnail == null) {
       if (_failed) {
         return const Center(child: Icon(Icons.broken_image_outlined));

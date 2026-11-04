@@ -1,4 +1,5 @@
 import 'package:tela/domain/models/download_record.dart';
+import 'package:tela/domain/models/library_order.dart';
 import 'package:tela/domain/models/offload_group.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/purity.dart';
@@ -60,7 +61,7 @@ class SurveyOffloadGroups {
       moves
           .putIfAbsent(kind, () => <StoredImageMove>[])
           .add(
-            _moveOf(recorded[i]),
+            _moveOf(recorded[i], sizes[i].bytes),
           );
       bytes[kind] = (bytes[kind] ?? 0) + sizes[i].bytes;
     }
@@ -101,7 +102,7 @@ class SurveyOffloadGroups {
   /// The tag rides along because a tag **is** a directory: an offload that
   /// dropped it would flatten a library the user has been filing for months
   /// into one folder on the card, and no undo puts it back.
-  StoredImageMove _moveOf(DownloadRecord record) {
+  StoredImageMove _moveOf(DownloadRecord record, int sizeBytes) {
     return StoredImageMove(
       ref: record.wallpaper.ref,
       purity: record.wallpaper.purity,
@@ -109,6 +110,7 @@ class SurveyOffloadGroups {
       location: record.location,
       to: StorageTier.filesOutsideGallery,
       tag: record.tag,
+      sizeBytes: sizeBytes,
     );
   }
 
@@ -130,10 +132,10 @@ class SurveyOffloadGroups {
     // The filter stays as well as the narrower call. It guards a **copy that
     // deletes its source**, and a guard on that is worth keeping even once the
     // value reaching it is meant to be impossible.
-    final List<PrivateImage> images = <PrivateImage>[
+    final List<PrivateImage> images = oldestSavedFirst(<PrivateImage>[
       for (final PrivateImage image in await _imageStore.appPrivateImages())
         if (image.tier == StorageTier.appPrivate) image,
-    ];
+    ]);
     if (images.isEmpty) return const <OffloadGroup>[];
     return <OffloadGroup>[
       OffloadGroup(
@@ -151,6 +153,7 @@ class SurveyOffloadGroups {
               location: image.location,
               to: StorageTier.filesOutsideGallery,
               tag: image.tag,
+              sizeBytes: image.sizeBytes,
             ),
         ],
         bytes: images.fold(

@@ -9,6 +9,7 @@ import 'package:tela/app/offload_run.dart';
 import 'package:tela/app/offload_run_controller.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/duration_text.dart';
 import 'package:tela/domain/models/queued_download.dart';
 import 'package:tela/domain/ports/download_queue_anchor.dart';
 
@@ -64,11 +65,23 @@ final Provider<({String title, String body})?> shadeNoticeProvider =
 /// the OS prompt on, and the shade is the only place left to say so.
 String _offloadLine(AppLocalizations l10n, OffloadRun run) {
   return switch (run.phase) {
-    OffloadPhase.copying => l10n.offloadProgress(run.copied, run.total),
+    OffloadPhase.copying => _copyingLine(l10n, run),
     OffloadPhase.waitingForScreen => l10n.offloadWaitingForScreen,
     OffloadPhase.removing => l10n.offloadFinishing,
     OffloadPhase.done => l10n.offloadFinishing,
   };
+}
+
+/// The count, and the time left once the run has measured its pace — the one
+/// figure someone pulling down the shade mid-move is looking for.
+String _copyingLine(AppLocalizations l10n, OffloadRun run) {
+  final Duration? left = run.pace.remaining;
+  if (left == null) return l10n.offloadProgress(run.copied, run.total);
+  return l10n.offloadProgressTimeLeft(
+    run.copied,
+    run.total,
+    formatDuration(l10n, left),
+  );
 }
 
 /// Raises the process anchor while background work is in flight, and drops it

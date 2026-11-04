@@ -4,38 +4,11 @@ import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
-import android.provider.DocumentsContract
 import android.provider.MediaStore
 import java.io.File
 import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-
-/**
- * One write into a tier: where it goes, what it is called, and where its bytes
- * come from.
- *
- * The seam that lets a download and a local copy share all three tier writers.
- * Everything those writers know is hard-won and specific — MediaStore
- * de-duplicating rather than overwriting, the `.nomedia` marker, `"wt"` to
- * truncate, and which failure paths may delete what they just created — and a
- * second copy of it to serve local sources is precisely where that knowledge
- * would rot. So the only thing that varies is [writeBytes].
- */
-private class ImageWrite(
-    val source: String,
-    val id: String,
-    val extension: String,
-    val purity: String,
-    val tier: String,
-    val tag: String?,
-    val localCopyFrom: Uri? = null,
-    val expectedDigest: (() -> StreamDigest?)? = null,
-    val writeBytes: (OutputStream) -> Unit,
-) {
-    val fileName: String get() = ImageFileNaming.fileName(source, id, extension)
-    val mimeType: String get() = ImageFileNaming.mimeType(extension)
-}
 
 /**
  * Writing an image into one of tela's three storage tiers.
@@ -54,7 +27,7 @@ private class ImageWrite(
  * ```
  */
 internal class TierWriting(private val context: Context) {
-    private val localCopies = LocalCopyChecks(context)
+    private val documents = DocumentTierWriting(context)
 
     /** Downloads [request]'s image from the network into its tier. */
     fun store(request: ImageStoreRequest, target: OutsideGalleryTarget): Map<String, Any> {
@@ -143,7 +116,7 @@ internal class TierWriting(private val context: Context) {
         return try {
             when (request.tier) {
                 "sharedGallery" -> storeInGallery(request)
-                "filesOutsideGallery" -> storeOutsideGallery(request, target)
+                "filesOutsideGallery" -> documents.store(request, target)
                 "appPrivate" -> storePrivately(request)
                 else -> imageStoreFailure("unavailable")
             }
@@ -191,7 +164,7 @@ internal class TierWriting(private val context: Context) {
             resolver.openOutputStream(uri)?.use { output -> request.writeBytes(output) }
                 ?: throw IllegalStateException("MediaStore output stream was null")
             markReady(uri)
-            stored(uri, request.tag)
+            storedAnswer(uri, request.tag)
         } catch (error: Exception) {
             resolver.delete(uri, null, null)
             throw error
@@ -256,7 +229,7 @@ internal class TierWriting(private val context: Context) {
                 request.writeBytes(output)
             } ?: throw IllegalStateException("MediaStore output stream was null")
             markReady(uri)
-            stored(uri, request.tag)
+            storedAnswer(uri, request.tag)
         } catch (error: Exception) {
             markReady(uri)
             throw error
@@ -305,141 +278,6 @@ internal class TierWriting(private val context: Context) {
         return null
     }
 
-    /**
-     * Which root inside the granted tree this image belongs in: the visible
-     * `tela/`, or the hidden vault beside it.
-     *
-     * **Decided by purity, here, and not by any caller.** It is the same
-     * placement as the NSFW gate a few lines above and it lives in the same
-     * function's reach for the same reason CLAUDE.md gives about indexing: a
-     * rule about explicit content that a feature has to remember is a rule that
-     * one feature will forget. Every route into this tier — a fresh download
-     * after the destination was re-pointed at the card, the offload screen
-     * emptying the private library, a single move out of it — lands explicit
-     * images in the vault without knowing the vault exists.
-     *
-     * `sketchy` is **not** vaulted, matching `StorageSettings.bucketFor`: it
-     * follows the safe destination everywhere else in the app, and a folder that
-     * disagreed with the setting the user configured would be its own surprise.
-     */
-    private fun rootFor(
-        request: ImageWrite,
-        tree: Uri,
-        target: OutsideGalleryTarget,
-    ): Uri? {
-        if (request.purity != "nsfw") return SafDocuments.telaFolderIn(context, tree)
-        return SafDocuments.vaultFolderIn(context, tree, target)
-    }
-
-    private fun storeOutsideGallery(
-        request: ImageWrite,
-        target: OutsideGalleryTarget,
-    ): Map<String, Any> {
-        val tree = target.treeFor(request.purity)?.let(Uri::parse)
-            ?: return imageStoreFailure("notConfigured")
-        // Before anything is created: this tier writes a `.nomedia`, and a tree
-        // that resolves onto the gallery's folder would hide it whole. A tree
-        // tela cannot even read is refused as well — "is this somebody else's
-        // directory" is not answerable there, and unanswerable is not no.
-        if (TreeLocation.of(tree)?.overlapsGallery != false) {
-            return imageStoreFailure("folderUnavailable")
-        }
-        val telaFolder = rootFor(request, tree, target)
-            ?: return imageStoreFailure("unavailable")
-        if (!SafDocuments.ensureNoMediaMarker(context, telaFolder)) {
-            return imageStoreFailure("unavailable")
-        }
-        // The tag's own folder is marked too. A `.nomedia` in the parent already
-        // covers the subtree for Android's scanner, so this is belt and braces —
-        // but this tier's entire contract is "not in the gallery index", the
-        // marker costs one document, and a subtree exclusion is a scanner
-        // behaviour rather than a documented guarantee. See `TreeLocation`, which
-        // records what a mis-marked directory cost the owner once already.
-        val directory = SafDocuments.tagFolderIn(context, telaFolder, request.tag)
-            ?: return imageStoreFailure("unavailable")
-        if (directory != telaFolder && !SafDocuments.ensureNoMediaMarker(context, directory)) {
-            return imageStoreFailure("unavailable")
-        }
-        val resolver = context.contentResolver
-        // Same duplicate trap as the gallery tier, through a different door:
-        // `createDocument` also renames rather than replacing, so a second
-        // download of one wallpaper produced `wallhaven-abc123 (1).jpg`. This is
-        // the desktop-sync path, where a directory quietly accumulating near
-        // copies of every wallpaper is worse still.
-        val existing = SafDocuments.findChild(context, directory, request.fileName)
-        if (existing != null) {
-            writeOverExisting(existing, request, telaFolder, directory)?.let { return it }
-        }
-        val file = DocumentsContract.createDocument(
-            resolver,
-            directory,
-            request.mimeType,
-            request.fileName,
-        ) ?: return imageStoreFailure("unavailable")
-        return try {
-            resolver.openOutputStream(file)?.use { output -> request.writeBytes(output) }
-                ?: throw IllegalStateException("document output stream was null")
-            verifyLocalCopy(request, file)
-            SafDocuments.dropFromOtherFolders(context, telaFolder, directory, request.fileName)
-            stored(file, request.tag)
-        } catch (error: Exception) {
-            SafDocuments.deleteQuietly(context, file)
-            throw error
-        }
-    }
-
-    /**
-     * Settles a document already holding [request]'s name, or answers null when
-     * it has been cleared away and the caller should create a fresh one.
-     *
-     * See [ExistingCopyPolicy] for which of the three happens and why.
-     */
-    private fun writeOverExisting(
-        existing: Uri,
-        request: ImageWrite,
-        telaFolder: Uri,
-        directory: Uri,
-    ): Map<String, Any>? {
-        val matches = matchesLocalCopy(request, existing)
-        val result = when (ExistingCopyPolicy.decide(request.localCopyFrom != null, matches)) {
-            ExistingCopyPolicy.REUSE -> stored(existing, request.tag)
-            ExistingCopyPolicy.REWRITE -> rewriteDocument(existing, request)
-            ExistingCopyPolicy.REPLACE -> return replaceable(existing)
-        }
-        if (result["success"] == true) {
-            SafDocuments.dropFromOtherFolders(context, telaFolder, directory, request.fileName)
-        }
-        return result
-    }
-
-    /**
-     * Deletes a mismatched offload leftover so a fresh document can take its
-     * name. Answers null once it is gone, a failure when it would not go — a
-     * `createDocument` beside it would only produce `wallhaven-abc123 (1).jpg`.
-     */
-    private fun replaceable(existing: Uri): Map<String, Any>? =
-        if (SafDocuments.deleteQuietly(context, existing)) null else imageStoreFailure("unavailable")
-
-    /**
-     * Overwrites an existing document in place, truncating it first.
-     *
-     * `"wt"` and the absence of a delete-on-failure are load-bearing for the
-     * same reasons [rewriteGalleryImage] gives.
-     */
-    private fun rewriteDocument(file: Uri, request: ImageWrite): Map<String, Any> {
-        context.contentResolver.openOutputStream(file, "wt")?.use { output ->
-            request.writeBytes(output)
-        } ?: throw IllegalStateException("document output stream was null")
-        verifyLocalCopy(request, file)
-        return stored(file, request.tag)
-    }
-
-    private fun verifyLocalCopy(request: ImageWrite, written: Uri) =
-        localCopies.verify(request.expectedDigest?.invoke(), request.localCopyFrom, written)
-
-    private fun matchesLocalCopy(request: ImageWrite, existing: Uri): Boolean =
-        localCopies.matches(request.localCopyFrom, existing)
-
     private fun storePrivately(request: ImageWrite): Map<String, Any> {
         val directory = TagFolders.privateDirectory(context, request.tag)
             ?: return imageStoreFailure("unavailable")
@@ -447,7 +285,7 @@ internal class TierWriting(private val context: Context) {
         val file = File(directory, request.fileName)
         file.outputStream().use { output -> request.writeBytes(output) }
         dropOtherPrivateTags(request, file)
-        return stored(Uri.fromFile(file), request.tag)
+        return storedAnswer(Uri.fromFile(file), request.tag)
     }
 
     /**
@@ -500,25 +338,6 @@ internal class TierWriting(private val context: Context) {
         } finally {
             connection.disconnect()
         }
-    }
-
-    /**
-     * The answer a successful write gives, naming the tag it **actually** used.
-     *
-     * Reported rather than assumed by the caller, for the reason the tier
-     * already is: the adapter has the last word. A sweep that could not remove
-     * an older copy, or a tier that ignored the tag, must not be described to
-     * the user — or written into a history row — as the tag they asked for.
-     */
-    private fun stored(location: Uri, tag: String? = null): Map<String, Any> {
-        val answer = mutableMapOf<String, Any>(
-            "success" to true,
-            "location" to location.toString(),
-        )
-        // Absent rather than null for an untagged write, so the response reads
-        // back the same as it did before tags existed.
-        if (tag != null) answer["tag"] = tag
-        return answer
     }
 
     private companion object {

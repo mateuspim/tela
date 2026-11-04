@@ -6,15 +6,19 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_source_badge.dart';
 import 'package:tela/core/ui/wallpaper_source_labels_scope.dart';
 import 'package:tela/domain/models/download_folder.dart';
 import 'package:tela/domain/models/image_store_failure.dart';
+import 'package:tela/domain/models/library_order.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
+import 'package:tela/domain/ports/local_preview_cache.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
 
 import '../fakes/fake_app_lock.dart';
@@ -23,6 +27,7 @@ import '../fakes/fake_image_store.dart';
 import '../fakes/fake_local_preview_cache.dart';
 import '../fakes/fake_screen_guard.dart';
 import '../fakes/fake_settings_repository.dart';
+import '../fakes/gated_local_preview_cache.dart';
 
 void main() {
   group('FLAG_SECURE', () {
@@ -373,18 +378,126 @@ void main() {
       expect(previews.thumbnailsRequested, <Uri>[vault.location]);
     });
 
-    testWidgets('an app-private tile never asks the preview cache at all', (
+    testWidgets('an app-private tile asks for a persisted thumbnail once', (
       WidgetTester tester,
     ) async {
-      final FakeLocalPreviewCache previews = FakeLocalPreviewCache();
+      // Regression (owner, 2026-11-04): it used to decode the original with
+      // Image.file(cacheWidth:) on every visit, ~30s for a big library.
+      final FakeLocalPreviewCache previews = FakeLocalPreviewCache(
+        fallbackBounds: (width: 4, height: 3),
+      );
+      final PrivateImage image = _image('e7jvjd');
 
       await _pump(
         tester,
-        FakeImageStore(privateLibrary: <PrivateImage>[_image('e7jvjd')]),
+        FakeImageStore(privateLibrary: <PrivateImage>[image]),
         previews: previews,
       );
 
-      expect(previews.thumbnailsRequested, isEmpty);
+      expect(previews.thumbnailsRequested, <Uri>[image.location]);
+    });
+
+    testWidgets('a late thumbnail paints without rebuilding the screen', (
+      WidgetTester tester,
+    ) async {
+      // Regression (owner, device pass 2026-11-04): every resolved thumbnail
+      // rebuilt the whole 7,298-image screen; tiles stayed blank until
+      // scrolled. The tile now paints its own answer.
+      final GatedLocalPreviewCache previews = GatedLocalPreviewCache();
+      final PrivateImage image = _sizedImage('e7jvjd');
+
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[image]),
+        previews: previews,
+      );
+      expect(_thumbnailPaths(tester), isEmpty);
+      final Widget gridBefore = tester.widget(
+        find.byType(JustifiedWallpaperGrid),
+      );
+
+      previews.finish(image.location);
+      // The await resolves on the first frame and the tile paints on the next.
+      await tester.pump();
+      await tester.pump();
+
+      // The same grid instance: the screen did not rebuild (and re-pack every
+      // row) for a thumbnail whose ratio the listing already knew.
+      expect(
+        identical(
+          tester.widget(find.byType(JustifiedWallpaperGrid)),
+          gridBefore,
+        ),
+        isTrue,
+      );
+      expect(_thumbnailPaths(tester), <String>[
+        '/thumb/${image.location.path}',
+      ]);
+    });
+
+    testWidgets("switching tag never leaves the last tag's pictures", (
+      WidgetTester tester,
+    ) async {
+      // Regression (owner, device pass 2026-11-04): a tile reused at the same
+      // grid position kept the previous tag's thumbnail, and never asked for
+      // its new image's, until it was scrolled away and back.
+      final GatedLocalPreviewCache previews = GatedLocalPreviewCache();
+      final PrivateImage ana = _sizedImage('aaaaaa', tag: 'ana');
+      final PrivateImage bia = _sizedImage('bbbbbb', tag: 'bia');
+
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[ana, bia]),
+        previews: previews,
+      );
+      // Only the first tag's picture has landed when the user switches, as on
+      // a library still filling in.
+      previews.finish(ana.location);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'bia'));
+      await tester.pumpAndSettle();
+      expect(_thumbnailPaths(tester), isEmpty);
+
+      previews.finish(previews.started.last);
+      await tester.pumpAndSettle();
+      expect(_thumbnailPaths(tester), <String>['/thumb/${bia.location.path}']);
+    });
+  });
+
+  group('order', () {
+    // Owner, 2026-11-04: "we dont have a way to sort them by most recent first
+    // or oldest". Newest first stays the default; the menu flips it and the
+    // choice is saved.
+    final PrivateImage older = _savedAt('aaaaaa', DateTime.utc(2026));
+    final PrivateImage newer = _savedAt('bbbbbb', DateTime.utc(2026, 6));
+
+    testWidgets('lists newest first by default', (WidgetTester tester) async {
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[older, newer]),
+      );
+
+      expect(_tileOrder(tester), <String>['bbbbbb', 'aaaaaa']);
+    });
+
+    testWidgets('choosing oldest first reorders the grid and saves it', (
+      WidgetTester tester,
+    ) async {
+      final FakeSettingsRepository settings = FakeSettingsRepository();
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[older, newer]),
+        settings: settings,
+      );
+
+      await tester.tap(find.byTooltip('Order: Newest first'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Oldest first'));
+      await tester.pumpAndSettle();
+
+      expect(_tileOrder(tester), <String>['aaaaaa', 'bbbbbb']);
+      expect(settings.privateLibraryOrder, LibraryOrder.oldestFirst);
     });
   });
 
@@ -480,7 +593,8 @@ Future<void> _pump(
   FakeAppLock? lock,
   bool locked = false,
   Map<String, String>? labels,
-  FakeLocalPreviewCache? previews,
+  LocalPreviewCache? previews,
+  FakeSettingsRepository? settings,
 }) async {
   const Widget screen = PrivateLibraryScreen();
   await tester.pumpWidget(
@@ -491,10 +605,11 @@ Future<void> _pump(
         screenGuardProvider.overrideWithValue(guard ?? FakeScreenGuard()),
         appLockProvider.overrideWithValue(lock ?? FakeAppLock()),
         settingsRepositoryProvider.overrideWithValue(
-          FakeSettingsRepository(privateLibraryLocked: locked),
+          settings ?? FakeSettingsRepository(privateLibraryLocked: locked),
         ),
         localPreviewCacheProvider.overrideWithValue(
-          previews ?? FakeLocalPreviewCache(),
+          previews ??
+              FakeLocalPreviewCache(fallbackBounds: (width: 4, height: 3)),
         ),
       ],
       child: MaterialApp(
@@ -560,3 +675,53 @@ const DownloadFolder _grantedFolder = DownloadFolder(
   isRemovable: false,
   isAvailable: true,
 );
+
+/// An app-private file whose bounds the listing already knows, as on device.
+PrivateImage _sizedImage(String id, {String? tag}) => PrivateImage(
+  ref: WallpaperRef(SourceId.wallhaven, id),
+  location: Uri.file(
+    '/data/user/0/cc.pym.tela/files/wallpapers/wallhaven-$id.jpg',
+  ),
+  savedAt: DateTime.utc(2026, 7, 14),
+  sizeBytes: 2048,
+  tag: tag == null ? null : TagFolder(tag),
+  width: 1080,
+  height: 2400,
+);
+
+/// The file paths of every thumbnail picture currently drawn.
+List<String> _thumbnailPaths(WidgetTester tester) => <String>[
+  for (final Image image in tester.widgetList<Image>(find.byType(Image)))
+    if (image.image is FileImage) (image.image as FileImage).file.path,
+];
+
+/// An app-private image saved at [savedAt], to pin the library's order.
+PrivateImage _savedAt(String id, DateTime savedAt) => PrivateImage(
+  ref: WallpaperRef(SourceId.wallhaven, id),
+  location: Uri.file(
+    '/data/user/0/cc.pym.tela/files/wallpapers/wallhaven-$id.jpg',
+  ),
+  savedAt: savedAt,
+  sizeBytes: 2048,
+  width: 1080,
+  height: 2400,
+);
+
+/// The ids of the private tiles in reading order: by row, then left to right.
+List<String> _tileOrder(WidgetTester tester) {
+  final Finder tiles = find.bySemanticsLabel(RegExp('^Private wallpaper '));
+  final List<Element> found = tiles.evaluate().toList()
+    ..sort((Element a, Element b) {
+      final Offset pa = tester.getTopLeft(
+        find.byElementPredicate((e) => e == a),
+      );
+      final Offset pb = tester.getTopLeft(
+        find.byElementPredicate((e) => e == b),
+      );
+      return pa.dy != pb.dy ? pa.dy.compareTo(pb.dy) : pa.dx.compareTo(pb.dx);
+    });
+  return <String>[
+    for (final Element e in found)
+      (e.widget as Semantics).properties.label!.split(' ').last,
+  ];
+}

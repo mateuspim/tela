@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:tela/core/web/sign_in_browser_state.dart';
 
 /// The embedded browser the "sign in to Wallhaven" screen shows.
 ///
@@ -13,10 +14,18 @@ import 'package:flutter/widgets.dart';
 /// ```
 abstract interface class SignInBrowser {
   /// The web view, already on Wallhaven's login page. Calls [onKeyFound] each
-  /// time it reads a key off Account settings.
-  Widget build({required ValueChanged<String> onKeyFound});
+  /// time it reads a key off Account settings, and [onState] whenever what it
+  /// is doing changes (loading, ready, failed, no key on the account).
+  Widget build({
+    required ValueChanged<String> onKeyFound,
+    required ValueChanged<SignInBrowserState> onState,
+  });
 
-  /// Drops the web session's cookies, so tela keeps the key and nothing else:
-  /// no logged-in Wallhaven session is left behind in the app.
+  /// Loads again the page that failed. Meant for the [SignInFailed] state.
+  Future<void> retry();
+
+  /// Drops everything the web session left: cookies, cache and local storage,
+  /// so tela keeps the key and nothing else — no logged-in Wallhaven session
+  /// is left behind in the app.
   Future<void> forgetSession();
 }

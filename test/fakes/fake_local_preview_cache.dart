@@ -1,4 +1,5 @@
 import 'package:tela/domain/models/local_preview.dart';
+import 'package:tela/domain/models/thumbnail_cancellation.dart';
 import 'package:tela/domain/models/vault_thumbnail.dart';
 import 'package:tela/domain/ports/local_preview_cache.dart';
 
@@ -20,11 +21,17 @@ class FakeLocalPreviewCache implements LocalPreviewCache {
     Set<Uri> unreadable = const <Uri>{},
     Map<Uri, ({int width, int height})> bounds =
         const <Uri, ({int width, int height})>{},
+    ({int width, int height})? fallbackBounds,
   }) : _unreadable = unreadable,
-       _bounds = bounds;
+       _bounds = bounds,
+       _fallbackBounds = fallbackBounds;
 
   final Set<Uri> _unreadable;
   final Map<Uri, ({int width, int height})> _bounds;
+
+  /// What a location with no entry in `bounds` decodes to, when set — for a
+  /// grid test that only needs every tile to resolve to *some* picture.
+  final ({int width, int height})? _fallbackBounds;
 
   /// Locations passed to [materialize], in order — proves local-first.
   final List<Uri> materialised = <Uri>[];
@@ -70,11 +77,13 @@ class FakeLocalPreviewCache implements LocalPreviewCache {
   @override
   Future<VaultThumbnail?> materializeThumbnail(
     Uri location,
-    int maxDimensionPx,
-  ) async {
+    int maxDimensionPx, {
+    ThumbnailCancellation? cancellation,
+  }) async {
     thumbnailsRequested.add(location);
     if (_unreadable.contains(location)) return null;
-    final ({int width, int height})? size = _bounds[location];
+    final ({int width, int height})? size =
+        _bounds[location] ?? _fallbackBounds;
     if (size == null) return null;
     return VaultThumbnail(
       path: '/cache/thumb-${location.hashCode}',

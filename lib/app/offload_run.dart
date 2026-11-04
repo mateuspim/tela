@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:tela/domain/models/transfer_pace.dart';
 
 /// What phase a background offload is in.
 enum OffloadPhase {
@@ -32,6 +33,8 @@ class OffloadRun {
     this.copied = 0,
     this.moved = 0,
     this.bytes = 0,
+    this.copiedBytes = 0,
+    this.elapsed = Duration.zero,
     this.stopping = false,
     this.failed = false,
     this.includesPrivateLibrary = false,
@@ -62,6 +65,19 @@ class OffloadRun {
   /// What the selection was measured at, for the report at the end.
   final int bytes;
 
+  /// How many of [bytes] have been copied so far, counted the same way as
+  /// [copied]: an attempt counts, so a skipped file does not stall the bar.
+  final int copiedBytes;
+
+  /// How long the copying has been going, as of the last file it finished.
+  final Duration elapsed;
+
+  /// Speed and time left, by bytes when the selection was measured and by
+  /// files when it was not — a run of unmeasured moves still gets an estimate.
+  TransferPace get pace => bytes > 0
+      ? TransferPace(done: copiedBytes, total: bytes, elapsed: elapsed)
+      : TransferPace(done: copied, total: total, elapsed: elapsed);
+
   /// Whether a stop has been asked for and not yet taken effect.
   ///
   /// A stop ends the *copying*; whatever is already copied still has its
@@ -88,6 +104,8 @@ class OffloadRun {
     OffloadPhase phase, {
     int? copied,
     int? moved,
+    int? copiedBytes,
+    Duration? elapsed,
     bool? stopping,
     bool? failed,
   }) {
@@ -97,6 +115,8 @@ class OffloadRun {
       copied: copied ?? this.copied,
       moved: moved ?? this.moved,
       bytes: bytes,
+      copiedBytes: copiedBytes ?? this.copiedBytes,
+      elapsed: elapsed ?? this.elapsed,
       stopping: stopping ?? this.stopping,
       failed: failed ?? this.failed,
       includesPrivateLibrary: includesPrivateLibrary,
@@ -110,12 +130,22 @@ class OffloadRun {
       other.total == total &&
       other.copied == copied &&
       other.moved == moved &&
+      other.copiedBytes == copiedBytes &&
+      other.elapsed == elapsed &&
       other.stopping == stopping &&
       other.failed == failed;
 
   @override
-  int get hashCode =>
-      Object.hash(phase, total, copied, moved, stopping, failed);
+  int get hashCode => Object.hash(
+    phase,
+    total,
+    copied,
+    moved,
+    copiedBytes,
+    elapsed,
+    stopping,
+    failed,
+  );
 
   @override
   String toString() =>

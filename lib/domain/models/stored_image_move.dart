@@ -38,6 +38,7 @@ class StoredImageMove {
     required this.location,
     required this.to,
     this.tag,
+    this.sizeBytes = 0,
   });
 
   /// Which source issued the image and under what id — how the moved file is
@@ -65,6 +66,13 @@ class StoredImageMove {
   /// copy-and-delete because the file could not be moved in place — see
   /// `RetagStoredImages`.
   final TagFolder? tag;
+
+  /// The file's size as the survey measured it, or 0 when nobody did.
+  ///
+  /// Only progress reads it: a move by bytes is what lets the offload screen
+  /// say how much is left and how fast it is going, where a file count alone
+  /// treats a 300 KB phone shot and a 40 MB 8K scan as the same step.
+  final int sizeBytes;
 
   @override
   bool operator ==(Object other) =>

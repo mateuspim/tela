@@ -2,6 +2,7 @@ import 'package:tela/domain/models/accent_color.dart';
 import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/library_order.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_settings.dart';
@@ -120,6 +121,14 @@ abstract interface class SettingsRepository {
 
   /// Persists [density] as the size the shelves draw at.
   Future<void> saveTileDensity(TileDensity density);
+
+  /// Which way the private library lists its images, or
+  /// [LibraryOrder.newestFirst] when unset — the order it always had. Never
+  /// throws: an unreadable row answers the same default.
+  Future<LibraryOrder> loadPrivateLibraryOrder();
+
+  /// Persists [order] as the private library's listing order.
+  Future<void> savePrivateLibraryOrder(LibraryOrder order);
 
   /// How many downloads in a row have landed in the same tier for [purity], or
   /// null when there is no run to speak of yet.

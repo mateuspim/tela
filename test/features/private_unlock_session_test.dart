@@ -177,7 +177,9 @@ Future<void> _pumpRouter(
         appLockProvider.overrideWithValue(lock),
         screenGuardProvider.overrideWithValue(FakeScreenGuard()),
         wallpaperApplierProvider.overrideWithValue(FakeWallpaperApplier()),
-        localPreviewCacheProvider.overrideWithValue(FakeLocalPreviewCache()),
+        localPreviewCacheProvider.overrideWithValue(
+          FakeLocalPreviewCache(fallbackBounds: (width: 4, height: 3)),
+        ),
         settingsRepositoryProvider.overrideWithValue(
           FakeSettingsRepository(privateLibraryLocked: true),
         ),

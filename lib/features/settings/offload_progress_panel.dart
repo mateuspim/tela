@@ -4,6 +4,7 @@ import 'package:tela/app/offload_run.dart';
 import 'package:tela/app/offload_run_controller.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/ui/byte_size_text.dart';
+import 'package:tela/features/settings/offload_copy_report.dart';
 
 /// Reports the offload that is running, in the page rather than over it.
 ///
@@ -31,9 +32,7 @@ class OffloadProgressPanel extends ConsumerWidget {
           children: <Widget>[
             Text(_heading(l10n), style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
-            LinearProgressIndicator(value: _fraction()),
-            const SizedBox(height: 12),
-            Text(_line(l10n), style: theme.textTheme.bodyMedium),
+            ..._body(l10n, theme),
             ..._tail(context, ref, l10n, theme),
           ],
         ),
@@ -41,20 +40,37 @@ class OffloadProgressPanel extends ConsumerWidget {
     );
   }
 
+  /// The full report while copying, where there is a pace to report; the
+  /// bar and one line otherwise. A stop request still gets its line under the
+  /// report, so the button going dead is explained.
+  List<Widget> _body(AppLocalizations l10n, ThemeData theme) {
+    final Text line = Text(_line(l10n), style: theme.textTheme.bodyMedium);
+    if (run.isCopying) {
+      return <Widget>[
+        OffloadCopyReport(run: run),
+        if (run.stopping) ...<Widget>[const SizedBox(height: 12), line],
+      ];
+    }
+    return <Widget>[
+      LinearProgressIndicator(value: _fraction()),
+      const SizedBox(height: 12),
+      line,
+    ];
+  }
+
   String _heading(AppLocalizations l10n) =>
       run.isDone ? l10n.offloadTitle : l10n.offloadRunning;
 
-  /// A position while copying, full once it is over, and **indeterminate in
-  /// between** — which is the honest reading of each.
+  /// Full once it is over, and **indeterminate in between** — which is the
+  /// honest reading of each. (Copying draws its own bar, by bytes, in
+  /// [OffloadCopyReport].)
   ///
   /// The middle phases have no position to report: removing the originals is
   /// one call, and waiting for a screen is waiting on the user. A bar frozen at
   /// 100% through either reads as a hang. A finished run is the opposite case:
   /// it is not working, so a bar that keeps sweeping says it is.
   double? _fraction() {
-    if (run.isDone) return 1;
-    if (!run.isCopying || run.total == 0) return null;
-    return run.copied / run.total;
+    return run.isDone ? 1 : null;
   }
 
   String _line(AppLocalizations l10n) {

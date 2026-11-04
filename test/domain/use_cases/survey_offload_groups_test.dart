@@ -214,6 +214,49 @@ void main() {
       expect(images.vaultListings, 0);
     });
 
+    /// A copy is stamped with the moment it was made, so the card's saved
+    /// times follow the copy order. Listed newest first and copied that way,
+    /// the moved library came out reversed under "Oldest first".
+    test('the private library is copied oldest saved first', () async {
+      final FakeImageStore images = FakeImageStore(
+        privateLibrary: <PrivateImage>[
+          _private('new', 500, savedAt: DateTime(2026, 11, 3)),
+          _private('old', 500, savedAt: DateTime(2026, 1, 3)),
+          _private('mid', 500, savedAt: DateTime(2026, 6, 3)),
+        ],
+      );
+
+      final List<OffloadGroup> groups = await _survey(
+        images,
+        FakeDownloadHistory(),
+      )();
+
+      expect(
+        groups.single.moves.map((StoredImageMove m) => m.ref.id),
+        <String>['old', 'mid', 'new'],
+      );
+    });
+
+    /// Progress counts bytes, so each move has to carry its own size.
+    test('every move carries the size it was measured at', () async {
+      final DownloadRecord gallery = _record('g', StorageTier.sharedGallery);
+      final FakeImageStore images = FakeImageStore(
+        privateLibrary: <PrivateImage>[_private('p', 700)],
+      )..sizes[gallery.location] = _size(500);
+
+      final List<OffloadGroup> groups = await _survey(
+        images,
+        FakeDownloadHistory(initial: <DownloadRecord>[gallery]),
+      )();
+
+      expect(
+        groups
+            .expand((OffloadGroup g) => g.moves)
+            .map((StoredImageMove m) => m.sizeBytes),
+        <int>[500, 700],
+      );
+    });
+
     test('an empty device answers no groups at all', () async {
       final List<OffloadGroup> groups = await _survey(
         FakeImageStore(),
@@ -246,10 +289,11 @@ PrivateImage _private(
   String id,
   int bytes, {
   StorageTier tier = StorageTier.appPrivate,
+  DateTime? savedAt,
 }) => PrivateImage(
   ref: WallpaperRef(SourceId.wallhaven, id),
   location: Uri.parse('file:///data/tela/wallhaven-$id.jpg'),
-  savedAt: DateTime(2026, 8, 25),
+  savedAt: savedAt ?? DateTime(2026, 8, 25),
   sizeBytes: bytes,
   tier: tier,
 );
