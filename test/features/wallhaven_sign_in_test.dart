@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/web/sign_in_browser_state.dart';
 import 'package:tela/domain/models/source_failure.dart';
 import 'package:tela/features/settings/api_key_section.dart';
 import 'package:tela/features/settings/wallhaven_sign_in_screen.dart';
@@ -109,6 +110,60 @@ void main() {
     expect(secrets.storedKey, isNull);
     expect(find.text('That Wallhaven API key was rejected.'), findsOneWidget);
   });
+
+  testWidgets('shows a progress bar while loading and drops it when ready', (
+    WidgetTester tester,
+  ) async {
+    final FakeSignInBrowser browser = FakeSignInBrowser();
+    await _pumpSection(tester, browser: browser);
+    await _openSignIn(tester);
+    const Key bar = ValueKey<String>('sign-in-progress');
+    expect(find.byKey(bar), findsOneWidget);
+
+    browser.deliverState(const SignInLoading(0.5));
+    await tester.pump();
+    expect(tester.widget<LinearProgressIndicator>(find.byKey(bar)).value, 0.5);
+
+    browser.deliverState(const SignInReady());
+    await tester.pump();
+    expect(find.byKey(bar), findsNothing);
+  });
+
+  testWidgets('a failed load shows the error, and Retry reloads it', (
+    WidgetTester tester,
+  ) async {
+    final FakeSignInBrowser browser = FakeSignInBrowser();
+    await _pumpSection(tester, browser: browser);
+    await _openSignIn(tester);
+
+    browser.deliverState(const SignInFailed());
+    await tester.pump();
+    expect(find.textContaining("Couldn't load Wallhaven"), findsOneWidget);
+
+    await tester.tap(find.text('Retry'));
+    expect(browser.retryCount, 1);
+
+    browser.deliverState(const SignInLoading(0));
+    await tester.pump();
+    expect(find.textContaining("Couldn't load Wallhaven"), findsNothing);
+  });
+
+  testWidgets('an account with no key is told to generate one', (
+    WidgetTester tester,
+  ) async {
+    final FakeSignInBrowser browser = FakeSignInBrowser();
+    await _pumpSection(tester, browser: browser);
+    await _openSignIn(tester);
+    expect(find.textContaining('No API key on this account'), findsNothing);
+
+    browser.deliverState(const SignInMissingKey());
+    await tester.pump();
+    expect(find.textContaining('No API key on this account'), findsOneWidget);
+
+    browser.deliverState(const SignInLoading(0));
+    await tester.pump();
+    expect(find.textContaining('No API key on this account'), findsNothing);
+  });
 }
 
 Future<void> _openSignIn(WidgetTester tester) async {
@@ -133,9 +188,7 @@ Future<void> _pumpSection(
         wallhavenSourceProvider.overrideWithValue(
           source ?? FakeWallpaperSource(),
         ),
-        signInBrowserProvider.overrideWithValue(
-          browser ?? FakeSignInBrowser(),
-        ),
+        signInBrowserProvider.overrideWithValue(browser ?? FakeSignInBrowser()),
       ],
       child: MaterialApp(
         localizationsDelegates: const <LocalizationsDelegate<Object>>[

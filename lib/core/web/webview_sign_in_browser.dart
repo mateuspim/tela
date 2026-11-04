@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:tela/core/web/sign_in_browser.dart';
+import 'package:tela/core/web/sign_in_browser_state.dart';
 import 'package:tela/domain/models/wallhaven_sign_in.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -23,43 +24,125 @@ const String _readKeyScript = r'''
 
 /// [SignInBrowser] over the `webview_flutter` plugin.
 ///
+/// Holds the controller of the web view it built, so [retry] and
+/// [forgetSession] reach it from the screen.
+///
 /// ```dart
-/// final SignInBrowser browser = const WebViewSignInBrowser();
+/// final SignInBrowser browser = WebViewSignInBrowser();
 /// ```
 class WebViewSignInBrowser implements SignInBrowser {
-  /// Creates the adapter. Each [build] gets its own web view.
-  const WebViewSignInBrowser();
+  /// Creates the adapter. Its web view is made on the first [build].
+  WebViewSignInBrowser();
+
+  WebViewController? _controller;
+
+  /// The page the last load started on, which [retry] goes back to.
+  Uri _lastRequested = WallhavenSignIn.loginUrl;
 
   @override
-  Widget build({required ValueChanged<String> onKeyFound}) =>
-      _SignInWebView(onKeyFound: onKeyFound);
+  Widget build({
+    required ValueChanged<String> onKeyFound,
+    required ValueChanged<SignInBrowserState> onState,
+  }) {
+    final WebViewController controller = _controller ??= WebViewController();
+    return _SignInWebView(
+      controller: controller,
+      onKeyFound: onKeyFound,
+      onState: onState,
+      onRequested: (Uri page) => _lastRequested = page,
+      initialPage: _lastRequested,
+    );
+  }
 
   @override
-  Future<void> forgetSession() => WebViewCookieManager().clearCookies();
+  Future<void> retry() async {
+    await _controller?.loadRequest(_lastRequested);
+  }
+
+  /// Each step is independent, so one failing does not leave the rest behind.
+  @override
+  Future<void> forgetSession() async {
+    final WebViewController? controller = _controller;
+    _controller = null;
+    _lastRequested = WallhavenSignIn.loginUrl;
+    await WebViewCookieManager().clearCookies();
+    if (controller == null) return;
+    await controller.clearCache();
+    await controller.clearLocalStorage();
+  }
 }
 
 class _SignInWebView extends StatefulWidget {
-  const _SignInWebView({required this.onKeyFound});
+  const _SignInWebView({
+    required this.controller,
+    required this.onKeyFound,
+    required this.onState,
+    required this.onRequested,
+    required this.initialPage,
+  });
 
+  final WebViewController controller;
   final ValueChanged<String> onKeyFound;
+  final ValueChanged<SignInBrowserState> onState;
+  final ValueChanged<Uri> onRequested;
+  final Uri initialPage;
 
   @override
   State<_SignInWebView> createState() => _SignInWebViewState();
 }
 
 class _SignInWebViewState extends State<_SignInWebView> {
-  late final WebViewController _controller = WebViewController()
-    ..setJavaScriptMode(JavaScriptMode.unrestricted)
-    ..setNavigationDelegate(
+  WebViewController get _controller => widget.controller;
+
+  /// Android still fires `onPageFinished` for the error page it shows; this
+  /// keeps that from turning a failure back into "ready".
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_configure());
+  }
+
+  Future<void> _configure() async {
+    await _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+    await _controller.setNavigationDelegate(
       NavigationDelegate(
         onNavigationRequest: _gate,
+        onPageStarted: (String url) => _started(),
+        onProgress: (int percent) => _emit(SignInLoading(percent / 100)),
+        onWebResourceError: _onError,
         onPageFinished: (String url) => unawaited(_advance(url)),
       ),
-    )
-    ..loadRequest(WallhavenSignIn.loginUrl);
+    );
+    _load(widget.initialPage);
+  }
 
   @override
   Widget build(BuildContext context) => WebViewWidget(controller: _controller);
+
+  void _load(Uri page) {
+    widget.onRequested(page);
+    unawaited(_controller.loadRequest(page));
+  }
+
+  void _emit(SignInBrowserState state) {
+    if (!mounted || _failed && state is SignInLoading) return;
+    widget.onState(state);
+  }
+
+  void _started() {
+    _failed = false;
+    _emit(const SignInLoading(0));
+  }
+
+  /// Sub-frame and sub-resource failures (an ad, a captcha beacon) are not the
+  /// page failing, so only the top frame's count.
+  void _onError(WebResourceError error) {
+    if (error.isForMainFrame == false) return;
+    _failed = true;
+    _emit(const SignInFailed());
+  }
 
   /// Keeps the top frame on wallhaven.cc. Sub-frames pass: a login captcha
   /// lives in one, served from its provider's own host.
@@ -70,24 +153,27 @@ class _SignInWebViewState extends State<_SignInWebView> {
   }
 
   Future<void> _advance(String url) async {
+    if (_failed) return;
     switch (WallhavenSignIn.stepFor(Uri.parse(url))) {
       case SignInStep.awaitCredentials:
-        return;
+        _emit(const SignInReady());
       case SignInStep.openAccountSettings:
-        await _controller.loadRequest(WallhavenSignIn.accountSettingsUrl);
+        _load(WallhavenSignIn.accountSettingsUrl);
       case SignInStep.readKey:
         await _readKey();
     }
   }
 
-  /// An account that never generated a key shows none — the user can create
-  /// one on the page, which reloads it and brings us back here.
+  /// An account that never generated a key shows none: say so, and the user
+  /// can create one on the page, which reloads it and brings us back here.
   Future<void> _readKey() async {
     final Object raw = await _controller.runJavaScriptReturningResult(
       _readKeyScript,
     );
     final String? key = WallhavenSignIn.keyFrom(raw.toString());
-    if (key == null || !mounted) return;
+    if (!mounted) return;
+    if (key == null) return _emit(const SignInMissingKey());
+    _emit(const SignInReady());
     widget.onKeyFound(key);
   }
 }

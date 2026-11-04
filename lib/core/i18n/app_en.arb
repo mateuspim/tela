@@ -1528,6 +1528,21 @@
     "description": "Line above the embedded Wallhaven login page, saying what happens after logging in."
   },
 
+  "settingsSignInLoadFailed": "Couldn't load Wallhaven. Check your connection and try again.",
+  "@settingsSignInLoadFailed": {
+    "description": "Shown over the sign-in screen when wallhaven.cc could not be loaded (offline, or the site is down)."
+  },
+
+  "settingsSignInRetry": "Retry",
+  "@settingsSignInRetry": {
+    "description": "Button on the sign-in load error that loads the page again."
+  },
+
+  "settingsSignInNoKeyHint": "No API key on this account yet. Generate one on this page and tela will pick it up when the page reloads.",
+  "@settingsSignInNoKeyHint": {
+    "description": "Replaces the sign-in hint when Account settings shows no API key because the account never created one."
+  },
+
   "settingsApiKeyRemoved": "API key removed.",
   "@settingsApiKeyRemoved": {
     "description": "Shown after the stored key is deleted."
