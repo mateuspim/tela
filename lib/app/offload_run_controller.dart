@@ -26,6 +26,13 @@ final NotifierProvider<OffloadRunController, OffloadRun?> offloadRunProvider =
       OffloadRunController.new,
     );
 
+/// The time the offload measures its own pace against.
+///
+/// A provider rather than `DateTime.now` called in place, so a test can walk a
+/// run through ten minutes in one line and check the estimate it gives.
+final Provider<DateTime Function()> offloadClockProvider =
+    Provider<DateTime Function()>((Ref ref) => DateTime.now);
+
 /// Runs one offload to completion, whatever the user does with the screen.
 ///
 /// Holds no queue and nothing durable, unlike the download queue beside it, and
@@ -40,6 +47,10 @@ final NotifierProvider<OffloadRunController, OffloadRun?> offloadRunProvider =
 class OffloadRunController extends Notifier<OffloadRun?> {
   bool _stopRequested = false;
   bool _running = false;
+  List<StoredImageMove> _moves = const <StoredImageMove>[];
+  int _counted = 0;
+  int _copiedBytes = 0;
+  DateTime _startedAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   OffloadRun? build() => null;
@@ -57,6 +68,7 @@ class OffloadRunController extends Notifier<OffloadRun?> {
     if (moves.isEmpty) return false;
     _running = true;
     _stopRequested = false;
+    _beginPacing(moves);
     state = OffloadRun(
       phase: OffloadPhase.copying,
       total: moves.length,
@@ -104,8 +116,29 @@ class OffloadRunController extends Notifier<OffloadRun?> {
     }
   }
 
+  void _beginPacing(List<StoredImageMove> moves) {
+    _moves = moves;
+    _counted = 0;
+    _copiedBytes = 0;
+    _startedAt = ref.read(offloadClockProvider)();
+  }
+
+  /// Advances the tally, by files and by bytes, and stamps how long it took.
+  ///
+  /// The bytes are summed from the moves themselves rather than asked of the
+  /// copy: [copied] is a running count of attempts, so the moves before it are
+  /// exactly the ones that have been dealt with.
   void _onCopied(int copied, int total) {
-    state = state?.at(OffloadPhase.copying, copied: copied);
+    while (_counted < copied && _counted < _moves.length) {
+      _copiedBytes += _moves[_counted++].sizeBytes;
+    }
+    final DateTime now = ref.read(offloadClockProvider)();
+    state = state?.at(
+      OffloadPhase.copying,
+      copied: copied,
+      copiedBytes: _copiedBytes,
+      elapsed: now.difference(_startedAt),
+    );
   }
 
   /// Holds the delete until there is a screen to raise the OS prompt on.

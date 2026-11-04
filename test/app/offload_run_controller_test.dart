@@ -64,6 +64,31 @@ void main() {
     expect(harness.run, isNull);
   });
 
+  group('pace', () {
+    /// Bytes, not just files, and the time it took: what the screen turns into
+    /// a percentage, a speed and a time left.
+    test('each copy advances the bytes and the elapsed time', () async {
+      final _Harness harness = _Harness(secondsPerTick: 10);
+      addTearDown(harness.dispose);
+
+      harness.controller.start(<OffloadGroup>[_group(3)]);
+      await harness.settle();
+
+      expect(harness.run?.copiedBytes, 3 * 1024);
+      expect(harness.run?.elapsed, const Duration(seconds: 30));
+    });
+
+    test('a run that copied a third of its bytes is a third done', () async {
+      final _Harness harness = _Harness(secondsPerTick: 10, stopAfter: 1);
+      addTearDown(harness.dispose);
+
+      harness.controller.start(<OffloadGroup>[_group(3)]);
+      await harness.settle();
+
+      expect(harness.run?.pace.fraction, closeTo(1 / 3, 0.001));
+    });
+  });
+
   group('the delete waits for a screen', () {
     /// Only an Activity can raise the gallery's system delete confirmation, so
     /// a backgrounded delete cannot happen — and a move reads that as declined
@@ -304,6 +329,7 @@ OffloadGroup _group(
           from: private ? StorageTier.appPrivate : StorageTier.sharedGallery,
           location: Uri.parse('content://media/$i'),
           to: StorageTier.filesOutsideGallery,
+          sizeBytes: 1024,
         ),
     ],
   );
@@ -315,6 +341,8 @@ class _Harness {
     bool foreground = true,
     bool failEveryCopy = false,
     StorageTier? pin,
+    int secondsPerTick = 0,
+    int? stopAfter,
   }) : settings = FakeSettingsRepository(pinnedDownloadTier: pin),
        visibility = FakeAppVisibility(foreground: foreground),
        images = FakeImageStore(
@@ -329,9 +357,21 @@ class _Harness {
         downloadQueueProvider.overrideWithValue(queue),
         settingsRepositoryProvider.overrideWithValue(settings),
         appVisibilityProvider.overrideWithValue(visibility),
+        offloadClockProvider.overrideWithValue(() {
+          final DateTime now = _clockAt;
+          _clockAt = _clockAt.add(Duration(seconds: secondsPerTick));
+          return now;
+        }),
       ],
     );
+    if (stopAfter != null) {
+      container.listen(offloadRunProvider, (_, OffloadRun? run) {
+        if ((run?.copied ?? 0) >= stopAfter) controller.stop();
+      });
+    }
   }
+
+  DateTime _clockAt = DateTime(2026, 11, 4, 18);
 
   final FakeAppVisibility visibility;
   final FakeImageStore images;

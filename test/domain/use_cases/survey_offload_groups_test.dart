@@ -237,6 +237,26 @@ void main() {
       );
     });
 
+    /// Progress counts bytes, so each move has to carry its own size.
+    test('every move carries the size it was measured at', () async {
+      final DownloadRecord gallery = _record('g', StorageTier.sharedGallery);
+      final FakeImageStore images = FakeImageStore(
+        privateLibrary: <PrivateImage>[_private('p', 700)],
+      )..sizes[gallery.location] = _size(500);
+
+      final List<OffloadGroup> groups = await _survey(
+        images,
+        FakeDownloadHistory(initial: <DownloadRecord>[gallery]),
+      )();
+
+      expect(
+        groups
+            .expand((OffloadGroup g) => g.moves)
+            .map((StoredImageMove m) => m.sizeBytes),
+        <int>[500, 700],
+      );
+    });
+
     test('an empty device answers no groups at all', () async {
       final List<OffloadGroup> groups = await _survey(
         FakeImageStore(),
