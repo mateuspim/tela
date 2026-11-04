@@ -19,7 +19,12 @@ import java.util.Locale
  * learned on a device: ids are `<parent id>/<name>` (no slash under a volume
  * root ending in `:`), lookups are **case-insensitive** like the FAT-family
  * card, a clash is **renamed** to `name (1)` rather than refused, and a query
- * for a document that is not there answers a null cursor.
+ * for a document that is not there **throws `IllegalArgumentException`** when
+ * asked through a tree URI — the real provider's tree check resolves the
+ * child's path before anything else, and a missing file fails it. This fake
+ * used to answer a null cursor there, which is why the probe's fallback to a
+ * full listing for every new file passed here and crawled on the device.
+ * Asked outside a tree, a missing document is still a null cursor.
  *
  * [queries] counts every cursor handed out, split into single-document probes
  * and child listings, so a test can assert the cost of an operation — which is
@@ -87,8 +92,18 @@ class FakeDocumentsProvider(private val storage: File) : ContentProvider() {
             return cursor
         }
         probes++
-        val node = nodes[key(id)] ?: return null
+        val node = nodes[key(id)] ?: return missing(uri, id)
         return cursor.also { it.addRow(row(node, columns)) }
+    }
+
+    private fun missing(uri: Uri, id: String): Cursor? {
+        if (!DocumentsContract.isTreeUri(uri)) return null
+        val tree = DocumentsContract.getTreeDocumentId(uri)
+        if (tree == id) return null
+        throw IllegalArgumentException(
+            "Failed to determine if $id is child of $tree: " +
+                "java.io.FileNotFoundException: Missing file for $id",
+        )
     }
 
     private fun row(node: Node, columns: Array<out String>): Array<Any?> = columns.map {

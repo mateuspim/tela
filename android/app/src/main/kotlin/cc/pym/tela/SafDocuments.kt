@@ -171,6 +171,15 @@ internal object SafDocuments {
      * per file copied. The medium the provider reads is FAT-family where this
      * runs, so the probe is as case-insensitive as the listing it replaces.
      * A provider that answers the probe with an error falls back to listing.
+     *
+     * **Except the error that means "not there".** Over a tree URI the real
+     * provider never reaches its own null-cursor answer for a missing file:
+     * its tree check (`isChildDocument`) resolves the child's path first, and a
+     * missing file fails that with an `IllegalArgumentException`. Read as "the
+     * probe is unsupported", it sent every *new* file — every file of a move —
+     * through a full listing anyway, so on the owner's 65 GB move the lookup
+     * grew from 0.1 s to 2 s per file as the folder filled (2026-11-04,
+     * `tela.timing sdcopy`), and the tag sweep paid the same in every folder.
      */
     private fun probeChild(context: Context, parent: Uri, name: String): Uri? {
         val parentId = DocumentsContract.getDocumentId(parent)
@@ -179,14 +188,18 @@ internal object SafDocuments {
             DocumentsContract.buildDocumentUriUsingTree(parent, "$parentId$separator$name")
         return try {
             if (documentExists(context, candidate)) candidate else null
+        } catch (_: IllegalArgumentException) {
+            null
         } catch (_: Exception) {
             listedChild(context, parent, name)
         }
     }
 
     private fun documentExists(context: Context, document: Uri): Boolean {
+        // Not counted as a listing: it is one row, and counting it as one is
+        // what made the timing log read "8 listings" whether or not any folder
+        // was actually walked.
         val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-        SafListingCount.bump()
         return context.contentResolver.query(document, projection, null, null, null)
             ?.use { cursor -> cursor.moveToFirst() } ?: false
     }
