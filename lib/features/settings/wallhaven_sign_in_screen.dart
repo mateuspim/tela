@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
 import 'package:tela/core/web/sign_in_browser.dart';
+import 'package:tela/core/web/sign_in_browser_state.dart';
 
 /// Opens the Wallhaven sign-in screen. Returns the account's API key once it is
 /// read off Account settings, or null if the user backs out first.
@@ -47,6 +48,8 @@ class _WallhavenSignInScreenState extends ConsumerState<WallhavenSignInScreen> {
   /// the route may only be popped once.
   bool _done = false;
 
+  SignInBrowserState _state = const SignInLoading(0);
+
   @override
   void dispose() {
     unawaited(_browser.forgetSession());
@@ -57,28 +60,84 @@ class _WallhavenSignInScreenState extends ConsumerState<WallhavenSignInScreen> {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.settingsSignInTitle)),
+      appBar: AppBar(
+        title: Text(l10n.settingsSignInTitle),
+        bottom: _progressBar(),
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           _hint(context, l10n),
-          Expanded(child: _browser.build(onKeyFound: _finish)),
+          Expanded(child: _page(l10n)),
         ],
+      ),
+    );
+  }
+
+  /// A hairline under the app bar while a page loads; nothing otherwise.
+  PreferredSizeWidget? _progressBar() {
+    final SignInBrowserState state = _state;
+    if (state is! SignInLoading) return null;
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(2),
+      child: LinearProgressIndicator(
+        key: const ValueKey<String>('sign-in-progress'),
+        value: state.progress,
+        minHeight: 2,
+      ),
+    );
+  }
+
+  /// The browser stays mounted under the error so a retry reloads in place.
+  Widget _page(AppLocalizations l10n) {
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(
+          child: _browser.build(onKeyFound: _finish, onState: _onState),
+        ),
+        if (_state is SignInFailed) Positioned.fill(child: _failure(l10n)),
+      ],
+    );
+  }
+
+  Widget _failure(AppLocalizations l10n) {
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.surface,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(l10n.settingsSignInLoadFailed),
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: () => unawaited(_browser.retry()),
+              child: Text(l10n.settingsSignInRetry),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _hint(BuildContext context, AppLocalizations l10n) {
     final ThemeData theme = Theme.of(context);
+    final bool missing = _state is SignInMissingKey;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       child: Text(
-        l10n.settingsSignInHint,
+        missing ? l10n.settingsSignInNoKeyHint : l10n.settingsSignInHint,
         style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
+          color: missing
+              ? theme.colorScheme.primary
+              : theme.colorScheme.onSurfaceVariant,
         ),
       ),
     );
+  }
+
+  void _onState(SignInBrowserState state) {
+    if (!mounted) return;
+    setState(() => _state = state);
   }
 
   void _finish(String key) {

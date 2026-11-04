@@ -172,7 +172,7 @@ final Provider<ExternalLink> externalLinkProvider = Provider<ExternalLink>(
 
 /// The embedded Wallhaven sign-in browser, bound to `webview_flutter`.
 final Provider<SignInBrowser> signInBrowserProvider = Provider<SignInBrowser>(
-  (Ref ref) => const WebViewSignInBrowser(),
+  (Ref ref) => WebViewSignInBrowser(),
 );
 
 /// The three-tier image-storage port, bound to Android's scoped-storage API.
