@@ -103,7 +103,7 @@ class FakeDocumentsProvider(private val storage: File) : ContentProvider() {
     }.toTypedArray()
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
-        val target = Uri.parse(extras!!.getString("uri"))
+        val target = extras!!.getParcelable<Uri>("uri")!!
         val id = DocumentsContract.getDocumentId(target)
         return when (method) {
             "android:createDocument" -> create(target, id, extras)

@@ -43,6 +43,10 @@ class CardCopyCostTest {
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         provider = FakeDocumentsProvider(context.cacheDir)
+        provider.attachInfo(context, android.content.pm.ProviderInfo().apply {
+            this.authority = this@CardCopyCostTest.authority
+            exported = true
+        })
         ShadowContentResolver.registerProviderInternal(authority, provider)
         provider.folder(rootId)
         source = File(context.cacheDir, "source.jpg").apply { writeText("pixels") }
@@ -54,11 +58,17 @@ class CardCopyCostTest {
 
     private fun document(id: String): Uri = DocumentsContract.buildDocumentUriUsingTree(tree, id)
 
-    private fun copy(id: String, tag: String? = null): Map<String, Any> = ImageStorage(context).copy(
-        ImageCopyRequest("wallhaven", id, Uri.fromFile(source).toString(), "sfw",
-            "filesOutsideGallery", tag),
-        OutsideGalleryTarget(tree.toString()),
-    )
+    private fun copy(id: String, tag: String? = null): Map<String, Any> {
+        val result = ImageStorage(context).copy(
+            ImageCopyRequest("wallhaven", id, Uri.fromFile(source).toString(), "sfw",
+                "filesOutsideGallery", tag),
+            OutsideGalleryTarget(tree.toString()),
+        )
+        val why = org.robolectric.shadows.ShadowLog.getLogs().filter { it.tag == "tela" }
+            .joinToString { it.msg }
+        assertEquals("$result $why", true, result["success"])
+        return result
+    }
 
     @Test
     fun `finding a child costs one probe and no listing`() {
