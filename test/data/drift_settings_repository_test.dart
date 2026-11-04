@@ -7,6 +7,7 @@ import 'package:tela/domain/models/account_settings.dart';
 import 'package:tela/domain/models/browse_defaults.dart';
 import 'package:tela/domain/models/category.dart';
 import 'package:tela/domain/models/download_destination_streak.dart';
+import 'package:tela/domain/models/library_order.dart';
 import 'package:tela/domain/models/purity.dart';
 import 'package:tela/domain/models/ratio_choice.dart';
 import 'package:tela/domain/models/resolution.dart';
@@ -420,6 +421,33 @@ void main() {
     test('a corrupt row costs the density, not the app', () async {
       await db.putSetting('appearance.tileDensity', 'enormous');
       expect(await settings.loadTileDensity(), TileDensity.medium);
+    });
+  });
+
+  group('private library order', () {
+    test('lists newest first before anything is chosen', () async {
+      // The order the library always had; an upgrade must not flip it.
+      expect(
+        await settings.loadPrivateLibraryOrder(),
+        LibraryOrder.newestFirst,
+      );
+    });
+
+    test('round-trips a chosen order as its constant name', () async {
+      await settings.savePrivateLibraryOrder(LibraryOrder.oldestFirst);
+      expect(
+        await settings.loadPrivateLibraryOrder(),
+        LibraryOrder.oldestFirst,
+      );
+      expect(await db.settingValue('privateLibrary.order'), 'oldestFirst');
+    });
+
+    test('a corrupt row costs the order, not the screen', () async {
+      await db.putSetting('privateLibrary.order', 'sideways');
+      expect(
+        await settings.loadPrivateLibraryOrder(),
+        LibraryOrder.newestFirst,
+      );
     });
   });
 
