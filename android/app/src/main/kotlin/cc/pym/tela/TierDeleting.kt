@@ -53,6 +53,7 @@ internal class TierDeleting(private val context: Context) {
         val matches = TelaDirectories.privateFiles(context)
             .filter { ImageFileNaming.keyOf(it.name) == key }
         if (matches.isEmpty()) return mapOf("success" to true)
+        matches.forEach { forgetThumbnail(Uri.fromFile(it)) }
         if (!matches.all { it.delete() }) return imageStoreFailure("unavailable")
         matches.forEach { EmptyTagFolders.pruneAfterPrivate(context, it) }
         return mapOf("success" to true)
@@ -68,6 +69,9 @@ internal class TierDeleting(private val context: Context) {
      * guarded [deletePrivate] by recovering the id from the file's own name.
      */
     fun deleteDownload(tier: String, location: Uri): Map<String, Any> {
+        // Forgotten first, even if the delete then fails: a thumbnail is cheap
+        // to remake, a downsampled explicit picture outliving its file is not.
+        if (tier != "sharedGallery") forgetThumbnail(location)
         return when (tier) {
             "appPrivate" -> deletePrivateAt(location)
             "filesOutsideGallery" -> deleteDocumentAt(location)
@@ -75,6 +79,9 @@ internal class TierDeleting(private val context: Context) {
             else -> imageStoreFailure("unavailable")
         }
     }
+
+    /** Drops the cached grid thumbnails of a file that is going away. */
+    private fun forgetThumbnail(location: Uri) = StoredThumbnails(context).forget(location)
 
     /**
      * Whether MediaStore still has a row at [location].

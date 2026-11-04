@@ -50,6 +50,8 @@ internal class StoredImageRetagging(private val context: Context) {
         outsideGalleryTree: String?,
     ): Map<String, Any> {
         if (tag != null && !TagFolders.isValid(tag)) return imageStoreFailure("unavailable")
+        // The location changes for these tiers, orphaning the old thumbnail.
+        if (tier != "sharedGallery") StoredThumbnails(context).forget(location)
         return try {
             when (tier) {
                 "sharedGallery" -> retagGalleryImage(location, tag)

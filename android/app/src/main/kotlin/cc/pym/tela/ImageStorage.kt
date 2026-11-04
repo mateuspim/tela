@@ -108,7 +108,7 @@ class ImageStorage(private val context: Context) {
 
     /** Decodes a downsampled grid thumbnail, with the source's pixel bounds. */
     fun materialiseThumbnail(location: Uri, maxDimensionPx: Int): Map<String, Any> =
-        StoredImageReading(context).materialiseThumbnail(location, maxDimensionPx)
+        StoredThumbnails(context).make(location, maxDimensionPx)
 
     /** Deletes a throwaway preview, refusing any path outside the cache folder. */
     fun releasePreview(path: String): Map<String, Any> =
