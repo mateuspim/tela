@@ -578,6 +578,11 @@ class _PrivateTile extends StatelessWidget {
   Widget _thumbnail(BuildContext context) {
     final double devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     final Widget picture = _StoredThumbnailImage(
+      // Keyed by image: a tag switch reuses grid positions, and an unkeyed
+      // state kept the last tag's picture and never asked for the new one
+      // (device pass, 2026-11-04). A new key is a fresh request; the old
+      // state's dispose cancels its own.
+      key: ValueKey<String>(image.ref.key),
       image: image,
       cachedThumbnail: cachedThumbnail,
       onResolved: onThumbnailResolved,
@@ -609,6 +614,7 @@ class _StoredThumbnailImage extends ConsumerStatefulWidget {
     required this.cachedThumbnail,
     required this.onResolved,
     required this.maxDimensionPx,
+    super.key,
   });
 
   final PrivateImage image;

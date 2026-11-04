@@ -15,6 +15,7 @@ import 'package:tela/domain/models/image_store_failure.dart';
 import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
+import 'package:tela/domain/models/tag_folder.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
 import 'package:tela/domain/ports/local_preview_cache.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
@@ -432,6 +433,35 @@ void main() {
         '/thumb/${image.location.path}',
       ]);
     });
+
+    testWidgets("switching tag never leaves the last tag's pictures", (
+      WidgetTester tester,
+    ) async {
+      // Regression (owner, device pass 2026-11-04): a tile reused at the same
+      // grid position kept the previous tag's thumbnail, and never asked for
+      // its new image's, until it was scrolled away and back.
+      final GatedLocalPreviewCache previews = GatedLocalPreviewCache();
+      final PrivateImage ana = _sizedImage('aaaaaa', tag: 'ana');
+      final PrivateImage bia = _sizedImage('bbbbbb', tag: 'bia');
+
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[ana, bia]),
+        previews: previews,
+      );
+      // Only the first tag's picture has landed when the user switches, as on
+      // a library still filling in.
+      previews.finish(ana.location);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'bia'));
+      await tester.pumpAndSettle();
+      expect(_thumbnailPaths(tester), isEmpty);
+
+      previews.finish(previews.started.last);
+      await tester.pumpAndSettle();
+      expect(_thumbnailPaths(tester), <String>['/thumb/${bia.location.path}']);
+    });
   });
 
   group('source badge', () {
@@ -609,13 +639,14 @@ const DownloadFolder _grantedFolder = DownloadFolder(
 );
 
 /// An app-private file whose bounds the listing already knows, as on device.
-PrivateImage _sizedImage(String id) => PrivateImage(
+PrivateImage _sizedImage(String id, {String? tag}) => PrivateImage(
   ref: WallpaperRef(SourceId.wallhaven, id),
   location: Uri.file(
     '/data/user/0/cc.pym.tela/files/wallpapers/wallhaven-$id.jpg',
   ),
   savedAt: DateTime.utc(2026, 7, 14),
   sizeBytes: 2048,
+  tag: tag == null ? null : TagFolder(tag),
   width: 1080,
   height: 2400,
 );
