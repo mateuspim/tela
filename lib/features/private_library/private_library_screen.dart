@@ -83,8 +83,22 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
   final Map<String, VaultThumbnail> _vaultThumbnails =
       <String, VaultThumbnail>{};
 
-  void _onVaultThumbnailResolved(String key, VaultThumbnail thumbnail) {
+  /// Remembers [thumbnail] so a tile scrolled back in skips the request, and
+  /// rebuilds the screen only when the row packing depends on it.
+  ///
+  /// A rebuild re-packs every row of the library. With 7,298 app-private images
+  /// whose ratio the listing already knows, rebuilding once per decoded
+  /// thumbnail (three every ~50 ms) starved the UI thread: tiles stayed blank
+  /// until scrolled and a tapped photo would not open (device pass,
+  /// 2026-11-04). The tile paints its own thumbnail, so only an unknown ratio
+  /// needs this.
+  void _onThumbnailResolved(PrivateImage image, VaultThumbnail thumbnail) {
+    final String key = image.ref.key;
     if (!mounted || _vaultThumbnails[key] == thumbnail) return;
+    if (image.aspectRatio != null) {
+      _vaultThumbnails[key] = thumbnail;
+      return;
+    }
     setState(() => _vaultThumbnails[key] = thumbnail);
   }
 
@@ -255,7 +269,7 @@ class _PrivateLibraryScreenState extends ConsumerState<PrivateLibraryScreen>
       onTap: gestures.onTap,
       onLongPress: gestures.onLongPress,
       cachedThumbnail: _vaultThumbnails[stored[index].ref.key],
-      onThumbnailResolved: _onVaultThumbnailResolved,
+      onThumbnailResolved: _onThumbnailResolved,
     );
   }
 
@@ -485,9 +499,10 @@ class _PrivateTile extends StatelessWidget {
   /// Null until this tile's thumbnail has finished resolving.
   final VaultThumbnail? cachedThumbnail;
 
-  /// Reports a newly-resolved vault thumbnail back up to the screen, so its
+  /// Reports a newly-resolved thumbnail back up to the screen, so an unknown
   /// aspect ratio can feed the grid's row packing on the next build.
-  final void Function(String key, VaultThumbnail thumbnail) onThumbnailResolved;
+  final void Function(PrivateImage image, VaultThumbnail thumbnail)
+  onThumbnailResolved;
 
   @override
   Widget build(BuildContext context) {
@@ -598,7 +613,7 @@ class _StoredThumbnailImage extends ConsumerStatefulWidget {
 
   final PrivateImage image;
   final VaultThumbnail? cachedThumbnail;
-  final void Function(String key, VaultThumbnail thumbnail) onResolved;
+  final void Function(PrivateImage image, VaultThumbnail thumbnail) onResolved;
   final int maxDimensionPx;
 
   @override
@@ -608,6 +623,10 @@ class _StoredThumbnailImage extends ConsumerStatefulWidget {
 
 class _StoredThumbnailImageState extends ConsumerState<_StoredThumbnailImage> {
   bool _failed = false;
+
+  /// This tile's own answer, drawn without waiting for the screen to rebuild —
+  /// which it deliberately does not for an image whose ratio is already known.
+  VaultThumbnail? _resolved;
   final ThumbnailCancellation _cancellation = ThumbnailCancellation();
 
   @override
@@ -635,12 +654,13 @@ class _StoredThumbnailImageState extends ConsumerState<_StoredThumbnailImage> {
       setState(() => _failed = true);
       return;
     }
-    widget.onResolved(widget.image.ref.key, thumbnail);
+    setState(() => _resolved = thumbnail);
+    widget.onResolved(widget.image, thumbnail);
   }
 
   @override
   Widget build(BuildContext context) {
-    final VaultThumbnail? thumbnail = widget.cachedThumbnail;
+    final VaultThumbnail? thumbnail = widget.cachedThumbnail ?? _resolved;
     if (thumbnail == null) {
       if (_failed) {
         return const Center(child: Icon(Icons.broken_image_outlined));
