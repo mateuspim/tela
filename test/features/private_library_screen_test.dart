@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tela/app/providers.dart';
 import 'package:tela/core/i18n/generated/app_localizations.dart';
+import 'package:tela/core/ui/justified_wallpaper_grid.dart';
 import 'package:tela/core/ui/wallpaper_selection.dart';
 import 'package:tela/core/ui/wallpaper_source_badge.dart';
 import 'package:tela/core/ui/wallpaper_source_labels_scope.dart';
@@ -15,6 +16,7 @@ import 'package:tela/domain/models/private_image.dart';
 import 'package:tela/domain/models/source_id.dart';
 import 'package:tela/domain/models/storage_tier.dart';
 import 'package:tela/domain/models/wallpaper_ref.dart';
+import 'package:tela/domain/ports/local_preview_cache.dart';
 import 'package:tela/features/private_library/private_library_screen.dart';
 
 import '../fakes/fake_app_lock.dart';
@@ -23,6 +25,7 @@ import '../fakes/fake_image_store.dart';
 import '../fakes/fake_local_preview_cache.dart';
 import '../fakes/fake_screen_guard.dart';
 import '../fakes/fake_settings_repository.dart';
+import '../fakes/gated_local_preview_cache.dart';
 
 void main() {
   group('FLAG_SECURE', () {
@@ -391,6 +394,44 @@ void main() {
 
       expect(previews.thumbnailsRequested, <Uri>[image.location]);
     });
+
+    testWidgets('a late thumbnail paints without rebuilding the screen', (
+      WidgetTester tester,
+    ) async {
+      // Regression (owner, device pass 2026-11-04): every resolved thumbnail
+      // rebuilt the whole 7,298-image screen; tiles stayed blank until
+      // scrolled. The tile now paints its own answer.
+      final GatedLocalPreviewCache previews = GatedLocalPreviewCache();
+      final PrivateImage image = _sizedImage('e7jvjd');
+
+      await _pump(
+        tester,
+        FakeImageStore(privateLibrary: <PrivateImage>[image]),
+        previews: previews,
+      );
+      expect(_thumbnailPaths(tester), isEmpty);
+      final Widget gridBefore = tester.widget(
+        find.byType(JustifiedWallpaperGrid),
+      );
+
+      previews.finish(image.location);
+      // The await resolves on the first frame and the tile paints on the next.
+      await tester.pump();
+      await tester.pump();
+
+      // The same grid instance: the screen did not rebuild (and re-pack every
+      // row) for a thumbnail whose ratio the listing already knew.
+      expect(
+        identical(
+          tester.widget(find.byType(JustifiedWallpaperGrid)),
+          gridBefore,
+        ),
+        isTrue,
+      );
+      expect(_thumbnailPaths(tester), <String>[
+        '/thumb/${image.location.path}',
+      ]);
+    });
   });
 
   group('source badge', () {
@@ -485,7 +526,7 @@ Future<void> _pump(
   FakeAppLock? lock,
   bool locked = false,
   Map<String, String>? labels,
-  FakeLocalPreviewCache? previews,
+  LocalPreviewCache? previews,
 }) async {
   const Widget screen = PrivateLibraryScreen();
   await tester.pumpWidget(
@@ -566,3 +607,21 @@ const DownloadFolder _grantedFolder = DownloadFolder(
   isRemovable: false,
   isAvailable: true,
 );
+
+/// An app-private file whose bounds the listing already knows, as on device.
+PrivateImage _sizedImage(String id) => PrivateImage(
+  ref: WallpaperRef(SourceId.wallhaven, id),
+  location: Uri.file(
+    '/data/user/0/cc.pym.tela/files/wallpapers/wallhaven-$id.jpg',
+  ),
+  savedAt: DateTime.utc(2026, 7, 14),
+  sizeBytes: 2048,
+  width: 1080,
+  height: 2400,
+);
+
+/// The file paths of every thumbnail picture currently drawn.
+List<String> _thumbnailPaths(WidgetTester tester) => <String>[
+  for (final Image image in tester.widgetList<Image>(find.byType(Image)))
+    if (image.image is FileImage) (image.image as FileImage).file.path,
+];
