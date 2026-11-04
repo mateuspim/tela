@@ -274,6 +274,7 @@ internal object SafDocuments {
             DocumentsContract.Document.COLUMN_LAST_MODIFIED,
         )
         val children = mutableListOf<SafChild>()
+        SafListingCount.bump()
         context.contentResolver
             .query(childDocuments, projection, null, null, null)
             ?.use { cursor -> while (cursor.moveToNext()) children += cursor.readChild() }
