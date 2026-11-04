@@ -1,3 +1,5 @@
+import 'package:tela/domain/models/private_image.dart';
+
 /// Which way a local library lists its images by the time they were saved.
 ///
 /// The private library only ever listed newest first, with no way to walk it
@@ -44,4 +46,23 @@ enum LibraryOrder {
       return bySaved != 0 ? bySaved : tieBreak(a).compareTo(tieBreak(b));
     });
   }
+}
+
+/// [images] in the order they were saved, earliest first — the order a move
+/// must copy them in.
+///
+/// A copy is a new file, so its saved time becomes the moment it was copied,
+/// and no SAF call can set it back. Copied newest first, the library came out
+/// exactly reversed: "Oldest first" opened on the newest images.
+/// Copied earliest first, the times move, but each image keeps its place.
+///
+/// ```dart
+/// final List<PrivateImage> ordered = oldestSavedFirst(movable);
+/// ```
+List<PrivateImage> oldestSavedFirst(Iterable<PrivateImage> images) {
+  return LibraryOrder.oldestFirst.sorted(
+    images,
+    savedAt: (PrivateImage image) => image.savedAt,
+    tieBreak: (PrivateImage image) => image.ref.key,
+  );
 }
