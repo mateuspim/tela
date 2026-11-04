@@ -377,7 +377,8 @@ class ImageStoreChannel(context: Context) {
         }
         val maxDimensionPx = call.argument<String>("maxDimensionPx")?.toIntOrNull()
             ?: DEFAULT_THUMBNAIL_MAX_DIMENSION_PX
-        onStorageThread(result) {
+        // Own pool: a wall of decodes must not delay opening a single photo.
+        answerOffThread(StoredThumbnails.executor, ::onMainThread, result) {
             ImageStorage(context).materialiseThumbnail(Uri.parse(location), maxDimensionPx)
         }
     }

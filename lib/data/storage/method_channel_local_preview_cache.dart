@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:tela/domain/models/local_preview.dart';
+import 'package:tela/domain/models/thumbnail_cancellation.dart';
 import 'package:tela/domain/models/vault_thumbnail.dart';
 import 'package:tela/domain/ports/local_preview_cache.dart';
 
@@ -73,8 +74,9 @@ class MethodChannelLocalPreviewCache implements LocalPreviewCache {
   @override
   Future<VaultThumbnail?> materializeThumbnail(
     Uri location,
-    int maxDimensionPx,
-  ) async {
+    int maxDimensionPx, {
+    ThumbnailCancellation? cancellation,
+  }) async {
     try {
       final Object? raw = await _invokeMethod(
         'materializeVaultThumbnail',

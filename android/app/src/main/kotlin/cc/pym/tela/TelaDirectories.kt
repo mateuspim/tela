@@ -24,6 +24,9 @@ internal object TelaDirectories {
     /** Throwaway copies made decodable for the viewer, under the cache dir. */
     fun previews(context: Context): File = File(context.cacheDir, "previews")
 
+    /** Persisted grid thumbnails; cache dir, so never backed up or indexed. */
+    fun thumbnails(context: Context): File = File(context.cacheDir, "thumbnails")
+
     /**
      * Every file in the app-private tier: its root, plus one directory down.
      *
